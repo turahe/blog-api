@@ -59,7 +59,7 @@ internal/adapters/outbound/rbac
 
 ## Storage Model (tables summary)
 
-Canonical column-level definitions live in [database.md](file:///mnt/myadrive/repo/turahe/blog-api/docs/backend/database.md). Summary:
+Canonical column-level definitions live in [database.md](./database.md). Summary:
 
 | Table                          | Purpose                                                                                         | Source of truth |
 |--------------------------------|-------------------------------------------------------------------------------------------------|-----------------|
@@ -104,7 +104,7 @@ Custom matchers registered via `enforcer.AddFunction("scopeMatch", ScopeMatchFun
 
 ## Endpoints Catalog
 
-Full HTTP definitions → [api.md](file:///mnt/myadrive/repo/turahe/blog-api/docs/backend/api.md) + [openapi.yaml](file:///mnt/myadrive/repo/turahe/blog-api/contracts/openapi.yaml). Summary:
+Full HTTP definitions → [api.md](./api.md) + [openapi.yaml](../../contracts/openapi.yaml). Summary:
 
 ### Admin RBAC
 | Method | Path                                               | Permission                  | Description                                                     |
@@ -141,7 +141,7 @@ Self-service endpoints use the middleware. No RBAC-specific self-service endpoin
 
 ## Events (Transactional Outbox)
 
-Complete catalogue → [events.md](file:///mnt/myadrive/repo/turahe/blog-api/docs/backend/events.md). Summary list:
+Complete catalogue → [events.md](./events.md). Summary list:
 - `rbac.role.created`, `rbac.role.updated`, `rbac.role.deleted`
 - `rbac.role.permissions.updated` (diff summary: added_keys, removed_keys, unchanged_keys)
 - `rbac.user.role.assigned`, `rbac.user.role.revoked`
@@ -223,11 +223,11 @@ Cache hit rate SLO: ≥99.9%. Metric `rbac_enforce_cache_hit_ratio` exported to 
 
 ## Cross-References
 
-- [rbac-with-casbin.md](file:///mnt/myadrive/repo/turahe/blog-api/docs/features/rbac-with-casbin.md) — Feature level scope, tier matrix, UI spec, staging/UAT
-- [database.md](file:///mnt/myadrive/repo/turahe/blog-api/docs/backend/database.md) — `casbin_rules`, `rbac_roles`, `rbac_permissions`, `user_role_assignments`, audit tables, index details
-- [api.md](file:///mnt/myadrive/repo/turahe/blog-api/docs/backend/api.md) — Admin RBAC endpoints rules + middleware position
-- [services.md](file:///mnt/myadrive/repo/turahe/blog-api/docs/backend/services.md) — Core services list including `RBACService`, `CasbinEnforcerFactory`, etc.
-- [events.md](file:///mnt/myadrive/repo/turahe/blog-api/docs/backend/events.md) — Full event catalog + consumers
-- [security.md](file:///mnt/myadrive/repo/turahe/blog-api/docs/architecture/security.md) — RBAC hardening rules, impersonation inheritance strictness
-- [openapi.yaml](file:///mnt/myadrive/repo/turahe/blog-api/contracts/openapi.yaml) — Contract (paths/schemas/security)
-- [asyncapi.yaml](file:///mnt/myadrive/repo/turahe/blog-api/contracts/asyncapi.yaml) — Event channels & messages
+- [rbac-with-casbin.md](../features/rbac-with-casbin.md) — Feature level scope, tier matrix, UI spec, staging/UAT
+- [database.md](./database.md) — `casbin_rules`, `rbac_roles`, `rbac_permissions`, `user_role_assignments`, audit tables, index details
+- [api.md](./api.md) — Admin RBAC endpoints rules + middleware position
+- [services.md](./services.md) — Core services list including `RBACService`, `CasbinEnforcerFactory`, etc.
+- [events.md](./events.md) — Full event catalog + consumers
+- [security.md](../architecture/security.md) — RBAC hardening rules, impersonation inheritance strictness
+- [openapi.yaml](../../contracts/openapi.yaml) — Contract (paths/schemas/security)
+- [asyncapi.yaml](../../contracts/asyncapi.yaml) — Event channels & messages

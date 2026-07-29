@@ -86,6 +86,37 @@
   - wildcard origin rejected for profile mutations; only whitelist origins allowed; non-whitelisted → 403 cors.origin_not_allowed
   - production responses set CSP, SameSite=Lax/Secure cookies, X-Content-Type-Options nosniff; profile avatar endpoints served on distinct media domain without auth cookies
 
+## Realtime SSE Stream
+
+- contract and OpenAPI compliance:
+  - `GET /api/v1/me/notifications/stream` with valid bearer JWT → 200; headers present exactly per contract (`Content-Type: text/event-stream; charset=utf-8`, `Cache-Control: no-cache`; non-HTTP/2 env also includes `Connection: keep-alive`, `X-Accel-Buffering: no`)
+  - 200 body contains exactly one `retry:` line (default `5000`) and exactly one opening `event: stream.opened` with data payload `{ stream_id, user_id, server_ts, retry_ms, channels }`
+  - `Last-Event-ID:` header (and equivalent `?replay_after=`) both accepted; header wins when both provided
+  - responses for `401 unauth`, `403 cors/csrf`, `429 too many connections` all return standard `EnvelopeError` JSON with documented `code` enums (`sse.stream.too_many_connections`, `sse.stream.reconnect_rate`, `sse.stream.jailed`, `cors.origin_not_allowed`, `csrf.invalid`) and `429` always sets numeric `Retry-After` header
+- connection lifecycle and cleanup (integration tests, see §6.1–6.3 in [realtime-notifications-sse.md](../features/realtime-notifications-sse.md)):
+  - clean client close → hub.Unregister called, process-local `activeCount` decremented within one watchdog cycle; Redis `sse_active:user:<id>` counter matches
+  - half-open TCP (server sends RST via watchdog after two missed pings) → watchdog closes socket within `30 + 2*ping` seconds, releases goroutines; `runtime.NumGoroutine` delta from start→after 10 connections stays bounded
+  - SIGTERM graceful server shutdown → every open stream receives `event: stream.closed { code: "shutdown", retry_ms: 15000 }` then drains; zero goroutines leaked after 10s grace window
+- realtime delivery and fan-out (requires Redis test instance for multi-process fan-out):
+  - single user, N connections (N=5) → single published `notification.created` event arrives on all 5 within p99 latency `MAX_FANOUT_LATENCY_MS` (500ms default); `id:` monotonic across frames per connection; same `data.notification_id` delivered to all
+  - cross-user isolation: publish to user A → user B stream read buffer contains zero new frames within a 300ms settle window (no cross-leak)
+  - inter-process: two HTTP servers (A and B) share same Redis; publish to A's Watermill bus → both A-connected and B-connected subscribers receive the notification.created within 500ms
+- reconnect behaviour:
+  - publish 500 events, drop client TCP mid-stream, reconnect with exact `Last-Event-ID` of 250 → replay of events 251..500 exact; `stream.opened.replay_applied=true`, `replay_count=250`; client dedup by `notification_id` yields 500 unique ids (no dupes, no gaps)
+  - client with `Last-Event-ID` older than replay TTL → stream still opens, `replay_applied=false`, client fires `GET /api/v1/me/notifications` REST history catchup and ends with union covering all ids within the retention window
+  - reconnect backoff: wrapper doubles delay each consecutive transport failure up to 120s cap; resets to `retry_ms` immediately upon next `stream.opened` arrival
+  - aggressive reconnect jail: 12 connect attempts within 60s window from same `ip:user` → last attempts → 429 `sse.stream.jailed` with `Retry-After: 120`; attempts inside jail all 429 until TTL elapses
+- security and rate limiting:
+  - missing `Authorization`/cookie or tampered JWT → 401 `unauthorized` envelope; zero SSE frame bytes written before close
+  - non-whitelisted `Origin: https://evil.example` on cookie call → 403 `cors.origin_not_allowed`
+  - session cookie without `X-CSRF-Token` when CSRF enabled for browser origins → 403 `csrf.invalid`; allowlisted API tokens pass through
+  - concurrent connection limit: 4 simultaneous connects for user (max default=3) → 4th returns 429 `sse.stream.too_many_connections`, `X-RateLimit-Limit=3`, `X-RateLimit-Remaining=0`, `Retry-After=30`
+  - slow consumer buffer overflow: attach 1 r/s reader, write 1000 events as fast as possible → exactly one `event: error { code: "fanout.buffer_full", dropped_count: N }` frame emitted with integer `N`, no other clients blocked, no goroutine leak, process continues
+- graceful degradation for SSE-unsupported clients:
+  - jsdom or unit environment without `EventSource` → wrapper falls back to REST polling at 60s interval, hydrates first 50 notifications from `GET /api/v1/me/notifications`
+  - HTTP/1.0 `Connection: close` clients → route either writes handshake then cleanly closes with 0 bytes leaked, or returns documented 400 `sse.protocol_upgrade_required` (per configured strictness); never 500, never goroutine leak per NumGoroutine assertion
+- SSE contract fixtures live in `tests/contracts/fixtures/notifications-stream.json` alongside comments/newsletter fixtures, each test case is a JSON object with fields `{ name, request_headers, expected_status, expected_events[], last_event_id?, cors_origin?, expected_error_code? }` and the contract test runner replays them against an httptest server using the configured Gin engine with middleware chain.
+
 ## Test Environment
 
 - isolated test database

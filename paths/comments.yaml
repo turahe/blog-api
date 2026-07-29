@@ -1,0 +1,513 @@
+/api/v1/posts/{id}/comments:
+  get:
+    tags:
+    - Public
+    summary: List approved (or pending for owner/admin) comments on a post as a 
+      threaded tree
+    security: []
+    operationId: public.posts.comments.list
+    parameters:
+    - name: id
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+    - $ref: ../components/parameters.yaml#/Page
+    - $ref: ../components/parameters.yaml#/PerPage
+    - name: sort
+      in: query
+      schema:
+        type: string
+        enum: [newest, oldest, most_upvoted, most_replied]
+        default: newest
+    - name: tree_depth
+      in: query
+      schema:
+        type: integer
+        minimum: 1
+        maximum: 5
+        default: 3
+    responses:
+      '200':
+        description: Paginated comment tree
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas/Comments.yaml#/EnvelopeCommentList
+      '404':
+        $ref: ../components/responses.yaml#/NotFoundError
+  post:
+    tags:
+    - Public
+    summary: Post a comment (or reply) on a post; supports anonymous-with-name +
+      authenticated paths
+    security:
+    - bearerAuth: []
+    - []
+    operationId: public.posts.comments.create
+    description: |-
+      Creates a new comment. Anonymous submissions require `author_name` and `author_email`,
+      plus an optional `author_website`. Authenticated requests inherit the session user's
+      identity. All submissions pass through honeypot + spam assessment; any `turnstile_response`
+      token is verified if a captcha provider is configured.
+    parameters:
+    - name: id
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: ../components/schemas/Comments.yaml#/CommentCreateRequest
+    responses:
+      '201':
+        description: Comment created (status in returned object reflects 
+          pending/approved/spam)
+        headers:
+          Location:
+            description: Canonical URI of the new comment
+            schema: {type: string, format: uri}
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas/Comments.yaml#/EnvelopeCommentResponse
+      '400':
+        $ref: ../components/responses.yaml#/ValidationError
+      '401':
+        $ref: ../components/responses.yaml#/UnauthorizedError
+      '403':
+        description: Anonymous commenting disabled or site comment policy closed
+          for post
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas/Common.yaml#/EnvelopeError
+      '404':
+        $ref: ../components/responses.yaml#/NotFoundError
+      '409':
+        $ref: ../components/responses.yaml#/ValidationError
+      '422':
+        $ref: ../components/responses.yaml#/ValidationError
+      '429':
+        $ref: ../components/responses.yaml#/TooManyRequests
+
+/api/v1/comments/{id}:
+  get:
+    tags:
+    - Public
+    summary: Get a single comment with its immediate children (descendants 
+      limited by tree_depth)
+    security: []
+    operationId: public.comments.get
+    parameters:
+    - name: id
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+    - name: tree_depth
+      in: query
+      schema: {type: integer, minimum: 0, maximum: 5, default: 2}
+    responses:
+      '200':
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas/Comments.yaml#/EnvelopeCommentThread
+        description: Comment with threaded descendants limited by tree_depth
+      '404':
+        $ref: ../components/responses.yaml#/NotFoundError
+  patch:
+    tags:
+    - Self-Service
+    summary: Edit own comment within the grace window (or any by admin)
+    operationId: self.comments.patch
+    parameters:
+    - name: id
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: ../components/schemas/Comments.yaml#/CommentUpdateRequest
+    responses:
+      '200':
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas/Comments.yaml#/EnvelopeCommentResponse
+        description: Updated comment after edit
+      '400':
+        $ref: ../components/responses.yaml#/ValidationError
+      '401':
+        $ref: ../components/responses.yaml#/UnauthorizedError
+      '403':
+        $ref: ../components/responses.yaml#/ForbiddenError
+      '404':
+        $ref: ../components/responses.yaml#/NotFoundError
+      '409':
+        description: Grace period elapsed or editing blocked by moderation lock
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas/Common.yaml#/EnvelopeError
+  delete:
+    tags:
+    - Self-Service
+    summary: Soft-delete own comment (hard delete by admin)
+    operationId: self.comments.delete
+    parameters:
+    - name: id
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+    - name: reason
+      in: query
+      required: false
+      schema: {type: string, maxLength: 500}
+    responses:
+      '200':
+        $ref: ../components/responses.yaml#/EmptyOk
+      '401':
+        $ref: ../components/responses.yaml#/UnauthorizedError
+      '403':
+        $ref: ../components/responses.yaml#/ForbiddenError
+      '404':
+        $ref: ../components/responses.yaml#/NotFoundError
+
+/api/v1/comments/{id}/flag:
+  post:
+    tags:
+    - Public
+    summary: Flag a comment for moderator review; prevents duplicate flags from 
+      same identity
+    security:
+    - bearerAuth: []
+    - []
+    operationId: public.comments.flag
+    parameters:
+    - name: id
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            required:
+            - reason_code
+            properties:
+              reason_code:
+                type: string
+                enum: [spam, abuse, hate, harassment, doxx, self_harm, copyright,
+                  impersonation, illegal, other]
+              details:
+                type: string
+                maxLength: 2000
+    responses:
+      '200':
+        $ref: ../components/responses.yaml#/EmptyOk
+      '400':
+        $ref: ../components/responses.yaml#/ValidationError
+      '404':
+        $ref: ../components/responses.yaml#/NotFoundError
+      '429':
+        $ref: ../components/responses.yaml#/TooManyRequests
+
+/api/v1/comments/{id}/upvote:
+  post:
+    tags:
+    - Self-Service
+    summary: Toggle (upvote / cancel) an upvote on a comment; rate limited per 
+      user
+    operationId: self.comments.upvote
+    parameters:
+    - name: id
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+    responses:
+      '200':
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas/Comments.yaml#/EnvelopeCommentResponse
+        description: Toggled upvote; comment reflects updated upvote_count
+      '401':
+        $ref: ../components/responses.yaml#/UnauthorizedError
+      '404':
+        $ref: ../components/responses.yaml#/NotFoundError
+      '429':
+        $ref: ../components/responses.yaml#/TooManyRequests
+
+/api/v1/me/comments:
+  get:
+    tags:
+    - Self-Service
+    summary: List comments authored by the current authenticated user across all
+      posts
+    operationId: self.comments.list
+    parameters:
+    - $ref: ../components/parameters.yaml#/Page
+    - $ref: ../components/parameters.yaml#/PerPage
+    - name: status
+      in: query
+      schema:
+        type: string
+        enum: [pending, approved, rejected, spam, flagged, deleted]
+    - name: sort
+      in: query
+      schema: {type: string, enum: [newest, oldest, most_upvoted], default: 
+          newest}
+    responses:
+      '200':
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas/Comments.yaml#/EnvelopeCommentList
+        description: Comments authored by the authenticated user
+      '401':
+        $ref: ../components/responses.yaml#/UnauthorizedError
+
+/api/v1/admin/comments:
+  get:
+    tags:
+    - Admin / Moderation
+    summary: Moderation list with filters, bulk-ready pagination
+    operationId: admin.comments.list
+    description: Enables moderators to triage pending/flagged/spam comments by 
+      post, author, reason codes, keyword, date, or score.
+    parameters:
+    - $ref: ../components/parameters.yaml#/Page
+    - $ref: ../components/parameters.yaml#/PerPage
+    - name: status
+      in: query
+      schema:
+        type: string
+        enum: [pending, approved, rejected, spam, flagged, deleted]
+    - name: post_id
+      in: query
+      schema: {type: string, format: uuid}
+    - name: author_id
+      in: query
+      schema: {type: string, format: uuid}
+    - name: flagged_reason
+      in: query
+      schema:
+        type: string
+        enum: [spam, abuse, hate, harassment, doxx, self_harm, copyright, 
+            impersonation, illegal, other]
+    - name: spam_verdict
+      in: query
+      schema:
+        type: string
+        enum: [ham, unknown, likely_spam, spam]
+    - name: spam_score_gte
+      in: query
+      schema: {type: number, format: float, minimum: 0, maximum: 1}
+    - name: search
+      in: query
+      schema: {type: string, maxLength: 200}
+    - name: after
+      in: query
+      schema: {type: string, format: date-time}
+    - name: before
+      in: query
+      schema: {type: string, format: date-time}
+    - name: sort
+      in: query
+      schema: {type: string, enum: [newest, oldest, highest_flag, highest_spam, 
+            most_replied], default: newest}
+    responses:
+      '200':
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas/Comments.yaml#/EnvelopeCommentList
+        description: Triage list of comments for moderation
+      '401':
+        $ref: ../components/responses.yaml#/UnauthorizedError
+      '403':
+        $ref: ../components/responses.yaml#/ForbiddenError
+
+/api/v1/admin/comments/{id}:
+  get:
+    tags:
+    - Admin / Moderation
+    summary: View a single comment with full moderation metadata, ip hash, and 
+      spam assessment
+    operationId: admin.comments.get
+    parameters:
+    - name: id
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+    responses:
+      '200':
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas/Comments.yaml#/EnvelopeCommentResponse
+        description: Full comment with moderation metadata and spam assessment
+      '401':
+        $ref: ../components/responses.yaml#/UnauthorizedError
+      '403':
+        $ref: ../components/responses.yaml#/ForbiddenError
+      '404':
+        $ref: ../components/responses.yaml#/NotFoundError
+  delete:
+    tags:
+    - Admin / Moderation
+    summary: Hard delete a comment (with audit + optional author notification)
+    operationId: admin.comments.delete
+    parameters:
+    - name: id
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+    requestBody:
+      required: false
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              reason: {type: string, maxLength: 500}
+              notify_author: {type: boolean, default: false}
+    responses:
+      '200':
+        $ref: ../components/responses.yaml#/EmptyOk
+      '401':
+        $ref: ../components/responses.yaml#/UnauthorizedError
+      '403':
+        $ref: ../components/responses.yaml#/ForbiddenError
+      '404':
+        $ref: ../components/responses.yaml#/NotFoundError
+
+/api/v1/admin/comments/{id}/moderate:
+  post:
+    tags:
+    - Admin / Moderation
+    summary: Moderate a single comment (approve/reject/spam/restore/unspam)
+    operationId: admin.comments.moderate
+    parameters:
+    - name: id
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+    - $ref: ../components/parameters.yaml#/XCsrfToken
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: ../components/schemas/Comments.yaml#/CommentModerateRequest
+    responses:
+      '200':
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas/Comments.yaml#/EnvelopeCommentResponse
+        description: Comment with updated moderation status and audit reference
+      '400':
+        $ref: ../components/responses.yaml#/ValidationError
+      '401':
+        $ref: ../components/responses.yaml#/UnauthorizedError
+      '403':
+        $ref: ../components/responses.yaml#/ForbiddenError
+      '404':
+        $ref: ../components/responses.yaml#/NotFoundError
+
+/api/v1/admin/comments/bulk-moderate:
+  post:
+    tags:
+    - Admin / Moderation
+    summary: Bulk moderate a list of comment IDs using one action; transactional
+      with audit logs
+    operationId: admin.comments.bulk_moderate
+    parameters:
+    - $ref: ../components/parameters.yaml#/XCsrfToken
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            required:
+            - ids
+            - action
+            properties:
+              ids:
+                type: array
+                minItems: 1
+                maxItems: 500
+                items: {type: string, format: uuid}
+              action:
+                type: string
+                enum: [approve, reject, spam, restore, unspam, flag_resolved, 
+                    delete]
+              reason: {type: string, maxLength: 500}
+              notify_authors: {type: boolean, default: false}
+    responses:
+      '200':
+        description: Per-item success/failure totals
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas/Common.yaml#/Envelope
+      '400':
+        $ref: ../components/responses.yaml#/ValidationError
+      '401':
+        $ref: ../components/responses.yaml#/UnauthorizedError
+      '403':
+        $ref: ../components/responses.yaml#/ForbiddenError
+
+/api/v1/admin/comments/stats:
+  get:
+    tags:
+    - Admin / Moderation
+    summary: Moderation queue health + per-post counts for dashboard widgets
+    operationId: admin.comments.stats
+    parameters:
+    - name: window
+      in: query
+      schema: {type: string, enum: [1d, 7d, 30d, 90d], default: 7d}
+    - name: group_by
+      in: query
+      schema: {type: string, enum: [day, status, post], default: status}
+    responses:
+      '200':
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas/Comments.yaml#/EnvelopeCommentStats
+        description: Moderation queue and per-post status counts
+      '401':
+        $ref: ../components/responses.yaml#/UnauthorizedError
+      '403':
+        $ref: ../components/responses.yaml#/ForbiddenError

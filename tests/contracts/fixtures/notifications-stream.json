@@ -1,0 +1,177 @@
+[
+  {
+    "name": "valid-bearer-token-opens-stream",
+    "description": "A valid bearer token should return 200 with correct SSE headers and the initial handshake (retry + stream.opened).",
+    "request_headers": {
+      "Authorization": "Bearer eyJhbGciOiJFZERTQSIsInR5cCI6IkpXVCJ9.valid-session-fixture",
+      "Accept": "text/event-stream",
+      "Origin": "https://app.example.com"
+    },
+    "query_params": {
+      "channels": "default"
+    },
+    "expected_status": 200,
+    "expected_response_headers": {
+      "Content-Type": "text/event-stream; charset=utf-8",
+      "Cache-Control": "no-cache"
+    },
+    "stream_read_ms": 1200,
+    "expected_events": [
+      {
+        "event_name": "_control_retry_line",
+        "value_matches": "^retry: 5000$"
+      },
+      {
+        "event_name": "stream.opened",
+        "data_required_keys": ["stream_id", "user_id", "server_ts", "retry_ms", "channels"],
+        "data_values": {
+          "retry_ms": 5000,
+          "replay_applied": false,
+          "replay_count": 0
+        }
+      }
+    ]
+  },
+  {
+    "name": "missing-auth-rejects-with-401",
+    "description": "No Authorization header and no session cookie must produce a JSON EnvelopeError code=unauthorized and never write SSE frame bytes.",
+    "request_headers": {
+      "Accept": "text/event-stream"
+    },
+    "expected_status": 401,
+    "expected_body_contains": ["\"code\":\"unauthorized\"", "\"status\":\"error\""],
+    "expected_body_contains_none": ["retry:", "event:", "data:"]
+  },
+  {
+    "name": "non-whitelisted-origin-rejects-403",
+    "description": "SSE connections from Origins outside the CORS allowlist must short-circuit 403 cors.origin_not_allowed.",
+    "request_headers": {
+      "Authorization": "Bearer valid-user-fixture",
+      "Origin": "https://evil.example.com"
+    },
+    "expected_status": 403,
+    "expected_body_contains": ["\"code\":\"cors.origin_not_allowed\""]
+  },
+  {
+    "name": "fourth-concurrent-stream-429-too-many-connections",
+    "description": "Default SSE_MAX_CONCURRENT_PER_USER=3; opening a 4th connection for the same identity should return 429 with Retry-After and code sse.stream.too_many_connections.",
+    "arrange": {
+      "pre_open_user_streams": 3,
+      "scrub_after": true
+    },
+    "request_headers": {
+      "Authorization": "Bearer valid-user-fixture"
+    },
+    "expected_status": 429,
+    "expected_response_headers": {
+      "Retry-After": "30"
+    },
+    "expected_body_contains": ["\"code\":\"sse.stream.too_many_connections\""]
+  },
+  {
+    "name": "reconnect-with-last-event-id-replays-gap",
+    "description": "Reconnecting with Last-Event-ID=N should replay events strictly greater than N with replay_applied=true and correct replay_count.",
+    "arrange": {
+      "pre_publish_notifications_for_user": 20
+    },
+    "request_headers": {
+      "Authorization": "Bearer valid-user-fixture",
+      "Last-Event-ID": "0000000000000000005-0001"
+    },
+    "stream_read_ms": 1800,
+    "expected_status": 200,
+    "expected_events": [
+      {
+        "event_name": "stream.opened",
+        "data_values": {
+          "replay_applied": true,
+          "replay_count": 15
+        }
+      }
+    ],
+    "expected_notification_ids_subset_count_gte": 15
+  },
+  {
+    "name": "single-notification-fans-out-to-N-connections",
+    "description": "Publish 1 blog.comment.created domain event; every one of N=5 connected SSE clients for the same user receives the notification.created frame within 500ms with identical notification_id.",
+    "arrange": {
+      "open_user_streams": 5,
+      "single_publish": "blog.comment.created"
+    },
+    "expected_status": 200,
+    "every_stream_must_receive_event": {
+      "event_name": "notification.created",
+      "data_required_keys": ["notification_id", "type", "title", "read", "created_at", "channel"],
+      "data_values": { "channel": "sse" }
+    },
+    "inter_stream_consistency": {
+      "same_value_across_streams": ["data.notification_id"],
+      "monotonic_within_stream": ["id"]
+    }
+  },
+  {
+    "name": "cross-user-isolation-no-leak",
+    "description": "Publishing to user A must never deliver frames to user B's connection, even when both are open on the same server process.",
+    "arrange": {
+      "open_streams": [
+        { "as_user": "user-a-fixture" },
+        { "as_user": "user-b-fixture" }
+      ],
+      "publish_to_user": "user-a-fixture"
+    },
+    "settle_ms": 400,
+    "per_stream_asserts": [
+      { "as_user": "user-a-fixture", "received_events_count_gte.notification.created": 1 },
+      { "as_user": "user-b-fixture", "received_events_count_eq.notification.created": 0 }
+    ]
+  },
+  {
+    "name": "slow-consumer-buffer-overflow-emits-error-frame",
+    "description": "Attach a 1 frame/sec consumer; flood 1000 events. Expect exactly 1 event: error with code=fanout.buffer_full and integer dropped_count, other clients unaffected.",
+    "arrange": {
+      "read_throttle_per_frame_ms": 1000,
+      "publish_count": 1000,
+      "open_background_fast_clients": 4
+    },
+    "expected_events": [
+      {
+        "event_name": "error",
+        "data_required_keys": ["code", "message", "dropped_count"],
+        "data_values": { "code": "fanout.buffer_full" },
+        "data_types": { "dropped_count": "integer", "dropped_count_min": 1 }
+      }
+    ],
+    "background_fast_clients": {
+      "all_events_received": true,
+      "no_error_frames": true
+    }
+  },
+  {
+    "name": "aggressive-reconnect-jail",
+    "description": "12 connects inside a 60s window for the same ip:user tuple → last several return 429 sse.stream.jailed with Retry-After=120.",
+    "arrange": {
+      "client_ip": "203.0.113.42",
+      "rapid_connects_count": 12,
+      "window_seconds": 60
+    },
+    "expected_status_on_last_n": {
+      "n": 2,
+      "status": 429,
+      "body_contains": ["\"code\":\"sse.stream.jailed\""],
+      "response_header_Retry_After": "120"
+    }
+  },
+  {
+    "name": "session-invalidated-family-closes-stream",
+    "description": "Publish user.session.invalidated_family domain event; every open stream for that user receives event: session.invalidated_family then server closes stream within 250ms; client wrapper dispatches auth:logout-required.",
+    "arrange": {
+      "open_user_streams": 3,
+      "publish_domain_event": "user.session.invalidated_family"
+    },
+    "every_stream_must_receive_event": {
+      "event_name": "session.invalidated_family",
+      "data_required_keys": ["reason", "logout_everywhere"]
+    },
+    "stream_close_within_ms": 250
+  }
+]

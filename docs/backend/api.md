@@ -4,7 +4,7 @@
 
 The authoritative REST API contract lives at:
 
-- [contracts/openapi.yaml](file:///mnt/myadrive/repo/turahe/blog-api/contracts/openapi.yaml) (OpenAPI 3.1)
+- [contracts/openapi.yaml](../../contracts/openapi.yaml) (OpenAPI 3.1)
 
 Use `docs/backend/api.md` as a human-readable summary, but `contracts/openapi.yaml` is the source of truth for path definitions, schema, security, and status codes. Validation and code generation should reference the contract file.
 
@@ -72,20 +72,57 @@ All associations must be server-resolved from FKs and join tables rather than tr
 
 ## Notification SSE Endpoint
 
-- `GET /api/v1/me/notifications/stream` must require authentication
-- each connected client must subscribe only to that user's notification fan-out
-- content type: `text/event-stream`
-- cache-control: `no-cache`
-- connection should include:
-  - periodic keep-alive comments or `: ping` frames
-  - reconnect negotiation via `Retry:` hint
-  - graceful close on client disconnect or auth expiration
-- event format:
-  - `event: notification.created`
-  - `id: <notification-event-id>`
-  - `data: { "notification_id", "type", "title", "preview", "read", "created_at" }`
-- fan-out should happen through an internal pub/sub channel (for example Watermill pub/sub or Redis pub/sub) that SSE handlers subscribe to per authenticated user
-- delivery is at-least-once; clients must deduplicate by `id` or `notification_id`
+Authoritative contract: [paths/notifications.yaml](../../paths/notifications.yaml#L41-L153)
+(OpenAPI 3.1) + AsyncAPI channel `notifications.user.{user_id}.stream` in
+[contracts/asyncapi.yaml](../../contracts/asyncapi.yaml).
+Full wire format, client integration, security, and scaling guidance is in the feature chapter
+[realtime-notifications-sse.md](../features/realtime-notifications-sse.md).
+
+- `GET /api/v1/me/notifications/stream` must require authentication (JWT bearer token OR valid
+  http-only session cookie issued by `/api/v1/auth/login`). Browser-origin callers using
+  cookies must send `X-CSRF-Token`; non-browser API tokens in the allowlist are CSRF-exempt.
+- Each connected client must subscribe **only** to that user's notification fan-out keyed by
+  JWT `sub`; server-side there is no path to upgrade a connection to another user.
+- Response headers on 200 OK: `Content-Type: text/event-stream; charset=utf-8` (always),
+  `Cache-Control: no-cache` (always), `Connection: keep-alive` on HTTP/1.1,
+  `X-Accel-Buffering: no` for Nginx. Optional `Retry-After` + `X-RateLimit-Limit/Remaining`
+  rate limit headers present when the endpoint is under load.
+- Connection lifecycle includes:
+  - periodic `event: ping` frames every `SSE_PING_INTERVAL_SECONDS` (default 15s) to keep
+    intermediate proxy sockets alive
+  - opening `retry: 5000` line for EventSource reconnect delay hint + `event: stream.opened`
+    frame with `stream_id`, `user_id`, `retry_ms`, `replay_applied`, `replay_count`
+  - graceful close on client disconnect (request context done), auth expiration
+    (`event: stream.closed { code: "auth.expired" }`), session revocation, or server SIGTERM
+    shutdown
+  - watchdog-based cleanup of half-open TCP sockets after 2 missed pings
+  - bounded per-connection write buffer (default 512); slow consumers overflow produces a
+    single `event: error { code: "fanout.buffer_full", dropped_count: N }` frame and drops
+    oldest events rather than blocking the global fan-out
+- Event format on the wire (WHATWG Server-Sent Events):
+  - `event: notification.created` / `notification.read` / `notification.dismissed` /
+    `stream.opened` / `stream.closed` / `error` / `ping` / `session.invalidated_family`
+  - `id: <monotonic opaque id>` present on every frame except `ping`
+  - `data: <single-line compact JSON>`; payloads are standardised
+  - `retry: <milliseconds>` exactly once during the handshake
+- REST history companion endpoint `GET /api/v1/me/notifications` is the fallback catchment for
+  events older than the bounded Redis replay ring (`SSE_REPLAY_MAX_EVENTS_PER_USER = 1000`,
+  TTL `SSE_REPLAY_TTL_SECONDS = 600`) after `Last-Event-ID` reconnects.
+- Fan-out happens through an internal Watermill → Redis pub/sub bridge. Single-process deployments
+  can use Watermill in-process; multi-process deployments MUST fan out via Redis bus so any
+  process can publish and every process's connected clients receive the frame.
+- Delivery semantics are at-least-once; clients MUST deduplicate by `id:` or
+  `data.notification_id`. `Last-Event-ID` (or query `?replay_after=`) replay restores gaps
+  within the replay ring; gaps outside the ring are filled by the client calling
+  `GET /api/v1/me/notifications` immediately after the reconnect.
+- Rate limiting on SSE (all Redis-backed, keys documented in
+  [realtime-notifications-sse.md](../features/realtime-notifications-sse.md) §4):
+  - per-user concurrent streams: `SSE_MAX_CONCURRENT_PER_USER=3` (4th → 429
+    `sse.stream.too_many_connections` + `Retry-After: 30`)
+  - reconnect attempts per `ip:user` 60s window: 10 (excess → 429
+    `sse.stream.reconnect_rate`)
+  - aggressive reconnect jail: ≥ 5 failed connects inside 60s → 120s jail 429
+    `sse.stream.jailed`
 
 ## Example Admin Endpoints
 

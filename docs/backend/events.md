@@ -4,7 +4,7 @@
 
 The authoritative events and streaming contract lives at:
 
-- [contracts/asyncapi.yaml](file:///mnt/myadrive/repo/turahe/blog-api/contracts/asyncapi.yaml) (AsyncAPI 2.6)
+- [contracts/asyncapi.yaml](../../contracts/asyncapi.yaml) (AsyncAPI 2.6)
 
 Use `docs/backend/events.md` as a human overview; the AsyncAPI contract is the source of truth for channel names, message payloads, security requirements, SSE bindings, and job topics.
 
@@ -99,3 +99,57 @@ Use Watermill for domain and integration events. Prefer transactional consistenc
 - include aggregate ID
 - include actor ID when available
 - keep payload versionable
+
+## Streaming Channels and SSE Fan-Out
+
+In addition to the point-to-point Watermill channels listed above, the backend exposes
+parameterised streaming channels that are consumed by inbound SSE adapters. The authoritative
+binding for these channels lives in [contracts/asyncapi.yaml](../../contracts/asyncapi.yaml)
+(server `sse-local` and `sse-prod`), but the human-facing catalogue is:
+
+| Channel | SSE endpoint | Consumer identity | Purpose |
+|---------|--------------|-------------------|---------|
+| `notifications.user.{user_id}.stream` | `GET /api/v1/me/notifications/stream` | authenticated `user_id == sub` claim | Realtime per-user notification events (created/read/dismissed) plus stream lifecycle frames |
+| `analytics.admin.realtime.stream` | `GET /api/v1/admin/analytics/realtime/stream` | authenticated admin with `analytics.read_all` | Live dashboards, impersonation audit trail, system health |
+
+### SSE Event Catalogue
+
+Each SSE frame is serialized according to the WHATWG Server-Sent Events specification using
+`event:`, `id:`, `data:`, and optional `retry:` lines. Data payloads are compact single-line
+JSON. All streams deliver the following control frames in addition to domain events:
+
+- `event: stream.opened` — emitted exactly once per successful connection, `data` contains
+  `{ "stream_id": <uuid>, "user_id": <uuid>, "server_ts": <ISO-8601>, "retry_ms": 5000 }`.
+- `event: stream.closed` — emitted on server-initiated shutdown. The `data.code` field is one
+  of: `auth.expired`, `session.revoked`, `too_many_connections`, `shutdown`,
+  `maintenance`. Clients should not reconnect until `retry_ms` has elapsed.
+- `event: ping` — keep-alive every `SSE_PING_INTERVAL_SECONDS` (default 15 seconds). `data` is
+  `{ "ts": <ISO-8601 server wall clock> }`.
+- `event: error` — transient server-side error that does not close the stream, for example
+  a single fan-out write that was dropped because the consumer buffer was full. `data.code`
+  is a stable machine-readable enum.
+
+Notification stream frames on `notifications.user.{user_id}.stream`:
+
+- `event: notification.created` — a new in-app notification has been stored for the user.
+  `data` mirrors the REST `Notification` shape: `{ notification_id, type, title, preview,
+  read: false, created_at, channel: "sse" }`.
+- `event: notification.read` — one or more notifications have been marked read (via REST
+  `POST /api/v1/me/notifications/{id}/read` or bulk). `data` is
+  `{ "ids": [<uuid>, ...], "read_at": <ISO-8601> }`.
+- `event: notification.dismissed` — user dismissed a single notification from the UI.
+  `data` is `{ "id": <uuid> }`.
+- `event: session.invalidated_family` — password/email/security change caused the refresh
+  family to be rotated. Clients MUST tear down local session state and navigate to login.
+  Emitted from the Watermill consumer handling `user.session.invalidated_family`.
+
+### SSE Delivery Guarantees
+
+- At-least-once delivery; clients deduplicate by `id:` or `data.notification_id`.
+- On reconnect, `Last-Event-ID` is passed to the stream endpoint. The server replays missed
+  events from a bounded in-memory or Redis-backed replay ring (default last 1000 events per
+  user with TTL 10 minutes). Events older than the replay window are fetched by calling the
+  REST `GET /api/v1/me/notifications` endpoint from the client after reconnect.
+- Idle sockets are kept alive by `event: ping` frames; clients that miss two consecutive pings
+  SHOULD initiate a reconnect before the upstream proxy idle timeout (configured separately;
+  recommended Nginx `proxy_read_timeout` is 120s or higher).

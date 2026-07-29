@@ -1,0 +1,300 @@
+{
+  "_meta": {
+    "purpose": "newsletter module contract-test fixtures (public double opt-in + admin send + ESP integration)",
+    "base_url": "/api/v1",
+    "subscriber_uuid": "00000000-0000-0000-0000-0000000000aa",
+    "issue_uuid": "00000000-0000-0000-0000-0000000000bb",
+    "confirm_token_raw": "64-byte-csprng-confirm-token-for-testing-do-not-hardcode-in-prod-01234567890abcdef",
+    "confirm_token_hash_sha256_hex": "compute-at-runtime-sha256-of-confirm_token_raw",
+    "unsubscribe_token_signed_hs256": "runtime-generated-hs256-per-issue-per-subscriber-token"
+  },
+  "subscribe_new_email__happy_public": {
+    "request": {
+      "method": "POST",
+      "path": "/newsletter/subscribe",
+      "auth": "none",
+      "headers": {
+        "Content-Type": "application/json",
+        "X-CSRF-Token": "csrf-double-submit-from-newsletter-form-cookie"
+      },
+      "body": {
+        "email": "alex.newsletter@example.com",
+        "display_name": "Alex Newsletter",
+        "locale": "en_US",
+        "timezone": "America/New_York",
+        "list_ids": ["weekly-news", "product-updates"],
+        "consents_given": true,
+        "gdpr_legal_basis": "consent",
+        "consents_declaration": "I confirm I am over 16 and agree to receive newsletters. My data is stored securely and I can unsubscribe at any time.",
+        "source": "web_form",
+        "format": "html",
+        "frequency": "weekly_digest",
+        "honeypot": "",
+        "turnstile_response": "0.v2.sandbox-turnstile-token"
+      }
+    },
+    "expected_response": {
+      "status": 202,
+      "notes": [
+        "Always 202 regardless of whether email was new or existing (non-enumeration).",
+        "Actual row creation + email DOI send happen async via event bus."
+      ],
+      "body_contains": {
+        "data": {
+          "type": "newsletter_subscription_accepted",
+          "check_inbox_hint": true
+        }
+      }
+    },
+    "side_effects": {
+      "newsletter_subscribers.rows_inserted": 1,
+      "newsletter_subscribers.status": "pending_confirm",
+      "newsletter_provider_syncs.rows_inserted": 1,
+      "newsletter_provider_syncs.sync_status": "pending",
+      "newsletter_consent_audit.rows_inserted": 1,
+      "newsletter_consent_audit.action": "opted_in",
+      "events_fired": [
+        "newsletter.subscription.created",
+        "newsletter.subscription.confirm_sent"
+      ]
+    }
+  },
+  "subscribe__sad_honeypot_filled_anti_bot": {
+    "request": {
+      "method": "POST",
+      "path": "/newsletter/subscribe",
+      "auth": "none",
+      "headers": { "Content-Type": "application/json" },
+      "body": {
+        "email": "bot@example.com",
+        "consents_given": true,
+        "honeypot": "bot-field-filled",
+        "turnstile_response": ""
+      }
+    },
+    "expected_response": {
+      "status": 202,
+      "notes": [
+        "Response shape identical to happy path for non-enumeration.",
+        "Server MUST NOT create subscriber row; MUST NOT send DOI email; MUST count honeypot metric."
+      ]
+    },
+    "side_effects": {
+      "newsletter_subscribers.rows_inserted": 0,
+      "newsletter_consent_audit.rows_inserted": 0,
+      "metrics_incremented": ["newsletter_subscribe_honeypot_hit_total"]
+    }
+  },
+  "confirm_subscription__happy_token_valid": {
+    "request": {
+      "method": "POST",
+      "path": "/newsletter/confirm",
+      "auth": "none",
+      "headers": { "Content-Type": "application/json" },
+      "body": {
+        "token": "__PLACEHOLDER_confirm_token_raw__",
+        "ip_hash": "sha256-of-confirm-click-ip-address"
+      }
+    },
+    "expected_response": {
+      "status": 200,
+      "body_contains": {
+        "data": {
+          "type": "newsletter_subscriber",
+          "status": "active",
+          "confirmed_at__is_non_null": true
+        }
+      }
+    },
+    "side_effects": {
+      "newsletter_subscribers.status_transition": ["pending_confirm", "active"],
+      "events_fired": [
+        "newsletter.subscription.confirmed",
+        "newsletter.provider_sync.attempted"
+      ]
+    }
+  },
+  "confirm_subscription__sad_token_expired_ttl": {
+    "request": {
+      "method": "POST",
+      "path": "/newsletter/confirm",
+      "auth": "none",
+      "headers": { "Content-Type": "application/json" },
+      "body": { "token": "token-expired-because-confirm_sent_at-was-50h-ago" }
+    },
+    "expected_response": {
+      "status": 410,
+      "body_contains": {
+        "code": "newsletter.confirm.token_expired",
+        "resend_hint": true
+      }
+    }
+  },
+  "resend_confirm__sad_rate_limited": {
+    "request": {
+      "method": "POST",
+      "path": "/newsletter/confirm/resend",
+      "auth": "none",
+      "headers": { "Content-Type": "application/json" },
+      "body": { "email": "alex.newsletter@example.com" }
+    },
+    "simulate": {
+      "previous_3_resends_within_last_30_min": true
+    },
+    "expected_response": {
+      "status": 429,
+      "headers": { "Retry-After": "1800" },
+      "body_contains": {
+        "code": "newsletter.confirm.resend.rate_limited"
+      }
+    }
+  },
+  "unsubscribe__happy_issue_token": {
+    "request": {
+      "method": "POST",
+      "path": "/newsletter/unsubscribe",
+      "auth": "none",
+      "headers": { "Content-Type": "application/json" },
+      "body": {
+        "token": "__PLACEHOLDER_per_issue_signed_unsubscribe_token_hs256__",
+        "reason_code": "not_relevant",
+        "feedback": "This content no longer matches my interests, thanks for the work though."
+      }
+    },
+    "expected_response": {
+      "status": 200,
+      "body_contains": {
+        "data": {
+          "type": "newsletter_unsubscribed",
+          "unsubscribed_at__is_non_null": true
+        }
+      }
+    },
+    "side_effects": {
+      "newsletter_subscribers.status": "unsubscribed",
+      "newsletter_consent_audit.action": "unsubscribed",
+      "newsletter_list_memberships.unsubscribed_at__set_now": true,
+      "newsletter_provider_syncs.direction": "push_to_provider",
+      "newsletter_provider_syncs.sync_status": "pending",
+      "events_fired": [
+        "newsletter.subscription.unsubscribed",
+        "newsletter.provider_sync.attempted"
+      ]
+    }
+  },
+  "rfc8058_one_click_unsubscribe__happy": {
+    "request": {
+      "method": "POST",
+      "path": "/newsletter/unsubscribe-header",
+      "auth": "none",
+      "headers": {
+        "Content-Type": "application/x-www-form-urlencoded",
+        "User-Agent": "List-Unsubscribe=One-Click (mail-client/2.0)"
+      },
+      "form_body": "List-Unsubscribe=One-Click&sid=signed_sid_token_from_list_unsubscribe_header_value"
+    },
+    "expected_response": {
+      "status": 200,
+      "body_contains": { "type": "newsletter_unsubscribed" },
+      "notes": [
+        "RFC 8058 HTTPS endpoint. No authentication. MUST verify HMAC signature of sid param.",
+        "Body is plain OK or JSON envelope, does NOT require login or browser session."
+      ]
+    }
+  },
+  "admin_create_issue__happy_editor": {
+    "request": {
+      "method": "POST",
+      "path": "/admin/newsletter/issues",
+      "auth": "bearer_jwt_newsletter_editor",
+      "headers": {
+        "Content-Type": "application/json",
+        "X-CSRF-Token": "admin-newsletter-csrf-token"
+      },
+      "body": {
+        "slug": "issue-2026-w03-introducing-comments",
+        "subject": "Introducing comments and newsletter subscriptions 🚀",
+        "preheader": "Readers can now post comments, subscribe, and manage preferences — here's everything you need.",
+        "list_id": "weekly-news",
+        "template_id": "weekly-v1",
+        "status": "draft",
+        "html_body": "<h1>Hello {{display_name}}!</h1><p>This week we shipped two features...</p><p><a href=\"{{unsubscribe_link}}\">Unsubscribe</a> from future emails.</p>",
+        "plaintext_body": "Hello {{display_name}}!\n\nThis week we shipped two features...\n\nUnsubscribe: {{unsubscribe_link}}",
+        "scheduled_at": null
+      }
+    },
+    "expected_response": {
+      "status": 201,
+      "body_contains": {
+        "data": {
+          "type": "newsletter_issue",
+          "slug": "issue-2026-w03-introducing-comments",
+          "status": "draft"
+        }
+      }
+    }
+  },
+  "admin_send_issue__missing_unsubscribe_link_aborted": {
+    "request": {
+      "method": "POST",
+      "path": "/admin/newsletter/issues",
+      "auth": "bearer_jwt_newsletter_editor",
+      "headers": { "Content-Type": "application/json", "X-CSRF-Token": "token" },
+      "body": {
+        "slug": "issue-no-footer-link-should-fail",
+        "subject": "No unsubscribe link in this issue on purpose",
+        "list_id": "weekly-news",
+        "status": "sending",
+        "html_body": "<p>I forgot the footer unsubscribe link!</p>",
+        "plaintext_body": "I forgot the footer unsubscribe link!",
+        "scheduled_at": null
+      }
+    },
+    "expected_response": {
+      "status": 422,
+      "body_contains": {
+        "code": "newsletter.issue.unsubscribe_link.required",
+        "missing_in": ["html_body", "plaintext_body"]
+      }
+    },
+    "side_effects": {
+      "newsletter_issues.rows_inserted": 0,
+      "events_fired": ["newsletter.issue.send_failed"]
+    }
+  },
+  "admin_provider_config__happy_put_ses_smtp": {
+    "request": {
+      "method": "PUT",
+      "path": "/admin/newsletter/provider-config",
+      "auth": "bearer_jwt_admin_superadmin",
+      "headers": { "Content-Type": "application/json", "X-CSRF-Token": "token" },
+      "body": {
+        "provider": "ses_smtp",
+        "api_key_secret_ref": "secrets://blog/prod/smtp/ses_creds_v1",
+        "list_id": "weekly-news",
+        "from_name": "Turahe Blog",
+        "from_email": "newsletter@blog.example.com",
+        "reply_to": "no-reply@blog.example.com",
+        "physical_address": "123 Open-Source Street, Jakarta, ID",
+        "double_optin_required": true,
+        "unsubscribe_branded_domain": "links.blog.example.com",
+        "enabled": true
+      }
+    },
+    "expected_response": {
+      "status": 200,
+      "body_contains": {
+        "data": {
+          "type": "newsletter_provider_config",
+          "provider": "ses_smtp",
+          "api_key_secret_ref": "secrets://blog/prod/smtp/ses_creds_v1",
+          "api_key_value_exposed_in_response": false
+        }
+      }
+    },
+    "side_effects": {
+      "audit_log_rows_appended": 1,
+      "settings_cache_invalidated_key": "newsletter.provider:ses_smtp"
+    }
+  }
+}

@@ -43,14 +43,112 @@
     tags:
     - Self-Service
     summary: SSE stream of real-time notifications for the current user
-    description: SSE stream producing user-scoped notification events. See `contracts/asyncapi.yaml` for event payloads.
+    description: |
+      Opens a long-lived Server-Sent Events (HTTP/1.1 or HTTP/2 `text/event-stream`) connection
+      that pushes user-scoped notifications and stream lifecycle events to the authenticated
+      client. The server emits periodic keep-alive frames so intermediate proxies do not close
+      the socket on idle, and a `retry` hint so EventSource clients know how to back off on
+      reconnect. Connecting requires a valid bearer token or session cookie (auth middleware)
+      and the call is rate limited per user to avoid stream exhaustion attacks. See
+      `contracts/asyncapi.yaml` channel `notifications.user.{user_id}.stream` and the feature
+      doc `docs/features/realtime-notifications-sse.md` for event wire formats, client
+      examples, and scaling guidance.
     operationId: me.notifications.stream
+    security:
+    - bearerAuth: [notifications.self.read]
     responses:
       '200':
-        description: text/event-stream with keep-alives and events
+        description: |
+          A `text/event-stream` response body kept open for the lifetime of the connection.
+          Each payload follows the WHATWG Server-Sent Events format (`event:`, `data:`, `id:`,
+          `retry:` lines) with standard framing. Clients must support the EventSource API or
+          an equivalent streaming parser.
+        headers:
+          Content-Type:
+            description: Always `text/event-stream` with UTF-8 charset.
+            required: true
+            schema:
+              type: string
+              enum:
+              - text/event-stream; charset=utf-8
+          Cache-Control:
+            description: Disables caching so intermediaries do not serve stale stream frames.
+            required: true
+            schema:
+              type: string
+              enum:
+              - no-cache
+          Connection:
+            description: Instructs HTTP/1.1 intermediaries to keep the socket open.
+            required: false
+            schema:
+              type: string
+              enum:
+              - keep-alive
+          X-Accel-Buffering:
+            description: Nginx/OpenResty specific header to disable response buffering for SSE.
+            required: false
+            schema:
+              type: string
+              enum:
+              - 'no'
+          Retry-After:
+            description: Present only in the initial 200 OK when the endpoint is under load; seconds to wait before reconnecting if the server immediately closes the stream.
+            required: false
+            schema:
+              type: integer
+              minimum: 1
+              maximum: 3600
+          X-RateLimit-Limit:
+            description: Configured concurrent SSE connections allowed for the authenticated identity.
+            required: false
+            schema:
+              type: integer
+              minimum: 0
+          X-RateLimit-Remaining:
+            description: Concurrent SSE connections remaining before the next attempt returns 429.
+            required: false
+            schema:
+              type: integer
+              minimum: 0
         content:
           text/event-stream:
             schema:
               type: string
+              format: binary
+              description: |
+                Server-Sent Events stream. Each event is one of:
+                  * `event: notification.created` / `notification.read` / `notification.dismissed`
+                  * `event: stream.opened`   — server ack on successful subscription
+                  * `event: stream.closed`   — server-initiated goodbye (auth expired, session revoked, too many connections)
+                  * `event: error`           — transient server-side error with human readable `data.message` and `data.code`
+                  * `event: ping`            — keep-alive every N seconds, data payload is `{ "ts": <ISO-8601> }`
+                All data objects are single-line JSON or an empty line. `id:` values are opaque
+                monotonically increasing string ids; clients send `Last-Event-ID` on reconnect.
       '401':
         $ref: ../components/responses.yaml#/UnauthorizedError
+      '403':
+        description: |
+          Cross-origin request from a non-whitelisted origin, or CSRF validation failed
+          for browser-style callers configured to require it. The body uses the standard
+          `EnvelopeError` envelope with `code=cors.origin_not_allowed` or `code=csrf.invalid`.
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas/Common.yaml#/EnvelopeError
+      '429':
+        description: |
+          Too many concurrent SSE connections for this user, or too many reconnect attempts per
+          window. Clients MUST honor the `Retry-After` seconds header before reconnecting.
+        headers:
+          Retry-After:
+            required: true
+            schema:
+              type: integer
+              minimum: 1
+              maximum: 3600
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas/Common.yaml#/EnvelopeError
+

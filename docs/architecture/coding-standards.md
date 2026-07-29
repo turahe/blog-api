@@ -7,6 +7,16 @@
 - prefer ASCII unless the file already uses Unicode intentionally
 - add short comments only where logic is not self-evident
 
+## Documentation Standards
+
+- **Relative links only**: every cross-reference link inside Markdown documents must be relative to the current file's directory. Absolute `file:///…` paths and root-absolute `/docs/…` paths are forbidden. Full rules: [relative-link-usage-rules.md](../guides/relative-link-usage-rules.md)
+- Validate links before every PR that modifies Markdown files:
+  ```bash
+  node scripts/docs/validate_relative_links.cjs docs contracts paths README.md
+  ```
+- When renaming or moving a referenced document, follow the 4-step rename/move protocol in §6 of the rules document.
+- For Mermaid diagrams, follow the [mermaid-competency-framework.md](../guides/mermaid-competency-framework.md) authoring checklist and run `node scripts/docs/parse_mermaid_validate.mjs docs` before merge.
+
 ## Go Standards
 
 - keep packages focused on one responsibility

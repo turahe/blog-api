@@ -1,0 +1,639 @@
+/api/v1/newsletter/subscribe:
+  post:
+    tags:
+    - Public / Newsletter
+    summary: Public subscribe endpoint (web forms + embeds). Emits double-opt-in
+      email; never confirms address directly.
+    description: |-
+      Accepts a new newsletter subscription from a public form. Always returns a success-shaped
+      202/201 regardless of whether the email already exists, to prevent email enumeration.
+      For new subscribers, generates a cryptographically random double-opt-in token (hashed + TTL)
+      and queues the confirmation email via the configured ESP. `honeypot`, `turnstile_response`,
+      and `referrer_url` are respected to reduce bot signups. Captures GDPR consent declaration
+      verbatim if provided.
+    security: []
+    operationId: public.newsletter.subscribe
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: 
+              ../components/schemas/Newsletter.yaml#/NewsletterSubscribeRequest
+    responses:
+      '201':
+        description: New subscriber created in pending_confirm state 
+          (confirmation email scheduled)
+        content:
+          application/json:
+            schema:
+              $ref: 
+                ../components/schemas/Newsletter.yaml#/EnvelopeNewsletterSubscriberResponse
+      '202':
+        description: Submission accepted; existing pending/active subscriber 
+          flow handled (silent no-op on duplicates)
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas/Common.yaml#/EnvelopeEmpty
+      '400':
+        $ref: ../components/responses.yaml#/ValidationError
+      '403':
+        description: Honeypot filled or captcha failed; submission rejected as 
+          bot
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas/Common.yaml#/EnvelopeError
+      '409':
+        description: Duplicate race on unique email; clients SHOULD retry to 
+          coalesce into 202
+      '429':
+        $ref: ../components/responses.yaml#/TooManyRequests
+
+/api/v1/newsletter/confirm:
+  post:
+    tags:
+    - Public / Newsletter
+    summary: Confirm a double-opt-in token and transition subscriber to active
+    security: []
+    operationId: public.newsletter.confirm
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: 
+              ../components/schemas/Newsletter.yaml#/NewsletterConfirmRequest
+    responses:
+      '200':
+        description: Subscriber confirmed; welcome email queued; sync with ESP 
+          initiated
+        content:
+          application/json:
+            schema:
+              $ref: 
+                ../components/schemas/Newsletter.yaml#/EnvelopeNewsletterSubscriberResponse
+      '400':
+        $ref: ../components/responses.yaml#/ValidationError
+      '404':
+        $ref: ../components/responses.yaml#/NotFoundError
+      '409':
+        description: Token expired, already consumed, or signature invalid
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas/Common.yaml#/EnvelopeError
+      '410':
+        description: Token already used
+
+/api/v1/newsletter/confirm/resend:
+  post:
+    tags:
+    - Public / Newsletter
+    summary: Resend a double-opt-in confirmation email for a pending subscriber 
+      (rate limited)
+    security: []
+    operationId: public.newsletter.confirm_resend
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: 
+              ../components/schemas/Newsletter.yaml#/NewsletterResendConfirmRequest
+    responses:
+      '202':
+        description: Accepted; if pending subscriber exists a fresh confirmation
+          email has been queued
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas/Common.yaml#/EnvelopeEmpty
+      '400':
+        $ref: ../components/responses.yaml#/ValidationError
+      '429':
+        $ref: ../components/responses.yaml#/TooManyRequests
+
+/api/v1/newsletter/unsubscribe:
+  post:
+    tags:
+    - Public / Newsletter
+    summary: Unsubscribe by signed token (used by one-click List-Unsubscribe and
+      in-email links)
+    security: []
+    operationId: public.newsletter.unsubscribe
+    description: |-
+      Consumes an unsubscribe token (usually from the footer of every newsletter email).
+      Optionally captures reason code + free-text feedback. If `delete_data=true` the
+      subscriber's PII is scheduled for hard deletion; otherwise row transitions to
+      `unsubscribed` and is retained for suppression list / compliance purposes.
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: 
+              ../components/schemas/Newsletter.yaml#/NewsletterUnsubscribeRequest
+    responses:
+      '200':
+        description: Subscriber unsubscribed; suppression lists updated; ESP 
+          sync queued
+        content:
+          application/json:
+            schema:
+              $ref: 
+                ../components/schemas/Newsletter.yaml#/EnvelopeNewsletterSubscriberResponse
+      '400':
+        $ref: ../components/responses.yaml#/ValidationError
+      '404':
+        $ref: ../components/responses.yaml#/NotFoundError
+      '409':
+        description: Token signature invalid or already consumed
+
+/api/v1/newsletter/preferences/{token}:
+  get:
+    tags:
+    - Public / Newsletter
+    summary: Load a subscriber's preferences using a signed token (for "Manage 
+      Subscription" links)
+    security: []
+    operationId: public.newsletter.preferences.get
+    parameters:
+    - name: token
+      in: path
+      required: true
+      schema: {type: string, minLength: 16, maxLength: 1000}
+    responses:
+      '200':
+        content:
+          application/json:
+            schema:
+              $ref: 
+                ../components/schemas/Newsletter.yaml#/EnvelopeNewsletterSubscriberResponse
+        description: Subscriber preferences for the signed token identity
+      '400':
+        $ref: ../components/responses.yaml#/ValidationError
+      '404':
+        $ref: ../components/responses.yaml#/NotFoundError
+  patch:
+    tags:
+    - Public / Newsletter
+    summary: Update subscriber format, frequency, categories via the manage 
+      preferences link
+    security: []
+    operationId: public.newsletter.preferences.patch
+    parameters:
+    - name: token
+      in: path
+      required: true
+      schema: {type: string, minLength: 16, maxLength: 1000}
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              display_name: {type: string, maxLength: 120}
+              locale: {type: string, maxLength: 16}
+              list_ids:
+                type: array
+                maxItems: 20
+                items: {type: string, maxLength: 64}
+              categories:
+                type: array
+                maxItems: 100
+                items: {type: string}
+              preferences:
+                $ref: 
+                  ../components/schemas/Newsletter.yaml#/NewsletterSubscriberPreferences
+    responses:
+      '200':
+        content:
+          application/json:
+            schema:
+              $ref: 
+                ../components/schemas/Newsletter.yaml#/EnvelopeNewsletterSubscriberResponse
+        description: Updated subscriber preferences record
+      '400':
+        $ref: ../components/responses.yaml#/ValidationError
+      '404':
+        $ref: ../components/responses.yaml#/NotFoundError
+
+/api/v1/me/newsletter/subscriptions:
+  get:
+    tags:
+    - Self-Service
+    summary: Show subscriptions for the currently authenticated user (if account
+      email matches subscriber)
+    operationId: me.newsletter.subscriptions.list
+    responses:
+      '200':
+        content:
+          application/json:
+            schema:
+              $ref: 
+                ../components/schemas/Newsletter.yaml#/EnvelopeNewsletterSubscriberList
+        description: Subscriptions matching the authenticated user email
+      '401':
+        $ref: ../components/responses.yaml#/UnauthorizedError
+      '404':
+        $ref: ../components/responses.yaml#/NotFoundError
+
+/api/v1/me/newsletter/subscribe:
+  post:
+    tags:
+    - Self-Service
+    summary: Subscribe (or re-activate) the current authenticated user's email 
+      to the newsletter
+    operationId: me.newsletter.subscribe
+    requestBody:
+      required: false
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              list_ids:
+                type: array
+                maxItems: 20
+                items: {type: string, maxLength: 64}
+              categories:
+                type: array
+                maxItems: 100
+                items: {type: string}
+              preferences:
+                $ref: 
+                  ../components/schemas/Newsletter.yaml#/NewsletterSubscriberPreferences
+    responses:
+      '200':
+        content:
+          application/json:
+            schema:
+              $ref: 
+                ../components/schemas/Newsletter.yaml#/EnvelopeNewsletterSubscriberResponse
+        description: Subscriber record (newly created or reactivated)
+      '201':
+        description: New subscriber row created for the user email
+      '400':
+        $ref: ../components/responses.yaml#/ValidationError
+      '401':
+        $ref: ../components/responses.yaml#/UnauthorizedError
+
+/api/v1/me/newsletter/unsubscribe:
+  post:
+    tags:
+    - Self-Service
+    summary: Unsubscribe the current authenticated user's email
+    operationId: me.newsletter.unsubscribe
+    requestBody:
+      required: false
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              reason_code:
+                type: string
+                enum: [too_often, not_relevant, did_not_sign_up, privacy_concern,
+                  spam, other]
+              reason: {type: string, maxLength: 500}
+              delete_data: {type: boolean, default: false}
+    responses:
+      '200':
+        content:
+          application/json:
+            schema:
+              $ref: 
+                ../components/schemas/Newsletter.yaml#/EnvelopeNewsletterSubscriberResponse
+        description: Subscriber record updated to unsubscribed
+      '401':
+        $ref: ../components/responses.yaml#/UnauthorizedError
+      '404':
+        $ref: ../components/responses.yaml#/NotFoundError
+
+/api/v1/admin/newsletter/subscribers:
+  get:
+    tags:
+    - Admin / Newsletter
+    summary: Admin list/search subscribers with filters and exports
+    operationId: admin.newsletter.subscribers.list
+    parameters:
+    - $ref: ../components/parameters.yaml#/Page
+    - $ref: ../components/parameters.yaml#/PerPage
+    - name: status
+      in: query
+      schema:
+        type: string
+        enum: [pending_confirm, active, unsubscribed, bounced, complained, 
+            deleted]
+    - name: list_id
+      in: query
+      schema: {type: string, maxLength: 64}
+    - name: provider
+      in: query
+      schema:
+        type: string
+        enum: [mailchimp, convertkit, sendfox, brevo, mailerlite, beehiiv, 
+            buttondown, mailgun, ses_smtp, custom_http]
+    - name: q
+      in: query
+      schema: {type: string, maxLength: 200}
+    - name: locale
+      in: query
+      schema: {type: string, maxLength: 16}
+    - name: confirmed_after
+      in: query
+      schema: {type: string, format: date-time}
+    - name: confirmed_before
+      in: query
+      schema: {type: string, format: date-time}
+    - name: sync_status
+      in: query
+      schema:
+        type: string
+        enum: [pending, synced, error, skipped]
+    - name: export_format
+      in: query
+      schema: {type: string, enum: [json, csv]}
+    responses:
+      '200':
+        content:
+          application/json:
+            schema:
+              $ref: 
+                ../components/schemas/Newsletter.yaml#/EnvelopeNewsletterSubscriberList
+          text/csv:
+            schema: {type: string, format: binary}
+        description: Paginated subscriber list with optional CSV export 
+          attachment
+      '401':
+        $ref: ../components/responses.yaml#/UnauthorizedError
+      '403':
+        $ref: ../components/responses.yaml#/ForbiddenError
+
+/api/v1/admin/newsletter/subscribers/{id}:
+  get:
+    tags:
+    - Admin / Newsletter
+    summary: Get a single subscriber detail (consents, sync status, engagement, 
+      lists)
+    operationId: admin.newsletter.subscribers.get
+    parameters:
+    - name: id
+      in: path
+      required: true
+      schema: {type: string, format: uuid}
+    responses:
+      '200':
+        content:
+          application/json:
+            schema:
+              $ref: 
+                ../components/schemas/Newsletter.yaml#/EnvelopeNewsletterSubscriberResponse
+        description: Subscriber detail including consents, sync status, lists, 
+          engagement
+      '401':
+        $ref: ../components/responses.yaml#/UnauthorizedError
+      '403':
+        $ref: ../components/responses.yaml#/ForbiddenError
+      '404':
+        $ref: ../components/responses.yaml#/NotFoundError
+  delete:
+    tags:
+    - Admin / Newsletter
+    summary: GDPR-style forget-me – scrub PII or soft-delete a subscriber record
+    operationId: admin.newsletter.subscribers.delete
+    parameters:
+    - name: id
+      in: path
+      required: true
+      schema: {type: string, format: uuid}
+    - name: mode
+      in: query
+      schema: {type: string, enum: [soft_delete, hard_delete], default: 
+          soft_delete}
+    - name: reason
+      in: query
+      schema: {type: string, maxLength: 500}
+    responses:
+      '200':
+        $ref: ../components/responses.yaml#/EmptyOk
+      '401':
+        $ref: ../components/responses.yaml#/UnauthorizedError
+      '403':
+        $ref: ../components/responses.yaml#/ForbiddenError
+      '404':
+        $ref: ../components/responses.yaml#/NotFoundError
+
+/api/v1/admin/newsletter/issues:
+  get:
+    tags:
+    - Admin / Newsletter
+    summary: List drafts, scheduled, and sent newsletter issues
+    operationId: admin.newsletter.issues.list
+    parameters:
+    - $ref: ../components/parameters.yaml#/Page
+    - $ref: ../components/parameters.yaml#/PerPage
+    - name: status
+      in: query
+      schema:
+        type: string
+        enum: [draft, scheduled, sending, sent, cancelled, failed]
+    - name: list_id
+      in: query
+      schema: {type: string, maxLength: 64}
+    - name: q
+      in: query
+      schema: {type: string, maxLength: 200}
+    responses:
+      '200':
+        content:
+          application/json:
+            schema:
+              $ref: 
+                ../components/schemas/Newsletter.yaml#/EnvelopeNewsletterIssueList
+        description: Paginated list of newsletter issues (drafts, scheduled, 
+          sent)
+      '401':
+        $ref: ../components/responses.yaml#/UnauthorizedError
+      '403':
+        $ref: ../components/responses.yaml#/ForbiddenError
+  post:
+    tags:
+    - Admin / Newsletter
+    summary: Schedule or immediately send a new newsletter issue to a list
+    operationId: admin.newsletter.issues.send
+    description: |-
+      Creates (and optionally schedules) a newsletter send. If `test_recipients` is
+      populated the send is restricted to those emails (preview/test). Every sent email
+      includes a footer `unsubscribe_link` templated from the signed token of each
+      recipient, plus `List-Unsubscribe` headers (one-click HTTPS + mailto) for CAN-SPAM
+      and RFC 8058 compliance.
+    parameters:
+    - $ref: ../components/parameters.yaml#/XCsrfToken
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: ../components/schemas/Newsletter.yaml#/NewsletterSendRequest
+    responses:
+      '201':
+        description: Issue created; returns status (scheduled / sending / sent 
+          for test recipients)
+        content:
+          application/json:
+            schema:
+              $ref: 
+                ../components/schemas/Newsletter.yaml#/EnvelopeNewsletterIssueResponse
+      '400':
+        $ref: ../components/responses.yaml#/ValidationError
+      '401':
+        $ref: ../components/responses.yaml#/UnauthorizedError
+      '403':
+        $ref: ../components/responses.yaml#/ForbiddenError
+      '409':
+        description: Missing ESP provider configuration or list_id empty
+
+/api/v1/admin/newsletter/issues/{id}:
+  get:
+    tags:
+    - Admin / Newsletter
+    summary: Get a single issue (sends + engagement summary)
+    operationId: admin.newsletter.issues.get
+    parameters:
+    - name: id
+      in: path
+      required: true
+      schema: {type: string, format: uuid}
+    responses:
+      '200':
+        content:
+          application/json:
+            schema:
+              $ref: 
+                ../components/schemas/Newsletter.yaml#/EnvelopeNewsletterIssueResponse
+        description: Newsletter issue record with send summary and statistics
+      '401':
+        $ref: ../components/responses.yaml#/UnauthorizedError
+      '403':
+        $ref: ../components/responses.yaml#/ForbiddenError
+      '404':
+        $ref: ../components/responses.yaml#/NotFoundError
+  patch:
+    tags:
+    - Admin / Newsletter
+    summary: Update draft / scheduled issue (subject, body, schedule, list, 
+      template)
+    operationId: admin.newsletter.issues.patch
+    parameters:
+    - name: id
+      in: path
+      required: true
+      schema: {type: string, format: uuid}
+    - $ref: ../components/parameters.yaml#/XCsrfToken
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              subject: {type: string, minLength: 1, maxLength: 300}
+              preheader: {type: string, maxLength: 500}
+              slug: {type: string, maxLength: 200}
+              list_id: {type: string, maxLength: 64}
+              template_id: {type: string, maxLength: 128}
+              html_body: {type: string, maxLength: 400000}
+              plaintext_body: {type: string, maxLength: 400000}
+              scheduled_at: {type: string, format: date-time, nullable: true}
+              cancelled: {type: boolean}
+    responses:
+      '200':
+        content:
+          application/json:
+            schema:
+              $ref: 
+                ../components/schemas/Newsletter.yaml#/EnvelopeNewsletterIssueResponse
+        description: Updated newsletter issue record
+      '400':
+        $ref: ../components/responses.yaml#/ValidationError
+      '401':
+        $ref: ../components/responses.yaml#/UnauthorizedError
+      '403':
+        $ref: ../components/responses.yaml#/ForbiddenError
+      '404':
+        $ref: ../components/responses.yaml#/NotFoundError
+      '409':
+        description: Cannot modify an issue already sending/sent (only cancel is
+          allowed)
+
+/api/v1/admin/newsletter/provider-config:
+  get:
+    tags:
+    - Admin / Newsletter
+    summary: Get configured ESP provider details (secrets masked out)
+    operationId: admin.newsletter.provider_config.get
+    responses:
+      '200':
+        content:
+          application/json:
+            schema:
+              $ref: 
+                ../components/schemas/Newsletter.yaml#/EnvelopeNewsletterProviderConfig
+        description: ESP provider configuration with masked secrets
+      '401':
+        $ref: ../components/responses.yaml#/UnauthorizedError
+      '403':
+        $ref: ../components/responses.yaml#/ForbiddenError
+  put:
+    tags:
+    - Admin / Newsletter
+    summary: Update ESP provider + default list / double-opt-in / sender 
+      identity settings
+    operationId: admin.newsletter.provider_config.put
+    parameters:
+    - $ref: ../components/parameters.yaml#/XCsrfToken
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            required:
+            - provider
+            properties:
+              provider:
+                type: string
+                enum: [mailchimp, convertkit, sendfox, brevo, mailerlite, 
+                    beehiiv, buttondown, mailgun, ses_smtp, custom_http]
+              enabled: {type: boolean}
+              api_key_secret_ref:
+                type: string
+                maxLength: 200
+                description: "Secrets manager reference (never raw API key in payloads)."
+              api_endpoint: {type: string, format: uri, maxLength: 1000, 
+                  nullable: true}
+              default_list_id: {type: string, maxLength: 128, nullable: true}
+              double_optin_required: {type: boolean, default: true}
+              unsubscribe_branded_domain: {type: string, maxLength: 255, 
+                  nullable: true}
+              from_name: {type: string, maxLength: 200, nullable: true}
+              from_email: {type: string, format: email, nullable: true}
+              reply_to: {type: string, format: email, nullable: true}
+    responses:
+      '200':
+        content:
+          application/json:
+            schema:
+              $ref: 
+                ../components/schemas/Newsletter.yaml#/EnvelopeNewsletterProviderConfig
+        description: Updated ESP provider configuration
+      '400':
+        $ref: ../components/responses.yaml#/ValidationError
+      '401':
+        $ref: ../components/responses.yaml#/UnauthorizedError
+      '403':
+        $ref: ../components/responses.yaml#/ForbiddenError

@@ -1,0 +1,235 @@
+{
+  "_meta": {
+    "purpose": "comments-system contract-test fixtures (happy + unhappy paths)",
+    "base_url": "/api/v1",
+    "post_id__uuid": "00000000-0000-0000-0000-000000000001",
+    "comment_id_root__uuid": "00000000-0000-0000-0000-000000000002",
+    "comment_id_reply__uuid": "00000000-0000-0000-0000-000000000003",
+    "user_id_author__uuid": "00000000-0000-0000-0000-000000000004"
+  },
+  "create_root_comment__happy_authenticated": {
+    "request": {
+      "method": "POST",
+      "path": "/posts/00000000-0000-0000-0000-000000000001/comments",
+      "auth": "bearer_jwt_user_4",
+      "headers": {
+        "Content-Type": "application/json",
+        "X-CSRF-Token": "csrf-header-double-submit-value-from-cookie"
+      },
+      "body": {
+        "content": "Great article! Thanks for writing this up. Do you have a follow-up planned about the performance implications?",
+        "honeypot": "",
+        "turnstile_response": "0.v2.sandbox-token-from-turnstile-for-testing",
+        "subscribe_to_replies": true,
+        "reply_notify_freq": "instant"
+      }
+    },
+    "expected_response": {
+      "status": 201,
+      "headers": { "Location": "/api/v1/comments/00000000-0000-0000-0000-000000000002" },
+      "body_contains": {
+        "data": {
+          "type": "comment",
+          "id": "<uuid>",
+          "post_id": "00000000-0000-0000-0000-000000000001",
+          "parent_id": null,
+          "depth": 0,
+          "content": "Great article! Thanks for writing this up. Do you have a follow-up planned about the performance implications?",
+          "content_html_snippet": "<p>Great article!",
+          "status": "pending",
+          "reply_count": 0,
+          "upvote_count": 0,
+          "flag_count": 0
+        }
+      }
+    }
+  },
+  "create_reply_comment__happy_guest": {
+    "request": {
+      "method": "POST",
+      "path": "/posts/00000000-0000-0000-0000-000000000001/comments",
+      "auth": "none",
+      "headers": {
+        "Content-Type": "application/json",
+        "X-CSRF-Token": "csrf-cookie-for-guest-sessions"
+      },
+      "body": {
+        "parent_id": "00000000-0000-0000-0000-000000000002",
+        "content": "Same question here — subscribing to replies thread.",
+        "author_name": "Jane Doe",
+        "author_email": "jane.doe@example.com",
+        "author_website": "https://jane.example.com",
+        "honeypot": "",
+        "turnstile_response": "0.v2.sandbox-token-from-turnstile-for-testing"
+      }
+    },
+    "expected_response": {
+      "status": 201,
+      "body_contains": {
+        "data": {
+          "parent_id": "00000000-0000-0000-0000-000000000002",
+          "depth": 1,
+          "status": "pending"
+        }
+      }
+    }
+  },
+  "create_comment__sad_spam_honeypot": {
+    "request": {
+      "method": "POST",
+      "path": "/posts/00000000-0000-0000-0000-000000000001/comments",
+      "auth": "none",
+      "headers": { "Content-Type": "application/json" },
+      "body": {
+        "content": "Visit https://spam.example.com for free money!!!",
+        "author_name": "Spammy",
+        "author_email": "spammy@spam.example.com",
+        "honeypot": "I am a bot so I filled this field",
+        "turnstile_response": ""
+      }
+    },
+    "expected_response": {
+      "status": 201,
+      "notes": [
+        "Response looks identical to a normal 201 for anti-enumeration purposes",
+        "but server-side status MUST be set to spam, never shown in public lists"
+      ],
+      "side_effect": {
+        "status": "spam",
+        "spam_engine": "honeypot",
+        "spam_verdict": "spam",
+        "spam_score": 1.0
+      }
+    }
+  },
+  "create_comment__sad_invalid_captcha": {
+    "request": {
+      "method": "POST",
+      "path": "/posts/00000000-0000-0000-0000-000000000001/comments",
+      "auth": "none",
+      "headers": { "Content-Type": "application/json" },
+      "body": {
+        "content": "Normal comment but bad captcha token.",
+        "author_name": "Good Person",
+        "author_email": "good@example.com",
+        "honeypot": "",
+        "turnstile_response": "invalid.will.fail.at.provider"
+      }
+    },
+    "expected_response": {
+      "status": 400,
+      "body_contains": {
+        "code": "comments.spam.challenge_invalid"
+      }
+    }
+  },
+  "create_comment__sad_depth_exceeded": {
+    "request": {
+      "method": "POST",
+      "path": "/posts/00000000-0000-0000-0000-000000000001/comments",
+      "auth": "bearer_jwt_user_4",
+      "headers": { "Content-Type": "application/json" },
+      "body": {
+        "parent_id": "00000000-0000-0000-0000-000000000099",
+        "content": "Reply to a comment that already has depth=5 should be rejected"
+      }
+    },
+    "expected_response": {
+      "status": 400,
+      "body_contains": { "code": "comments.parent.depth_exceeded" },
+      "assume_db": {
+        "00000000-0000-0000-0000-000000000099": { "depth": 5 }
+      }
+    }
+  },
+  "list_threaded_comments__happy": {
+    "request": {
+      "method": "GET",
+      "path": "/posts/00000000-0000-0000-0000-000000000001/comments",
+      "query": {
+        "tree_depth": 3,
+        "sort": "created_at",
+        "limit": 50,
+        "after": null
+      }
+    },
+    "expected_response": {
+      "status": 200,
+      "body_contains": {
+        "data": [
+          {
+            "id": "00000000-0000-0000-0000-000000000002",
+            "depth": 0,
+            "children": [
+              {
+                "id": "00000000-0000-0000-0000-000000000003",
+                "depth": 1,
+                "children": []
+              }
+            ]
+          }
+        ],
+        "meta": { "total_available": 2 }
+      }
+    }
+  },
+  "moderate_approve__happy_admin": {
+    "request": {
+      "method": "POST",
+      "path": "/admin/comments/00000000-0000-0000-0000-000000000002/moderate",
+      "auth": "bearer_jwt_admin",
+      "headers": {
+        "Content-Type": "application/json",
+        "X-CSRF-Token": "admin-csrf-token-from-admin-cookie"
+      },
+      "body": {
+        "action": "approve",
+        "reason": "Looks like a genuine question, approved",
+        "notify_author": true
+      }
+    },
+    "expected_response": {
+      "status": 200,
+      "body_contains": {
+        "data": {
+          "id": "00000000-0000-0000-0000-000000000002",
+          "status": "approved"
+        }
+      },
+      "audit_side_effect": {
+        "rows_appended": 1,
+        "action": "approve"
+      }
+    }
+  },
+  "bulk_moderate_reject__happy_admin": {
+    "request": {
+      "method": "POST",
+      "path": "/admin/comments/bulk-moderate",
+      "auth": "bearer_jwt_moderator",
+      "headers": {
+        "Content-Type": "application/json",
+        "X-CSRF-Token": "mod-csrf-token"
+      },
+      "body": {
+        "comment_ids": [
+          "00000000-0000-0000-0000-000000000f01",
+          "00000000-0000-0000-0000-000000000f02",
+          "00000000-0000-0000-0000-000000000f03"
+        ],
+        "action": "reject",
+        "reason": "Automated spam campaign batch #1234",
+        "notify_author": false
+      }
+    },
+    "expected_response": {
+      "status": 207,
+      "body_contains": {
+        "results": {
+          "success_count": 3,
+          "failure_count": 0
+        }
+      }
+    }
+  }
+}

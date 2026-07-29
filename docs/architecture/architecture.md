@@ -15,6 +15,24 @@ The canonical contracts are kept under `contracts/` and serve as the source of t
 
 Use these files for documentation generation, validation in CI, code generation for clients or mock servers, and contract-based testing. See `docs/architecture/api-contracts.md` for usage and validation commands.
 
+### Realtime (SSE) Stream Contracts
+
+Long-lived streaming endpoints are modelled in both OpenAPI (REST path, auth, response headers and error codes) and AsyncAPI (per-user channel parameters, SSE binding to the HTTP endpoint, message payloads).
+
+| Stream channel | OpenAPI path | Scope | Purpose |
+|---|---|---|---|
+| `notifications.user.{user_id}.stream` | `GET /api/v1/me/notifications/stream` | authenticated user-scoped | Realtime in-app notifications (created/read/dismissed), session lifecycle, and keep-alive frames. |
+| `analytics.admin.realtime.stream` | `GET /api/v1/admin/analytics/realtime/stream` | admin + `analytics.read_all` | Live admin dashboards, impersonation audit, system health. |
+
+All SSE endpoints:
+
+- require a valid authenticated bearer token or http-only session cookie
+- use strict CORS origin whitelist + CSRF gate for browser callers
+- rate limit per user (concurrent streams + reconnect rate) with 429 `Retry-After`
+- send standard `event:`, `data:`, `id:`, and `retry:` frames per the WHATWG Server-Sent Events specification
+- fan out via internal Watermill → Redis pub/sub bridge to support multi-process deployments
+- are documented end-to-end in [realtime-notifications-sse.md](../features/realtime-notifications-sse.md)
+
 ## Core Principles
 
 - **Domain-centric**: business logic lives in `internal/core/<module>/domain`
@@ -140,7 +158,7 @@ Examples of outbound port types:
 
 ### Outbound Adapters
 
-- persistence: GORM + PostgreSQL
+- persistence: GORM + PostgreSQL source-of-truth or MySQL (future) running on **Google Cloud SQL**; all managed connections use the `cloud.google.com/go/cloudsqlconn` Go connector with Private Service Connect private IP, IAM Database Authentication, and ephemeral mTLS certificates (no static passwords or client CA bundles). Full connector config, pooling parameters, connection-name format, and prod guardrails (restrictPublicIp org policy, firewall, workload identity) are specified in [backend/database.md Cloud SQL Connectivity](../backend/database.md#L62-L457). Bootstrap wiring in `internal/platform/postgres/` (or `internal/platform/mysql/` for MySQL deployments) wraps the cloudsqlconn `Dialer` with the jackc/pgx or go-sql-driver stdlib connector and hands the resulting `*sql.DB` to the GORM dialect.
 - cache: Redis
 - events: Watermill (publishers + subscribers)
 - storage: Cloudflare R2 + S3-compatible providers (MinIO, DigitalOcean Spaces, AWS S3)

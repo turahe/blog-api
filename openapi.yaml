@@ -43,6 +43,12 @@ tags:
   description: Public and internal health endpoints
 - name: Public / Users
   description: Public user profile display endpoint
+- name: Public / Newsletter
+  description: Public subscribe, double-opt-in confirm/resend, unsubscribe, and preferences endpoints
+- name: Admin / Moderation
+  description: Comment moderation (queue, bulk actions, triage) and spam review APIs
+- name: Admin / Newsletter
+  description: Newsletter subscriber management, issues (draft/schedule/send), and ESP provider config
 security:
 - bearerAuth: []
 paths:
@@ -88,8 +94,6 @@ paths:
     $ref: ./paths/posts.yaml#/~1api~1v1~1posts~1{slug}
   /api/v1/posts/{slug}/seo-meta:
     $ref: ./paths/posts.yaml#/~1api~1v1~1posts~1{slug}~1seo-meta
-  /api/v1/posts/{id}/comments:
-    $ref: ./paths/posts.yaml#/~1api~1v1~1posts~1{id}~1comments
   /api/v1/admin/posts:
     $ref: ./paths/posts.yaml#/~1api~1v1~1admin~1posts
   /api/v1/admin/posts/{id}/publish:
@@ -184,6 +188,52 @@ paths:
     $ref: ./paths/notifications.yaml#/~1api~1v1~1me~1notifications~1{id}~1read
   /api/v1/me/notifications/stream:
     $ref: ./paths/notifications.yaml#/~1api~1v1~1me~1notifications~1stream
+  /api/v1/posts/{id}/comments:
+    $ref: ./paths/comments.yaml#/~1api~1v1~1posts~1{id}~1comments
+  /api/v1/comments/{id}:
+    $ref: ./paths/comments.yaml#/~1api~1v1~1comments~1{id}
+  /api/v1/comments/{id}/flag:
+    $ref: ./paths/comments.yaml#/~1api~1v1~1comments~1{id}~1flag
+  /api/v1/comments/{id}/upvote:
+    $ref: ./paths/comments.yaml#/~1api~1v1~1comments~1{id}~1upvote
+  /api/v1/me/comments:
+    $ref: ./paths/comments.yaml#/~1api~1v1~1me~1comments
+  /api/v1/admin/comments:
+    $ref: ./paths/comments.yaml#/~1api~1v1~1admin~1comments
+  /api/v1/admin/comments/{id}:
+    $ref: ./paths/comments.yaml#/~1api~1v1~1admin~1comments~1{id}
+  /api/v1/admin/comments/{id}/moderate:
+    $ref: ./paths/comments.yaml#/~1api~1v1~1admin~1comments~1{id}~1moderate
+  /api/v1/admin/comments/bulk-moderate:
+    $ref: ./paths/comments.yaml#/~1api~1v1~1admin~1comments~1bulk-moderate
+  /api/v1/admin/comments/stats:
+    $ref: ./paths/comments.yaml#/~1api~1v1~1admin~1comments~1stats
+  /api/v1/newsletter/subscribe:
+    $ref: ./paths/newsletter.yaml#/~1api~1v1~1newsletter~1subscribe
+  /api/v1/newsletter/confirm:
+    $ref: ./paths/newsletter.yaml#/~1api~1v1~1newsletter~1confirm
+  /api/v1/newsletter/confirm/resend:
+    $ref: ./paths/newsletter.yaml#/~1api~1v1~1newsletter~1confirm~1resend
+  /api/v1/newsletter/unsubscribe:
+    $ref: ./paths/newsletter.yaml#/~1api~1v1~1newsletter~1unsubscribe
+  /api/v1/newsletter/preferences/{token}:
+    $ref: ./paths/newsletter.yaml#/~1api~1v1~1newsletter~1preferences~1{token}
+  /api/v1/me/newsletter/subscriptions:
+    $ref: ./paths/newsletter.yaml#/~1api~1v1~1me~1newsletter~1subscriptions
+  /api/v1/me/newsletter/subscribe:
+    $ref: ./paths/newsletter.yaml#/~1api~1v1~1me~1newsletter~1subscribe
+  /api/v1/me/newsletter/unsubscribe:
+    $ref: ./paths/newsletter.yaml#/~1api~1v1~1me~1newsletter~1unsubscribe
+  /api/v1/admin/newsletter/subscribers:
+    $ref: ./paths/newsletter.yaml#/~1api~1v1~1admin~1newsletter~1subscribers
+  /api/v1/admin/newsletter/subscribers/{id}:
+    $ref: ./paths/newsletter.yaml#/~1api~1v1~1admin~1newsletter~1subscribers~1{id}
+  /api/v1/admin/newsletter/issues:
+    $ref: ./paths/newsletter.yaml#/~1api~1v1~1admin~1newsletter~1issues
+  /api/v1/admin/newsletter/issues/{id}:
+    $ref: ./paths/newsletter.yaml#/~1api~1v1~1admin~1newsletter~1issues~1{id}
+  /api/v1/admin/newsletter/provider-config:
+    $ref: ./paths/newsletter.yaml#/~1api~1v1~1admin~1newsletter~1provider-config
 components:
   parameters:
     Page:
@@ -234,10 +284,6 @@ components:
       $ref: ./components/schemas/Media.yaml#/AvatarSizeVariants
     Category:
       $ref: ./components/schemas/Categories.yaml#/Category
-    Comment:
-      $ref: ./components/schemas/posts.yaml#/Comment
-    CommentCreateRequest:
-      $ref: ./components/schemas/posts.yaml#/CommentCreateRequest
     EmailChangeRequest:
       $ref: ./components/schemas/User.yaml#/EmailChangeRequest
     Envelope:
@@ -268,8 +314,6 @@ components:
       $ref: ./components/schemas/Categories.yaml#/EnvelopeCategoryList
     EnvelopeCategoryResponse:
       $ref: ./components/schemas/Categories.yaml#/EnvelopeCategoryResponse
-    EnvelopeCommentResponse:
-      $ref: ./components/schemas/posts.yaml#/EnvelopeCommentResponse
     EnvelopeEmpty:
       $ref: ./components/schemas/Common.yaml#/EnvelopeEmpty
     EnvelopeError:
@@ -404,6 +448,62 @@ components:
       $ref: ./components/schemas/User.yaml#/UserProfileExtension
     UserSocialLinks:
       $ref: ./components/schemas/User.yaml#/UserSocialLinks
+    Comment:
+      $ref: ./components/schemas/Comments.yaml#/Comment
+    CommentSpamAssessment:
+      $ref: ./components/schemas/Comments.yaml#/CommentSpamAssessment
+    CommentModerationSummary:
+      $ref: ./components/schemas/Comments.yaml#/CommentModerationSummary
+    CommentCreateRequest:
+      $ref: ./components/schemas/Comments.yaml#/CommentCreateRequest
+    CommentUpdateRequest:
+      $ref: ./components/schemas/Comments.yaml#/CommentUpdateRequest
+    CommentListQuery:
+      $ref: ./components/schemas/Comments.yaml#/CommentListQuery
+    CommentModerateRequest:
+      $ref: ./components/schemas/Comments.yaml#/CommentModerateRequest
+    EnvelopeCommentResponse:
+      $ref: ./components/schemas/Comments.yaml#/EnvelopeCommentResponse
+    EnvelopeCommentList:
+      $ref: ./components/schemas/Comments.yaml#/EnvelopeCommentList
+    EnvelopeCommentThread:
+      $ref: ./components/schemas/Comments.yaml#/EnvelopeCommentThread
+    EnvelopeCommentStats:
+      $ref: ./components/schemas/Comments.yaml#/EnvelopeCommentStats
+    NewsletterSubscriber:
+      $ref: ./components/schemas/Newsletter.yaml#/NewsletterSubscriber
+    NewsletterConsents:
+      $ref: ./components/schemas/Newsletter.yaml#/NewsletterConsents
+    NewsletterSubscriberPreferences:
+      $ref: ./components/schemas/Newsletter.yaml#/NewsletterSubscriberPreferences
+    NewsletterProviderSync:
+      $ref: ./components/schemas/Newsletter.yaml#/NewsletterProviderSync
+    NewsletterListMembership:
+      $ref: ./components/schemas/Newsletter.yaml#/NewsletterListMembership
+    NewsletterSubscribeRequest:
+      $ref: ./components/schemas/Newsletter.yaml#/NewsletterSubscribeRequest
+    NewsletterConfirmRequest:
+      $ref: ./components/schemas/Newsletter.yaml#/NewsletterConfirmRequest
+    NewsletterResendConfirmRequest:
+      $ref: ./components/schemas/Newsletter.yaml#/NewsletterResendConfirmRequest
+    NewsletterUnsubscribeRequest:
+      $ref: ./components/schemas/Newsletter.yaml#/NewsletterUnsubscribeRequest
+    NewsletterSendIssue:
+      $ref: ./components/schemas/Newsletter.yaml#/NewsletterSendIssue
+    NewsletterSendRequest:
+      $ref: ./components/schemas/Newsletter.yaml#/NewsletterSendRequest
+    NewsletterProviderConfig:
+      $ref: ./components/schemas/Newsletter.yaml#/NewsletterProviderConfig
+    EnvelopeNewsletterSubscriberResponse:
+      $ref: ./components/schemas/Newsletter.yaml#/EnvelopeNewsletterSubscriberResponse
+    EnvelopeNewsletterSubscriberList:
+      $ref: ./components/schemas/Newsletter.yaml#/EnvelopeNewsletterSubscriberList
+    EnvelopeNewsletterIssueResponse:
+      $ref: ./components/schemas/Newsletter.yaml#/EnvelopeNewsletterIssueResponse
+    EnvelopeNewsletterIssueList:
+      $ref: ./components/schemas/Newsletter.yaml#/EnvelopeNewsletterIssueList
+    EnvelopeNewsletterProviderConfig:
+      $ref: ./components/schemas/Newsletter.yaml#/EnvelopeNewsletterProviderConfig
   responses:
     EmptyOk:
       $ref: ./components/responses.yaml#/EmptyOk

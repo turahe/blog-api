@@ -33,11 +33,11 @@ authentication, RBAC, media, analytics, impersonation, and audit tooling.**
 1.  [Project Introduction](#1-project-introduction)
 2.  [Features](#2-features)
 3.  [Technology Stack](#3-technology-stack)
-4.  [Environment Setup](#4-environment-setup)
-5.  [Usage & API Examples](#5-usage--api-examples)
-6.  [Deployment](#6-deployment)
-7.  [Contributing](#7-contributing)
-8.  [Issue Feedback](#8-issue-feedback)
+4.  [Environment Setup Guide](#4-environment-setup-guide)
+5.  [Usage & API Examples](#5-usage-api-examples)
+6.  [Project Deployment Guide](#6-project-deployment-guide)
+7.  [Contribution Guidelines](#7-contribution-guidelines)
+8.  [Issue Feedback Channels](#8-issue-feedback-channels)
 9.  [License](#9-license)
 
 ---

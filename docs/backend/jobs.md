@@ -4,7 +4,7 @@
 
 Job topics and command messages are defined in the AsyncAPI contract:
 
-- [contracts/asyncapi.yaml](file:///mnt/myadrive/repo/turahe/blog-api/contracts/asyncapi.yaml)
+- [contracts/asyncapi.yaml](../../contracts/asyncapi.yaml)
 
 ## Purpose
 

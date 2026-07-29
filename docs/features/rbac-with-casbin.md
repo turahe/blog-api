@@ -259,9 +259,9 @@ Activity tracking (`user_activity` table) records RBAC-policy-change actions as 
 
 ## Cross-References
 
-- [authentication.md](file:///mnt/myadrive/repo/turahe/blog-api/docs/features/authentication.md) — login, JWT claims, step-up, impersonation
-- [user-profile-management.md](file:///mnt/myadrive/repo/turahe/blog-api/docs/features/user-profile-management.md) — profile, password, privacy endpoints that consume the RBAC middleware
-- [impersonation.md](file:///mnt/myadrive/repo/turahe/blog-api/docs/features/impersonation.md) — impersonation session gating rules
-- [settings-management.md](file:///mnt/myadrive/repo/turahe/blog-api/docs/features/settings-management.md) — settings sensitivity tiers (admin_only, server_only) consumed by RBAC scope enforcement
-- [user-management.md](file:///mnt/myadrive/repo/turahe/blog-api/docs/features/user-management.md) — existing roles/permissions entities referenced by mirror layer
-- [rbac-casbin.md](file:///mnt/myadrive/repo/turahe/blog-api/docs/backend/rbac-casbin.md) — hexagonal module placement, ports, service, events
+- [authentication.md](./authentication.md) — login, JWT claims, step-up, impersonation
+- [user-profile-management.md](./user-profile-management.md) — profile, password, privacy endpoints that consume the RBAC middleware
+- [impersonation.md](./impersonation.md) — impersonation session gating rules
+- [settings-management.md](./settings-management.md) — settings sensitivity tiers (admin_only, server_only) consumed by RBAC scope enforcement
+- [user-management.md](./user-management.md) — existing roles/permissions entities referenced by mirror layer
+- [rbac-casbin.md](../backend/rbac-casbin.md) — hexagonal module placement, ports, service, events

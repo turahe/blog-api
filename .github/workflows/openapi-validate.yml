@@ -1,0 +1,90 @@
+name: OpenAPI Contract Validation
+
+on:
+  push:
+    branches: [main, "release/*"]
+  pull_request:
+    paths:
+      - "openapi.yaml"
+      - "paths/**"
+      - "components/**"
+      - "contracts/**"
+      - "scripts/contracts/**"
+      - "package.json"
+      - "redocly.yaml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  validate-openapi:
+    name: Validate OpenAPI (lint + semantic)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20.19"
+          cache: "npm"
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: "pip"
+
+      - name: Install npm dependencies
+        run: npm ci --no-audit --no-fund
+
+      - name: Install Python validators (optional ruamel.yaml for line numbers)
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install --prefer-binary 'ruamel.yaml>=0.18' 'openapi-spec-validator>=0.7'
+
+      - name: Validate OpenAPI contract
+        run: npm run contracts:validate
+        env:
+          NODE_OPTIONS: --max_old_space_size=4096
+          PYTHONUNBUFFERED: "1"
+
+      - name: Upload validation reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: openapi-validation-reports
+          path: |
+            reports/*.log
+            reports/*.json
+            reports/*.txt
+            reports/*.md
+          retention-days: 14
+
+      - name: Validate spec with openapi-spec-validator (extra conformance)
+        if: always()
+        run: |
+          python - <<'PY'
+          import json, sys, yaml
+          from pathlib import Path
+          try:
+              from openapi_spec_validator import validate_spec
+          except Exception as e:
+              print(f'skipping openapi-spec-validator: {e}')
+              sys.exit(0)
+          bundle = Path('contracts/openapi.bundle.yaml')
+          if not bundle.exists():
+              print('no bundled spec yet; validating openapi.yaml directly')
+              bundle = Path('openapi.yaml')
+          with bundle.open() as f:
+              spec = yaml.safe_load(f)
+          errs = list(validate_spec(spec).errors or [])
+          if errs:
+              for e in errs:
+                  print('CONFORMANCE:', e)
+              sys.exit(1)
+          print('openapi-spec-validator: OK')
+          PY

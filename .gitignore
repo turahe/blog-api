@@ -3,3 +3,4 @@ dist/
 .redocly-cache/
 contracts/openapi.bundle.yaml
 .DS_Store
+reports/

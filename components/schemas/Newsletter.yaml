@@ -1,0 +1,414 @@
+NewsletterSubscriber:
+  type: object
+  required:
+  - id
+  - email
+  - status
+  properties:
+    id:
+      type: string
+      format: uuid
+    email:
+      type: string
+      format: email
+      minLength: 6
+      maxLength: 254
+    email_normalized:
+      type: string
+      format: email
+      nullable: true
+    display_name:
+      type: string
+      maxLength: 120
+      nullable: true
+    status:
+      type: string
+      enum:
+      - pending_confirm
+      - active
+      - unsubscribed
+      - bounced
+      - complained
+      - deleted
+    source:
+      type: string
+      enum:
+      - web_form
+      - api
+      - imported
+      - migration
+      - admin
+    locale:
+      type: string
+      maxLength: 16
+      nullable: true
+    ip_hash:
+      type: string
+      nullable: true
+    user_agent:
+      type: string
+      maxLength: 500
+      nullable: true
+    consents:
+      nullable: true
+      allOf:
+      - $ref: '#/NewsletterConsents'
+    lists:
+      type: array
+      items:
+        $ref: '#/NewsletterListMembership'
+      maxItems: 50
+    confirmed_at:
+      type: string
+      format: date-time
+      nullable: true
+    confirm_token_hash:
+      type: string
+      maxLength: 128
+      nullable: true
+      description: One-way hash of double-opt-in token; never returned in API responses.
+    unsubscribe_token_hash:
+      type: string
+      maxLength: 128
+      nullable: true
+      description: One-way hash of unsubscribe token; never returned in API responses.
+    bounced_at:
+      type: string
+      format: date-time
+      nullable: true
+    last_clicked_at:
+      type: string
+      format: date-time
+      nullable: true
+    last_opened_at:
+      type: string
+      format: date-time
+      nullable: true
+    created_at:
+      type: string
+      format: date-time
+    updated_at:
+      type: string
+      format: date-time
+    provider_sync:
+      nullable: true
+      allOf:
+      - $ref: '#/NewsletterProviderSync'
+    preferences:
+      nullable: true
+      allOf:
+      - $ref: '#/NewsletterSubscriberPreferences'
+
+NewsletterConsents:
+  type: object
+  required:
+  - given
+  - gdpr_legal_basis
+  - opted_in_at
+  properties:
+    given:
+      type: boolean
+    gdpr_legal_basis:
+      type: string
+      enum: [consent, legitimate_interest, contract, legal_obligation, vital_interest, public_task]
+    opted_in_at:
+      type: string
+      format: date-time
+    opted_in_ip_hash:
+      type: string
+      nullable: true
+    declaration:
+      type: string
+      maxLength: 5000
+      nullable: true
+
+NewsletterSubscriberPreferences:
+  type: object
+  properties:
+    format:
+      type: string
+      enum: [html, plaintext]
+      default: html
+    frequency:
+      type: string
+      enum: [instant, daily_digest, weekly_digest, monthly_digest]
+      default: weekly_digest
+    categories:
+      type: array
+      items: { type: string }
+      maxItems: 100
+
+NewsletterProviderSync:
+  type: object
+  properties:
+    provider:
+      type: string
+      enum: [mailchimp, convertkit, sendfox, brevo, mailerlite, beehiiv, buttondown, mailgun, ses_smtp, custom_http]
+    contact_id:
+      type: string
+      maxLength: 128
+      nullable: true
+    list_id:
+      type: string
+      maxLength: 128
+      nullable: true
+    synced_at:
+      type: string
+      format: date-time
+      nullable: true
+    sync_status:
+      type: string
+      enum: [pending, synced, error, skipped]
+    last_error:
+      type: string
+      maxLength: 1000
+      nullable: true
+
+NewsletterListMembership:
+  type: object
+  required:
+  - list_id
+  - subscribed_at
+  properties:
+    list_id:
+      type: string
+      maxLength: 64
+    subscribed_at:
+      type: string
+      format: date-time
+    unsubscribed_at:
+      type: string
+      format: date-time
+      nullable: true
+
+NewsletterSubscribeRequest:
+  type: object
+  required:
+  - email
+  properties:
+    email:
+      type: string
+      format: email
+      minLength: 6
+      maxLength: 254
+    display_name:
+      type: string
+      maxLength: 120
+    locale:
+      type: string
+      maxLength: 16
+    source:
+      type: string
+      enum: [web_form, api]
+      default: web_form
+    list_ids:
+      type: array
+      maxItems: 20
+      items:
+        type: string
+        maxLength: 64
+    categories:
+      type: array
+      maxItems: 100
+      items:
+        type: string
+    preferences:
+      $ref: '#/NewsletterSubscriberPreferences'
+    consents_declaration:
+      type: string
+      maxLength: 5000
+      description: Plaintext verbatim copy of the consent statement shown to the subscriber.
+    honeypot:
+      type: string
+      maxLength: 200
+      description: Anti-bot honeypot; clients MUST leave empty.
+    turnstile_response:
+      type: string
+      maxLength: 4000
+      description: Turnstile/hCaptcha/reCAPTCHA response token if configured.
+    referrer_url:
+      type: string
+      format: uri
+      maxLength: 2048
+      nullable: true
+    utm_source:
+      type: string
+      maxLength: 200
+      nullable: true
+
+NewsletterConfirmRequest:
+  type: object
+  required:
+  - token
+  properties:
+    token:
+      type: string
+      minLength: 16
+      maxLength: 1000
+
+NewsletterResendConfirmRequest:
+  type: object
+  required:
+  - email
+  properties:
+    email:
+      type: string
+      format: email
+      maxLength: 254
+
+NewsletterUnsubscribeRequest:
+  type: object
+  required:
+  - token
+  properties:
+    token:
+      type: string
+      minLength: 16
+      maxLength: 1000
+    reason:
+      type: string
+      maxLength: 500
+      nullable: true
+    reason_code:
+      type: string
+      enum: [too_often, not_relevant, did_not_sign_up, privacy_concern, spam, other]
+      nullable: true
+    feedback:
+      type: string
+      maxLength: 2000
+      nullable: true
+    delete_data:
+      type: boolean
+      default: false
+
+NewsletterSendIssue:
+  type: object
+  required:
+  - id
+  - subject
+  - list_id
+  - status
+  properties:
+    id: { type: string, format: uuid }
+    slug: { type: string, maxLength: 200, nullable: true }
+    subject: { type: string, maxLength: 300 }
+    preheader: { type: string, maxLength: 500, nullable: true }
+    list_id: { type: string, maxLength: 64 }
+    template_id: { type: string, maxLength: 128, nullable: true }
+    status:
+      type: string
+      enum: [draft, scheduled, sending, sent, cancelled, failed]
+    scheduled_at: { type: string, format: date-time, nullable: true }
+    sent_at: { type: string, format: date-time, nullable: true }
+    sent_count: { type: integer, minimum: 0, default: 0 }
+    open_count: { type: integer, minimum: 0, default: 0 }
+    click_count: { type: integer, minimum: 0, default: 0 }
+    bounce_count: { type: integer, minimum: 0, default: 0 }
+    complaint_count: { type: integer, minimum: 0, default: 0 }
+    unsubscribe_count: { type: integer, minimum: 0, default: 0 }
+    created_at: { type: string, format: date-time }
+    updated_at: { type: string, format: date-time }
+
+NewsletterSendRequest:
+  type: object
+  required:
+  - subject
+  properties:
+    subject: { type: string, minLength: 1, maxLength: 300 }
+    preheader: { type: string, maxLength: 500 }
+    slug: { type: string, maxLength: 200 }
+    list_id: { type: string, maxLength: 64 }
+    template_id: { type: string, maxLength: 128 }
+    html_body: { type: string, maxLength: 400000 }
+    plaintext_body: { type: string, maxLength: 400000 }
+    scheduled_at: { type: string, format: date-time, nullable: true }
+    include_unsubscribe_link: { type: boolean, default: true }
+    utm_campaign: { type: string, maxLength: 200, nullable: true }
+    test_recipients:
+      type: array
+      maxItems: 50
+      items: { type: string, format: email }
+      description: If provided, send only to these emails; otherwise send to the full list.
+
+NewsletterProviderConfig:
+  type: object
+  required:
+  - provider
+  properties:
+    provider:
+      type: string
+      enum: [mailchimp, convertkit, sendfox, brevo, mailerlite, beehiiv, buttondown, mailgun, ses_smtp, custom_http]
+    enabled: { type: boolean, default: false }
+    api_endpoint: { type: string, format: uri, nullable: true, maxLength: 1000 }
+    default_list_id: { type: string, maxLength: 128, nullable: true }
+    double_optin_required: { type: boolean, default: true }
+    unsubscribe_branded_domain: { type: string, maxLength: 255, nullable: true }
+    from_name: { type: string, maxLength: 200, nullable: true }
+    from_email: { type: string, format: email, nullable: true }
+    reply_to: { type: string, format: email, nullable: true }
+
+EnvelopeNewsletterSubscriberResponse:
+  allOf:
+  - $ref: './Common.yaml#/Envelope'
+  - type: object
+    properties:
+      data:
+        $ref: '#/NewsletterSubscriber'
+
+EnvelopeNewsletterSubscriberList:
+  allOf:
+  - $ref: './Common.yaml#/Envelope'
+  - type: object
+    properties:
+      data:
+        type: object
+        required:
+        - items
+        - total
+        - page
+        - per_page
+        properties:
+          items:
+            type: array
+            items:
+              $ref: '#/NewsletterSubscriber'
+          total: { type: integer, minimum: 0 }
+          page: { type: integer, minimum: 1 }
+          per_page: { type: integer, minimum: 1, maximum: 200 }
+
+EnvelopeNewsletterIssueResponse:
+  allOf:
+  - $ref: './Common.yaml#/Envelope'
+  - type: object
+    properties:
+      data:
+        $ref: '#/NewsletterSendIssue'
+
+EnvelopeNewsletterIssueList:
+  allOf:
+  - $ref: './Common.yaml#/Envelope'
+  - type: object
+    properties:
+      data:
+        type: object
+        required:
+        - items
+        - total
+        - page
+        - per_page
+        properties:
+          items:
+            type: array
+            items:
+              $ref: '#/NewsletterSendIssue'
+          total: { type: integer, minimum: 0 }
+          page: { type: integer, minimum: 1 }
+          per_page: { type: integer, minimum: 1, maximum: 200 }
+
+EnvelopeNewsletterProviderConfig:
+  allOf:
+  - $ref: './Common.yaml#/Envelope'
+  - type: object
+    properties:
+      data:
+        $ref: '#/NewsletterProviderConfig'
