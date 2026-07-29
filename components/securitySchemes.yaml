@@ -1,0 +1,5 @@
+bearerAuth:
+  type: http
+  scheme: bearer
+  bearerFormat: JWT
+  description: JWT access token, 15 minute TTL. Refresh via /api/v1/auth/refresh with 30-day refresh token.

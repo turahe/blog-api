@@ -1,0 +1,165 @@
+/api/v1/auth/login:
+  post:
+    tags:
+    - Auth
+    summary: Login with email/password
+    description: Exchange credentials for JWT access and refresh tokens.
+    security: []
+    operationId: auth.login
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: ../components/schemas/Auth.yaml#/LoginRequest
+    responses:
+      '200':
+        description: Success
+        headers:
+          X-Request-ID:
+            schema:
+              type: string
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas/Auth.yaml#/EnvelopeTokenResponse
+      '400':
+        $ref: ../components/responses.yaml#/ValidationError
+      '401':
+        $ref: ../components/responses.yaml#/UnauthorizedError
+      '429':
+        $ref: ../components/responses.yaml#/TooManyRequests
+/api/v1/auth/refresh:
+  post:
+    tags:
+    - Auth
+    summary: Refresh access token using refresh token
+    security: []
+    operationId: auth.refresh
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            required:
+            - refresh_token
+            properties:
+              refresh_token:
+                type: string
+                format: jwt
+    responses:
+      '200':
+        description: New tokens issued
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas/Auth.yaml#/EnvelopeTokenResponse
+      '401':
+        $ref: ../components/responses.yaml#/UnauthorizedError
+      '429':
+        $ref: ../components/responses.yaml#/TooManyRequests
+/api/v1/auth/logout:
+  post:
+    tags:
+    - Auth
+    summary: Logout current session
+    operationId: auth.logout
+    requestBody:
+      required: false
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              refresh_token:
+                type: string
+    responses:
+      '200':
+        $ref: ../components/responses.yaml#/EmptyOk
+      '401':
+        $ref: ../components/responses.yaml#/UnauthorizedError
+/api/v1/auth/2fa/challenge:
+  post:
+    tags:
+    - Auth
+    summary: Submit 2FA challenge or prove step-up for high-risk actions
+    operationId: auth.2fa.challenge
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            required:
+            - challenge_type
+            - proof
+            properties:
+              challenge_type:
+                type: string
+                enum:
+                - totp
+                - backup_code
+                - stepup_proof
+              proof:
+                type: string
+    responses:
+      '200':
+        description: Challenge verified; returns short-lived stepup scope or status
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas/Auth.yaml#/Envelope2FAStatus
+      '400':
+        $ref: ../components/responses.yaml#/ValidationError
+      '401':
+        $ref: ../components/responses.yaml#/UnauthorizedError
+      '429':
+        $ref: ../components/responses.yaml#/TooManyRequests
+/api/v1/auth/oauth/{provider}/callback:
+  post:
+    tags:
+    - Auth
+    summary: OAuth/OIDC callback handler for social login providers
+    security: []
+    operationId: auth.oauth.callback
+    parameters:
+    - name: provider
+      in: path
+      required: true
+      schema:
+        type: string
+        enum:
+        - google
+        - github
+        - oidc
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            required:
+            - code
+            - state
+            properties:
+              code:
+                type: string
+              state:
+                type: string
+              nonce:
+                type: string
+              link_with_current_user:
+                type: boolean
+                default: false
+    responses:
+      '200':
+        description: Social login success or linking success
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas/Auth.yaml#/EnvelopeTokenResponse
+      '400':
+        $ref: ../components/responses.yaml#/ValidationError
+      '401':
+        $ref: ../components/responses.yaml#/UnauthorizedError

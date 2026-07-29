@@ -1,0 +1,145 @@
+LoginRequest:
+  type: object
+  required:
+  - email
+  - password
+  properties:
+    email:
+      type: string
+      format: email
+    password:
+      type: string
+      minLength: 8
+    remember:
+      type: boolean
+      default: false
+TokenPair:
+  type: object
+  required:
+  - access_token
+  - refresh_token
+  properties:
+    access_token:
+      type: string
+      format: jwt
+      description: 15-minute JWT access token
+    refresh_token:
+      type: string
+      description: 30-day refresh token
+    token_type:
+      type: string
+      default: Bearer
+    expires_in:
+      type: integer
+      description: seconds until access token expiry
+      default: 900
+EnvelopeTokenResponse:
+  allOf:
+  - $ref: Common.yaml#/Envelope
+  - type: object
+    properties:
+      data:
+        $ref: Auth.yaml#/TokenPair
+Envelope2FAStatus:
+  allOf:
+  - $ref: Common.yaml#/Envelope
+  - type: object
+    properties:
+      data:
+        type: object
+        required:
+        - verified
+        properties:
+          verified:
+            type: boolean
+          scope:
+            type: string
+            nullable: true
+          expires_at:
+            type: string
+            format: date-time
+            nullable: true
+PasswordForgotRequest:
+  type: object
+  required:
+  - email_or_username
+  properties:
+    email_or_username:
+      type: string
+      minLength: 3
+      maxLength: 254
+    captcha_token:
+      type: string
+      description: Optional captcha token when rate limits prompt for proof of humanity.
+PasswordResetCompleteRequest:
+  type: object
+  required:
+  - token
+  - new_password
+  - confirm_password
+  properties:
+    token:
+      type: string
+    new_password:
+      type: string
+      minLength: 12
+      maxLength: 128
+    confirm_password:
+      type: string
+      minLength: 12
+      maxLength: 128
+PasswordUpdateRequest:
+  type: object
+  required:
+  - current_password
+  - new_password
+  - confirm_password
+  properties:
+    current_password:
+      type: string
+      minLength: 1
+      maxLength: 256
+    new_password:
+      type: string
+      minLength: 12
+      maxLength: 128
+    confirm_password:
+      type: string
+      minLength: 12
+      maxLength: 128
+    revoke_all_sessions:
+      type: boolean
+      default: true
+      description: If true, rotate user refresh family and invalidate all existing sessions.
+EnvelopePasswordChangedResponse:
+  allOf:
+  - $ref: Common.yaml#/Envelope
+  - type: object
+    properties:
+      data:
+        type: object
+        required:
+        - password_changed_at
+        - sessions_invalidated
+        properties:
+          password_changed_at:
+            type: string
+            format: date-time
+          sessions_invalidated:
+            type: boolean
+EnvelopePasswordResetTokenValidity:
+  allOf:
+  - $ref: Common.yaml#/Envelope
+  - type: object
+    properties:
+      data:
+        type: object
+        required:
+        - valid
+        - expires_at
+        properties:
+          valid:
+            type: boolean
+          expires_at:
+            type: string
+            format: date-time

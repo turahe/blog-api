@@ -1,0 +1,56 @@
+/api/v1/me/notifications:
+  get:
+    tags:
+    - Self-Service
+    summary: List notifications for the current user
+    operationId: me.notifications.list
+    parameters:
+    - $ref: ../components/parameters.yaml#/Page
+    - $ref: ../components/parameters.yaml#/PerPage
+    responses:
+      '200':
+        description: Paginated notifications
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas/Notifications.yaml#/EnvelopeNotificationList
+      '401':
+        $ref: ../components/responses.yaml#/UnauthorizedError
+/api/v1/me/notifications/{id}/read:
+  post:
+    tags:
+    - Self-Service
+    summary: Mark a notification read
+    operationId: me.notifications.read
+    parameters:
+    - name: id
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+    responses:
+      '200':
+        $ref: ../components/responses.yaml#/EmptyOk
+      '401':
+        $ref: ../components/responses.yaml#/UnauthorizedError
+      '403':
+        $ref: ../components/responses.yaml#/ForbiddenError
+      '404':
+        $ref: ../components/responses.yaml#/NotFoundError
+/api/v1/me/notifications/stream:
+  get:
+    tags:
+    - Self-Service
+    summary: SSE stream of real-time notifications for the current user
+    description: SSE stream producing user-scoped notification events. See `contracts/asyncapi.yaml` for event payloads.
+    operationId: me.notifications.stream
+    responses:
+      '200':
+        description: text/event-stream with keep-alives and events
+        content:
+          text/event-stream:
+            schema:
+              type: string
+      '401':
+        $ref: ../components/responses.yaml#/UnauthorizedError

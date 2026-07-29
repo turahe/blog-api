@@ -1,0 +1,157 @@
+EnvelopeEmpty:
+  allOf:
+  - $ref: Common.yaml#/Envelope
+  - type: object
+    properties:
+      data:
+        type: object
+        nullable: true
+        default: null
+EnvelopeError:
+  allOf:
+  - $ref: Common.yaml#/Envelope
+  - type: object
+    required:
+    - error
+    properties:
+      data:
+        nullable: true
+      error:
+        $ref: Common.yaml#/Error
+Envelope:
+  type: object
+  required:
+  - meta
+  properties:
+    data: {}
+    meta:
+      $ref: Common.yaml#/Meta
+    error:
+      nullable: true
+      allOf:
+      - $ref: Common.yaml#/Error
+Meta:
+  type: object
+  properties:
+    request_id:
+      type: string
+    page:
+      type: integer
+    per_page:
+      type: integer
+    total:
+      type: integer
+    window:
+      type: string
+Error:
+  type: object
+  required:
+  - code
+  - message
+  properties:
+    code:
+      type: string
+      examples:
+      - validation_error
+      - unauthorized
+      - forbidden
+      - not_found
+      - too_many_requests
+      - conflict
+    message:
+      type: string
+    details:
+      type: object
+      additionalProperties: true
+EnvelopeHealth:
+  allOf:
+  - $ref: Common.yaml#/Envelope
+  - type: object
+    properties:
+      data:
+        type: object
+        required:
+        - status
+        properties:
+          status:
+            type: string
+            enum:
+            - ok
+            - degraded
+            - down
+          checks:
+            type: object
+            additionalProperties:
+              type: string
+              enum:
+              - ok
+              - down
+EnvelopeVersion:
+  allOf:
+  - $ref: Common.yaml#/Envelope
+  - type: object
+    properties:
+      data:
+        type: object
+        required:
+        - version
+        - commit
+        - build_time
+        - go_version
+        properties:
+          version:
+            type: string
+          commit:
+            type: string
+          build_time:
+            type: string
+          go_version:
+            type: string
+EnvelopeUserActivityList:
+  allOf:
+  - $ref: Common.yaml#/Envelope
+  - type: object
+    properties:
+      data:
+        type: object
+        required:
+        - items
+        - page
+        - per_page
+        - total
+        - total_pages
+        properties:
+          items:
+            type: array
+            items:
+              $ref: User.yaml#/UserActivityItem
+          page:
+            type: integer
+          per_page:
+            type: integer
+          total:
+            type: integer
+          total_pages:
+            type: integer
+EnvelopeActivityExportAccepted:
+  allOf:
+  - $ref: Common.yaml#/Envelope
+  - type: object
+    properties:
+      data:
+        type: object
+        required:
+        - job_id
+        - status
+        properties:
+          job_id:
+            type: string
+            format: uuid
+          status:
+            type: string
+            enum:
+            - queued
+          estimated_ready_at:
+            type: string
+            format: date-time
+            nullable: true

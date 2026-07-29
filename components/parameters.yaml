@@ -1,0 +1,63 @@
+Page:
+  name: page
+  in: query
+  schema:
+    type: integer
+    minimum: 1
+    default: 1
+PerPage:
+  name: per_page
+  in: query
+  schema:
+    type: integer
+    minimum: 1
+    maximum: 200
+    default: 20
+IncludeAvatar:
+  name: include
+  in: query
+  description: Comma-separated includes; value `avatar` expands user avatar media
+  schema:
+    type: string
+IncludePostMedia:
+  name: include
+  in: query
+  description: Comma-separated includes; `cover` or `media` or `cover,media`
+  schema:
+    type: string
+IncludeCategoryImage:
+  name: include
+  in: query
+  description: Comma-separated includes; `image` expands category cover media
+  schema:
+    type: string
+XCsrfToken:
+  name: X-CSRF-Token
+  in: header
+  required: true
+  schema:
+    type: string
+XReVerifyPassword:
+  name: X-Re-Verify-Password
+  in: header
+  required: false
+  schema:
+    type: string
+  description: Current user password proof for high-risk actions (step-up).
+X2FAVerified:
+  name: X-2FA-Verified
+  in: header
+  required: false
+  schema:
+    type: string
+  description: 'Opaque token returned by /api/v1/auth/2fa/challenge within the last 5 minutes, proving step-up for high-risk actions.
+
+    '
+PerPageMax100:
+  name: per_page
+  in: query
+  schema:
+    type: integer
+    minimum: 1
+    maximum: 100
+    default: 20

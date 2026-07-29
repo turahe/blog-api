@@ -1,0 +1,53 @@
+/api/v1/categories:
+  get:
+    tags:
+    - Public
+    summary: List public categories, optionally include cover image
+    security: []
+    operationId: public.categories.list
+    parameters:
+    - $ref: ../components/parameters.yaml#/IncludeCategoryImage
+    responses:
+      '200':
+        description: Categories list
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas/Categories.yaml#/EnvelopeCategoryList
+/api/v1/categories/{slug}:
+  get:
+    tags:
+    - Public
+    summary: Get single category
+    security: []
+    operationId: public.categories.get
+    parameters:
+    - name: slug
+      in: path
+      required: true
+      schema:
+        type: string
+    - $ref: ../components/parameters.yaml#/IncludeCategoryImage
+    responses:
+      '200':
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas/Categories.yaml#/EnvelopeCategoryResponse
+        description: OK
+      '404':
+        $ref: ../components/responses.yaml#/NotFoundError
+/api/v1/tags:
+  get:
+    tags:
+    - Public
+    summary: List tags
+    security: []
+    operationId: public.tags.list
+    responses:
+      '200':
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas/Categories.yaml#/EnvelopeTagList
+        description: OK

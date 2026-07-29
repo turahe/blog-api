@@ -1,0 +1,95 @@
+Category:
+  type: object
+  required:
+  - id
+  - name
+  - slug
+  properties:
+    id:
+      type: string
+      format: uuid
+    parent_id:
+      type: string
+      format: uuid
+      nullable: true
+    name:
+      type: string
+    slug:
+      type: string
+    description:
+      type: string
+      nullable: true
+    image_id:
+      type: string
+      format: uuid
+      nullable: true
+    image:
+      nullable: true
+      allOf:
+      - $ref: Media.yaml#/MediaAsset
+    lft:
+      type: integer
+    rgt:
+      type: integer
+    depth:
+      type: integer
+    sort_order:
+      type: integer
+    created_at:
+      type: string
+      format: date-time
+    updated_at:
+      type: string
+      format: date-time
+EnvelopeCategoryList:
+  allOf:
+  - $ref: Common.yaml#/Envelope
+  - type: object
+    properties:
+      data:
+        type: object
+        required:
+        - items
+        properties:
+          items:
+            type: array
+            items:
+              $ref: Categories.yaml#/Category
+EnvelopeCategoryResponse:
+  allOf:
+  - $ref: Common.yaml#/Envelope
+  - type: object
+    properties:
+      data:
+        $ref: Categories.yaml#/Category
+Tag:
+  type: object
+  required:
+  - id
+  - name
+  - slug
+  properties:
+    id:
+      type: string
+      format: uuid
+    name:
+      type: string
+    slug:
+      type: string
+    created_at:
+      type: string
+      format: date-time
+EnvelopeTagList:
+  allOf:
+  - $ref: Common.yaml#/Envelope
+  - type: object
+    properties:
+      data:
+        type: object
+        required:
+        - items
+        properties:
+          items:
+            type: array
+            items:
+              $ref: Categories.yaml#/Tag

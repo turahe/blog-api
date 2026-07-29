@@ -1,0 +1,36 @@
+EmptyOk:
+  description: Empty success
+  content:
+    application/json:
+      schema:
+        $ref: schemas/Common.yaml#/EnvelopeEmpty
+ValidationError:
+  description: Validation error
+  content:
+    application/json:
+      schema:
+        $ref: schemas/Common.yaml#/EnvelopeError
+UnauthorizedError:
+  description: Authentication required
+  content:
+    application/json:
+      schema:
+        $ref: schemas/Common.yaml#/EnvelopeError
+ForbiddenError:
+  description: Permission denied
+  content:
+    application/json:
+      schema:
+        $ref: schemas/Common.yaml#/EnvelopeError
+NotFoundError:
+  description: Resource not found
+  content:
+    application/json:
+      schema:
+        $ref: schemas/Common.yaml#/EnvelopeError
+TooManyRequests:
+  description: Rate limit exceeded (default 100/min per client)
+  content:
+    application/json:
+      schema:
+        $ref: schemas/Common.yaml#/EnvelopeError

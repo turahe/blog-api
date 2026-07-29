@@ -1,0 +1,501 @@
+EnvelopeUserResponse:
+  allOf:
+  - $ref: Common.yaml#/Envelope
+  - type: object
+    properties:
+      data:
+        $ref: User.yaml#/User
+EnvelopeUserList:
+  allOf:
+  - $ref: Common.yaml#/Envelope
+  - type: object
+    properties:
+      data:
+        type: object
+        required:
+        - items
+        properties:
+          items:
+            type: array
+            items:
+              $ref: User.yaml#/User
+Setting:
+  type: object
+  required:
+  - key
+  - value
+  - value_type
+  - category
+  - sensitivity
+  properties:
+    key:
+      type: string
+    value: {}
+    value_type:
+      type: string
+      enum:
+      - string
+      - number
+      - boolean
+      - string_array
+      - object
+    category:
+      type: string
+      enum:
+      - site
+      - content
+      - media
+      - analytics
+      - notifications
+      - seo
+      - security
+    sensitivity:
+      type: string
+      enum:
+      - public_safe
+      - admin_only
+      - server_only
+    updated_at:
+      type: string
+      format: date-time
+SettingsUpdateRequest:
+  type: object
+  required:
+  - updates
+  properties:
+    updates:
+      type: array
+      minItems: 1
+      maxItems: 100
+      items:
+        type: object
+        required:
+        - key
+        - value
+        properties:
+          key:
+            type: string
+          value: {}
+EnvelopeSettingsGet:
+  allOf:
+  - $ref: Common.yaml#/Envelope
+  - type: object
+    properties:
+      data:
+        type: object
+        required:
+        - settings
+        properties:
+          settings:
+            type: array
+            items:
+              $ref: Admin.yaml#/Setting
+          default_applied:
+            type: array
+            items:
+              type: string
+EnvelopeSettingsUpdate:
+  allOf:
+  - $ref: Common.yaml#/Envelope
+  - type: object
+    properties:
+      data:
+        type: object
+        properties:
+          applied:
+            type: array
+            items:
+              type: object
+              required:
+              - key
+              - previous_value
+              - new_value
+              properties:
+                key:
+                  type: string
+                previous_value: {}
+                new_value: {}
+          unchanged:
+            type: array
+            items:
+              type: string
+SettingsHistoryItem:
+  type: object
+  properties:
+    id:
+      type: string
+      format: uuid
+    setting_id:
+      type: string
+      format: uuid
+    key:
+      type: string
+    previous_value: {}
+    new_value: {}
+    changed_by:
+      type: string
+      format: uuid
+    created_at:
+      type: string
+      format: date-time
+EnvelopeSettingsHistoryList:
+  allOf:
+  - $ref: Common.yaml#/Envelope
+  - type: object
+    properties:
+      data:
+        type: object
+        required:
+        - items
+        properties:
+          items:
+            type: array
+            items:
+              $ref: Admin.yaml#/SettingsHistoryItem
+ImpersonationStartRequest:
+  type: object
+  required:
+  - target_user_id
+  properties:
+    target_user_id:
+      type: string
+      format: uuid
+    document_scope:
+      type: object
+      properties:
+        document_id:
+          type: string
+          format: uuid
+          nullable: true
+        reason:
+          type: string
+          maxLength: 255
+EnvelopeImpersonationStart:
+  allOf:
+  - $ref: Common.yaml#/Envelope
+  - type: object
+    properties:
+      data:
+        type: object
+        required:
+        - impersonation_session_id
+        - target_user
+        - expires_at
+        - effective_permissions_scope
+        properties:
+          impersonation_session_id:
+            type: string
+            format: uuid
+          target_user:
+            type: object
+            required:
+            - id
+            - display_name
+            - email
+            properties:
+              id:
+                type: string
+                format: uuid
+              display_name:
+                type: string
+              email:
+                type: string
+                format: email
+          expires_at:
+            type: string
+            format: date-time
+          effective_permissions_scope:
+            type: string
+            enum:
+            - target_user_only
+            default: target_user_only
+EnvelopeImpersonationStop:
+  allOf:
+  - $ref: Common.yaml#/Envelope
+  - type: object
+    properties:
+      data:
+        type: object
+        required:
+        - restored_identity
+        - status
+        properties:
+          restored_identity:
+            type: object
+            required:
+            - user_id
+            properties:
+              user_id:
+                type: string
+                format: uuid
+          status:
+            type: string
+            enum:
+            - exited
+EnvelopeImpersonationCurrent:
+  allOf:
+  - $ref: Common.yaml#/Envelope
+  - type: object
+    properties:
+      data:
+        type: object
+        required:
+        - active
+        properties:
+          active:
+            type: boolean
+          impersonation_session_id:
+            type: string
+            format: uuid
+            nullable: true
+          impersonator_user_id:
+            type: string
+            format: uuid
+            nullable: true
+          target_user_id:
+            type: string
+            format: uuid
+            nullable: true
+          document_scope:
+            type: object
+            additionalProperties: true
+          started_at:
+            type: string
+            format: date-time
+            nullable: true
+          expires_at:
+            type: string
+            format: date-time
+            nullable: true
+AnalyticsOverview:
+  type: object
+  properties:
+    stat_cards:
+      type: object
+      required:
+      - page_views
+      - unique_visitors
+      - average_time_spent_seconds
+      - bounce_rate
+      - searches
+      - search_ctr
+      properties:
+        page_views:
+          type: integer
+        unique_visitors:
+          type: integer
+        average_time_spent_seconds:
+          type: number
+        bounce_rate:
+          type: number
+        searches:
+          type: integer
+        search_ctr:
+          type: number
+    traffic_trend:
+      type: array
+      items:
+        type: object
+        required:
+        - date
+        - page_views
+        - unique_visitors
+        properties:
+          date:
+            type: string
+            format: date
+          page_views:
+            type: integer
+          unique_visitors:
+            type: integer
+EnvelopeAnalyticsOverview:
+  allOf:
+  - $ref: Common.yaml#/Envelope
+  - type: object
+    properties:
+      data:
+        $ref: Admin.yaml#/AnalyticsOverview
+EnvelopeAnalyticsPages:
+  allOf:
+  - $ref: Common.yaml#/Envelope
+  - type: object
+    properties:
+      data:
+        type: object
+        required:
+        - top_by_views
+        - top_by_time_spent
+        properties:
+          top_by_views:
+            type: array
+            items:
+              type: object
+              required:
+              - path
+              - views
+              properties:
+                path:
+                  type: string
+                views:
+                  type: integer
+          top_by_time_spent:
+            type: array
+            items:
+              type: object
+              required:
+              - path
+              - average_seconds
+              properties:
+                path:
+                  type: string
+                average_seconds:
+                  type: number
+EnvelopeAnalyticsNavigation:
+  allOf:
+  - $ref: Common.yaml#/Envelope
+  - type: object
+    properties:
+      data:
+        type: object
+        required:
+        - flows
+        - entry_pages
+        - exit_pages
+        properties:
+          flows:
+            type: array
+            items:
+              type: object
+              required:
+              - from
+              - to
+              - count
+              properties:
+                from:
+                  type: string
+                to:
+                  type: string
+                count:
+                  type: integer
+          entry_pages:
+            type: array
+            items:
+              type: object
+              required:
+              - path
+              - count
+              properties:
+                path:
+                  type: string
+                count:
+                  type: integer
+          exit_pages:
+            type: array
+            items:
+              type: object
+              required:
+              - path
+              - count
+              properties:
+                path:
+                  type: string
+                count:
+                  type: integer
+EnvelopeAnalyticsRetention:
+  allOf:
+  - $ref: Common.yaml#/Envelope
+  - type: object
+    properties:
+      data:
+        type: object
+        required:
+        - cohorts
+        properties:
+          cohorts:
+            type: array
+            items:
+              type: object
+              required:
+              - cohort_date
+              - d1
+              - d7
+              - d30
+              properties:
+                cohort_date:
+                  type: string
+                  format: date
+                d1:
+                  type: number
+                d7:
+                  type: number
+                d30:
+                  type: number
+EnvelopeAnalyticsSearch:
+  allOf:
+  - $ref: Common.yaml#/Envelope
+  - type: object
+    properties:
+      data:
+        type: object
+        required:
+        - top_queries
+        - zero_result_queries
+        - position_ctr
+        properties:
+          top_queries:
+            type: array
+            items:
+              type: object
+              required:
+              - query
+              - count
+              properties:
+                query:
+                  type: string
+                count:
+                  type: integer
+          zero_result_queries:
+            type: array
+            items:
+              type: object
+              required:
+              - query
+              - count
+              properties:
+                query:
+                  type: string
+                count:
+                  type: integer
+          position_ctr:
+            type: array
+            items:
+              type: object
+              required:
+              - position
+              - ctr
+              properties:
+                position:
+                  type: integer
+                ctr:
+                  type: number
+EnvelopeAnalyticsExport:
+  allOf:
+  - $ref: Common.yaml#/Envelope
+  - type: object
+    properties:
+      data:
+        type: object
+        required:
+        - format
+        properties:
+          format:
+            type: string
+            enum:
+            - csv
+            - json
+          download_url:
+            type: string
+            format: uri
+          expires_at:
+            type: string
+            format: date-time

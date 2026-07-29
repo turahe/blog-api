@@ -1,0 +1,629 @@
+/api/v1/me:
+  get:
+    tags:
+    - Self-Service
+    summary: Current user profile including optional avatar media
+    operationId: me.get
+    parameters:
+    - $ref: ../components/parameters.yaml#/IncludeAvatar
+    responses:
+      '200':
+        description: Current user profile
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas/Admin.yaml#/EnvelopeUserResponse
+      '401':
+        $ref: ../components/responses.yaml#/UnauthorizedError
+/api/v1/me/profile:
+  patch:
+    tags:
+    - Self-Service
+    summary: Update current user profile
+    operationId: me.profile.patch
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: ../components/schemas/User.yaml#/ProfileUpdateRequest
+    responses:
+      '200':
+        description: Profile updated
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas/Admin.yaml#/EnvelopeUserResponse
+      '400':
+        $ref: ../components/responses.yaml#/ValidationError
+      '401':
+        $ref: ../components/responses.yaml#/UnauthorizedError
+      '403':
+        $ref: ../components/responses.yaml#/ForbiddenError
+/api/v1/admin/users:
+  get:
+    tags:
+    - Admin / Users
+    summary: List users (admins)
+    operationId: admin.users.list
+    parameters:
+    - $ref: ../components/parameters.yaml#/Page
+    - $ref: ../components/parameters.yaml#/PerPage
+    - $ref: ../components/parameters.yaml#/IncludeAvatar
+    security:
+    - bearerAuth: []
+    responses:
+      '200':
+        description: Paginated users
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas/Admin.yaml#/EnvelopeUserList
+      '401':
+        $ref: ../components/responses.yaml#/UnauthorizedError
+      '403':
+        $ref: ../components/responses.yaml#/ForbiddenError
+  post:
+    tags:
+    - Admin / Users
+    summary: Create a new user
+    operationId: admin.users.create
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: ../components/schemas/User.yaml#/UserCreateRequest
+    responses:
+      '201':
+        description: Created
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas/Admin.yaml#/EnvelopeUserResponse
+      '400':
+        $ref: ../components/responses.yaml#/ValidationError
+      '401':
+        $ref: ../components/responses.yaml#/UnauthorizedError
+      '403':
+        $ref: ../components/responses.yaml#/ForbiddenError
+/api/v1/auth/password/forgot:
+  post:
+    tags:
+    - Auth
+    summary: Request password reset email
+    description: Timing-safe password reset request. Returns identical response for existing or non-existing emails to prevent enumeration. Rate limited.
+    security: []
+    operationId: auth.password.forgot
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: ../components/schemas/Auth.yaml#/PasswordForgotRequest
+    responses:
+      '202':
+        description: Accepted. If account exists a reset email has been sent.
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas/Common.yaml#/EnvelopeEmpty
+      '400':
+        $ref: ../components/responses.yaml#/ValidationError
+      '429':
+        $ref: ../components/responses.yaml#/TooManyRequests
+/api/v1/auth/password/reset/{token}:
+  get:
+    tags:
+    - Auth
+    summary: Check password reset token validity (for UI)
+    security: []
+    operationId: auth.password.reset_token_validity
+    parameters:
+    - name: token
+      in: path
+      required: true
+      schema:
+        type: string
+    responses:
+      '200':
+        description: Token valid (signature, aud, not consumed, not expired)
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas/Auth.yaml#/EnvelopePasswordResetTokenValidity
+      '400':
+        $ref: ../components/responses.yaml#/ValidationError
+/api/v1/auth/password/reset:
+  post:
+    tags:
+    - Auth
+    summary: Consume reset token and set new password
+    security: []
+    operationId: auth.password.reset
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: ../components/schemas/Auth.yaml#/PasswordResetCompleteRequest
+    responses:
+      '200':
+        description: Password reset completed; all sessions invalidated.
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas/Common.yaml#/EnvelopeEmpty
+      '400':
+        $ref: ../components/responses.yaml#/ValidationError
+      '422':
+        $ref: ../components/responses.yaml#/ValidationError
+      '429':
+        $ref: ../components/responses.yaml#/TooManyRequests
+/api/v1/me/avatar:
+  post:
+    tags:
+    - Self-Service
+    summary: Upload and attach a new avatar image
+    description: Multipart upload for the current user avatar. Returns avatar media with 4 size variants.
+    operationId: me.avatar.upload
+    parameters:
+    - $ref: ../components/parameters.yaml#/XCsrfToken
+    requestBody:
+      required: true
+      content:
+        multipart/form-data:
+          schema:
+            type: object
+            required:
+            - file
+            properties:
+              file:
+                type: string
+                format: binary
+                description: 'Avatar image. Max 5 MB. Allowed: image/jpeg, image/png, image/webp, image/gif, image/avif'
+              crop:
+                type: string
+                description: Optional JSON crop window (x, y, width, height integers)
+    responses:
+      '200':
+        description: Avatar updated. Returns attached MediaAsset with size_variants populated.
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas/Media.yaml#/EnvelopeAvatarResponse
+      '400':
+        $ref: ../components/responses.yaml#/ValidationError
+      '401':
+        $ref: ../components/responses.yaml#/UnauthorizedError
+      '403':
+        $ref: ../components/responses.yaml#/ForbiddenError
+      '413':
+        $ref: ../components/responses.yaml#/ValidationError
+      '422':
+        $ref: ../components/responses.yaml#/ValidationError
+  delete:
+    tags:
+    - Self-Service
+    summary: Detach current avatar (requires password reverify or recent 2FA)
+    operationId: me.avatar.delete
+    parameters:
+    - $ref: ../components/parameters.yaml#/XCsrfToken
+    - $ref: ../components/parameters.yaml#/XReVerifyPassword
+    - $ref: ../components/parameters.yaml#/X2FAVerified
+    responses:
+      '200':
+        $ref: ../components/responses.yaml#/EmptyOk
+      '401':
+        $ref: ../components/responses.yaml#/UnauthorizedError
+      '403':
+        $ref: ../components/responses.yaml#/ForbiddenError
+/api/v1/me/password:
+  put:
+    tags:
+    - Self-Service
+    summary: Update authenticated user password (requires current password proof)
+    operationId: me.password.update
+    parameters:
+    - $ref: ../components/parameters.yaml#/XCsrfToken
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: ../components/schemas/Auth.yaml#/PasswordUpdateRequest
+    responses:
+      '200':
+        description: Password changed
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas/Auth.yaml#/EnvelopePasswordChangedResponse
+      '400':
+        $ref: ../components/responses.yaml#/ValidationError
+      '401':
+        $ref: ../components/responses.yaml#/UnauthorizedError
+      '403':
+        $ref: ../components/responses.yaml#/ForbiddenError
+      '422':
+        $ref: ../components/responses.yaml#/ValidationError
+      '429':
+        $ref: ../components/responses.yaml#/TooManyRequests
+/api/v1/me/email/request-change:
+  post:
+    tags:
+    - Self-Service
+    summary: Request changing current user email address
+    operationId: me.email.request_change
+    parameters:
+    - $ref: ../components/parameters.yaml#/XCsrfToken
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: ../components/schemas/User.yaml#/EmailChangeRequest
+    responses:
+      '202':
+        description: Email change request accepted; verification sent to new email, warning to old.
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas/Common.yaml#/EnvelopeEmpty
+      '400':
+        $ref: ../components/responses.yaml#/ValidationError
+      '401':
+        $ref: ../components/responses.yaml#/UnauthorizedError
+      '403':
+        $ref: ../components/responses.yaml#/ForbiddenError
+      '409':
+        $ref: ../components/responses.yaml#/ValidationError
+      '429':
+        $ref: ../components/responses.yaml#/TooManyRequests
+/api/v1/me/email/confirm-change:
+  post:
+    tags:
+    - Self-Service
+    summary: Confirm pending email change using the signed token from verification email
+    operationId: me.email.confirm_change
+    parameters:
+    - $ref: ../components/parameters.yaml#/XCsrfToken
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            required:
+            - token
+            properties:
+              token:
+                type: string
+    responses:
+      '200':
+        description: Email updated; refresh token family invalidated
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas/Admin.yaml#/EnvelopeUserResponse
+      '400':
+        $ref: ../components/responses.yaml#/ValidationError
+      '401':
+        $ref: ../components/responses.yaml#/UnauthorizedError
+      '403':
+        $ref: ../components/responses.yaml#/ForbiddenError
+/api/v1/me/privacy:
+  get:
+    tags:
+    - Self-Service
+    summary: Read current user privacy settings
+    operationId: me.privacy.get
+    responses:
+      '200':
+        description: Privacy settings for the authenticated user
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas/User.yaml#/EnvelopeUserPrivacyResponse
+      '401':
+        $ref: ../components/responses.yaml#/UnauthorizedError
+  put:
+    tags:
+    - Self-Service
+    summary: Update current user privacy settings (allowlisted flags only)
+    operationId: me.privacy.update
+    parameters:
+    - $ref: ../components/parameters.yaml#/XCsrfToken
+    - $ref: ../components/parameters.yaml#/XReVerifyPassword
+    - $ref: ../components/parameters.yaml#/X2FAVerified
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: ../components/schemas/User.yaml#/UserPrivacyUpdateRequest
+    responses:
+      '200':
+        description: Privacy settings updated
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas/User.yaml#/EnvelopeUserPrivacyResponse
+      '400':
+        $ref: ../components/responses.yaml#/ValidationError
+      '401':
+        $ref: ../components/responses.yaml#/UnauthorizedError
+      '403':
+        $ref: ../components/responses.yaml#/ForbiddenError
+/api/v1/me/activity:
+  get:
+    tags:
+    - Self-Service
+    summary: List current user engagement activity timeline
+    operationId: me.activity.list
+    parameters:
+    - $ref: ../components/parameters.yaml#/Page
+    - $ref: ../components/parameters.yaml#/PerPageMax100
+    - name: category
+      in: query
+      description: Filter by one or more activity types. Repeat or CSV for multiple.
+      schema:
+        type: array
+        items:
+          $ref: ../components/schemas/User.yaml#/UserActivityType
+    - name: from_date
+      in: query
+      schema:
+        type: string
+        format: date-time
+    - name: to_date
+      in: query
+      schema:
+        type: string
+        format: date-time
+    - name: export
+      in: query
+      description: Set csv to stream a CSV download of the full result set.
+      schema:
+        type: string
+        enum:
+        - csv
+    responses:
+      '200':
+        description: Paginated activity list or CSV stream
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas/Common.yaml#/EnvelopeUserActivityList
+          text/csv:
+            schema:
+              type: string
+              format: binary
+      '401':
+        $ref: ../components/responses.yaml#/UnauthorizedError
+      '429':
+        $ref: ../components/responses.yaml#/TooManyRequests
+/api/v1/me/activity/export:
+  get:
+    tags:
+    - Self-Service
+    summary: Queue GDPR/CCPA activity CSV export for the authenticated user
+    operationId: me.activity.export
+    responses:
+      '202':
+        description: Export job queued; download URL delivered via in-app notification and email.
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas/Common.yaml#/EnvelopeActivityExportAccepted
+      '401':
+        $ref: ../components/responses.yaml#/UnauthorizedError
+      '429':
+        $ref: ../components/responses.yaml#/TooManyRequests
+/api/v1/me/activity/erase:
+  post:
+    tags:
+    - Self-Service
+    summary: Submit GDPR/CCPA request to erase PII from user activity history
+    operationId: me.activity.erase
+    parameters:
+    - $ref: ../components/parameters.yaml#/XCsrfToken
+    - $ref: ../components/parameters.yaml#/XReVerifyPassword
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: ../components/schemas/User.yaml#/ActivityEraseRequest
+    responses:
+      '202':
+        description: Erasure request accepted; job scheduled.
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas/Common.yaml#/EnvelopeEmpty
+      '401':
+        $ref: ../components/responses.yaml#/UnauthorizedError
+      '403':
+        $ref: ../components/responses.yaml#/ForbiddenError
+/api/v1/users/{usernameOrId}:
+  get:
+    tags:
+    - Public
+    summary: Public user profile page respecting user privacy settings
+    description: 'Returns privacy-filtered public profile. Returns 404 if the user has a private profile or does not exist, to avoid leaking existence. Include avatar,posts_preview,roles_brief via include comma-joined.
+
+      '
+    security: []
+    operationId: public.users.profile
+    parameters:
+    - name: usernameOrId
+      in: path
+      required: true
+      schema:
+        type: string
+    - name: include
+      in: query
+      description: 'Comma-separated includes: avatar, posts_preview, roles_brief'
+      schema:
+        type: string
+    responses:
+      '200':
+        description: Public profile payload filtered by privacy settings
+        headers:
+          X-Robots-Tag:
+            schema:
+              type: string
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas/User.yaml#/EnvelopePublicUserProfile
+      '404':
+        $ref: ../components/responses.yaml#/NotFoundError
+/api/v1/admin/users/{id}/profile:
+  get:
+    tags:
+    - Admin / Users
+    summary: Admin read full user profile including privacy and summary activity counts
+    operationId: admin.users.profile.get
+    parameters:
+    - name: id
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+    security:
+    - bearerAuth: []
+    responses:
+      '200':
+        description: Full user + profile + privacy + summary activity counts (admin-only view)
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas/User.yaml#/EnvelopeAdminUserProfile
+      '401':
+        $ref: ../components/responses.yaml#/UnauthorizedError
+      '403':
+        $ref: ../components/responses.yaml#/ForbiddenError
+      '404':
+        $ref: ../components/responses.yaml#/NotFoundError
+  patch:
+    tags:
+    - Admin / Users
+    summary: Admin forcibly update user profile or privacy flags (requires 2FA step-up)
+    operationId: admin.users.profile.patch
+    parameters:
+    - name: id
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+    - $ref: ../components/parameters.yaml#/XCsrfToken
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: ../components/schemas/User.yaml#/AdminUserProfilePatchRequest
+    security:
+    - bearerAuth: []
+    responses:
+      '200':
+        description: Admin profile update applied
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas/User.yaml#/EnvelopeAdminUserProfile
+      '400':
+        $ref: ../components/responses.yaml#/ValidationError
+      '401':
+        $ref: ../components/responses.yaml#/UnauthorizedError
+      '403':
+        $ref: ../components/responses.yaml#/ForbiddenError
+      '404':
+        $ref: ../components/responses.yaml#/NotFoundError
+/api/v1/admin/users/{id}/password/admin-reset:
+  post:
+    tags:
+    - Admin / Users
+    summary: Admin trigger password reset email or force-password-on-next-login
+    operationId: admin.users.password.admin_reset
+    parameters:
+    - name: id
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+    - $ref: ../components/parameters.yaml#/XCsrfToken
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: ../components/schemas/User.yaml#/AdminUserPasswordResetRequest
+    security:
+    - bearerAuth: []
+    responses:
+      '202':
+        description: Reset triggered
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas/Common.yaml#/EnvelopeEmpty
+      '400':
+        $ref: ../components/responses.yaml#/ValidationError
+      '401':
+        $ref: ../components/responses.yaml#/UnauthorizedError
+      '403':
+        $ref: ../components/responses.yaml#/ForbiddenError
+      '404':
+        $ref: ../components/responses.yaml#/NotFoundError
+/api/v1/admin/users/{id}/activity:
+  get:
+    tags:
+    - Admin / Users
+    summary: Admin read full activity log for target user (ignores target privacy)
+    operationId: admin.users.activity.list
+    parameters:
+    - name: id
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+    - $ref: ../components/parameters.yaml#/Page
+    - $ref: ../components/parameters.yaml#/PerPageMax100
+    - name: category
+      in: query
+      schema:
+        type: array
+        items:
+          $ref: ../components/schemas/User.yaml#/UserActivityType
+    - name: from_date
+      in: query
+      schema:
+        type: string
+        format: date-time
+    - name: to_date
+      in: query
+      schema:
+        type: string
+        format: date-time
+    security:
+    - bearerAuth: []
+    responses:
+      '200':
+        description: Full activity log including full IP / detail JSONB for admin
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas/Common.yaml#/EnvelopeUserActivityList
+      '401':
+        $ref: ../components/responses.yaml#/UnauthorizedError
+      '403':
+        $ref: ../components/responses.yaml#/ForbiddenError
+      '404':
+        $ref: ../components/responses.yaml#/NotFoundError

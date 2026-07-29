@@ -1,0 +1,48 @@
+/health/live:
+  get:
+    tags:
+    - Health
+    summary: Liveness probe
+    security: []
+    operationId: health.live
+    responses:
+      '200':
+        description: OK
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas/Common.yaml#/EnvelopeEmpty
+/health/ready:
+  get:
+    tags:
+    - Health
+    summary: Readiness probe (requires DB/Redis/Storage healthy)
+    security: []
+    operationId: health.ready
+    responses:
+      '200':
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas/Common.yaml#/EnvelopeHealth
+        description: OK
+      '503':
+        description: One or more dependencies unhealthy
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas/Common.yaml#/EnvelopeHealth
+/health/version:
+  get:
+    tags:
+    - Health
+    summary: Print build version (corresponds to CLI `app version`)
+    security: []
+    operationId: health.version
+    responses:
+      '200':
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas/Common.yaml#/EnvelopeVersion
+        description: OK

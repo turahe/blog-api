@@ -1,0 +1,410 @@
+/api/v1/admin/auth/login:
+  post:
+    tags:
+    - Admin / Auth
+    summary: Admin login endpoint for the backoffice
+    security: []
+    operationId: admin.auth.login
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: ../components/schemas/Auth.yaml#/LoginRequest
+    responses:
+      '200':
+        description: Admin tokens issued
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas/Auth.yaml#/EnvelopeTokenResponse
+      '400':
+        $ref: ../components/responses.yaml#/ValidationError
+      '401':
+        $ref: ../components/responses.yaml#/UnauthorizedError
+      '403':
+        $ref: ../components/responses.yaml#/ForbiddenError
+/api/v1/admin/settings:
+  get:
+    tags:
+    - Admin / Settings
+    summary: Get current admin settings
+    operationId: admin.settings.get
+    parameters:
+    - name: category
+      in: query
+      schema:
+        type: string
+        enum:
+        - site
+        - content
+        - media
+        - analytics
+        - notifications
+        - seo
+        - security
+    - name: include_sensitive_admin
+      in: query
+      schema:
+        type: boolean
+        default: false
+    responses:
+      '200':
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas/Admin.yaml#/EnvelopeSettingsGet
+        description: OK
+      '401':
+        $ref: ../components/responses.yaml#/UnauthorizedError
+      '403':
+        $ref: ../components/responses.yaml#/ForbiddenError
+  put:
+    tags:
+    - Admin / Settings
+    summary: Partial update of allowlisted settings keys
+    operationId: admin.settings.put
+    parameters:
+    - name: If-Match
+      in: header
+      description: Optional version digest for optimistic locking
+      schema:
+        type: string
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: ../components/schemas/Admin.yaml#/SettingsUpdateRequest
+    responses:
+      '200':
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas/Admin.yaml#/EnvelopeSettingsUpdate
+        description: OK
+      '400':
+        $ref: ../components/responses.yaml#/ValidationError
+      '403':
+        $ref: ../components/responses.yaml#/ForbiddenError
+      '409':
+        description: Optimistic locking conflict
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas/Common.yaml#/EnvelopeError
+/api/v1/admin/settings/history:
+  get:
+    tags:
+    - Admin / Settings
+    summary: Optional settings history (requires settings.history.read)
+    operationId: admin.settings.history
+    parameters:
+    - $ref: ../components/parameters.yaml#/Page
+    - $ref: ../components/parameters.yaml#/PerPage
+    - name: key
+      in: query
+      schema:
+        type: string
+    responses:
+      '200':
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas/Admin.yaml#/EnvelopeSettingsHistoryList
+        description: OK
+      '401':
+        $ref: ../components/responses.yaml#/UnauthorizedError
+      '403':
+        $ref: ../components/responses.yaml#/ForbiddenError
+/api/v1/admin/impersonation/start:
+  post:
+    tags:
+    - Admin / Impersonation
+    summary: Start impersonation (superadmin only)
+    operationId: admin.impersonation.start
+    parameters:
+    - $ref: ../components/parameters.yaml#/XCsrfToken
+    - name: X-2FA-Stepup-Proof
+      in: header
+      description: Optional 2FA step-up proof for users with 2FA enabled
+      schema:
+        type: string
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: ../components/schemas/Admin.yaml#/ImpersonationStartRequest
+    responses:
+      '200':
+        description: Impersonation context established
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas/Admin.yaml#/EnvelopeImpersonationStart
+      '400':
+        $ref: ../components/responses.yaml#/ValidationError
+      '401':
+        $ref: ../components/responses.yaml#/UnauthorizedError
+      '403':
+        $ref: ../components/responses.yaml#/ForbiddenError
+      '409':
+        description: Active impersonation already exists
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas/Common.yaml#/EnvelopeError
+/api/v1/admin/impersonation/stop:
+  post:
+    tags:
+    - Admin / Impersonation
+    summary: Stop impersonation
+    operationId: admin.impersonation.stop
+    parameters:
+    - $ref: ../components/parameters.yaml#/XCsrfToken
+    requestBody:
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              impersonation_session_id:
+                type: string
+                format: uuid
+    responses:
+      '200':
+        description: Identity restored to superadmin
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas/Admin.yaml#/EnvelopeImpersonationStop
+      '401':
+        $ref: ../components/responses.yaml#/UnauthorizedError
+      '403':
+        $ref: ../components/responses.yaml#/ForbiddenError
+/api/v1/admin/impersonation/current:
+  get:
+    tags:
+    - Admin / Impersonation
+    summary: Get current impersonation state if any
+    operationId: admin.impersonation.current
+    responses:
+      '200':
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas/Admin.yaml#/EnvelopeImpersonationCurrent
+        description: OK
+      '401':
+        $ref: ../components/responses.yaml#/UnauthorizedError
+      '403':
+        $ref: ../components/responses.yaml#/ForbiddenError
+/api/v1/admin/analytics/overview:
+  get:
+    tags:
+    - Admin / Analytics
+    summary: Overview widget data for admin dashboard
+    operationId: admin.analytics.overview
+    parameters:
+    - name: window
+      in: query
+      schema:
+        type: string
+        enum:
+        - 7d
+        - 30d
+        - 90d
+        default: 7d
+    - name: start_date
+      in: query
+      schema:
+        type: string
+        format: date
+    - name: end_date
+      in: query
+      schema:
+        type: string
+        format: date
+    - name: path
+      in: query
+      schema:
+        type: string
+    - name: country
+      in: query
+      schema:
+        type: string
+    responses:
+      '200':
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas/Admin.yaml#/EnvelopeAnalyticsOverview
+        description: OK
+      '401':
+        $ref: ../components/responses.yaml#/UnauthorizedError
+      '403':
+        $ref: ../components/responses.yaml#/ForbiddenError
+/api/v1/admin/analytics/pages:
+  get:
+    tags:
+    - Admin / Analytics
+    summary: Popular pages and engagement metrics
+    operationId: admin.analytics.pages
+    parameters:
+    - name: window
+      in: query
+      schema:
+        type: string
+        enum:
+        - 7d
+        - 30d
+        - 90d
+        default: 7d
+    responses:
+      '200':
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas/Admin.yaml#/EnvelopeAnalyticsPages
+        description: OK
+      '401':
+        $ref: ../components/responses.yaml#/UnauthorizedError
+      '403':
+        $ref: ../components/responses.yaml#/ForbiddenError
+/api/v1/admin/analytics/navigation:
+  get:
+    tags:
+    - Admin / Analytics
+    summary: Section-to-section flow / entry-exit statistics
+    operationId: admin.analytics.navigation
+    parameters:
+    - name: window
+      in: query
+      schema:
+        type: string
+        enum:
+        - 7d
+        - 30d
+        - 90d
+        default: 7d
+    responses:
+      '200':
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas/Admin.yaml#/EnvelopeAnalyticsNavigation
+        description: OK
+      '401':
+        $ref: ../components/responses.yaml#/UnauthorizedError
+      '403':
+        $ref: ../components/responses.yaml#/ForbiddenError
+/api/v1/admin/analytics/retention:
+  get:
+    tags:
+    - Admin / Analytics
+    summary: Cohort retention data
+    operationId: admin.analytics.retention
+    parameters:
+    - name: window
+      in: query
+      schema:
+        type: string
+        enum:
+        - 30d
+        - 90d
+        default: 30d
+    responses:
+      '200':
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas/Admin.yaml#/EnvelopeAnalyticsRetention
+        description: OK
+      '401':
+        $ref: ../components/responses.yaml#/UnauthorizedError
+      '403':
+        $ref: ../components/responses.yaml#/ForbiddenError
+/api/v1/admin/analytics/search:
+  get:
+    tags:
+    - Admin / Analytics
+    summary: Search queries and CTR stats
+    operationId: admin.analytics.search
+    parameters:
+    - name: window
+      in: query
+      schema:
+        type: string
+        enum:
+        - 7d
+        - 30d
+        - 90d
+        default: 7d
+    responses:
+      '200':
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas/Admin.yaml#/EnvelopeAnalyticsSearch
+        description: OK
+      '401':
+        $ref: ../components/responses.yaml#/UnauthorizedError
+      '403':
+        $ref: ../components/responses.yaml#/ForbiddenError
+/api/v1/admin/analytics/realtime/stream:
+  get:
+    tags:
+    - Admin / Analytics
+    summary: Admin realtime analytics SSE stream
+    operationId: admin.analytics.realtime.stream
+    responses:
+      '200':
+        description: text/event-stream producing realtime analytics events
+        content:
+          text/event-stream:
+            schema:
+              type: string
+      '401':
+        $ref: ../components/responses.yaml#/UnauthorizedError
+      '403':
+        $ref: ../components/responses.yaml#/ForbiddenError
+/api/v1/admin/analytics/export:
+  post:
+    tags:
+    - Admin / Analytics
+    summary: Export analytics data for a given window (requires export permission + stepup if configured)
+    operationId: admin.analytics.export
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            required:
+            - format
+            - start_date
+            - end_date
+            properties:
+              format:
+                type: string
+                enum:
+                - csv
+                - json
+              start_date:
+                type: string
+                format: date
+              end_date:
+                type: string
+                format: date
+    responses:
+      '200':
+        description: Export data or job accepted
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas/Admin.yaml#/EnvelopeAnalyticsExport
+      '401':
+        $ref: ../components/responses.yaml#/UnauthorizedError
+      '403':
+        $ref: ../components/responses.yaml#/ForbiddenError

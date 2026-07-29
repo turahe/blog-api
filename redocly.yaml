@@ -1,0 +1,24 @@
+# Redocly CLI configuration
+apis:
+  main:
+    root: ./openapi.yaml
+
+extends:
+  - recommended
+
+rules:
+  no-unused-components: warn
+  no-unresolved-refs: error
+  operation-2xx-response: warn
+  operation-operationId: error
+  operation-tag-defined: warn
+  path-parameters-defined: error
+  security-defined: warn
+
+theme:
+  openapi:
+    generateCodeSamples:
+      languages:
+        - lang: curl
+        - lang: Node.js
+        - lang: Python

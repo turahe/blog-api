@@ -1,0 +1,187 @@
+AnalyticsPageViewRequest:
+  type: object
+  required:
+  - consent_token
+  - path
+  - occurred_at
+  properties:
+    consent_token:
+      type: string
+    session_id:
+      type: string
+    path:
+      type: string
+      maxLength: 1024
+    referrer:
+      type: string
+      maxLength: 1024
+      nullable: true
+    country_code:
+      type: string
+      maxLength: 2
+      nullable: true
+    device_type:
+      type: string
+      enum:
+      - desktop
+      - tablet
+      - mobile
+      nullable: true
+    occurred_at:
+      type: string
+      format: date-time
+AnalyticsTimeSpentRequest:
+  type: object
+  required:
+  - consent_token
+  - path
+  - started_at
+  properties:
+    consent_token:
+      type: string
+    session_id:
+      type: string
+    path:
+      type: string
+      maxLength: 1024
+    started_at:
+      type: string
+      format: date-time
+    ended_at:
+      type: string
+      format: date-time
+      nullable: true
+    focus_seconds:
+      type: integer
+      minimum: 0
+AnalyticsNavigationRequest:
+  type: object
+  required:
+  - consent_token
+  - from_path
+  - to_path
+  - occurred_at
+  properties:
+    consent_token:
+      type: string
+    session_id:
+      type: string
+    from_path:
+      type: string
+      maxLength: 1024
+    to_path:
+      type: string
+      maxLength: 1024
+    transition_type:
+      type: string
+      enum:
+      - internal_link
+      - external_link
+      - back_forward
+      - direct
+    occurred_at:
+      type: string
+      format: date-time
+AnalyticsSearchRequest:
+  type: object
+  required:
+  - consent_token
+  - normalized_query
+  - occurred_at
+  properties:
+    consent_token:
+      type: string
+    session_id:
+      type: string
+    normalized_query:
+      type: string
+      maxLength: 200
+    result_count:
+      type: integer
+      minimum: 0
+    filters:
+      type: object
+      additionalProperties: true
+    occurred_at:
+      type: string
+      format: date-time
+AnalyticsSearchClickRequest:
+  type: object
+  required:
+  - consent_token
+  - search_id
+  - position
+  - clicked_resource_type
+  - clicked_resource_id
+  properties:
+    consent_token:
+      type: string
+    search_id:
+      type: string
+      format: uuid
+    position:
+      type: integer
+      minimum: 1
+    clicked_resource_type:
+      type: string
+      enum:
+      - post
+      - page
+      - category
+      - tag
+      - media
+    clicked_resource_id:
+      type: string
+      format: uuid
+    clicked_at:
+      type: string
+      format: date-time
+AnalyticsConsentRequest:
+  type: object
+  required:
+  - granted
+  - scope
+  properties:
+    token:
+      type: string
+      nullable: true
+    granted:
+      type: boolean
+    scope:
+      type: array
+      maxItems: 10
+      items:
+        type: string
+        enum:
+        - page_view
+        - time_spent
+        - navigation
+        - search
+        - search_click
+EnvelopeAnalyticsConsent:
+  allOf:
+  - $ref: Common.yaml#/Envelope
+  - type: object
+    properties:
+      data:
+        type: object
+        required:
+        - token
+        - granted
+        properties:
+          token:
+            type: string
+          granted:
+            type: boolean
+          scope:
+            type: array
+            items:
+              type: string
+          granted_at:
+            type: string
+            format: date-time
+            nullable: true
+          withdrawn_at:
+            type: string
+            format: date-time
+            nullable: true

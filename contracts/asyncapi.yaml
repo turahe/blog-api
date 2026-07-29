@@ -1,0 +1,2051 @@
+asyncapi: 2.6.0
+info:
+  title: Blog Platform AsyncAPI
+  summary: Event-driven and streaming interfaces for the blog platform (Watermill outbox, pub/sub, and SSE streams).
+  description: "This AsyncAPI contract documents the asynchronous communication for the blog backend:\n  - Transactional outbox events published via Watermill\n  - Internal pub/sub topic conventions for consumers\n  - Server-Sent Events streams realtime notifications and admin live views\nThis contract aligns with `docs/backend/events.md`, `docs/backend/notification.md`, `docs/backend/impersonation.md`, and the analytics dashboards in `docs/features/analytics-dashboard.md` and `docs/backend/analytics.md`.\n"
+  contact:
+    name: Platform Team
+  version: 1.0.0
+defaultContentType: application/json
+servers:
+  local:
+    url: localhost
+    description: Local development (Redis streams or in-memory pub/sub for Watermill; SSE via HTTP)
+    protocol: redis
+    variables:
+      port:
+        default: '6379'
+    bindings:
+      redis:
+        password: ${REDIS_PASSWORD}
+  sse-local:
+    url: http://localhost:8080
+    description: SSE stream base for local HTTP server
+    protocol: http
+    security:
+    - httpBearerAuth: []
+  prod-bus:
+    url: ${EVENT_BUS_URL}
+    description: Production event bus (Watermill router + any supported broker, e.g. Kafka or Redis streams)
+    protocol: redis
+    security:
+    - userPassword: []
+channels:
+  blog.post.created:
+    description: Raised after a post is persisted.
+    subscribe:
+      summary: Consumers can subscribe (e.g., cache invalidation, search indexers)
+      operationId: onPostCreated
+      tags:
+      - name: post
+      - name: outbox
+      message:
+        $ref: '#/components/messages/PostCreated'
+    publish:
+      summary: Post service publishes (via transactional outbox)
+      operationId: publishPostCreated
+      message:
+        $ref: '#/components/messages/PostCreated'
+  blog.post.updated:
+    subscribe:
+      operationId: onPostUpdated
+    publish:
+      operationId: publishPostUpdated
+    message:
+      $ref: '#/components/messages/PostUpdated'
+  blog.post.published:
+    subscribe:
+      operationId: onPostPublished
+    publish:
+      operationId: publishPostPublished
+    message:
+      $ref: '#/components/messages/PostPublished'
+  blog.post.archived:
+    subscribe:
+      operationId: onPostArchived
+    publish:
+      operationId: publishPostArchived
+    message:
+      $ref: '#/components/messages/PostArchived'
+  blog.comment.created:
+    subscribe:
+      operationId: onCommentCreated
+    publish:
+      operationId: publishCommentCreated
+    message:
+      $ref: '#/components/messages/CommentCreated'
+  blog.comment.approved:
+    subscribe:
+      operationId: onCommentApproved
+    publish:
+      operationId: publishCommentApproved
+    message:
+      $ref: '#/components/messages/CommentApproved'
+  blog.auth.logged_in:
+    subscribe:
+      operationId: onAuthLoggedIn
+    publish:
+      operationId: publishAuthLoggedIn
+    message:
+      $ref: '#/components/messages/AuthLoggedIn'
+  blog.user.created:
+    subscribe:
+      operationId: onUserCreated
+    publish:
+      operationId: publishUserCreated
+    message:
+      $ref: '#/components/messages/UserCreated'
+  blog.user.role_assigned:
+    subscribe:
+      operationId: onUserRoleAssigned
+    publish:
+      operationId: publishUserRoleAssigned
+    message:
+      $ref: '#/components/messages/UserRoleAssigned'
+  blog.user.avatar_updated:
+    description: Raised when a user avatar_id changes, used to invalidate user caches and fan-out UI updates.
+    subscribe:
+      operationId: onUserAvatarUpdated
+    publish:
+      operationId: publishUserAvatarUpdated
+    message:
+      $ref: '#/components/messages/UserAvatarUpdated'
+  blog.role.updated:
+    subscribe:
+      operationId: onRoleUpdated
+    publish:
+      operationId: publishRoleUpdated
+    message:
+      $ref: '#/components/messages/RoleUpdated'
+  blog.media.uploaded:
+    subscribe:
+      operationId: onMediaUploaded
+    publish:
+      operationId: publishMediaUploaded
+    message:
+      $ref: '#/components/messages/MediaUploaded'
+  blog.media.deleted:
+    subscribe:
+      operationId: onMediaDeleted
+    publish:
+      operationId: publishMediaDeleted
+    message:
+      $ref: '#/components/messages/MediaDeleted'
+  blog.media.variant.generated:
+    subscribe:
+      operationId: onMediaVariantGenerated
+    publish:
+      operationId: publishMediaVariantGenerated
+    message:
+      $ref: '#/components/messages/MediaVariantGenerated'
+  blog.post.media_updated:
+    description: Raised when post_media associations change; consumers invalidate entity caches.
+    subscribe:
+      operationId: onPostMediaUpdated
+    publish:
+      operationId: publishPostMediaUpdated
+    message:
+      $ref: '#/components/messages/PostMediaUpdated'
+  blog.category.image_updated:
+    description: Raised when a category cover image_id changes.
+    subscribe:
+      operationId: onCategoryImageUpdated
+    publish:
+      operationId: publishCategoryImageUpdated
+    message:
+      $ref: '#/components/messages/CategoryImageUpdated'
+  blog.settings.updated:
+    subscribe:
+      operationId: onSettingsUpdated
+    publish:
+      operationId: publishSettingsUpdated
+    message:
+      $ref: '#/components/messages/SettingsUpdated'
+  blog.settings.cache.invalidated:
+    subscribe:
+      operationId: onSettingsCacheInvalidated
+    publish:
+      operationId: publishSettingsCacheInvalidated
+    message:
+      $ref: '#/components/messages/SettingsCacheInvalidated'
+  blog.settings.security.updated:
+    subscribe:
+      operationId: onSettingsSecurityUpdated
+    publish:
+      operationId: publishSettingsSecurityUpdated
+    message:
+      $ref: '#/components/messages/SettingsSecurityUpdated'
+  blog.impersonation.start_attempted:
+    subscribe:
+      operationId: onImpersonationStartAttempted
+    publish:
+      operationId: publishImpersonationStartAttempted
+    message:
+      $ref: '#/components/messages/ImpersonationLifecycle'
+  blog.impersonation.started:
+    subscribe:
+      operationId: onImpersonationStarted
+    publish:
+      operationId: publishImpersonationStarted
+    message:
+      $ref: '#/components/messages/ImpersonationLifecycle'
+  blog.impersonation.start_failed:
+    subscribe:
+      operationId: onImpersonationStartFailed
+    publish:
+      operationId: publishImpersonationStartFailed
+    message:
+      $ref: '#/components/messages/ImpersonationLifecycle'
+  blog.impersonation.exited_manually:
+    subscribe:
+      operationId: onImpersonationExitedManually
+    publish:
+      operationId: publishImpersonationExitedManually
+    message:
+      $ref: '#/components/messages/ImpersonationLifecycle'
+  blog.impersonation.expired:
+    subscribe:
+      operationId: onImpersonationExpired
+    publish:
+      operationId: publishImpersonationExpired
+    message:
+      $ref: '#/components/messages/ImpersonationLifecycle'
+  blog.impersonation.revoked_by_policy:
+    subscribe:
+      operationId: onImpersonationRevokedByPolicy
+    publish:
+      operationId: publishImpersonationRevokedByPolicy
+    message:
+      $ref: '#/components/messages/ImpersonationLifecycle'
+  blog.impersonation.action_performed:
+    description: Optional high-grain event for audited business actions performed while impersonating.
+    subscribe:
+      operationId: onImpersonationActionPerformed
+    publish:
+      operationId: publishImpersonationActionPerformed
+    message:
+      $ref: '#/components/messages/ImpersonationActionPerformed'
+  blog.post.revision.created:
+    description: Raised when a new post revision is appended (create/update/publish/archive/restore).
+    subscribe:
+      operationId: onPostRevisionCreated
+    publish:
+      operationId: publishPostRevisionCreated
+    tags:
+    - name: post
+    - name: outbox
+    message:
+      $ref: '#/components/messages/PostRevisionCreated'
+  blog.post.revision.restored:
+    description: Raised when a previous revision is successfully restored as the current post content.
+    subscribe:
+      operationId: onPostRevisionRestored
+    publish:
+      operationId: publishPostRevisionRestored
+    tags:
+    - name: post
+    - name: outbox
+    message:
+      $ref: '#/components/messages/PostRevisionRestored'
+  blog.post.seo.updated:
+    description: Raised when post SEO configuration is changed (fields, canonical, robots flags). Triggers SEO cache invalidation and sitemap updates.
+    subscribe:
+      operationId: onPostSEOUpdated
+    publish:
+      operationId: publishPostSEOUpdated
+    tags:
+    - name: post
+    - name: outbox
+    message:
+      $ref: '#/components/messages/PostSEOUpdated'
+  blog.post.slug_changed:
+    description: Raised when a post URL slug changes; consumers create redirect rules, update internal references, sitemaps, and analytics URL mapping.
+    subscribe:
+      operationId: onPostSlugChanged
+    publish:
+      operationId: publishPostSlugChanged
+    tags:
+    - name: post
+    - name: outbox
+    message:
+      $ref: '#/components/messages/PostSlugChanged'
+  notifications.user.{user_id}.stream:
+    parameters:
+      user_id:
+        $ref: '#/components/parameters/user_id'
+    description: Per-user notification fan-out (SSE and internal pub/sub).
+    publish:
+      operationId: publishNotificationToUserStream
+      message:
+        $ref: '#/components/messages/NotificationStreamMessage'
+    subscribe:
+      operationId: onNotificationStreamMessage
+      security:
+      - httpBearerAuth:
+        - notifications.read
+        - notifications.self.read
+      message:
+        $ref: '#/components/messages/NotificationStreamMessage'
+    bindings:
+      sse:
+        bindingVersion: 0.2.0
+        endpoint: /api/v1/me/notifications/stream
+        method: GET
+  analytics.admin.realtime.stream:
+    description: Admin live activity and analytics SSE/pub-sub. Requires admin analytics permissions.
+    publish:
+      operationId: publishAdminRealtimeEvent
+      message:
+        $ref: '#/components/messages/AdminAnalyticsRealtime'
+    subscribe:
+      operationId: onAdminRealtimeEvent
+      security:
+      - httpBearerAuth:
+        - analytics.read
+        - analytics.realtime.read
+      message:
+        $ref: '#/components/messages/AdminAnalyticsRealtime'
+    bindings:
+      sse:
+        bindingVersion: 0.2.0
+        endpoint: /api/v1/admin/analytics/realtime/stream
+        method: GET
+  analytics.ingest.raw:
+    description: Internal topic for raw analytics events after consent-gated ingestion HTTP endpoints.
+    publish:
+      operationId: publishAnalyticsRawEvent
+      message:
+        $ref: '#/components/messages/AnalyticsIngestRaw'
+    subscribe:
+      operationId: onAnalyticsRawEvent
+      message:
+        $ref: '#/components/messages/AnalyticsIngestRaw'
+  analytics.job.materialize_daily:
+    description: Job topic for daily aggregate materialization jobs.
+    subscribe:
+      operationId: handleAnalyticsMaterializeDaily
+      message:
+        $ref: '#/components/messages/JobCommand'
+    publish:
+      operationId: scheduleAnalyticsMaterializeDaily
+      message:
+        $ref: '#/components/messages/JobCommand'
+  analytics.job.erase_by_consent:
+    description: Erase user data per withdrawn consent token.
+    subscribe:
+      operationId: handleAnalyticsEraseByConsent
+    publish:
+      operationId: scheduleAnalyticsEraseByConsent
+    message:
+      $ref: '#/components/messages/JobCommand'
+  media.job.cleanup_orphan_transforms:
+    description: Clean up cached media transforms that are past TTL.
+    subscribe:
+      operationId: handleCleanupOrphanTransforms
+    publish:
+      operationId: scheduleCleanupOrphanTransforms
+    message:
+      $ref: '#/components/messages/JobCommand'
+  impersonation.job.expire_sessions:
+    description: Periodic impersonation session expiry sweeper.
+    subscribe:
+      operationId: handleExpireImpersonationSessions
+    publish:
+      operationId: scheduleExpireImpersonationSessions
+    message:
+      $ref: '#/components/messages/JobCommand'
+  settings.job.rebuild_cache:
+    description: Rebuild settings cache after invalidation events.
+    subscribe:
+      operationId: handleSettingsRebuildCache
+    publish:
+      operationId: scheduleSettingsRebuildCache
+    message:
+      $ref: '#/components/messages/JobCommand'
+  outbox.publish:
+    description: Internal topic consumed by the Watermill outbox publisher; publishes transactional outbox rows on commit.
+    subscribe:
+      operationId: onOutboxPublish
+      message:
+        $ref: '#/components/messages/OutboxRecord'
+    publish:
+      operationId: publishOutboxRecord
+      message:
+        $ref: '#/components/messages/OutboxRecord'
+  user.profile.updated:
+    description: Self-service or admin edit of profile display/bio/contact/social/locale/timezone/marketing-consent fields.
+    subscribe:
+      operationId: onUserProfileUpdated
+    publish:
+      operationId: publishUserProfileUpdated
+    message:
+      $ref: '#/components/messages/UserProfileUpdated'
+  user.profile.avatar_updated:
+    description: Avatar attached, detached, or replaced on a user record.
+    subscribe:
+      operationId: onUserAvatarUpdated
+    publish:
+      operationId: publishUserAvatarUpdated
+    message:
+      $ref: '#/components/messages/UserAvatarUpdated'
+  user.password.changed:
+    description: Authenticated password change completed successfully.
+    subscribe:
+      operationId: onUserPasswordChanged
+    publish:
+      operationId: publishUserPasswordChanged
+    message:
+      $ref: '#/components/messages/UserPasswordChanged'
+  user.password.admin_reset_triggered:
+    description: Admin triggered a password reset email or set force-password-on-next-login for a user.
+    subscribe:
+      operationId: onUserPasswordAdminResetTriggered
+    publish:
+      operationId: publishUserPasswordAdminResetTriggered
+    message:
+      $ref: '#/components/messages/UserPasswordAdminResetTriggered'
+  auth.password.reset_requested:
+    description: Public forgot-password attempt (timing-safe; does not imply user existence).
+    subscribe:
+      operationId: onAuthPasswordResetRequested
+    publish:
+      operationId: publishAuthPasswordResetRequested
+    message:
+      $ref: '#/components/messages/AuthPasswordResetRequested'
+  user.password.reset_completed:
+    description: Forgot-password reset token consumed and new password applied.
+    subscribe:
+      operationId: onUserPasswordResetCompleted
+    publish:
+      operationId: publishUserPasswordResetCompleted
+    message:
+      $ref: '#/components/messages/UserPasswordResetCompleted'
+  user.email.change_requested:
+    description: User submitted new email address + password proof; verification email sent.
+    subscribe:
+      operationId: onUserEmailChangeRequested
+    publish:
+      operationId: publishUserEmailChangeRequested
+    message:
+      $ref: '#/components/messages/UserEmailChangeRequested'
+  user.email.changed:
+    description: Email change confirmed and applied; sessions invalidated.
+    subscribe:
+      operationId: onUserEmailChanged
+    publish:
+      operationId: publishUserEmailChanged
+    message:
+      $ref: '#/components/messages/UserEmailChanged'
+  user.email.change_cancelled:
+    description: Pending email change cancelled by user via warning link.
+    subscribe:
+      operationId: onUserEmailChangeCancelled
+    publish:
+      operationId: publishUserEmailChangeCancelled
+    message:
+      $ref: '#/components/messages/UserEmailChangeCancelled'
+  user.privacy.updated:
+    description: Any privacy-setting flag changed for a user.
+    subscribe:
+      operationId: onUserPrivacyUpdated
+    publish:
+      operationId: publishUserPrivacyUpdated
+    message:
+      $ref: '#/components/messages/UserPrivacyUpdated'
+  user.activity.export_requested:
+    description: User or admin requested a GDPR/CCPA activity CSV export.
+    subscribe:
+      operationId: onUserActivityExportRequested
+    publish:
+      operationId: publishUserActivityExportRequested
+    message:
+      $ref: '#/components/messages/UserActivityExportRequested'
+  user.activity.erasure_requested:
+    description: User submitted a PII erasure request for activity history.
+    subscribe:
+      operationId: onUserActivityErasureRequested
+    publish:
+      operationId: publishUserActivityErasureRequested
+    message:
+      $ref: '#/components/messages/UserActivityErasureRequested'
+  user.session.invalidated_family:
+    description: Refresh token family was rotated/invalidated for a user (password change, email change, admin action).
+    subscribe:
+      operationId: onUserSessionInvalidatedFamily
+    publish:
+      operationId: publishUserSessionInvalidatedFamily
+    message:
+      $ref: '#/components/messages/UserSessionInvalidatedFamily'
+  user.consent.marketing_granted:
+    description: User granted marketing consent via profile or sign-up.
+    subscribe:
+      operationId: onUserConsentMarketingGranted
+    publish:
+      operationId: publishUserConsentMarketingGranted
+    message:
+      $ref: '#/components/messages/UserConsentMarketingGranted'
+  user.consent.marketing_withdrawn:
+    description: User withdrew marketing consent via profile or unsubscribe link.
+    subscribe:
+      operationId: onUserConsentMarketingWithdrawn
+    publish:
+      operationId: publishUserConsentMarketingWithdrawn
+    message:
+      $ref: '#/components/messages/UserConsentMarketingWithdrawn'
+components:
+  securitySchemes:
+    httpBearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      scopes:
+        notifications.read: Read notifications
+        notifications.self.read: Read current user notifications (granted implicitly for self-service)
+        analytics.read: Read admin analytics
+        analytics.realtime.read: Subscribe to admin realtime stream
+    userPassword:
+      type: userPassword
+  parameters:
+    user_id:
+      description: Authenticated user ID scoping a notification SSE stream
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+  messageTraits:
+    EventEnvelope:
+      headers:
+        type: object
+        properties:
+          id:
+            type: string
+            format: uuid
+            description: Event id
+          type:
+            type: string
+          source:
+            type: string
+            default: blog-api
+          correlation_id:
+            type: string
+            description: Request or causation id
+          causation_id:
+            type: string
+          timestamp:
+            type: string
+            format: date-time
+          trace_id:
+            type: string
+            nullable: true
+          aggregate_id:
+            type: string
+            format: uuid
+          aggregate_type:
+            type: string
+          actor_id:
+            type: string
+            format: uuid
+            nullable: true
+          impersonator_id:
+            type: string
+            format: uuid
+            nullable: true
+          impersonation_session_id:
+            type: string
+            format: uuid
+            nullable: true
+      payload: {}
+  messages:
+    PostCreated:
+      traits:
+      - $ref: '#/components/messageTraits/EventEnvelope'
+      payload:
+        $ref: '#/components/schemas/PostEventPayload'
+    PostUpdated:
+      traits:
+      - $ref: '#/components/messageTraits/EventEnvelope'
+      payload:
+        $ref: '#/components/schemas/PostEventPayload'
+    PostPublished:
+      traits:
+      - $ref: '#/components/messageTraits/EventEnvelope'
+      payload:
+        allOf:
+        - $ref: '#/components/schemas/PostEventPayload'
+        - type: object
+          properties:
+            published_at:
+              type: string
+              format: date-time
+    PostArchived:
+      traits:
+      - $ref: '#/components/messageTraits/EventEnvelope'
+      payload:
+        $ref: '#/components/schemas/PostEventPayload'
+    CommentCreated:
+      traits:
+      - $ref: '#/components/messageTraits/EventEnvelope'
+      payload:
+        $ref: '#/components/schemas/CommentEventPayload'
+    CommentApproved:
+      traits:
+      - $ref: '#/components/messageTraits/EventEnvelope'
+      payload:
+        $ref: '#/components/schemas/CommentEventPayload'
+    AuthLoggedIn:
+      traits:
+      - $ref: '#/components/messageTraits/EventEnvelope'
+      payload:
+        type: object
+        required:
+        - user_id
+        - method
+        properties:
+          user_id:
+            type: string
+            format: uuid
+          method:
+            type: string
+            enum:
+            - password
+            - 2fa
+            - oauth
+          ip_address:
+            type: string
+            nullable: true
+    UserCreated:
+      traits:
+      - $ref: '#/components/messageTraits/EventEnvelope'
+      payload:
+        $ref: '#/components/schemas/UserEventPayload'
+    UserRoleAssigned:
+      traits:
+      - $ref: '#/components/messageTraits/EventEnvelope'
+      payload:
+        type: object
+        required:
+        - user_id
+        - role_ids
+        properties:
+          user_id:
+            type: string
+            format: uuid
+          role_ids:
+            type: array
+            items:
+              type: string
+              format: uuid
+    UserAvatarUpdated:
+      name: UserAvatarUpdated
+      title: User Avatar Updated
+      summary: User Avatar Updated
+      payload:
+        $ref: '#/components/schemas/UserAvatarUpdatedPayload'
+    RoleUpdated:
+      traits:
+      - $ref: '#/components/messageTraits/EventEnvelope'
+      payload:
+        type: object
+        required:
+        - role_id
+        properties:
+          role_id:
+            type: string
+            format: uuid
+          permission_keys_added:
+            type: array
+            items:
+              type: string
+          permission_keys_removed:
+            type: array
+            items:
+              type: string
+    MediaUploaded:
+      traits:
+      - $ref: '#/components/messageTraits/EventEnvelope'
+      payload:
+        $ref: '#/components/schemas/MediaEventPayload'
+    MediaDeleted:
+      traits:
+      - $ref: '#/components/messageTraits/EventEnvelope'
+      payload:
+        $ref: '#/components/schemas/MediaEventPayload'
+    MediaVariantGenerated:
+      traits:
+      - $ref: '#/components/messageTraits/EventEnvelope'
+      payload:
+        allOf:
+        - $ref: '#/components/schemas/MediaEventPayload'
+        - type: object
+          required:
+          - transform_id
+          - transform_params
+          properties:
+            transform_id:
+              type: string
+            transform_params:
+              type: object
+              properties:
+                width:
+                  type: integer
+                height:
+                  type: integer
+                fit:
+                  type: string
+                format:
+                  type: string
+                quality:
+                  type: integer
+                rotate:
+                  type: integer
+    PostMediaUpdated:
+      traits:
+      - $ref: '#/components/messageTraits/EventEnvelope'
+      payload:
+        type: object
+        required:
+        - post_id
+        properties:
+          post_id:
+            type: string
+            format: uuid
+          added:
+            type: array
+            items:
+              type: object
+              required:
+              - media_asset_id
+              - kind
+              properties:
+                media_asset_id:
+                  type: string
+                  format: uuid
+                kind:
+                  type: string
+                sort_order:
+                  type: integer
+          removed:
+            type: array
+            items:
+              type: object
+              properties:
+                media_asset_id:
+                  type: string
+                  format: uuid
+          cover_changed:
+            type: boolean
+    CategoryImageUpdated:
+      traits:
+      - $ref: '#/components/messageTraits/EventEnvelope'
+      payload:
+        type: object
+        required:
+        - category_id
+        properties:
+          category_id:
+            type: string
+            format: uuid
+          previous_media_asset_id:
+            type: string
+            format: uuid
+            nullable: true
+          new_media_asset_id:
+            type: string
+            format: uuid
+            nullable: true
+    SettingsUpdated:
+      traits:
+      - $ref: '#/components/messageTraits/EventEnvelope'
+      payload:
+        type: object
+        required:
+        - changed_keys
+        properties:
+          changed_keys:
+            type: array
+            items:
+              type: object
+              required:
+              - key
+              properties:
+                key:
+                  type: string
+                previous_value: {}
+                new_value: {}
+                sensitivity:
+                  type: string
+                  enum:
+                  - public_safe
+                  - admin_only
+                  - server_only
+          actor_id:
+            type: string
+            format: uuid
+          request_id:
+            type: string
+    SettingsCacheInvalidated:
+      traits:
+      - $ref: '#/components/messageTraits/EventEnvelope'
+      payload:
+        type: object
+        properties:
+          categories:
+            type: array
+            items:
+              type: string
+          keys:
+            type: array
+            items:
+              type: string
+    SettingsSecurityUpdated:
+      traits:
+      - $ref: '#/components/messageTraits/EventEnvelope'
+      payload:
+        $ref: '#/components/schemas/SettingsUpdated'
+    ImpersonationLifecycle:
+      traits:
+      - $ref: '#/components/messageTraits/EventEnvelope'
+      payload:
+        type: object
+        required:
+        - impersonator_user_id
+        - impersonated_user_id
+        properties:
+          impersonation_session_id:
+            type: string
+            format: uuid
+          impersonator_user_id:
+            type: string
+            format: uuid
+          impersonated_user_id:
+            type: string
+            format: uuid
+          document_scope:
+            type: object
+            properties:
+              document_id:
+                type: string
+                format: uuid
+                nullable: true
+              reason:
+                type: string
+          started_at:
+            type: string
+            format: date-time
+          expires_at:
+            type: string
+            format: date-time
+            nullable: true
+          reason_code:
+            type: string
+            enum:
+            - superadmin_role
+            - missing_permission
+            - missing_2fa_stepup
+            - csrf_invalid
+            - target_ineligible
+            - target_suspended
+            - already_active
+            - parent_session_expired
+            - manual_exit
+            - expired
+            - policy
+    ImpersonationActionPerformed:
+      traits:
+      - $ref: '#/components/messageTraits/EventEnvelope'
+      payload:
+        type: object
+        required:
+        - impersonation_session_id
+        - impersonator_user_id
+        - impersonated_user_id
+        - action
+        properties:
+          impersonation_session_id:
+            type: string
+            format: uuid
+          impersonator_user_id:
+            type: string
+            format: uuid
+          impersonated_user_id:
+            type: string
+            format: uuid
+          action:
+            type: object
+            required:
+            - verb
+            - resource_type
+            - resource_id
+            properties:
+              verb:
+                type: string
+              resource_type:
+                type: string
+              resource_id:
+                type: string
+          document_id:
+            type: string
+            format: uuid
+            nullable: true
+    PostRevisionCreated:
+      traits:
+      - $ref: '#/components/messageTraits/EventEnvelope'
+      payload:
+        type: object
+        required:
+        - post_id
+        - revision_id
+        - revision_number
+        - revision_type
+        - author_id
+        properties:
+          post_id:
+            type: string
+            format: uuid
+          revision_id:
+            type: string
+            format: uuid
+          revision_number:
+            type: integer
+            minimum: 1
+          revision_type:
+            type: string
+            enum:
+            - create
+            - update
+            - restore
+            - publish
+            - archive
+          author_id:
+            type: string
+            format: uuid
+          impersonator_id:
+            type: string
+            format: uuid
+            nullable: true
+          restore_from_revision_id:
+            type: string
+            format: uuid
+            nullable: true
+          changed_fields:
+            type: array
+            items:
+              type: string
+    PostRevisionRestored:
+      traits:
+      - $ref: '#/components/messageTraits/EventEnvelope'
+      payload:
+        type: object
+        required:
+        - post_id
+        - restored_from_revision_id
+        - new_revision_id
+        - actor_id
+        properties:
+          post_id:
+            type: string
+            format: uuid
+          restored_from_revision_id:
+            type: string
+            format: uuid
+          new_revision_id:
+            type: string
+            format: uuid
+          actor_id:
+            type: string
+            format: uuid
+          impersonator_id:
+            type: string
+            format: uuid
+            nullable: true
+          restore_note:
+            type: string
+            maxLength: 500
+            nullable: true
+    PostSEOUpdated:
+      traits:
+      - $ref: '#/components/messageTraits/EventEnvelope'
+      payload:
+        type: object
+        required:
+        - post_id
+        - actor_id
+        - changed_fields
+        properties:
+          post_id:
+            type: string
+            format: uuid
+          actor_id:
+            type: string
+            format: uuid
+          changed_fields:
+            type: array
+            items:
+              type: string
+          impersonator_id:
+            type: string
+            format: uuid
+            nullable: true
+          previous:
+            type: object
+            additionalProperties: true
+          current:
+            type: object
+            additionalProperties: true
+    PostSlugChanged:
+      traits:
+      - $ref: '#/components/messageTraits/EventEnvelope'
+      payload:
+        type: object
+        required:
+        - post_id
+        - old_slug
+        - new_slug
+        - actor_id
+        properties:
+          post_id:
+            type: string
+            format: uuid
+          old_slug:
+            type: string
+            maxLength: 200
+          new_slug:
+            type: string
+            maxLength: 200
+            minLength: 1
+          actor_id:
+            type: string
+            format: uuid
+          impersonator_id:
+            type: string
+            format: uuid
+            nullable: true
+    NotificationStreamMessage:
+      description: SSE notification event for per-user streams
+      payload:
+        type: object
+        required:
+        - notification_id
+        - type
+        - title
+        - created_at
+        properties:
+          notification_id:
+            type: string
+            format: uuid
+          type:
+            type: string
+          title:
+            type: string
+          preview:
+            type: string
+            nullable: true
+          read:
+            type: boolean
+          created_at:
+            type: string
+            format: date-time
+          channel:
+            type: string
+            default: sse
+    AdminAnalyticsRealtime:
+      description: Realtime admin analytics events (page_view, search, etc.)
+      payload:
+        type: object
+        required:
+        - name
+        discriminator: name
+        properties:
+          name:
+            type: string
+            enum:
+            - analytics.page_view
+            - analytics.search
+            - analytics.search_click
+            - analytics.navigation
+            - analytics.session_start
+            - health.degraded
+            - health.restored
+            - post.revision_created
+            - post.revision_restored
+            - post.seo_updated
+            - post.slug_changed
+          occurred_at:
+            type: string
+            format: date-time
+          data:
+            type: object
+            additionalProperties: true
+    AnalyticsIngestRaw:
+      payload:
+        type: object
+        required:
+        - event_name
+        - occurred_at
+        properties:
+          event_name:
+            type: string
+            enum:
+            - page_view
+            - time_spent
+            - navigation
+            - search
+            - search_click
+          occurred_at:
+            type: string
+            format: date-time
+          session_id:
+            type: string
+            nullable: true
+          consent_token:
+            type: string
+          payload:
+            type: object
+            additionalProperties: true
+    JobCommand:
+      payload:
+        type: object
+        required:
+        - job_name
+        properties:
+          job_name:
+            type: string
+          scheduled_for:
+            type: string
+            format: date-time
+          arguments:
+            type: object
+            additionalProperties: true
+    OutboxRecord:
+      description: Internal outbox row representation for publishing
+      payload:
+        type: object
+        required:
+        - id
+        - event_name
+        - payload
+        properties:
+          id:
+            type: string
+            format: uuid
+          aggregate_type:
+            type: string
+          aggregate_id:
+            type: string
+          event_name:
+            type: string
+          payload:
+            type: object
+            additionalProperties: true
+          status:
+            type: string
+            enum:
+            - pending
+            - published
+            - failed
+          published_at:
+            type: string
+            format: date-time
+            nullable: true
+          retry_count:
+            type: integer
+          created_at:
+            type: string
+            format: date-time
+    UserProfileUpdated:
+      name: UserProfileUpdated
+      title: User Profile Updated
+      summary: User Profile Updated
+      payload:
+        $ref: '#/components/schemas/UserProfileUpdatedPayload'
+    UserPasswordChanged:
+      name: UserPasswordChanged
+      title: User Password Changed Authenticated
+      summary: User Password Changed Authenticated
+      payload:
+        $ref: '#/components/schemas/UserPasswordChangedPayload'
+    UserPasswordAdminResetTriggered:
+      name: UserPasswordAdminResetTriggered
+      title: Admin Password Reset Triggered
+      summary: Admin Password Reset Triggered
+      payload:
+        $ref: '#/components/schemas/UserPasswordAdminResetPayload'
+    AuthPasswordResetRequested:
+      name: AuthPasswordResetRequested
+      title: Forgot-password Attempt
+      summary: Forgot-password Attempt
+      payload:
+        $ref: '#/components/schemas/AuthPasswordResetRequestedPayload'
+    UserPasswordResetCompleted:
+      name: UserPasswordResetCompleted
+      title: Password Reset Completed
+      summary: Password Reset Completed
+      payload:
+        $ref: '#/components/schemas/UserPasswordResetCompletedPayload'
+    UserEmailChangeRequested:
+      name: UserEmailChangeRequested
+      title: Email Change Requested
+      summary: Email Change Requested
+      payload:
+        $ref: '#/components/schemas/UserEmailChangeRequestedPayload'
+    UserEmailChanged:
+      name: UserEmailChanged
+      title: Email Changed Successfully
+      summary: Email Changed Successfully
+      payload:
+        $ref: '#/components/schemas/UserEmailChangedPayload'
+    UserEmailChangeCancelled:
+      name: UserEmailChangeCancelled
+      title: Email Change Cancelled
+      summary: Email Change Cancelled
+      payload:
+        $ref: '#/components/schemas/UserEmailChangeCancelledPayload'
+    UserPrivacyUpdated:
+      name: UserPrivacyUpdated
+      title: User Privacy Settings Updated
+      summary: User Privacy Settings Updated
+      payload:
+        $ref: '#/components/schemas/UserPrivacyUpdatedPayload'
+    UserActivityExportRequested:
+      name: UserActivityExportRequested
+      title: Activity Export Job Queued
+      summary: Activity Export Job Queued
+      payload:
+        $ref: '#/components/schemas/UserActivityExportRequestedPayload'
+    UserActivityErasureRequested:
+      name: UserActivityErasureRequested
+      title: Activity Erasure Requested
+      summary: Activity Erasure Requested
+      payload:
+        $ref: '#/components/schemas/UserActivityErasureRequestedPayload'
+    UserSessionInvalidatedFamily:
+      name: UserSessionInvalidatedFamily
+      title: Session Family Invalidated
+      summary: Session Family Invalidated
+      payload:
+        $ref: '#/components/schemas/UserSessionInvalidatedFamilyPayload'
+    UserConsentMarketingGranted:
+      name: UserConsentMarketingGranted
+      title: Marketing Consent Granted
+      summary: Marketing Consent Granted
+      payload:
+        $ref: '#/components/schemas/UserConsentMarketingPayload'
+    UserConsentMarketingWithdrawn:
+      name: UserConsentMarketingWithdrawn
+      title: Marketing Consent Withdrawn
+      summary: Marketing Consent Withdrawn
+      payload:
+        $ref: '#/components/schemas/UserConsentMarketingPayload'
+  schemas:
+    PostEventPayload:
+      type: object
+      required:
+      - post_id
+      - author_id
+      properties:
+        post_id:
+          type: string
+          format: uuid
+        author_id:
+          type: string
+          format: uuid
+        status:
+          type: string
+          enum:
+          - draft
+          - review
+          - published
+          - archived
+        category_id:
+          type: string
+          format: uuid
+          nullable: true
+        tag_ids:
+          type: array
+          items:
+            type: string
+            format: uuid
+        cover_image_media_id:
+          type: string
+          format: uuid
+          nullable: true
+    CommentEventPayload:
+      type: object
+      required:
+      - comment_id
+      - post_id
+      properties:
+        comment_id:
+          type: string
+          format: uuid
+        post_id:
+          type: string
+          format: uuid
+        parent_id:
+          type: string
+          format: uuid
+          nullable: true
+        status:
+          type: string
+    UserEventPayload:
+      type: object
+      required:
+      - user_id
+      properties:
+        user_id:
+          type: string
+          format: uuid
+        email:
+          type: string
+          format: email
+        status:
+          type: string
+        avatar_id:
+          type: string
+          format: uuid
+          nullable: true
+    MediaEventPayload:
+      type: object
+      required:
+      - media_asset_id
+      - storage_key
+      - disk
+      properties:
+        media_asset_id:
+          type: string
+          format: uuid
+        storage_key:
+          type: string
+        disk:
+          type: string
+          enum:
+          - s3
+          - r2
+          - minio
+          - do_spaces
+        content_type:
+          type: string
+        size_bytes:
+          type: integer
+          minimum: 0
+        referenced_by:
+          type: array
+          items:
+            type: string
+            enum:
+            - users.avatar_id
+            - posts.cover_image_media_id
+            - categories.image_id
+            - post_media
+    UserProfileUpdatedPayload:
+      type: object
+      required:
+      - event_id
+      - event_name
+      - occurred_at
+      - aggregate_id
+      - actor_id
+      - diff_before_hash
+      - diff_after_keys
+      properties:
+        event_id:
+          type: string
+          format: uuid
+        event_name:
+          const: user.profile.updated
+        occurred_at:
+          type: string
+          format: date-time
+        aggregate_id:
+          type: string
+          format: uuid
+        actor_id:
+          type: string
+          format: uuid
+          nullable: true
+          description: System or anonymous actor when null.
+        impersonator_id:
+          type: string
+          format: uuid
+          nullable: true
+        impersonation_session_id:
+          type: string
+          format: uuid
+          nullable: true
+        request_id:
+          type: string
+          nullable: true
+        diff_before_hash:
+          type: object
+          description: Hashed only for sensitive fields; public-safe fields show plain before value.
+          additionalProperties: true
+        diff_after_keys:
+          type: object
+          additionalProperties: true
+        admin_initiated:
+          type: boolean
+          default: false
+    UserAvatarUpdatedPayload:
+      type: object
+      required:
+      - event_id
+      - event_name
+      - occurred_at
+      - aggregate_id
+      - actor_id
+      properties:
+        event_id:
+          type: string
+          format: uuid
+        event_name:
+          const: user.profile.avatar_updated
+        occurred_at:
+          type: string
+          format: date-time
+        aggregate_id:
+          type: string
+          format: uuid
+        actor_id:
+          type: string
+          format: uuid
+          nullable: true
+          description: System or anonymous actor when null.
+        impersonator_id:
+          type: string
+          format: uuid
+          nullable: true
+        impersonation_session_id:
+          type: string
+          format: uuid
+          nullable: true
+        request_id:
+          type: string
+          nullable: true
+        old_media_asset_id:
+          type: string
+          format: uuid
+          nullable: true
+        new_media_asset_id:
+          type: string
+          format: uuid
+          nullable: true
+        size_variants:
+          type: object
+          properties:
+            s64:
+              type: string
+              format: uri
+              nullable: true
+            s128:
+              type: string
+              format: uri
+              nullable: true
+            s256:
+              type: string
+              format: uri
+              nullable: true
+            s512:
+              type: string
+              format: uri
+              nullable: true
+          nullable: true
+    UserPasswordChangedPayload:
+      type: object
+      required:
+      - event_id
+      - event_name
+      - occurred_at
+      - aggregate_id
+      - actor_id
+      - password_changed_at
+      - sessions_invalidated_family
+      properties:
+        event_id:
+          type: string
+          format: uuid
+        event_name:
+          const: user.password.changed
+        occurred_at:
+          type: string
+          format: date-time
+        aggregate_id:
+          type: string
+          format: uuid
+        actor_id:
+          type: string
+          format: uuid
+          nullable: true
+          description: System or anonymous actor when null.
+        impersonator_id:
+          type: string
+          format: uuid
+          nullable: true
+        impersonation_session_id:
+          type: string
+          format: uuid
+          nullable: true
+        request_id:
+          type: string
+          nullable: true
+        password_changed_at:
+          type: string
+          format: date-time
+        sessions_invalidated_family:
+          type: boolean
+        admin_initiated:
+          type: boolean
+          default: false
+    UserPasswordAdminResetPayload:
+      type: object
+      required:
+      - event_id
+      - event_name
+      - occurred_at
+      - aggregate_id
+      - actor_id
+      - mode
+      properties:
+        event_id:
+          type: string
+          format: uuid
+        event_name:
+          const: user.password.admin_reset_triggered
+        occurred_at:
+          type: string
+          format: date-time
+        aggregate_id:
+          type: string
+          format: uuid
+        actor_id:
+          type: string
+          format: uuid
+          nullable: true
+          description: System or anonymous actor when null.
+        impersonator_id:
+          type: string
+          format: uuid
+          nullable: true
+        impersonation_session_id:
+          type: string
+          format: uuid
+          nullable: true
+        request_id:
+          type: string
+          nullable: true
+        target_user_id:
+          type: string
+          format: uuid
+        mode:
+          type: string
+          enum:
+          - send_reset_email
+          - force_password_on_next_login
+        password_expires_at:
+          type: string
+          format: date-time
+          nullable: true
+    AuthPasswordResetRequestedPayload:
+      type: object
+      required:
+      - event_id
+      - event_name
+      - occurred_at
+      - aggregate_id
+      - actor_id
+      - status
+      - attempted_email_hash
+      properties:
+        event_id:
+          type: string
+          format: uuid
+        event_name:
+          const: auth.password.reset_requested
+        occurred_at:
+          type: string
+          format: date-time
+        aggregate_id:
+          type: string
+          format: uuid
+        actor_id:
+          type: string
+          format: uuid
+          nullable: true
+          description: System or anonymous actor when null.
+        impersonator_id:
+          type: string
+          format: uuid
+          nullable: true
+        impersonation_session_id:
+          type: string
+          format: uuid
+          nullable: true
+        request_id:
+          type: string
+          nullable: true
+        status:
+          type: string
+          const: attempted
+        attempted_email_hash:
+          type: string
+          description: Peppered HMAC of the attempted email address; never plain.
+        issued_ip_truncated:
+          type: string
+          nullable: true
+        matched_user:
+          type: boolean
+          nullable: true
+          description: Only used internally. Public-facing responses MUST be timing-safe.
+    UserPasswordResetCompletedPayload:
+      type: object
+      required:
+      - event_id
+      - event_name
+      - occurred_at
+      - aggregate_id
+      - actor_id
+      - password_changed_at
+      properties:
+        event_id:
+          type: string
+          format: uuid
+        event_name:
+          const: user.password.reset_completed
+        occurred_at:
+          type: string
+          format: date-time
+        aggregate_id:
+          type: string
+          format: uuid
+        actor_id:
+          type: string
+          format: uuid
+          nullable: true
+          description: System or anonymous actor when null.
+        impersonator_id:
+          type: string
+          format: uuid
+          nullable: true
+        impersonation_session_id:
+          type: string
+          format: uuid
+          nullable: true
+        request_id:
+          type: string
+          nullable: true
+        password_changed_at:
+          type: string
+          format: date-time
+        sessions_invalidated:
+          type: boolean
+          default: true
+        token_jti:
+          type: string
+          nullable: true
+    UserEmailChangeRequestedPayload:
+      type: object
+      required:
+      - event_id
+      - event_name
+      - occurred_at
+      - aggregate_id
+      - actor_id
+      - new_email_hash
+      properties:
+        event_id:
+          type: string
+          format: uuid
+        event_name:
+          const: user.email.change_requested
+        occurred_at:
+          type: string
+          format: date-time
+        aggregate_id:
+          type: string
+          format: uuid
+        actor_id:
+          type: string
+          format: uuid
+          nullable: true
+          description: System or anonymous actor when null.
+        impersonator_id:
+          type: string
+          format: uuid
+          nullable: true
+        impersonation_session_id:
+          type: string
+          format: uuid
+          nullable: true
+        request_id:
+          type: string
+          nullable: true
+        new_email_hash:
+          type: string
+          description: Peppered HMAC of new email address.
+        old_email_hash:
+          type: string
+          description: Peppered HMAC of current email address.
+        token_jti:
+          type: string
+        token_expires_at:
+          type: string
+          format: date-time
+    UserEmailChangedPayload:
+      type: object
+      required:
+      - event_id
+      - event_name
+      - occurred_at
+      - aggregate_id
+      - actor_id
+      - old_email_hash
+      - new_email_hash
+      - revoked_sessions_count
+      properties:
+        event_id:
+          type: string
+          format: uuid
+        event_name:
+          const: user.email.changed
+        occurred_at:
+          type: string
+          format: date-time
+        aggregate_id:
+          type: string
+          format: uuid
+        actor_id:
+          type: string
+          format: uuid
+          nullable: true
+          description: System or anonymous actor when null.
+        impersonator_id:
+          type: string
+          format: uuid
+          nullable: true
+        impersonation_session_id:
+          type: string
+          format: uuid
+          nullable: true
+        request_id:
+          type: string
+          nullable: true
+        old_email_hash:
+          type: string
+        new_email_hash:
+          type: string
+        revoked_sessions_count:
+          type: integer
+          minimum: 0
+    UserEmailChangeCancelledPayload:
+      type: object
+      required:
+      - event_id
+      - event_name
+      - occurred_at
+      - aggregate_id
+      - actor_id
+      properties:
+        event_id:
+          type: string
+          format: uuid
+        event_name:
+          const: user.email.change_cancelled
+        occurred_at:
+          type: string
+          format: date-time
+        aggregate_id:
+          type: string
+          format: uuid
+        actor_id:
+          type: string
+          format: uuid
+          nullable: true
+          description: System or anonymous actor when null.
+        impersonator_id:
+          type: string
+          format: uuid
+          nullable: true
+        impersonation_session_id:
+          type: string
+          format: uuid
+          nullable: true
+        request_id:
+          type: string
+          nullable: true
+        token_jti:
+          type: string
+          nullable: true
+        cancelled_by:
+          type: string
+          enum:
+          - old_email_link
+          - user_action
+          - admin
+          - expired
+          nullable: true
+    UserPrivacyUpdatedPayload:
+      type: object
+      required:
+      - event_id
+      - event_name
+      - occurred_at
+      - aggregate_id
+      - actor_id
+      - diff
+      properties:
+        event_id:
+          type: string
+          format: uuid
+        event_name:
+          const: user.privacy.updated
+        occurred_at:
+          type: string
+          format: date-time
+        aggregate_id:
+          type: string
+          format: uuid
+        actor_id:
+          type: string
+          format: uuid
+          nullable: true
+          description: System or anonymous actor when null.
+        impersonator_id:
+          type: string
+          format: uuid
+          nullable: true
+        impersonation_session_id:
+          type: string
+          format: uuid
+          nullable: true
+        request_id:
+          type: string
+          nullable: true
+        diff:
+          type: object
+          properties:
+            before:
+              type: object
+              additionalProperties: true
+            after:
+              type: object
+              additionalProperties: true
+        stepup_proof_present:
+          type: boolean
+          default: false
+    UserActivityExportRequestedPayload:
+      type: object
+      required:
+      - event_id
+      - event_name
+      - occurred_at
+      - aggregate_id
+      - actor_id
+      - job_id
+      - scope
+      properties:
+        event_id:
+          type: string
+          format: uuid
+        event_name:
+          const: user.activity.export_requested
+        occurred_at:
+          type: string
+          format: date-time
+        aggregate_id:
+          type: string
+          format: uuid
+        actor_id:
+          type: string
+          format: uuid
+          nullable: true
+          description: System or anonymous actor when null.
+        impersonator_id:
+          type: string
+          format: uuid
+          nullable: true
+        impersonation_session_id:
+          type: string
+          format: uuid
+          nullable: true
+        request_id:
+          type: string
+          nullable: true
+        job_id:
+          type: string
+          format: uuid
+        scope:
+          type: string
+          enum:
+          - activity_only
+          - full_profile
+        from_date:
+          type: string
+          format: date-time
+          nullable: true
+        to_date:
+          type: string
+          format: date-time
+          nullable: true
+        requested_by_admin:
+          type: boolean
+          default: false
+    UserActivityErasureRequestedPayload:
+      type: object
+      required:
+      - event_id
+      - event_name
+      - occurred_at
+      - aggregate_id
+      - actor_id
+      - erasure_id
+      - scope
+      properties:
+        event_id:
+          type: string
+          format: uuid
+        event_name:
+          const: user.activity.erasure_requested
+        occurred_at:
+          type: string
+          format: date-time
+        aggregate_id:
+          type: string
+          format: uuid
+        actor_id:
+          type: string
+          format: uuid
+          nullable: true
+          description: System or anonymous actor when null.
+        impersonator_id:
+          type: string
+          format: uuid
+          nullable: true
+        impersonation_session_id:
+          type: string
+          format: uuid
+          nullable: true
+        request_id:
+          type: string
+          nullable: true
+        erasure_id:
+          type: string
+          format: uuid
+        scope:
+          type: string
+          enum:
+          - activity_only
+          - full_profile
+        from_date:
+          type: string
+          format: date-time
+          nullable: true
+        to_date:
+          type: string
+          format: date-time
+          nullable: true
+        reason:
+          type: string
+          maxLength: 500
+          nullable: true
+    UserSessionInvalidatedFamilyPayload:
+      type: object
+      required:
+      - event_id
+      - event_name
+      - occurred_at
+      - aggregate_id
+      - actor_id
+      - reason
+      - revoked_count
+      properties:
+        event_id:
+          type: string
+          format: uuid
+        event_name:
+          const: user.session.invalidated_family
+        occurred_at:
+          type: string
+          format: date-time
+        aggregate_id:
+          type: string
+          format: uuid
+        actor_id:
+          type: string
+          format: uuid
+          nullable: true
+          description: System or anonymous actor when null.
+        impersonator_id:
+          type: string
+          format: uuid
+          nullable: true
+        impersonation_session_id:
+          type: string
+          format: uuid
+          nullable: true
+        request_id:
+          type: string
+          nullable: true
+        reason:
+          type: string
+          enum:
+          - password_change
+          - password_reset
+          - email_change
+          - avatar_security
+          - security_setting_change
+          - admin_action
+        revoked_count:
+          type: integer
+          minimum: 0
+        new_family_id:
+          type: string
+          nullable: true
+    UserConsentMarketingPayload:
+      type: object
+      required:
+      - event_id
+      - event_name
+      - occurred_at
+      - aggregate_id
+      - actor_id
+      properties:
+        event_id:
+          type: string
+          format: uuid
+        event_name:
+          type: string
+          enum:
+          - user.consent.marketing_granted
+          - user.consent.marketing_withdrawn
+        occurred_at:
+          type: string
+          format: date-time
+        aggregate_id:
+          type: string
+          format: uuid
+        actor_id:
+          type: string
+          format: uuid
+          nullable: true
+          description: System or anonymous actor when null.
+        impersonator_id:
+          type: string
+          format: uuid
+          nullable: true
+        impersonation_session_id:
+          type: string
+          format: uuid
+          nullable: true
+        request_id:
+          type: string
+          nullable: true
+        consent_id:
+          type: string
+          format: uuid
+          nullable: true
+        consent_timestamp:
+          type: string
+          format: date-time
+        ip_truncated:
+          type: string
+          nullable: true

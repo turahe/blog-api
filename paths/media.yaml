@@ -1,0 +1,221 @@
+/api/v1/media/{id}:
+  get:
+    tags:
+    - Public
+    summary: Get metadata for a single media asset (redirect or signed URL depending on implementation)
+    security: []
+    operationId: public.media.get
+    parameters:
+    - name: id
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+    responses:
+      '200':
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas/Media.yaml#/EnvelopeMediaResponse
+        description: OK
+      '404':
+        $ref: ../components/responses.yaml#/NotFoundError
+/api/v1/media/{id}/transform:
+  get:
+    tags:
+    - Public
+    summary: On-the-fly image transform endpoint
+    security: []
+    operationId: public.media.transform
+    parameters:
+    - name: id
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+    - name: w
+      in: query
+      schema:
+        type: integer
+        minimum: 1
+        maximum: 8192
+    - name: h
+      in: query
+      schema:
+        type: integer
+        minimum: 1
+        maximum: 8192
+    - name: fit
+      in: query
+      schema:
+        type: string
+        enum:
+        - cover
+        - contain
+        - fill
+        - inside
+        - outside
+        default: cover
+    - name: format
+      in: query
+      schema:
+        type: string
+        enum:
+        - jpeg
+        - png
+        - webp
+        - avif
+        default: webp
+    - name: quality
+      in: query
+      schema:
+        type: integer
+        minimum: 1
+        maximum: 100
+        default: 82
+    - name: rotate
+      in: query
+      schema:
+        type: integer
+        enum:
+        - 0
+        - 90
+        - 180
+        - 270
+    - name: crop
+      in: query
+      description: Optional crop window JSON (x,y,w,h)
+      schema:
+        type: string
+    responses:
+      '200':
+        description: Transformed image response with cache headers
+        content:
+          image/*:
+            schema:
+              type: string
+              format: binary
+      '400':
+        $ref: ../components/responses.yaml#/ValidationError
+      '404':
+        $ref: ../components/responses.yaml#/NotFoundError
+/api/v1/admin/media:
+  post:
+    tags:
+    - Admin / Media
+    summary: Upload a new media asset
+    operationId: admin.media.create
+    requestBody:
+      required: true
+      content:
+        multipart/form-data:
+          schema:
+            $ref: ../components/schemas/Media.yaml#/MediaUploadRequest
+    responses:
+      '201':
+        description: Asset created (or queued if async scanning)
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas/Media.yaml#/EnvelopeMediaResponse
+      '400':
+        $ref: ../components/responses.yaml#/ValidationError
+      '401':
+        $ref: ../components/responses.yaml#/UnauthorizedError
+      '403':
+        $ref: ../components/responses.yaml#/ForbiddenError
+  get:
+    tags:
+    - Admin / Media
+    summary: List admin media assets
+    operationId: admin.media.list
+    parameters:
+    - $ref: ../components/parameters.yaml#/Page
+    - $ref: ../components/parameters.yaml#/PerPage
+    - name: q
+      in: query
+      schema:
+        type: string
+    - name: disk
+      in: query
+      schema:
+        type: string
+        enum:
+        - s3
+        - r2
+        - minio
+        - do_spaces
+    responses:
+      '200':
+        description: Paginated media assets
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas/Media.yaml#/EnvelopeMediaList
+      '401':
+        $ref: ../components/responses.yaml#/UnauthorizedError
+      '403':
+        $ref: ../components/responses.yaml#/ForbiddenError
+/api/v1/admin/media/{id}/tags:
+  patch:
+    tags:
+    - Admin / Media
+    summary: Update tags for a media asset
+    operationId: admin.media.tags.patch
+    parameters:
+    - name: id
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            required:
+            - tags
+            properties:
+              tags:
+                type: array
+                items:
+                  type: string
+                maxItems: 50
+    responses:
+      '200':
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas/Media.yaml#/EnvelopeMediaResponse
+        description: OK
+      '400':
+        $ref: ../components/responses.yaml#/ValidationError
+      '403':
+        $ref: ../components/responses.yaml#/ForbiddenError
+      '404':
+        $ref: ../components/responses.yaml#/NotFoundError
+/api/v1/admin/media/{id}:
+  delete:
+    tags:
+    - Admin / Media
+    summary: Delete a media asset respecting FK constraints
+    description: Sets null on references (user.avatar_id, categories.image_id, posts.cover_image_media_id) and cascades join rows for post_media per database policy.
+    operationId: admin.media.delete
+    parameters:
+    - name: id
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+    responses:
+      '200':
+        $ref: ../components/responses.yaml#/EmptyOk
+      '403':
+        $ref: ../components/responses.yaml#/ForbiddenError
+      '404':
+        $ref: ../components/responses.yaml#/NotFoundError

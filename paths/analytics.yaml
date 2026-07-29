@@ -1,0 +1,179 @@
+/api/v1/analytics/consent:
+  post:
+    tags:
+    - Consent & Analytics Ingestion
+    summary: Grant or reject analytics consent
+    security: []
+    operationId: analytics.consent.store
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: ../components/schemas/Analytics.yaml#/AnalyticsConsentRequest
+    responses:
+      '200':
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas/Analytics.yaml#/EnvelopeAnalyticsConsent
+        description: OK
+  get:
+    tags:
+    - Consent & Analytics Ingestion
+    summary: Get consent state by token
+    security: []
+    operationId: analytics.consent.get
+    parameters:
+    - name: token
+      in: query
+      required: true
+      schema:
+        type: string
+    responses:
+      '200':
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas/Analytics.yaml#/EnvelopeAnalyticsConsent
+        description: OK
+/api/v1/analytics/consent/{token}:
+  delete:
+    tags:
+    - Consent & Analytics Ingestion
+    summary: Withdraw consent and schedule erasure
+    security: []
+    operationId: analytics.consent.withdraw
+    parameters:
+    - name: token
+      in: path
+      required: true
+      schema:
+        type: string
+    responses:
+      '200':
+        $ref: ../components/responses.yaml#/EmptyOk
+/api/v1/analytics/ingest/page-view:
+  post:
+    tags:
+    - Consent & Analytics Ingestion
+    summary: Ingest a page view if consent granted
+    security: []
+    operationId: analytics.ingest.page_view
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: ../components/schemas/Analytics.yaml#/AnalyticsPageViewRequest
+    responses:
+      '202':
+        description: Accepted
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas/Common.yaml#/EnvelopeEmpty
+      '400':
+        $ref: ../components/responses.yaml#/ValidationError
+      '403':
+        description: Consent rejected or invalid
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas/Common.yaml#/EnvelopeError
+/api/v1/analytics/ingest/time-spent:
+  post:
+    tags:
+    - Consent & Analytics Ingestion
+    summary: Ingest time spent heartbeat / final duration
+    security: []
+    operationId: analytics.ingest.time_spent
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: ../components/schemas/Analytics.yaml#/AnalyticsTimeSpentRequest
+    responses:
+      '202':
+        description: Accepted
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas/Common.yaml#/EnvelopeEmpty
+      '400':
+        $ref: ../components/responses.yaml#/ValidationError
+      '403':
+        $ref: ../components/responses.yaml#/ForbiddenError
+/api/v1/analytics/ingest/navigation:
+  post:
+    tags:
+    - Consent & Analytics Ingestion
+    summary: Ingest a navigation transition
+    security: []
+    operationId: analytics.ingest.navigation
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: ../components/schemas/Analytics.yaml#/AnalyticsNavigationRequest
+    responses:
+      '202':
+        description: Accepted
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas/Common.yaml#/EnvelopeEmpty
+      '400':
+        $ref: ../components/responses.yaml#/ValidationError
+      '403':
+        $ref: ../components/responses.yaml#/ForbiddenError
+/api/v1/analytics/ingest/search:
+  post:
+    tags:
+    - Consent & Analytics Ingestion
+    summary: Ingest a search query performed
+    security: []
+    operationId: analytics.ingest.search
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: ../components/schemas/Analytics.yaml#/AnalyticsSearchRequest
+    responses:
+      '202':
+        description: Accepted
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas/Common.yaml#/EnvelopeEmpty
+      '400':
+        $ref: ../components/responses.yaml#/ValidationError
+      '403':
+        $ref: ../components/responses.yaml#/ForbiddenError
+/api/v1/analytics/ingest/search-click:
+  post:
+    tags:
+    - Consent & Analytics Ingestion
+    summary: Ingest a search result click
+    security: []
+    operationId: analytics.ingest.search_click
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: ../components/schemas/Analytics.yaml#/AnalyticsSearchClickRequest
+    responses:
+      '202':
+        description: Accepted
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas/Common.yaml#/EnvelopeEmpty
+      '400':
+        $ref: ../components/responses.yaml#/ValidationError
+      '403':
+        $ref: ../components/responses.yaml#/ForbiddenError

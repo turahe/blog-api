@@ -1,0 +1,418 @@
+User:
+  type: object
+  required:
+  - id
+  - full_name
+  - email
+  properties:
+    id:
+      type: string
+      format: uuid
+    full_name:
+      type: string
+    email:
+      type: string
+      format: email
+    status:
+      type: string
+      enum:
+      - active
+      - inactive
+      - suspended
+    avatar_id:
+      type: string
+      format: uuid
+      nullable: true
+    avatar:
+      nullable: true
+      allOf:
+      - $ref: Media.yaml#/MediaAsset
+    last_login_at:
+      type: string
+      format: date-time
+      nullable: true
+    email_verified_at:
+      type: string
+      format: date-time
+      nullable: true
+    created_at:
+      type: string
+      format: date-time
+    updated_at:
+      type: string
+      format: date-time
+ProfileUpdateRequest:
+  allOf:
+  - $ref: User.yaml#/UserProfileExtension
+  - type: object
+    properties:
+      full_name:
+        type: string
+        minLength: 1
+        maxLength: 150
+UserCreateRequest:
+  type: object
+  required:
+  - full_name
+  - email
+  properties:
+    full_name:
+      type: string
+    email:
+      type: string
+      format: email
+    password:
+      type: string
+      minLength: 8
+    status:
+      type: string
+      enum:
+      - active
+      - inactive
+      default: active
+    role_ids:
+      type: array
+      items:
+        type: string
+        format: uuid
+EmailChangeRequest:
+  type: object
+  required:
+  - new_email
+  - password_proof
+  properties:
+    new_email:
+      type: string
+      format: email
+      maxLength: 254
+    password_proof:
+      type: string
+      description: Current user password; or X-2FA-Verified header accepted as alternative.
+UserPrivacySettings:
+  type: object
+  required:
+  - visibility_profile
+  - visibility_email
+  - visibility_contact_details
+  - visibility_activity_timeline
+  - search_allow_indexing
+  - tracking_personalize_ads
+  properties:
+    visibility_profile:
+      type: string
+      enum:
+      - public
+      - unlisted
+      - private
+      - followers_only
+      default: public
+    visibility_email:
+      type: boolean
+      default: false
+      description: Never expose email publicly. Admin and owner still see.
+    visibility_contact_details:
+      type: boolean
+      default: false
+    visibility_activity_timeline:
+      type: boolean
+      default: false
+    search_allow_indexing:
+      type: boolean
+      default: true
+    tracking_personalize_ads:
+      type: boolean
+      default: false
+UserPrivacyUpdateRequest:
+  allOf:
+  - $ref: User.yaml#/UserPrivacySettings
+  required: []
+UserProfileContact:
+  type: object
+  properties:
+    phone:
+      type: string
+      nullable: true
+      description: E.164 format, encrypted at rest. Returned only to owner or admin.
+    website:
+      type: string
+      format: uri
+      maxLength: 2048
+      nullable: true
+    location:
+      type: string
+      maxLength: 120
+      nullable: true
+UserSocialLinks:
+  type: object
+  properties:
+    twitter:
+      type: string
+      nullable: true
+    linkedin:
+      type: string
+      nullable: true
+    github:
+      type: string
+      nullable: true
+UserProfileExtension:
+  type: object
+  properties:
+    display_name:
+      type: string
+      minLength: 1
+      maxLength: 60
+      nullable: true
+    bio:
+      type: string
+      maxLength: 4000
+      nullable: true
+      description: Sanitized markdown.
+    contact:
+      $ref: User.yaml#/UserProfileContact
+    social_links:
+      $ref: User.yaml#/UserSocialLinks
+    locale:
+      type: string
+      pattern: ^[A-Za-z]{2,3}(?:_[A-Za-z]{4})?(?:_[A-Za-z]{2}|[0-9]{3})?$
+      default: en_US
+    timezone:
+      type: string
+      default: UTC
+    marketing_consent:
+      type: boolean
+      default: false
+    marketing_consent_updated_at:
+      type: string
+      format: date-time
+      nullable: true
+UserActivityType:
+  type: string
+  enum:
+  - login
+  - logout
+  - profile_edit
+  - avatar_update
+  - password_change
+  - password_reset
+  - email_change
+  - consent_grant
+  - consent_withdraw
+  - post_create
+  - post_edit
+  - post_publish
+  - comment_create
+  - twofa_enable
+  - twofa_disable
+  - oauth_link
+  - oauth_unlink
+  - impersonation_start
+  - impersonation_end
+  - role_change
+  - privacy_change
+  - marketing_consent_grant
+  - marketing_consent_withdraw
+  - export_requested
+  - erasure_requested
+UserActivityItem:
+  type: object
+  required:
+  - id
+  - activity_type
+  - summary
+  - created_at
+  properties:
+    id:
+      type: string
+      format: uuid
+    activity_type:
+      $ref: User.yaml#/UserActivityType
+    summary:
+      type: string
+      maxLength: 500
+    detail:
+      type: object
+      additionalProperties: true
+      nullable: true
+    ip_truncated:
+      type: string
+      nullable: true
+    user_agent_bucket:
+      type: string
+      maxLength: 64
+      nullable: true
+    geo_country_code:
+      type: string
+      minLength: 2
+      maxLength: 2
+      nullable: true
+    impersonator_id:
+      type: string
+      format: uuid
+      nullable: true
+    created_at:
+      type: string
+      format: date-time
+ActivityEraseRequest:
+  type: object
+  required:
+  - scope
+  properties:
+    scope:
+      type: string
+      enum:
+      - activity_only
+      - full_profile
+      default: activity_only
+    from_date:
+      type: string
+      format: date-time
+      nullable: true
+    to_date:
+      type: string
+      format: date-time
+      nullable: true
+    password_proof:
+      type: string
+      description: Alternative to X-Re-Verify-Password header.
+    reason:
+      type: string
+      maxLength: 500
+      nullable: true
+PublicUserProfile:
+  type: object
+  required:
+  - id
+  - full_name
+  - avatar_url
+  properties:
+    id:
+      type: string
+      format: uuid
+    full_name:
+      type: string
+    display_name:
+      type: string
+      nullable: true
+    bio:
+      type: string
+      nullable: true
+    avatar_url:
+      type: string
+      format: uri
+      nullable: true
+    avatar:
+      nullable: true
+      allOf:
+      - $ref: Media.yaml#/MediaAsset
+    website:
+      type: string
+      format: uri
+      nullable: true
+    location:
+      type: string
+      nullable: true
+    social_links:
+      $ref: User.yaml#/UserSocialLinks
+    posts_preview:
+      type: array
+      items:
+        type: object
+      nullable: true
+    roles_brief:
+      type: array
+      items:
+        type: string
+      nullable: true
+AdminUserProfile:
+  type: object
+  required:
+  - user
+  - profile
+  - privacy
+  - activity_summary
+  properties:
+    user:
+      $ref: User.yaml#/User
+    profile:
+      $ref: User.yaml#/UserProfileExtension
+    privacy:
+      $ref: User.yaml#/UserPrivacySettings
+    activity_summary:
+      type: object
+      properties:
+        last_30d_active_days:
+          type: integer
+          minimum: 0
+        total_posts:
+          type: integer
+          minimum: 0
+        total_comments:
+          type: integer
+          minimum: 0
+        last_activity_at:
+          type: string
+          format: date-time
+          nullable: true
+AdminUserProfilePatchRequest:
+  type: object
+  properties:
+    full_name:
+      type: string
+      minLength: 1
+      maxLength: 150
+    display_name:
+      type: string
+      minLength: 1
+      maxLength: 60
+      nullable: true
+    bio:
+      type: string
+      maxLength: 4000
+      nullable: true
+    contact:
+      $ref: User.yaml#/UserProfileContact
+    social_links:
+      $ref: User.yaml#/UserSocialLinks
+    locale:
+      type: string
+    timezone:
+      type: string
+    marketing_consent:
+      type: boolean
+    privacy:
+      $ref: User.yaml#/UserPrivacyUpdateRequest
+AdminUserPasswordResetRequest:
+  type: object
+  required:
+  - mode
+  properties:
+    mode:
+      type: string
+      enum:
+      - send_reset_email
+      - force_password_on_next_login
+    temporary_password:
+      type: string
+      nullable: true
+      description: Required only for force_password_on_next_login mode.
+EnvelopeUserPrivacyResponse:
+  allOf:
+  - $ref: Common.yaml#/Envelope
+  - type: object
+    properties:
+      data:
+        $ref: User.yaml#/UserPrivacySettings
+EnvelopePublicUserProfile:
+  allOf:
+  - $ref: Common.yaml#/Envelope
+  - type: object
+    properties:
+      data:
+        $ref: User.yaml#/PublicUserProfile
+EnvelopeAdminUserProfile:
+  allOf:
+  - $ref: Common.yaml#/Envelope
+  - type: object
+    properties:
+      data:
+        $ref: User.yaml#/AdminUserProfile

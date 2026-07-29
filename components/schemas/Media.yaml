@@ -1,0 +1,127 @@
+MediaAsset:
+  type: object
+  required:
+  - id
+  - storage_key
+  - content_type
+  properties:
+    id:
+      type: string
+      format: uuid
+    parent_id:
+      type: string
+      format: uuid
+      nullable: true
+    storage_key:
+      type: string
+    original_filename:
+      type: string
+    content_type:
+      type: string
+    size_bytes:
+      type: integer
+      minimum: 0
+    width:
+      type: integer
+      nullable: true
+    height:
+      type: integer
+      nullable: true
+    checksum_sha256:
+      type: string
+      nullable: true
+    disk:
+      type: string
+      enum:
+      - s3
+      - r2
+      - minio
+      - do_spaces
+    tags:
+      type: array
+      items:
+        type: string
+    metadata:
+      type: object
+      additionalProperties: true
+    uploaded_by:
+      type: string
+      format: uuid
+      nullable: true
+    created_at:
+      type: string
+      format: date-time
+    updated_at:
+      type: string
+      format: date-time
+EnvelopeMediaResponse:
+  allOf:
+  - $ref: Common.yaml#/Envelope
+  - type: object
+    properties:
+      data:
+        $ref: Media.yaml#/MediaAsset
+EnvelopeMediaList:
+  allOf:
+  - $ref: Common.yaml#/Envelope
+  - type: object
+    properties:
+      data:
+        type: object
+        required:
+        - items
+        properties:
+          items:
+            type: array
+            items:
+              $ref: Media.yaml#/MediaAsset
+MediaUploadRequest:
+  type: object
+  required:
+  - file
+  properties:
+    file:
+      type: string
+      format: binary
+      description: File bytes in multipart upload
+    tags:
+      type: array
+      items:
+        type: string
+    parent_id:
+      type: string
+      format: uuid
+AvatarSizeVariants:
+  type: object
+  required:
+  - s64
+  - s128
+  - s256
+  - s512
+  properties:
+    s64:
+      type: string
+      format: uri
+    s128:
+      type: string
+      format: uri
+    s256:
+      type: string
+      format: uri
+    s512:
+      type: string
+      format: uri
+EnvelopeAvatarResponse:
+  allOf:
+  - $ref: Common.yaml#/Envelope
+  - type: object
+    properties:
+      data:
+        type: object
+        required:
+        - avatar
+        properties:
+          avatar:
+            $ref: Media.yaml#/MediaAsset
+          size_variants:
+            $ref: Media.yaml#/AvatarSizeVariants
