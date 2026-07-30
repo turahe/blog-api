@@ -5,9 +5,9 @@
 - Language: Go
 - HTTP framework: Gin
 - ORM: GORM
-- Database: PostgreSQL
+- Database: PostgreSQL, MySQL, and Microsoft SQL Server (dialect selected via `DB_DRIVER`; production preferred path is Google Cloud SQL via `cloud.google.com/go/cloudsqlconn`)
 - Cache: Redis
-- Event bus: Watermill
+- Event bus: Watermill with selectable transports — Apache Kafka, RabbitMQ (AMQP), and Google Cloud Pub/Sub (`MESSAGE_BROKER`)
 - Object storage: Cloudflare R2 and S3-compatible providers
 - Image transformation: high-performance image processing engine with WebP and AVIF output support
 
@@ -15,6 +15,7 @@
 
 - local environment orchestration: Docker Compose
 - local object storage for media testing: MinIO or another S3-compatible service
+- local messaging brokers (Compose profile `messaging`): Kafka and RabbitMQ; Google Cloud Pub/Sub is exercised against a real GCP project / ADC, not a Compose emulator
 
 ## Authentication and Security
 
@@ -25,13 +26,29 @@
 
 ## Data and Async
 
-- PostgreSQL stores users, roles, permissions, posts, comments, audit logs, and outbox data
+- Relational store holds users, roles, permissions, posts, comments, audit logs, and outbox data
+- Supported dialects (local `DATABASE_URL` or Cloud SQL):
+  | `DB_DRIVER` | Engine | GORM driver | Notes |
+  |-------------|--------|-------------|-------|
+  | `postgres` (default) | PostgreSQL 15+ | `gorm.io/driver/postgres` + `jackc/pgx/v5` | Source-of-truth schema and Goose migrations |
+  | `mysql` | MySQL 8.0+ / Cloud SQL MySQL | `gorm.io/driver/mysql` | Secondary / portable deployments |
+  | `sqlserver` | Microsoft SQL Server / Cloud SQL SQL Server | `gorm.io/driver/sqlserver` | Secondary / portable deployments |
 - Google Cloud SQL is the managed relational data plane in production deployments
-  - managed connectivity via **`cloud.google.com/go/cloudsqlconn`** Go connector with IAM Database Authentication (no static passwords), ephemeral mTLS certificate auto-rotation, 1-hour cert refresh cycle, Private Service Connect private IP path (no public IP on instances)
-  - both PostgreSQL 15+ (source of truth) and MySQL 8.0+ (future secondary stores) supported through the same connector; see [backend/database.md Cloud SQL section](../backend/database.md#L62-L457) for go.mod pins, pooling parameters, private IP setup, org-policy guardrails, and troubleshooting
+  - managed connectivity via **`cloud.google.com/go/cloudsqlconn`** for **PostgreSQL**, **MySQL**, and **SQL Server**
+  - IAM Database Authentication where the engine supports it (Postgres / MySQL), ephemeral mTLS certificate auto-rotation, Private Service Connect private IP (`DB_PRIVATE_IP_ENABLED=true`)
+  - instance targeting via `DB_INSTANCE_CONNECTION_NAME` (`project:region:instance`); see [backend/database.md Cloud SQL Connectivity](../backend/database.md#google-cloud-sql-connectivity-cloudgooglecomgocloudsqlconn)
+  - platform wiring: `internal/platform/database` (replaces dialect-specific open packages)
 - Redis stores cache entries, rate-limit counters, and short-lived session/security state
 - object storage stores original media files and optionally hot transformed variants
-- Watermill publishes domain events such as post, auth, and notification events
+- Watermill publishes domain events (post, auth, notification, …) through a broker selected by `MESSAGE_BROKER`:
+  | `MESSAGE_BROKER` | Transport | Watermill package | Typical use |
+  |------------------|-----------|-------------------|-------------|
+  | `kafka` | Apache Kafka | `github.com/ThreeDotsLabs/watermill-kafka/v3` | High-throughput streams; local via Compose |
+  | `rabbitmq` | RabbitMQ (AMQP 0-9-1) | `github.com/ThreeDotsLabs/watermill-amqp/v3` | Work queues / fan-out; local via Compose |
+  | `googlepubsub` | Google Cloud Pub/Sub | `github.com/ThreeDotsLabs/watermill-googlecloud/v2` | Managed GCP production / staging |
+- Platform wiring: `internal/platform/messaging` (factory for Publisher/Subscriber); core must not import Watermill or broker SDKs
+- Delivery: at-least-once; durable publish path remains transactional outbox → worker; consumers must be idempotent
+- Design detail: [messaging brokers design](../superpowers/specs/2026-07-30-messaging-brokers-design.md)
 
 ## Recommended Supporting Libraries
 

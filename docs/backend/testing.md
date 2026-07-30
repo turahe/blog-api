@@ -131,3 +131,7 @@
 - avoid shared mutable global fixtures
 - keep security-sensitive scenarios covered first
 - include corrupted image, invalid transform, and storage failure scenarios
+
+## Operational handbook
+
+Layers, HTTP/contract test patterns, and PR checklist: [docs/testing](../testing/README.md).

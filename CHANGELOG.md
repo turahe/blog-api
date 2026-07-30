@@ -1,5 +1,55 @@
 # Changelog
 
+## 2026-07-30 — Multi-broker Watermill transports
+
+### Added
+
+- `internal/platform/messaging` factory for Kafka, RabbitMQ, and Google Cloud Pub/Sub (`MESSAGE_BROKER`)
+- Config validation and `.env.example` vars: `KAFKA_BROKERS`, `KAFKA_CONSUMER_GROUP`, `RABBITMQ_URL`, `GOOGLE_PUBSUB_*`, `MESSAGE_TOPIC_PREFIX`
+- Compose profile `messaging`: Kafka (`apache/kafka:3.9.0` KRaft) on `:9092`, RabbitMQ management on `:5672` / `:15672`
+- `make infra-up-messaging` / `infra-down-messaging`; `app worker` opens the selected broker; `app doctor` pings messaging when configured
+
+### Updated
+
+- Architecture, deployment, local, tech-stack, and events docs describe selectable transports
+- Spec [messaging brokers design](docs/superpowers/specs/2026-07-30-messaging-brokers-design.md) marked implemented
+
+## 2026-07-30 — Multi-dialect DB + Cloud SQL connector
+
+### Added
+
+- `internal/platform/database` opens PostgreSQL, MySQL, or SQL Server via `DB_DRIVER`
+- Google Cloud SQL path when `DB_INSTANCE_CONNECTION_NAME` is set (`cloud.google.com/go/cloudsqlconn` for all three engines)
+- Config / `.env.example` for Cloud SQL IAM, private IP, credentials source, and pool knobs
+
+### Updated
+
+- Tech stack and database docs list MySQL / SQL Server alongside Postgres + Cloud SQL
+- Bootstrap / CLI use the multi-dialect opener (`postgres` package kept as a thin shim)
+
+## 2026-07-30 — Auth foundation + public posts + me/admin users
+
+### Added
+
+- Auth domain/service with login, refresh rotation, logout
+- Password forgot (timing-safe) + reset token validity + reset consume + `me.password.update`
+- JWT access tokens + hashed refresh sessions (`00002_auth_sessions.sql`)
+- Password-reset token table (`00003_password_reset.sql`)
+- Casbin RBAC enforcer with custom Postgres adapter (`00004_casbin_and_tags.sql`); seed writes role policies
+- Bearer auth middleware for `AuthRequired` / `AuthOptional` routes
+- `GET /api/v1/me`, `GET /api/v1/admin/users` (Casbin `user.read`)
+- Public posts list/get; admin create draft + publish (Casbin `post.create` / `post.publish`)
+- Public categories + tags list/get
+- `app seed` for roles, permissions, Casbin policies, and initial admin
+- Unit tests for auth service (including reset flow) and JWT helpers
+
+### Updated
+
+- Config: `APP_SESSION_KEY` (JWT signing), access/refresh TTLs
+- Router wires Auth, Users, Posts, Categories, Tags, RBAC from bootstrap
+- Local deploy docs include seed + login smoke
+- Makefile `test`/`lint` scoped to `./cmd/... ./internal/...` (avoids Compose `data/` volume scan issues)
+
 ## 2026-07-29 — Post version history & SEO configuration
 
 Added complete specifications for a post revision history system and per-post SEO configuration, integrated into the editor workflow, admin APIs, canonical event contracts, and backend database/service/validation layers.

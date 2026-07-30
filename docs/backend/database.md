@@ -1,5 +1,8 @@
 # Database
 
+Model-layer conventions (domain vs GORM vs DTOs) and the entity catalog:
+[model.md](./model.md). Relationship diagrams: [ERD.md](./ERD.md).
+
 ## Primary Store
 
 PostgreSQL is the source of truth for:
@@ -72,16 +75,20 @@ secrets manager entries. The canonical connector package and latest usage guidan
 
 ### Supported Database Dialects
 
-| Dialect | Driver | GORM driver package | Cloud SQL connector integration |
-|---------|--------|---------------------|---------------------------------|
-| PostgreSQL 15+ (source of truth) | `github.com/jackc/pgx/v5/stdlib` (preferred) or `github.com/lib/pq` | `gorm.io/driver/postgres` | Use `pgx` stdlib driver with a custom `Connector()` returned by `cloudsqlconn.DialOption` → register as driver `cloudsqlpostgres`. See §"Integration steps" below. |
-| MySQL 8.0+ (future/secondary stores) | `github.com/go-sql-driver/mysql` | `gorm.io/driver/mysql` | Register `cloudsqlmysql` driver wrapping go-sql-driver/mysql using `cloudsqlconn.NewDriver()` with the same `Dialer`. MySQL connections use the private IP path the same way; the only difference is the connector factory + TLS `allowPublicKeyRetrieval=false` hardening. |
+| Dialect (`DB_DRIVER`) | Driver | GORM driver package | Cloud SQL connector integration |
+|-----------------------|--------|---------------------|---------------------------------|
+| `postgres` — PostgreSQL 15+ (source of truth) | `github.com/jackc/pgx/v5/stdlib` | `gorm.io/driver/postgres` | `cloud.google.com/go/cloudsqlconn/postgres/pgxv5` — `RegisterDriver("cloudsql-postgres", WithIAMAuthN(), WithPrivateIP())` then `sql.Open` + GORM `Conn`. |
+| `mysql` — MySQL 8.0+ | `github.com/go-sql-driver/mysql` | `gorm.io/driver/mysql` | `cloud.google.com/go/cloudsqlconn/mysql/mysql` — register `cloudsql-mysql`; private IP on connector port **3307**. |
+| `sqlserver` — Microsoft SQL Server | `github.com/microsoft/go-mssqldb` | `gorm.io/driver/sqlserver` | `cloud.google.com/go/cloudsqlconn/sqlserver/mssql` — register `cloudsql-sqlserver`; DSN includes `cloudsql=project:region:instance`. SQL Server uses user/password (IAM DB auth is not used the same way as Postgres/MySQL). |
+
+Local / non-Cloud-SQL: set `DATABASE_URL` and `DB_DRIVER`. Cloud SQL: set `DB_INSTANCE_CONNECTION_NAME` (and related `DB_*` vars); `internal/platform/database` opens via the connector and wraps `*sql.DB` for GORM.
 
 Reference docs:
 
 - Cloud SQL Go connector overview: <https://cloud.google.com/sql/docs/postgres/connect-connectors>
 - PostgreSQL connector guide: <https://cloud.google.com/sql/docs/postgres/samples/cloud-sql-postgres-databasesql-connect-connector>
 - MySQL connector guide: <https://cloud.google.com/sql/docs/mysql/samples/cloud-sql-mysql-databasesql-connect-connector>
+- SQL Server connector guide: <https://cloud.google.com/sql/docs/sqlserver/samples/cloud-sql-sqlserver-databasesql-connect-connector>
 - IAM database authentication for PostgreSQL: <https://cloud.google.com/sql/docs/postgres/iam-logins>
 - IAM database authentication for MySQL: <https://cloud.google.com/sql/docs/mysql/iam-logins>
 - Private IP setup overview: <https://cloud.google.com/sql/docs/postgres/private-ip>
@@ -99,17 +106,19 @@ secrets or passwords.
 
 | Variable | Example | Purpose |
 |----------|---------|---------|
-| `DB_DRIVER` | `postgres` or `mysql` | Dialect selector (default: `postgres`) |
-| `DB_IAM_AUTH_ENABLED` | `true` | Enables IAM DB auth; do NOT set `DB_PASSWORD`. Always true in prod. |
-| `DB_USER` | `blog-iam@my-project.iam` | IAM service account or IAM database user (format: `sa-name@project.iam`) |
+| `DB_DRIVER` | `postgres`, `mysql`, or `sqlserver` | Dialect selector (default: `postgres`) |
+| `DATABASE_URL` | `postgres://…` / `mysql://…` / `sqlserver://…` | Direct DSN when **not** using Cloud SQL (`DB_INSTANCE_CONNECTION_NAME` empty) |
+| `DB_IAM_AUTH_ENABLED` | `true` | Enables IAM DB auth for Postgres/MySQL; do NOT set `DB_PASSWORD`. Prefer `true` in prod for those engines. Ignored for `sqlserver` (password required). |
+| `DB_USER` | `blog-iam@my-project.iam` | IAM service account or database user |
+| `DB_PASSWORD` | *(secret)* | Required for `sqlserver` and when IAM auth is disabled |
 | `DB_NAME` | `blog` | Database name inside the Cloud SQL instance |
-| `DB_INSTANCE_CONNECTION_NAME` | `my-project:us-central1:blog-pg-01` | Fully qualified Cloud SQL instance name: `project:region:instance`. Used by `cloudsqlconn.Dialer` to resolve the instance. |
+| `DB_INSTANCE_CONNECTION_NAME` | `my-project:us-central1:blog-pg-01` | Fully qualified Cloud SQL instance name: `project:region:instance`. When set, opens via `cloudsqlconn` instead of `DATABASE_URL`. |
 | `DB_PRIVATE_IP_ENABLED` | `true` | When true, passes `cloudsqlconn.WithPrivateIP()` to the Dialer so all connections route over private VPC IP — **never falls back to public IP**. |
 | `DB_GOOGLE_CREDENTIALS_SOURCE` | `workload-identity` (default) or `adc` or `path:/secrets/sa-key.json` | How cloudsqlconn resolves its Google credentials. In GKE we use Workload Identity; in Cloud Run, the runtime service account (ADC); locally, developer ADC via `gcloud auth application-default login`. |
 | `DB_POOL_MAX_OPEN` | `25` | `sql.DB.SetMaxOpenConns` value (see §"Connection pooling best practices"). |
 | `DB_POOL_MAX_IDLE` | `10` | `sql.DB.SetMaxIdleConns`. |
-| `DB_POOL_MAX_LIFETIME_SECONDS` | `1800` | `sql.DB.SetConnMaxLifetime` (30 minutes — well under the 1-hour Cloud SQL connector cert rotation window). |
-| `DB_POOL_MAX_IDLETIME_SECONDS` | `600` | `sql.DB.SetConnMaxIdleTime` (10 minutes — forces refresh of idle certificate material). |
+| `DB_POOL_MAX_LIFETIME` / `DB_POOL_MAX_LIFETIME_SECONDS` | `30m` / `1800` | `sql.DB.SetConnMaxLifetime` (well under the 1-hour Cloud SQL connector cert rotation window). |
+| `DB_POOL_MAX_IDLE_TIME` / `DB_POOL_MAX_IDLETIME_SECONDS` | `10m` / `600` | `sql.DB.SetConnMaxIdleTime` (forces refresh of idle certificate material). |
 | `DB_CONNECT_TIMEOUT_SECONDS` | `15` | Per-dial timeout for the Dialer. Cloud SQL connector already enforces timeouts internally; this caps worst-case connect latency. |
 | `DB_TLS_SERVER_CA_MODE` | `enforce-connector-mtls` (default) | Not user-changeable; cloudsqlconn always uses ephemeral MTLS certificates, so we never add a custom CA or client key to the DSN. |
 
@@ -134,10 +143,10 @@ secrets or passwords.
 #### Private IP connection process step-by-step
 
 1. **Startup**: `app serve` / `app migrate up` entrypoint invokes
-   `internal/bootstrap.NewDialer(projectId, opts ...cloudsqlconn.Option)` which:
-   1. Resolves `DB_GOOGLE_CREDENTIALS_SOURCE` → Google credentials.
-   2. Calls `cloudsqlconn.NewDialer(ctx, credentials, cloudsqlconn.WithIAMAuthN(), cloudsqlconn.WithPrivateIP())`.
-   3. Exposes `dialer.DialContext` as a custom connector to the underlying `database/sql` driver.
+   `internal/platform/database.Open`, which:
+   1. Resolves `DB_DRIVER` and either `DATABASE_URL` (direct) or Cloud SQL env (`DB_INSTANCE_CONNECTION_NAME`, …).
+   2. For Cloud SQL: registers the dialect driver via `cloudsqlconn` helpers (`pgxv5` / `mysql` / `mssql`) with `WithIAMAuthN()` (Postgres/MySQL) and `WithDefaultDialOptions(WithPrivateIP())` when private IP is enabled.
+   3. Hands `*sql.DB` to the matching GORM dialector.
 2. **IAM token acquisition**: On the first `Dial()`, cloudsqlconn exchanges the workload
    service account token for a short-lived (1 hour) X.509 ephemeral client certificate,
    signed by Google's CA, bound to the Cloud SQL instance identity. Certificates are
@@ -159,15 +168,16 @@ secrets or passwords.
 
 ```
 require (
-    cloud.google.com/go/cloudsqlconn v1.12.0         # Go connector (or latest 1.x GA)
-    cloud.google.com/go/cloudsqlconn/postgres/pgxv5   # optional helper when using jackc/pgx
-    cloud.google.com/go/cloudsqlconn/mysql/mysql      # optional helper when using go-sql-driver
-    github.com/jackc/pgx/v5                            # PostgreSQL driver (preferred)
-    github.com/go-sql-driver/mysql                     # MySQL driver (future)
-    gorm.io/driver/postgres                            # GORM PostgreSQL dialect
-    gorm.io/driver/mysql                               # GORM MySQL dialect (future)
-    gorm.io/gorm                                       # GORM core
+    cloud.google.com/go/cloudsqlconn v1.22.x            # Go connector
+    github.com/jackc/pgx/v5                            # PostgreSQL
+    github.com/go-sql-driver/mysql                     # MySQL
+    github.com/microsoft/go-mssqldb                    # SQL Server
+    gorm.io/driver/postgres
+    gorm.io/driver/mysql
+    gorm.io/driver/sqlserver
+    gorm.io/gorm
 )
+# helpers (same module): cloudsqlconn/postgres/pgxv5, cloudsqlconn/mysql/mysql, cloudsqlconn/sqlserver/mssql
 ```
 
 Notes:

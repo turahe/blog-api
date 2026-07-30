@@ -19,7 +19,10 @@ This ERD captures every PostgreSQL source-of-truth table for the **blog-api** mu
 A materialized view (`user_activity_daily`) and Redis-coordinated logical entities (rate limits, session state) are included for completeness; Redis is not modelled as relational tables.
 
 ### 1.2 Design Philosophy & Rules
-The schema follows seven explicit principles documented in [database.md](./database.md):
+The schema follows seven explicit principles documented in [database.md](./database.md).
+How those tables map to domain / GORM / HTTP models is documented in [model.md](./model.md).
+
+The schema principles:
 
 - **UUIDs as primary keys everywhere** — no auto-increment ints leak through APIs; opaque external ids.
 - **Lean hot-path rows** — frequently-queried tables (`users`, `casbin_rules`) are kept deliberately narrow; wide payloads live in sidecar one-to-one tables (`user_profiles`, `user_privacy_settings`, `post_seo`).

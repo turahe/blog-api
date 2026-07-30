@@ -15,6 +15,54 @@ Use `docs/backend/api.md` as a human-readable summary, but `contracts/openapi.ya
 - use pagination for list endpoints
 - return a consistent error envelope
 
+## Route Grouping
+
+Every contract operation belongs to exactly one **route group**. The group is the `operationId`
+namespace prefix, and the auth mode is the operation's `security` block resolved against the
+document-level `security: [bearerAuth]` default. Both are generated into
+[routes_gen.go](../../internal/adapters/inbound/http/v1/routes_gen.go) by
+[generate_go_routes.py](../../scripts/contracts/generate_go_routes.py), so the router never carries a
+hand-maintained routing or auth table.
+
+| Group | Path prefixes | Ops | Auth modes | Chain responsibilities |
+| --- | --- | --- | --- | --- |
+| `health` | `/health/live`, `/health/ready`, `/health/version` | 3 | none | no auth, no CSRF, no rate limit; stays cheap enough for probes |
+| `auth` | `/api/v1/auth` | 8 | 6 none, 2 required | strict per-IP and per-identity rate limits, timing-safe responses, no user enumeration |
+| `me` | `/api/v1/me` | 18 | required | bearer or session auth, CSRF for browser clients, step-up re-verify on high-risk actions |
+| `self` | `/api/v1/me/comments`, `/api/v1/comments/:id` | 4 | required | same as `me`, plus per-resource ownership check |
+| `public` | `/api/v1/posts`, `/api/v1/categories`, `/api/v1/tags`, `/api/v1/media`, `/api/v1/users`, `/api/v1/comments`, `/api/v1/newsletter` | 19 | 17 none, 2 optional | anonymous-safe, cache-friendly, privacy filtering, spam and captcha checks on writes |
+| `admin` | `/api/v1/admin` | 49 | 48 required, 1 none | bearer auth, RBAC permission check, CSRF, audit logging |
+| `analytics` | `/api/v1/analytics` | 8 | none | consent gating, bot filtering, high-volume ingest rate limits |
+
+### Auth modes
+
+| Mode | Contract form | Enforcement |
+| --- | --- | --- |
+| `required` | inherits the document-level `security: [bearerAuth]` | `401` when there is no valid bearer token or session |
+| `none` | `security: []` | credentials are never read for authorization |
+| `optional` | `security: [bearerAuth, []]` | attach identity when a valid token is present, otherwise continue anonymously; never `401` |
+
+### Grouping rules
+
+- group membership comes from the `operationId` namespace, never from the URL prefix
+- auth is enforced per operation from the contract, never attached to a shared path prefix
+- middleware order per route is auth-mode chain, then group chain, then handler, so a caller is authenticated before any group-level authorization runs
+- every group and auth mode must have a chain registered in [router.go](../../internal/adapters/inbound/http/router.go); an unregistered one fails at startup rather than serving unprotected traffic
+- a new `operationId` namespace is a new group and must be added deliberately in both the generator and the chain registry
+- `GET /api/v1/health` is a convenience alias for `/health/live` and is intentionally the only route absent from the contract
+
+### Prefixes that must not carry prefix-level auth
+
+Four prefixes host more than one group or auth mode. Attaching auth to the shared prefix would
+either lock out anonymous callers or expose authenticated-only operations.
+
+| Prefix | Conflict |
+| --- | --- |
+| `/api/v1/comments/:id` | `GET` is anonymous (`public.comments.get`); `PATCH` and `DELETE` require auth (`self.comments.*`) |
+| `/api/v1/posts/:id/comments` | `GET` is anonymous; `POST` is optional auth (anonymous commenting with name and email) |
+| `/api/v1/me` | hosts both the `me` group (identity and profile) and the `self` group (owned comments) |
+| `/api/v1/admin` | `POST /api/v1/admin/auth/login` is the single anonymous operation under the admin prefix |
+
 ## Main API Areas
 
 - auth

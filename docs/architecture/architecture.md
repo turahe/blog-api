@@ -63,9 +63,9 @@ project/
 │   ├── platform/         # infra primitives shared by adapters
 │   │   ├── config/
 │   │   ├── logger/
-│   │   ├── postgres/
-│   │   ├── redis/
-│   │   └── watermill/
+│   │   ├── database/
+│   │   ├── messaging/    # Watermill factory (kafka / rabbitmq / googlepubsub)
+│   │   └── redis/
 │   │
 │   ├── core/
 │   │   ├── auth/
@@ -158,7 +158,7 @@ Examples of outbound port types:
 
 ### Outbound Adapters
 
-- persistence: GORM + PostgreSQL source-of-truth or MySQL (future) running on **Google Cloud SQL**; all managed connections use the `cloud.google.com/go/cloudsqlconn` Go connector with Private Service Connect private IP, IAM Database Authentication, and ephemeral mTLS certificates (no static passwords or client CA bundles). Full connector config, pooling parameters, connection-name format, and prod guardrails (restrictPublicIp org policy, firewall, workload identity) are specified in [backend/database.md Cloud SQL Connectivity](../backend/database.md#L62-L457). Bootstrap wiring in `internal/platform/postgres/` (or `internal/platform/mysql/` for MySQL deployments) wraps the cloudsqlconn `Dialer` with the jackc/pgx or go-sql-driver stdlib connector and hands the resulting `*sql.DB` to the GORM dialect.
+- persistence: GORM with `DB_DRIVER` ∈ {`postgres`, `mysql`, `sqlserver`}; production preferred plane is **Google Cloud SQL** via `cloud.google.com/go/cloudsqlconn` (Private Service Connect, IAM DB auth for Postgres/MySQL, ephemeral mTLS). Full config is in [backend/database.md Cloud SQL Connectivity](../backend/database.md#google-cloud-sql-connectivity-cloudgooglecomgocloudsqlconn). Bootstrap wiring lives in `internal/platform/database`.
 - cache: Redis
 - events: Watermill (publishers + subscribers)
 - storage: Cloudflare R2 + S3-compatible providers (MinIO, DigitalOcean Spaces, AWS S3)

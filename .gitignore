@@ -4,3 +4,10 @@ dist/
 contracts/openapi.bundle.yaml
 .DS_Store
 reports/
+.env
+*.local
+/app
+coverage.out
+__pycache__/
+*.py[cod]
+data/

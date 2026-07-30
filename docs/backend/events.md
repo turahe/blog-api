@@ -12,6 +12,16 @@ Use `docs/backend/events.md` as a human overview; the AsyncAPI contract is the s
 
 Use Watermill for domain and integration events. Prefer transactional consistency through an outbox pattern.
 
+Transports are selected at runtime with `MESSAGE_BROKER` (see [architecture/tech-stack.md](../architecture/tech-stack.md) and [messaging brokers design](../superpowers/specs/2026-07-30-messaging-brokers-design.md)):
+
+| `MESSAGE_BROKER` | Broker | Local | Notes |
+|------------------|--------|-------|-------|
+| `kafka` | Apache Kafka | Compose profile `messaging` | `KAFKA_BROKERS`, `KAFKA_CONSUMER_GROUP` |
+| `rabbitmq` | RabbitMQ | Compose profile `messaging` | `RABBITMQ_URL` |
+| `googlepubsub` | Google Cloud Pub/Sub | GCP project + ADC / Workload Identity | `GOOGLE_PUBSUB_PROJECT_ID` |
+
+Platform factory: `internal/platform/messaging`. Core domain code must not import Watermill or broker clients.
+
 ## Initial Event Catalogue
 
 - `blog.post.created`

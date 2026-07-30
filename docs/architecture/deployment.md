@@ -17,7 +17,7 @@ Local Compose should be able to run:
 - API service
 - PostgreSQL
 - Redis
-- local message broker or Watermill-compatible development transport if needed
+- optional Kafka (`apache/kafka:3.9.0`) and RabbitMQ via Compose profile `messaging` (see [local deployment](../deployment/local.md#messaging-optional))
 - local S3-compatible object storage such as MinIO for media workflows
 - optional worker service for async consumers
 
@@ -26,7 +26,7 @@ Local Compose should be able to run:
 - API service
 - PostgreSQL
 - Redis
-- Watermill transport backend or configured message broker
+- Watermill transport backend selected by `MESSAGE_BROKER` (`kafka`, `rabbitmq`, or `googlepubsub`; factory in `internal/platform/messaging`)
 - object storage bucket for originals and optionally cached variants
 - worker process for async jobs if consumers are split from the API
 
@@ -41,7 +41,7 @@ Use environment variables for:
 - encryption keys
 - OAuth provider credentials
 - email provider credentials
-- Watermill transport configuration
+- `MESSAGE_BROKER` and broker-specific settings (`KAFKA_BROKERS`, `RABBITMQ_URL`, `GOOGLE_PUBSUB_PROJECT_ID`, …)
 - media storage driver, bucket, region, endpoint, and credentials
 - image transform cache TTL and size controls
 
@@ -78,3 +78,7 @@ Use environment variables for:
 - Redis connectivity works
 - event publishing and consumers are healthy
 - critical auth flows succeed in smoke tests
+
+## Operational handbook
+
+Local Compose, Docker image, and release checklists: [docs/deployment](../deployment/README.md).

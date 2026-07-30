@@ -89,3 +89,7 @@ Audit at minimum:
 - least privilege for users and services
 - secrets via environment variables only
 - regular dependency review and patching
+
+## Operational handbook
+
+Day-to-day checklists and auth-mode tables: [docs/security](../security/README.md).
