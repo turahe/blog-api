@@ -1,0 +1,133 @@
+/api/v1/tags:
+  get:
+    tags:
+    - Public
+    summary: List tags
+    security: []
+    operationId: public.tags.list
+    responses:
+      '200':
+        description: OK
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas/Categories.yaml#/EnvelopeTagList
+/api/v1/admin/tags:
+  post:
+    tags:
+    - Admin / Tags
+    summary: Create tag
+    operationId: admin.tags.create
+    security:
+    - bearerAuth: []
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: ../components/schemas/Categories.yaml#/TagCreateRequest
+    responses:
+      '201':
+        description: Created
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas/Categories.yaml#/EnvelopeTagResponse
+      '400':
+        $ref: ../components/responses.yaml#/ValidationError
+      '409':
+        description: Slug conflict
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas/Common.yaml#/EnvelopeError
+/api/v1/admin/tags/{id}:
+  parameters:
+  - name: id
+    in: path
+    required: true
+    schema:
+      type: string
+      format: uuid
+  patch:
+    tags:
+    - Admin / Tags
+    summary: Update tag
+    operationId: admin.tags.update
+    security:
+    - bearerAuth: []
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: ../components/schemas/Categories.yaml#/TagUpdateRequest
+    responses:
+      '200':
+        description: OK
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas/Categories.yaml#/EnvelopeTagResponse
+      '404':
+        $ref: ../components/responses.yaml#/NotFoundError
+      '409':
+        description: Conflict
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas/Common.yaml#/EnvelopeError
+  delete:
+    tags:
+    - Admin / Tags
+    summary: Delete tag
+    operationId: admin.tags.delete
+    security:
+    - bearerAuth: []
+    responses:
+      '204':
+        description: Deleted
+      '404':
+        $ref: ../components/responses.yaml#/NotFoundError
+      '409':
+        description: Tag in use
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas/Common.yaml#/EnvelopeError
+/api/v1/admin/tags/{id}/merge:
+  post:
+    tags:
+    - Admin / Tags
+    summary: Merge tag into another
+    operationId: admin.tags.merge
+    security:
+    - bearerAuth: []
+    parameters:
+    - name: id
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: ../components/schemas/Categories.yaml#/TagMergeRequest
+    responses:
+      '200':
+        description: Target tag after merge
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas/Categories.yaml#/EnvelopeTagResponse
+      '404':
+        $ref: ../components/responses.yaml#/NotFoundError
+      '409':
+        description: Conflict
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas/Common.yaml#/EnvelopeError

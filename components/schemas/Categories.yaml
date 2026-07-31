@@ -93,3 +93,39 @@ EnvelopeTagList:
             type: array
             items:
               $ref: Categories.yaml#/Tag
+TagCreateRequest:
+  type: object
+  required:
+  - name
+  properties:
+    name:
+      type: string
+      minLength: 1
+      maxLength: 64
+    slug:
+      type: string
+TagUpdateRequest:
+  type: object
+  minProperties: 1
+  properties:
+    name:
+      type: string
+      minLength: 1
+      maxLength: 64
+    slug:
+      type: string
+TagMergeRequest:
+  type: object
+  required:
+  - into_id
+  properties:
+    into_id:
+      type: string
+      format: uuid
+EnvelopeTagResponse:
+  allOf:
+  - $ref: Common.yaml#/Envelope
+  - type: object
+    properties:
+      data:
+        $ref: Categories.yaml#/Tag

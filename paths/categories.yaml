@@ -37,17 +37,3 @@
         description: OK
       '404':
         $ref: ../components/responses.yaml#/NotFoundError
-/api/v1/tags:
-  get:
-    tags:
-    - Public
-    summary: List tags
-    security: []
-    operationId: public.tags.list
-    responses:
-      '200':
-        content:
-          application/json:
-            schema:
-              $ref: ../components/schemas/Categories.yaml#/EnvelopeTagList
-        description: OK

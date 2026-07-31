@@ -54,6 +54,10 @@ Post:
     updated_at:
       type: string
       format: date-time
+    tags:
+      type: array
+      items:
+        $ref: Categories.yaml#/Tag
 PostMediaItem:
   type: object
   properties:
@@ -125,11 +129,12 @@ PostCreateRequest:
       - published
       - archived
       default: draft
-    tag_ids:
+    tags:
       type: array
       items:
         type: string
-        format: uuid
+        minLength: 1
+        maxLength: 64
     media:
       type: array
       items:
@@ -167,6 +172,12 @@ PostUpdateRequest:
       type: string
       format: uuid
       nullable: true
+    tags:
+      type: array
+      items:
+        type: string
+        minLength: 1
+        maxLength: 64
 PostMediaReplaceRequest:
   type: object
   required:

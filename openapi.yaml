@@ -29,6 +29,8 @@ tags:
   description: Admin user management
 - name: Admin / Posts
   description: Admin post CRUD and workflow
+- name: Admin / Tags
+  description: Admin tag CRUD and merge
 - name: Admin / Media
   description: Admin media and post-media associations
 - name: Admin / Settings
@@ -165,7 +167,13 @@ paths:
   /api/v1/categories/{slug}:
     $ref: ./paths/categories.yaml#/~1api~1v1~1categories~1{slug}
   /api/v1/tags:
-    $ref: ./paths/categories.yaml#/~1api~1v1~1tags
+    $ref: ./paths/tags.yaml#/~1api~1v1~1tags
+  /api/v1/admin/tags:
+    $ref: ./paths/tags.yaml#/~1api~1v1~1admin~1tags
+  /api/v1/admin/tags/{id}:
+    $ref: ./paths/tags.yaml#/~1api~1v1~1admin~1tags~1{id}
+  /api/v1/admin/tags/{id}/merge:
+    $ref: ./paths/tags.yaml#/~1api~1v1~1admin~1tags~1{id}~1merge
   /api/v1/analytics/consent:
     $ref: ./paths/analytics.yaml#/~1api~1v1~1analytics~1consent
   /api/v1/analytics/consent/{token}:
@@ -368,6 +376,8 @@ components:
       $ref: ./components/schemas/Admin.yaml#/EnvelopeSettingsUpdate
     EnvelopeTagList:
       $ref: ./components/schemas/Categories.yaml#/EnvelopeTagList
+    EnvelopeTagResponse:
+      $ref: ./components/schemas/Categories.yaml#/EnvelopeTagResponse
     EnvelopeTokenResponse:
       $ref: ./components/schemas/Auth.yaml#/EnvelopeTokenResponse
     EnvelopeUserActivityList:
@@ -434,6 +444,12 @@ components:
       $ref: ./components/schemas/Admin.yaml#/SettingsUpdateRequest
     Tag:
       $ref: ./components/schemas/Categories.yaml#/Tag
+    TagCreateRequest:
+      $ref: ./components/schemas/Categories.yaml#/TagCreateRequest
+    TagMergeRequest:
+      $ref: ./components/schemas/Categories.yaml#/TagMergeRequest
+    TagUpdateRequest:
+      $ref: ./components/schemas/Categories.yaml#/TagUpdateRequest
     TokenPair:
       $ref: ./components/schemas/Auth.yaml#/TokenPair
     User:
