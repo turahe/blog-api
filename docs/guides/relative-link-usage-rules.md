@@ -110,7 +110,7 @@ Directory abbreviations used below:
 | `docs/architecture/` tech-stack.md | `docs/backend/ERD.md` | `[ERD.md](../backend/ERD.md)` |
 | `docs/guides/` mermaid-competency.md | `docs/backend/ERD.md` | `[ERD.md](../backend/ERD.md)` |
 | `docs/guides/` mermaid-competency.md | `docs/features/authentication.md` | `[authentication.md](../features/authentication.md)` |
-| `docs/guides/` mermaid-competency.md | `docs/product/roadmap.md` | `[roadmap.md](../product/roadmap.md)` |
+| `docs/guides/` mermaid-competency.md | `docs/tasks/README.md` | `[README.md](../tasks/README.md)` |
 | `docs/backend/` ERD.md | `docs/guides/mermaid-competency-framework.md` | `[mermaid-competency-framework.md](../guides/mermaid-competency-framework.md)` |
 | `docs/backend/` ERD.md | `docs/backend/database.md#L579-L641` | `[database.md §Notes](./database.md#L579-L641)` |
 | `docs/backend/` rbac-casbin.md | `docs/features/rbac-with-casbin.md` | `[rbac-with-casbin.md](../features/rbac-with-casbin.md)` |

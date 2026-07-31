@@ -33,7 +33,7 @@ type Database struct {
 	cleanup func() error
 }
 
-// Open connects using DATABASE_URL (direct) or Cloud SQL when
+// Open connects using split DB_* settings (direct) or Cloud SQL when
 // DB_INSTANCE_CONNECTION_NAME is set.
 func Open(ctx context.Context, cfg config.Config) (*Database, error) {
 	driver, err := NormalizeDriver(cfg.DBDriver)
@@ -48,7 +48,11 @@ func Open(ctx context.Context, cfg config.Config) (*Database, error) {
 	if cfg.UsesCloudSQL() {
 		sqlDB, cleanup, err = openCloudSQL(ctx, driver, cfg)
 	} else {
-		sqlDB, err = openDSN(driver, cfg.DatabaseURL)
+		dsn, dsnErr := cfg.DatabaseDSN()
+		if dsnErr != nil {
+			return nil, dsnErr
+		}
+		sqlDB, err = openDSN(driver, dsn)
 	}
 	if err != nil {
 		return nil, err
@@ -127,7 +131,7 @@ func NormalizeDriver(raw string) (string, error) {
 
 func openDSN(driver, dsn string) (*sql.DB, error) {
 	if strings.TrimSpace(dsn) == "" {
-		return nil, fmt.Errorf("DATABASE_URL is required when DB_INSTANCE_CONNECTION_NAME is empty")
+		return nil, fmt.Errorf("database DSN is empty when DB_INSTANCE_CONNECTION_NAME is empty")
 	}
 	var (
 		sqlDriver string

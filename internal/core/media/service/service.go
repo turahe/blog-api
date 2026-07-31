@@ -1,0 +1,204 @@
+package service
+
+import (
+	"context"
+	"errors"
+	"fmt"
+	"path/filepath"
+	"strings"
+	"time"
+
+	"github.com/google/uuid"
+	mediadomain "github.com/turahe/blog-api/internal/core/media/domain"
+	"github.com/turahe/blog-api/internal/core/media/ports"
+)
+
+var (
+	ErrValidation       = errors.New("validation error")
+	ErrNotFound         = mediadomain.ErrNotFound
+	ErrUploadIncomplete = errors.New("upload incomplete")
+	ErrUploadExpired    = errors.New("upload expired")
+	ErrStorage          = errors.New("storage error")
+)
+
+type IDGenerator interface {
+	New() uuid.UUID
+}
+
+type Clock interface {
+	Now() time.Time
+}
+
+type Service struct {
+	repo       ports.Repository
+	storage    ports.ObjectStorage
+	ids        IDGenerator
+	clock      Clock
+	disk       string
+	allowMIME  map[string]struct{}
+	maxBytes   int64
+	presignTTL time.Duration
+}
+
+func New(
+	repo ports.Repository,
+	storage ports.ObjectStorage,
+	ids IDGenerator,
+	clock Clock,
+	disk string,
+	allowedMIME []string,
+	maxBytes int64,
+	presignTTL time.Duration,
+) *Service {
+	allowMIME := make(map[string]struct{}, len(allowedMIME))
+	for _, mime := range allowedMIME {
+		mime = strings.TrimSpace(strings.ToLower(mime))
+		if mime == "" {
+			continue
+		}
+		allowMIME[mime] = struct{}{}
+	}
+
+	return &Service{
+		repo:       repo,
+		storage:    storage,
+		ids:        ids,
+		clock:      clock,
+		disk:       strings.TrimSpace(disk),
+		allowMIME:  allowMIME,
+		maxBytes:   maxBytes,
+		presignTTL: presignTTL,
+	}
+}
+
+func (s *Service) PresignUpload(
+	ctx context.Context,
+	uploadedBy *uuid.UUID,
+	filename, contentType string,
+	sizeBytes int64,
+	tags []string,
+) (mediadomain.PresignResult, error) {
+	sanitized, err := sanitizeFilename(filename)
+	if err != nil {
+		return mediadomain.PresignResult{}, err
+	}
+
+	contentType = strings.TrimSpace(strings.ToLower(contentType))
+	if !s.isAllowedContentType(contentType) {
+		return mediadomain.PresignResult{}, fmt.Errorf("%w: content type %q not allowed", ErrValidation, contentType)
+	}
+	if sizeBytes < 1 || sizeBytes > s.maxBytes {
+		return mediadomain.PresignResult{}, fmt.Errorf("%w: invalid size %d", ErrValidation, sizeBytes)
+	}
+
+	now := s.clock.Now()
+	expiresAt := now.Add(s.presignTTL)
+	id := s.ids.New()
+	asset := mediadomain.MediaAsset{
+		ID:               id,
+		StorageKey:       fmt.Sprintf("media/%s/%s", id.String(), sanitized),
+		OriginalFilename: sanitized,
+		ContentType:      contentType,
+		SizeBytes:        0,
+		Disk:             s.disk,
+		Status:           mediadomain.StatusPending,
+		UploadedBy:       uploadedBy,
+		Tags:             append([]string(nil), tags...),
+		PresignExpiresAt: &expiresAt,
+		CreatedAt:        now,
+		UpdatedAt:        now,
+	}
+
+	asset, err = s.repo.Create(ctx, asset)
+	if err != nil {
+		return mediadomain.PresignResult{}, err
+	}
+
+	uploadURL, headers, err := s.storage.PresignPut(ctx, asset.StorageKey, contentType, s.presignTTL)
+	if err != nil {
+		return mediadomain.PresignResult{}, fmt.Errorf("%w: presign put: %v", ErrStorage, err)
+	}
+
+	return mediadomain.PresignResult{
+		Asset:           asset,
+		UploadURL:       uploadURL,
+		RequiredHeaders: headers,
+		ExpiresAt:       expiresAt,
+	}, nil
+}
+
+func (s *Service) CompleteUpload(ctx context.Context, id uuid.UUID) (mediadomain.MediaAsset, error) {
+	asset, err := s.repo.GetByID(ctx, id)
+	if err != nil {
+		if errors.Is(err, ErrNotFound) {
+			return mediadomain.MediaAsset{}, ErrNotFound
+		}
+		return mediadomain.MediaAsset{}, err
+	}
+	if asset.DeletedAt != nil {
+		return mediadomain.MediaAsset{}, ErrNotFound
+	}
+	if asset.Status == mediadomain.StatusReady {
+		return asset, nil
+	}
+
+	if asset.Status == mediadomain.StatusPending && isExpired(s.clock.Now(), asset.PresignExpiresAt) {
+		return mediadomain.MediaAsset{}, fmt.Errorf("%w: presign expired for %s", ErrUploadExpired, asset.ID)
+	}
+
+	info, err := s.storage.HeadObject(ctx, asset.StorageKey)
+	if err != nil {
+		if errors.Is(err, ports.ErrObjectNotFound) {
+			return mediadomain.MediaAsset{}, fmt.Errorf("%w: object %q", ErrUploadIncomplete, asset.StorageKey)
+		}
+		return mediadomain.MediaAsset{}, fmt.Errorf("%w: head object: %v", ErrStorage, err)
+	}
+
+	contentType := strings.TrimSpace(strings.ToLower(info.ContentType))
+	if !s.isAllowedContentType(contentType) {
+		return mediadomain.MediaAsset{}, fmt.Errorf("%w: content type %q not allowed", ErrValidation, contentType)
+	}
+	if info.Size < 1 || info.Size > s.maxBytes {
+		return mediadomain.MediaAsset{}, fmt.Errorf("%w: invalid size %d", ErrValidation, info.Size)
+	}
+
+	asset.Status = mediadomain.StatusReady
+	asset.SizeBytes = info.Size
+	asset.ContentType = contentType
+	asset.UpdatedAt = s.clock.Now()
+
+	asset, err = s.repo.Update(ctx, asset)
+	if err != nil {
+		return mediadomain.MediaAsset{}, err
+	}
+	return asset, nil
+}
+
+func (s *Service) isAllowedContentType(contentType string) bool {
+	_, ok := s.allowMIME[contentType]
+	return ok
+}
+
+func sanitizeFilename(filename string) (string, error) {
+	filename = strings.TrimSpace(filename)
+	if filename == "" {
+		return "", fmt.Errorf("%w: filename required", ErrValidation)
+	}
+	if strings.ContainsAny(filename, `/\`) {
+		return "", fmt.Errorf("%w: invalid filename", ErrValidation)
+	}
+
+	base := filepath.Base(filename)
+	if base == "" || base == "." || base == ".." || base != filename {
+		return "", fmt.Errorf("%w: invalid filename", ErrValidation)
+	}
+
+	return base, nil
+}
+
+func isExpired(now time.Time, expiresAt *time.Time) bool {
+	if expiresAt == nil {
+		return false
+	}
+	return now.After(*expiresAt) || now.Equal(*expiresAt)
+}

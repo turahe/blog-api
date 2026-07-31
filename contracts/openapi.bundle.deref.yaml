@@ -237,7 +237,7 @@ paths:
         content:
           application/json:
             schema:
-              allOf: &ref_147
+              allOf: &ref_145
                 - type: object
                   properties: &ref_25
                     display_name:
@@ -386,10 +386,10 @@ paths:
           application/json:
             schema:
               type: object
-              required: &ref_159
+              required: &ref_157
                 - full_name
                 - email
-              properties: &ref_160
+              properties: &ref_158
                 full_name:
                   type: string
                 email:
@@ -439,9 +439,9 @@ paths:
           application/json:
             schema:
               type: object
-              required: &ref_131
+              required: &ref_129
                 - email_or_username
-              properties: &ref_132
+              properties: &ref_130
                 email_or_username:
                   type: string
                   minLength: 3
@@ -526,11 +526,11 @@ paths:
           application/json:
             schema:
               type: object
-              required: &ref_133
+              required: &ref_131
                 - token
                 - new_password
                 - confirm_password
-              properties: &ref_134
+              properties: &ref_132
                 token:
                   type: string
                 new_password:
@@ -695,11 +695,11 @@ paths:
           application/json:
             schema:
               type: object
-              required: &ref_135
+              required: &ref_133
                 - current_password
                 - new_password
                 - confirm_password
-              properties: &ref_136
+              properties: &ref_134
                 current_password:
                   type: string
                   minLength: 1
@@ -1036,12 +1036,12 @@ paths:
                             type: array
                             items:
                               type: object
-                              required: &ref_157
+                              required: &ref_155
                                 - id
                                 - activity_type
                                 - summary
                                 - created_at
-                              properties: &ref_158
+                              properties: &ref_156
                                 id:
                                   type: string
                                   format: uuid
@@ -1717,9 +1717,9 @@ paths:
                     properties:
                       data:
                         type: object
-                        required: &ref_141
+                        required: &ref_139
                           - title
-                        properties: &ref_142
+                        properties: &ref_140
                           title:
                             type: string
                           meta_description:
@@ -1838,10 +1838,10 @@ paths:
           application/json:
             schema:
               type: object
-              required: &ref_137
+              required: &ref_135
                 - title
                 - content
-              properties: &ref_138
+              properties: &ref_136
                 title:
                   type: string
                   minLength: 1
@@ -2030,9 +2030,9 @@ paths:
           application/json:
             schema:
               type: object
-              required: &ref_139
+              required: &ref_137
                 - items
-              properties: &ref_140
+              properties: &ref_138
                 enforce_cover_consistency:
                   type: boolean
                   default: true
@@ -2461,7 +2461,7 @@ paths:
             schema:
               type: object
               description: Partial update. Only allowlisted fields are accepted; unknown keys rejected.
-              allOf: &ref_146
+              allOf: &ref_144
                 - type: object
                   properties: *ref_39
       responses:
@@ -2506,7 +2506,7 @@ paths:
           application/json:
             schema:
               type: object
-              properties: &ref_145
+              properties: &ref_143
                 seo:
                   type: object
                   properties: *ref_39
@@ -2536,11 +2536,11 @@ paths:
                     properties:
                       data:
                         type: object
-                        required: &ref_143
+                        required: &ref_141
                           - search_preview
                           - og_preview
                           - twitter_preview
-                        properties: &ref_144
+                        properties: &ref_142
                           search_preview:
                             type: object
                             required:
@@ -2668,10 +2668,10 @@ paths:
                     properties:
                       data:
                         type: object
-                        required: &ref_155
+                        required: &ref_153
                           - access_token
                           - refresh_token
-                        properties: &ref_156
+                        properties: &ref_154
                           access_token:
                             type: string
                             format: jwt
@@ -2932,13 +2932,13 @@ paths:
                             type: array
                             items:
                               type: object
-                              required: &ref_148
+                              required: &ref_146
                                 - key
                                 - value
                                 - value_type
                                 - category
                                 - sensitivity
-                              properties: &ref_149
+                              properties: &ref_147
                                 key:
                                   type: string
                                 value: {}
@@ -2997,9 +2997,9 @@ paths:
           application/json:
             schema:
               type: object
-              required: &ref_151
+              required: &ref_149
                 - updates
-              properties: &ref_152
+              properties: &ref_150
                 updates:
                   type: array
                   minItems: 1
@@ -3094,7 +3094,7 @@ paths:
                             type: array
                             items:
                               type: object
-                              properties: &ref_150
+                              properties: &ref_148
                                 id:
                                   type: string
                                   format: uuid
@@ -3898,35 +3898,76 @@ paths:
     post:
       tags:
         - Admin / Media
-      summary: Upload a new media asset
+      summary: Create a pending media asset and return a presigned upload URL
       operationId: admin.media.create
       requestBody:
         required: true
         content:
-          multipart/form-data:
+          application/json:
             schema:
               type: object
-              required: &ref_127
-                - file
-              properties: &ref_128
-                file:
+              required: &ref_186
+                - original_filename
+                - content_type
+                - size_bytes
+              properties: &ref_187
+                original_filename:
                   type: string
-                  format: binary
-                  description: File bytes in multipart upload
+                  minLength: 1
+                  maxLength: 255
+                content_type:
+                  type: string
+                size_bytes:
+                  type: integer
+                  minimum: 1
                 tags:
                   type: array
                   items:
                     type: string
-                parent_id:
-                  type: string
-                  format: uuid
       responses:
         '201':
-          description: Asset created (or queued if async scanning)
+          description: Pending asset created with presigned PUT URL
           content:
             application/json:
               schema:
-                allOf: *ref_48
+                allOf: &ref_190
+                  - type: object
+                    required: *ref_0
+                    properties: *ref_1
+                  - type: object
+                    properties:
+                      data:
+                        type: object
+                        required: &ref_188
+                          - media_id
+                          - storage_key
+                          - upload_url
+                          - required_headers
+                          - expires_at
+                          - disk
+                        properties: &ref_189
+                          media_id:
+                            type: string
+                            format: uuid
+                          storage_key:
+                            type: string
+                          upload_url:
+                            type: string
+                            format: uri
+                          required_headers:
+                            type: object
+                            additionalProperties:
+                              type: string
+                          expires_at:
+                            type: string
+                            format: date-time
+                          disk:
+                            type: string
+                            enum:
+                              - s3
+                              - r2
+                              - minio
+                              - do_spaces
         '400':
           description: Validation error
           content: *ref_11
@@ -3990,6 +4031,44 @@ paths:
         '403':
           description: Permission denied
           content: *ref_10
+  /api/v1/admin/media/{id}/complete:
+    post:
+      tags:
+        - Admin / Media
+      summary: Finalize a pending media upload after the client PUT to storage
+      operationId: admin.media.complete
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Asset ready
+          content:
+            application/json:
+              schema:
+                allOf: *ref_48
+        '400':
+          description: Validation error
+          content: *ref_11
+        '401':
+          description: Authentication required
+          content: *ref_6
+        '403':
+          description: Permission denied
+          content: *ref_10
+        '404':
+          description: Resource not found
+          content: *ref_26
+        '409':
+          description: Upload incomplete or expired
+          content:
+            application/json:
+              schema:
+                allOf: *ref_5
   /api/v1/admin/media/{id}/tags:
     patch:
       tags:
@@ -4197,11 +4276,11 @@ paths:
                             type: array
                             items:
                               type: object
-                              required: &ref_153
+                              required: &ref_151
                                 - id
                                 - name
                                 - slug
-                              properties: &ref_154
+                              properties: &ref_152
                                 id:
                                   type: string
                                   format: uuid
@@ -4703,11 +4782,11 @@ paths:
                             type: array
                             items:
                               type: object
-                              required: &ref_129
+                              required: &ref_127
                                 - id
                                 - type
                                 - title
-                              properties: &ref_130
+                              properties: &ref_128
                                 id:
                                   type: string
                                   format: uuid
@@ -4984,7 +5063,7 @@ paths:
                                   nullable: true
                                   allOf:
                                     - type: object
-                                      properties: &ref_162
+                                      properties: &ref_160
                                         moderated_by_id:
                                           type: string
                                           format: uuid
@@ -5017,7 +5096,7 @@ paths:
                                   nullable: true
                                   allOf:
                                     - type: object
-                                      properties: &ref_161
+                                      properties: &ref_159
                                         score:
                                           type: number
                                           format: float
@@ -5138,9 +5217,9 @@ paths:
           application/json:
             schema:
               type: object
-              required: &ref_163
+              required: &ref_161
                 - content
-              properties: &ref_164
+              properties: &ref_162
                 parent_id:
                   type: string
                   format: uuid
@@ -5244,7 +5323,7 @@ paths:
           content:
             application/json:
               schema:
-                allOf: &ref_168
+                allOf: &ref_166
                   - type: object
                     required: *ref_0
                     properties: *ref_1
@@ -5288,7 +5367,7 @@ paths:
           application/json:
             schema:
               type: object
-              properties: &ref_165
+              properties: &ref_163
                 content:
                   type: string
                   minLength: 1
@@ -5673,9 +5752,9 @@ paths:
           application/json:
             schema:
               type: object
-              required: &ref_166
+              required: &ref_164
                 - action
-              properties: &ref_167
+              properties: &ref_165
                 action:
                   type: string
                   enum:
@@ -5802,7 +5881,7 @@ paths:
           content:
             application/json:
               schema:
-                allOf: &ref_169
+                allOf: &ref_167
                   - type: object
                     required: *ref_0
                     properties: *ref_1
@@ -5878,9 +5957,9 @@ paths:
           application/json:
             schema:
               type: object
-              required: &ref_175
+              required: &ref_173
                 - email
-              properties: &ref_176
+              properties: &ref_174
                 email:
                   type: string
                   format: email
@@ -6019,11 +6098,11 @@ paths:
                             nullable: true
                             allOf:
                               - type: object
-                                required: &ref_170
+                                required: &ref_168
                                   - given
                                   - gdpr_legal_basis
                                   - opted_in_at
-                                properties: &ref_171
+                                properties: &ref_169
                                   given:
                                     type: boolean
                                   gdpr_legal_basis:
@@ -6049,10 +6128,10 @@ paths:
                             type: array
                             items:
                               type: object
-                              required: &ref_173
+                              required: &ref_171
                                 - list_id
                                 - subscribed_at
-                              properties: &ref_174
+                              properties: &ref_172
                                 list_id:
                                   type: string
                                   maxLength: 64
@@ -6100,7 +6179,7 @@ paths:
                             nullable: true
                             allOf:
                               - type: object
-                                properties: &ref_172
+                                properties: &ref_170
                                   provider:
                                     type: string
                                     enum:
@@ -6175,9 +6254,9 @@ paths:
           application/json:
             schema:
               type: object
-              required: &ref_177
+              required: &ref_175
                 - token
-              properties: &ref_178
+              properties: &ref_176
                 token:
                   type: string
                   minLength: 16
@@ -6216,9 +6295,9 @@ paths:
           application/json:
             schema:
               type: object
-              required: &ref_179
+              required: &ref_177
                 - email
-              properties: &ref_180
+              properties: &ref_178
                 email:
                   type: string
                   format: email
@@ -6254,9 +6333,9 @@ paths:
           application/json:
             schema:
               type: object
-              required: &ref_181
+              required: &ref_179
                 - token
-              properties: &ref_182
+              properties: &ref_180
                 token:
                   type: string
                   minLength: 16
@@ -6713,7 +6792,7 @@ paths:
           content:
             application/json:
               schema:
-                allOf: &ref_187
+                allOf: &ref_185
                   - type: object
                     required: *ref_0
                     properties: *ref_1
@@ -6844,9 +6923,9 @@ paths:
           application/json:
             schema:
               type: object
-              required: &ref_183
+              required: &ref_181
                 - subject
-              properties: &ref_184
+              properties: &ref_182
                 subject:
                   type: string
                   minLength: 1
@@ -7034,9 +7113,9 @@ paths:
                     properties:
                       data:
                         type: object
-                        required: &ref_185
+                        required: &ref_183
                           - provider
-                        properties: &ref_186
+                        properties: &ref_184
                           provider:
                             type: string
                             enum:
@@ -7388,42 +7467,54 @@ components:
       properties: *ref_15
     MediaUploadRequest:
       type: object
-      required: *ref_127
-      properties: *ref_128
+      required:
+        - file
+      properties:
+        file:
+          type: string
+          format: binary
+          description: File bytes in multipart upload (legacy; admin.media.create uses MediaPresignRequest)
+        tags:
+          type: array
+          items:
+            type: string
+        parent_id:
+          type: string
+          format: uuid
     Meta:
       type: object
       properties: *ref_42
     Notification:
       type: object
+      required: *ref_127
+      properties: *ref_128
+    PasswordForgotRequest:
+      type: object
       required: *ref_129
       properties: *ref_130
-    PasswordForgotRequest:
+    PasswordResetCompleteRequest:
       type: object
       required: *ref_131
       properties: *ref_132
-    PasswordResetCompleteRequest:
+    PasswordUpdateRequest:
       type: object
       required: *ref_133
       properties: *ref_134
-    PasswordUpdateRequest:
-      type: object
-      required: *ref_135
-      properties: *ref_136
     Post:
       type: object
       required: *ref_34
       properties: *ref_35
     PostCreateRequest:
       type: object
-      required: *ref_137
-      properties: *ref_138
+      required: *ref_135
+      properties: *ref_136
     PostMediaItem:
       type: object
       properties: *ref_38
     PostMediaReplaceRequest:
       type: object
-      required: *ref_139
-      properties: *ref_140
+      required: *ref_137
+      properties: *ref_138
     PostRevision:
       type: object
       required: *ref_40
@@ -7433,59 +7524,59 @@ components:
       properties: *ref_39
     PostSEOMetaPublic:
       type: object
-      required: *ref_141
-      properties: *ref_142
+      required: *ref_139
+      properties: *ref_140
     PostSEOPreview:
       type: object
-      required: *ref_143
-      properties: *ref_144
+      required: *ref_141
+      properties: *ref_142
     PostSEOPreviewRequest:
       type: object
-      properties: *ref_145
+      properties: *ref_143
     PostSEOUpdateRequest:
       type: object
       description: Partial update. Only allowlisted fields are accepted; unknown keys rejected.
-      allOf: *ref_146
+      allOf: *ref_144
     ProfileUpdateRequest:
-      allOf: *ref_147
+      allOf: *ref_145
     PublicUserProfile:
       type: object
       required: *ref_54
       properties: *ref_55
     Setting:
       type: object
-      required: *ref_148
-      properties: *ref_149
+      required: *ref_146
+      properties: *ref_147
     SettingsHistoryItem:
       type: object
-      properties: *ref_150
+      properties: *ref_148
     SettingsUpdateRequest:
+      type: object
+      required: *ref_149
+      properties: *ref_150
+    Tag:
       type: object
       required: *ref_151
       properties: *ref_152
-    Tag:
+    TokenPair:
       type: object
       required: *ref_153
       properties: *ref_154
-    TokenPair:
-      type: object
-      required: *ref_155
-      properties: *ref_156
     User:
       type: object
       required: *ref_8
       properties: *ref_9
     UserActivityItem:
       type: object
-      required: *ref_157
-      properties: *ref_158
+      required: *ref_155
+      properties: *ref_156
     UserActivityType:
       type: string
       enum: *ref_23
     UserCreateRequest:
       type: object
-      required: *ref_159
-      properties: *ref_160
+      required: *ref_157
+      properties: *ref_158
     UserPrivacySettings:
       type: object
       required: *ref_19
@@ -7508,17 +7599,17 @@ components:
       properties: *ref_57
     CommentSpamAssessment:
       type: object
-      properties: *ref_161
+      properties: *ref_159
     CommentModerationSummary:
       type: object
-      properties: *ref_162
+      properties: *ref_160
     CommentCreateRequest:
       type: object
-      required: *ref_163
-      properties: *ref_164
+      required: *ref_161
+      properties: *ref_162
     CommentUpdateRequest:
       type: object
-      properties: *ref_165
+      properties: *ref_163
     CommentListQuery:
       type: object
       properties:
@@ -7553,62 +7644,62 @@ components:
           format: date-time
     CommentModerateRequest:
       type: object
-      required: *ref_166
-      properties: *ref_167
+      required: *ref_164
+      properties: *ref_165
     EnvelopeCommentResponse:
       allOf: *ref_58
     EnvelopeCommentList:
       allOf: *ref_59
     EnvelopeCommentThread:
-      allOf: *ref_168
+      allOf: *ref_166
     EnvelopeCommentStats:
-      allOf: *ref_169
+      allOf: *ref_167
     NewsletterSubscriber:
       type: object
       required: *ref_62
       properties: *ref_63
     NewsletterConsents:
       type: object
-      required: *ref_170
-      properties: *ref_171
+      required: *ref_168
+      properties: *ref_169
     NewsletterSubscriberPreferences:
       type: object
       properties: *ref_60
     NewsletterProviderSync:
       type: object
-      properties: *ref_172
+      properties: *ref_170
     NewsletterListMembership:
+      type: object
+      required: *ref_171
+      properties: *ref_172
+    NewsletterSubscribeRequest:
       type: object
       required: *ref_173
       properties: *ref_174
-    NewsletterSubscribeRequest:
+    NewsletterConfirmRequest:
       type: object
       required: *ref_175
       properties: *ref_176
-    NewsletterConfirmRequest:
+    NewsletterResendConfirmRequest:
       type: object
       required: *ref_177
       properties: *ref_178
-    NewsletterResendConfirmRequest:
+    NewsletterUnsubscribeRequest:
       type: object
       required: *ref_179
       properties: *ref_180
-    NewsletterUnsubscribeRequest:
-      type: object
-      required: *ref_181
-      properties: *ref_182
     NewsletterSendIssue:
       type: object
       required: *ref_65
       properties: *ref_66
     NewsletterSendRequest:
       type: object
-      required: *ref_183
-      properties: *ref_184
+      required: *ref_181
+      properties: *ref_182
     NewsletterProviderConfig:
       type: object
-      required: *ref_185
-      properties: *ref_186
+      required: *ref_183
+      properties: *ref_184
     EnvelopeNewsletterSubscriberResponse:
       allOf: *ref_61
     EnvelopeNewsletterSubscriberList:
@@ -7616,9 +7707,19 @@ components:
     EnvelopeNewsletterIssueResponse:
       allOf: *ref_67
     EnvelopeNewsletterIssueList:
-      allOf: *ref_187
+      allOf: *ref_185
     EnvelopeNewsletterProviderConfig:
       allOf: *ref_68
+    MediaPresignRequest:
+      type: object
+      required: *ref_186
+      properties: *ref_187
+    MediaPresignData:
+      type: object
+      required: *ref_188
+      properties: *ref_189
+    EnvelopeMediaPresignResponse:
+      allOf: *ref_190
   responses:
     EmptyOk:
       description: Empty success

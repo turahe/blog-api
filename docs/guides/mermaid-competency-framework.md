@@ -75,7 +75,7 @@ Goal: Author correct, readable, semantically-named diagrams for every documentat
 
 - **Beginner — linear 8–12 milestone release Gantt.**
   - `title`, `dateFormat YYYY-MM-DD`, `axisFormat %b %d`, `section GroupName`, `taskname : a1, 2026-08-01, 7d`; `crit` marker on path-critical tasks; `after a1` dependency chain.
-  - _Use case_: quarterly Q3 roadmap mini-Gantt inside [product/roadmap.md](../product/roadmap.md) (SSE feature 14d → RBAC admin UI 10d → comments moderation ML 14d → analytics dashboard GA 12d).
+  - _Use case_: quarterly Q3 roadmap mini-Gantt inside [docs/tasks/README.md](../tasks/README.md) (SSE feature 14d → RBAC admin UI 10d → comments moderation ML 14d → analytics dashboard GA 12d).
 - **Intermediate — swimlane Gantt with parallel workstreams, milestone markers, dependency gates.**
   - Explicit `Milestone : milestone, m1, 2026-08-12, 1d` zero-width dots; `crit` only for ≤ 5% of bars (release gates, SLA deadlines, compliance freeze); 3 parallel sections Frontend / Backend / QA with `after` links crossing sections.
   - _Use case_: post-launch v1.0 GA 12-week rollout Gantt: Infra private IP + VPC peering → Database migrations + perf test → Backend SSE + comment moderation → Frontend SSR/ISR migration → A11y WCAG audit → GA flag-flip milestone.

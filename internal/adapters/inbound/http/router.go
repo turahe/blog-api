@@ -10,6 +10,7 @@ import (
 	authports "github.com/turahe/blog-api/internal/core/auth/ports"
 	categoryservice "github.com/turahe/blog-api/internal/core/category/service"
 	healthports "github.com/turahe/blog-api/internal/core/health/ports"
+	mediaports "github.com/turahe/blog-api/internal/core/media/ports"
 	postservice "github.com/turahe/blog-api/internal/core/post/service"
 	rbacports "github.com/turahe/blog-api/internal/core/rbac/ports"
 	userservice "github.com/turahe/blog-api/internal/core/user/service"
@@ -25,6 +26,7 @@ type Dependencies struct {
 	Posts          *postservice.PostService
 	Categories     *categoryservice.CategoryService
 	Tags           *persistence.TagRepository
+	Media          mediaports.Service
 	Version        string
 	TrustedProxies []string
 }
@@ -122,6 +124,20 @@ func handlerFor(deps Dependencies) func(v1.Route) gin.HandlerFunc {
 	}
 	if deps.Tags != nil {
 		implemented["public.tags.list"] = listTagsHandler(deps.Tags)
+	}
+	if deps.Media != nil {
+		presignMedia := adminPresignMediaHandler(deps.Media)
+		completeMedia := adminCompleteMediaHandler(deps.Media)
+		if deps.RBAC != nil {
+			implemented["admin.media.create"] = chain(requirePermission(deps.RBAC, "media.create"), presignMedia)
+			implemented["admin.media.complete"] = chain(requirePermission(deps.RBAC, "media.create"), completeMedia)
+		} else if deps.Roles != nil {
+			implemented["admin.media.create"] = chain(requireRoles(deps.Roles, "admin", "editor", "author"), presignMedia)
+			implemented["admin.media.complete"] = chain(requireRoles(deps.Roles, "admin", "editor", "author"), completeMedia)
+		} else {
+			implemented["admin.media.create"] = presignMedia
+			implemented["admin.media.complete"] = completeMedia
+		}
 	}
 	return func(route v1.Route) gin.HandlerFunc {
 		if handler, ok := implemented[route.OperationID]; ok {

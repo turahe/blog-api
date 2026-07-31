@@ -1,5 +1,63 @@
 # Changelog
 
+## 2026-07-31 — Media upload MVP (presign + complete)
+
+### Added
+
+- Hexagonal media module (`internal/core/media`) with `PresignUpload` / `CompleteUpload`
+- S3-compatible object storage adapter (`internal/adapters/outbound/storage`) for MinIO/S3/R2/Spaces
+- `media_assets` migration (`00005_media_assets.sql`) and GORM repository
+- `admin.media.create` returns a JSON presigned PUT URL; `admin.media.complete` finalizes after client upload
+- Config: `S3_*`, `MEDIA_ALLOWED_MIME_TYPES`, `MEDIA_MAX_UPLOAD_BYTES`, `MEDIA_PRESIGN_TTL`
+
+### Changed
+
+- `admin.media.create` is no longer multipart through the API
+
+## 2026-07-31 — Project configuration guide
+
+### Added
+
+- `docs/deployment/config.md` documents every environment variable consumed by the Go
+  process, defaults, formats, production validation, database modes, messaging, and
+  Compose-only/reserved variables
+
+### Updated
+
+- Deployment index, local setup, Docker guide, root README, and `.env.example` link or align
+  with the configuration guide
+- Local setup now sources `.env` explicitly because the Go process does not load dotenv files
+- Redis application configuration is split into `REDIS_DRIVER`, `REDIS_HOST`, `REDIS_PORT`,
+  `REDIS_PASSWORD`, and `REDIS_DB`; `REDIS_URL` is no longer consumed
+- `REDIS_DRIVER` accepts `redis` or `valkey` (Valkey is protocol-compatible; connection URL
+  scheme remains `redis://`)
+- Direct database configuration is split into `DB_DRIVER`, `DB_HOST`, `DB_PORT`, `DB_USER`,
+  `DB_PASSWORD`, `DB_NAME`, and `DB_SSLMODE`; `DATABASE_URL` is no longer consumed
+
+## 2026-07-31 — CLI moved from `cmd/app` to `cmd`
+
+### Changed
+
+- `package main` now lives directly in `cmd/` (`main.go`, `command.go`, `worker.go`)
+- Build uses an explicit output name so the binary stays `app`: `go build -o app ./cmd`
+- `go run ./cmd <subcommand>` replaces `go run ./cmd/app <subcommand>` in Makefile, Dockerfile, CI, and docs
+
+### Fixed
+
+- `gofmt` alignment in `internal/platform/config/config.go` and `internal/platform/messaging/googlepubsub.go` that was failing `make lint`
+
+## 2026-07-31 — Task backlog docs
+
+### Added
+
+- `docs/tasks/` — per-phase delivery backlog with checklists, status, dependency order, and cross-cutting work
+- Index at [docs/tasks/README.md](docs/tasks/README.md) with status legend, current baseline, and maintenance rules
+- Six phase files under [docs/tasks/](docs/tasks/README.md); every one of the 109 contract operation IDs is covered exactly once
+
+### Updated
+
+- Root README documentation list and the agent docs map link the backlog; `docs/product/roadmap.md` removed in favour of `docs/tasks/`
+
 ## 2026-07-30 — Multi-broker Watermill transports
 
 ### Added
