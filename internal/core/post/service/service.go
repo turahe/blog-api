@@ -9,6 +9,8 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	mediadomain "github.com/turahe/blog-api/internal/core/media/domain"
+	mediaports "github.com/turahe/blog-api/internal/core/media/ports"
 	postdomain "github.com/turahe/blog-api/internal/core/post/domain"
 	"github.com/turahe/blog-api/internal/core/post/ports"
 )
@@ -27,13 +29,21 @@ type Clock interface {
 }
 
 type PostService struct {
-	repo  ports.Repository
-	ids   IDGenerator
-	clock Clock
+	repo      ports.Repository
+	postMedia mediaports.PostMediaRepository
+	media     mediaports.Repository
+	ids       IDGenerator
+	clock     Clock
 }
 
 func New(repo ports.Repository, ids IDGenerator, clock Clock) *PostService {
 	return &PostService{repo: repo, ids: ids, clock: clock}
+}
+
+func (s *PostService) WithMedia(postMedia mediaports.PostMediaRepository, media mediaports.Repository) *PostService {
+	s.postMedia = postMedia
+	s.media = media
+	return s
 }
 
 func (s *PostService) ListPublished(ctx context.Context, filter postdomain.ListFilter) (postdomain.ListResult, error) {
@@ -99,6 +109,88 @@ func (s *PostService) Publish(ctx context.Context, id uuid.UUID) (postdomain.Pos
 	post.UpdatedAt = now
 	post.Version++
 	return s.repo.Update(ctx, post)
+}
+
+func (s *PostService) ReplaceMedia(
+	ctx context.Context,
+	postID uuid.UUID,
+	items []mediadomain.PostMediaItem,
+	enforceCoverConsistency bool,
+) ([]mediadomain.PostMediaItem, error) {
+	if s.postMedia == nil || s.media == nil {
+		return nil, fmt.Errorf("%w: media associations not configured", ErrValidation)
+	}
+
+	post, err := s.repo.GetByID(ctx, postID)
+	if err != nil {
+		return nil, err
+	}
+	if post.DeletedAt != nil {
+		return nil, postdomain.ErrNotFound
+	}
+
+	_ = enforceCoverConsistency // cover FK is always synced from kind=cover items
+
+	normalized := make([]mediadomain.PostMediaItem, 0, len(items))
+	coverCount := 0
+	var coverID *uuid.UUID
+	seen := map[string]struct{}{}
+
+	for i, item := range items {
+		kind := strings.TrimSpace(strings.ToLower(item.Kind))
+		switch kind {
+		case mediadomain.KindCover, mediadomain.KindInlineImage, mediadomain.KindAttachment:
+		default:
+			return nil, fmt.Errorf("%w: invalid media kind %q", ErrValidation, item.Kind)
+		}
+		if item.MediaAssetID == uuid.Nil {
+			return nil, fmt.Errorf("%w: media_asset_id required", ErrValidation)
+		}
+		key := item.MediaAssetID.String() + ":" + kind
+		if _, ok := seen[key]; ok {
+			return nil, fmt.Errorf("%w: duplicate media item", ErrValidation)
+		}
+		seen[key] = struct{}{}
+
+		asset, err := s.media.GetByID(ctx, item.MediaAssetID)
+		if err != nil {
+			if errors.Is(err, mediadomain.ErrNotFound) {
+				return nil, fmt.Errorf("%w: media %s not found", ErrValidation, item.MediaAssetID)
+			}
+			return nil, err
+		}
+		if asset.Status != mediadomain.StatusReady {
+			return nil, fmt.Errorf("%w: media %s is not ready", ErrValidation, item.MediaAssetID)
+		}
+
+		sortOrder := item.SortOrder
+		if sortOrder == 0 && i > 0 {
+			sortOrder = i
+		}
+		assetCopy := asset
+		normalized = append(normalized, mediadomain.PostMediaItem{
+			MediaAssetID: item.MediaAssetID,
+			Kind:         kind,
+			SortOrder:    sortOrder,
+			Media:        &assetCopy,
+		})
+		if kind == mediadomain.KindCover {
+			coverCount++
+			id := item.MediaAssetID
+			coverID = &id
+		}
+	}
+	if coverCount > 1 {
+		return nil, fmt.Errorf("%w: at most one cover media item allowed", ErrValidation)
+	}
+
+	if err := s.postMedia.ReplaceAll(ctx, postID, normalized); err != nil {
+		return nil, err
+	}
+	if err := s.repo.SetCoverImage(ctx, postID, coverID, s.clock.Now()); err != nil {
+		return nil, err
+	}
+	return normalized, nil
 }
 
 func ParseOptionalUUID(raw string) (*uuid.UUID, error) {

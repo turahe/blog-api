@@ -152,6 +152,8 @@ paths:
     $ref: ./paths/media.yaml#/~1api~1v1~1media~1{id}~1transform
   /api/v1/admin/media:
     $ref: ./paths/media.yaml#/~1api~1v1~1admin~1media
+  /api/v1/admin/media/{id}/complete:
+    $ref: ./paths/media.yaml#/~1api~1v1~1admin~1media~1{id}~1complete
   /api/v1/admin/media/{id}/tags:
     $ref: ./paths/media.yaml#/~1api~1v1~1admin~1media~1{id}~1tags
   /api/v1/admin/media/{id}:

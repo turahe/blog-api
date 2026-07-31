@@ -81,7 +81,10 @@ secrets manager entries. The canonical connector package and latest usage guidan
 | `mysql` — MySQL 8.0+ | `github.com/go-sql-driver/mysql` | `gorm.io/driver/mysql` | `cloud.google.com/go/cloudsqlconn/mysql/mysql` — register `cloudsql-mysql`; private IP on connector port **3307**. |
 | `sqlserver` — Microsoft SQL Server | `github.com/microsoft/go-mssqldb` | `gorm.io/driver/sqlserver` | `cloud.google.com/go/cloudsqlconn/sqlserver/mssql` — register `cloudsql-sqlserver`; DSN includes `cloudsql=project:region:instance`. SQL Server uses user/password (IAM DB auth is not used the same way as Postgres/MySQL). |
 
-Local / non-Cloud-SQL: set `DATABASE_URL` and `DB_DRIVER`. Cloud SQL: set `DB_INSTANCE_CONNECTION_NAME` (and related `DB_*` vars); `internal/platform/database` opens via the connector and wraps `*sql.DB` for GORM.
+Local / non-Cloud-SQL: set split `DB_*` fields (`DB_DRIVER`, `DB_HOST`, `DB_PORT`, `DB_USER`,
+`DB_PASSWORD`, `DB_NAME`, and for PostgreSQL `DB_SSLMODE`). Cloud SQL: set
+`DB_INSTANCE_CONNECTION_NAME` (and related `DB_*` vars); `internal/platform/database` opens via
+the connector and wraps `*sql.DB` for GORM.
 
 Reference docs:
 
@@ -107,12 +110,14 @@ secrets or passwords.
 | Variable | Example | Purpose |
 |----------|---------|---------|
 | `DB_DRIVER` | `postgres`, `mysql`, or `sqlserver` | Dialect selector (default: `postgres`) |
-| `DATABASE_URL` | `postgres://…` / `mysql://…` / `sqlserver://…` | Direct DSN when **not** using Cloud SQL (`DB_INSTANCE_CONNECTION_NAME` empty) |
-| `DB_IAM_AUTH_ENABLED` | `true` | Enables IAM DB auth for Postgres/MySQL; do NOT set `DB_PASSWORD`. Prefer `true` in prod for those engines. Ignored for `sqlserver` (password required). |
+| `DB_HOST` | `127.0.0.1` | Direct-mode hostname (ignored when Cloud SQL is enabled) |
+| `DB_PORT` | `5432` / `3306` / `1433` | Direct-mode port; defaults by dialect when unset |
 | `DB_USER` | `blog-iam@my-project.iam` | IAM service account or database user |
 | `DB_PASSWORD` | *(secret)* | Required for `sqlserver` and when IAM auth is disabled |
 | `DB_NAME` | `blog` | Database name inside the Cloud SQL instance |
-| `DB_INSTANCE_CONNECTION_NAME` | `my-project:us-central1:blog-pg-01` | Fully qualified Cloud SQL instance name: `project:region:instance`. When set, opens via `cloudsqlconn` instead of `DATABASE_URL`. |
+| `DB_SSLMODE` | `disable` | PostgreSQL SSL mode for direct connections only |
+| `DB_IAM_AUTH_ENABLED` | `true` | Enables IAM DB auth for Postgres/MySQL; do NOT set `DB_PASSWORD`. Prefer `true` in prod for those engines. Ignored for `sqlserver` (password required). |
+| `DB_INSTANCE_CONNECTION_NAME` | `my-project:us-central1:blog-pg-01` | Fully qualified Cloud SQL instance name: `project:region:instance`. When set, opens via `cloudsqlconn` instead of direct `DB_HOST`/`DB_PORT`. |
 | `DB_PRIVATE_IP_ENABLED` | `true` | When true, passes `cloudsqlconn.WithPrivateIP()` to the Dialer so all connections route over private VPC IP — **never falls back to public IP**. |
 | `DB_GOOGLE_CREDENTIALS_SOURCE` | `workload-identity` (default) or `adc` or `path:/secrets/sa-key.json` | How cloudsqlconn resolves its Google credentials. In GKE we use Workload Identity; in Cloud Run, the runtime service account (ADC); locally, developer ADC via `gcloud auth application-default login`. |
 | `DB_POOL_MAX_OPEN` | `25` | `sql.DB.SetMaxOpenConns` value (see §"Connection pooling best practices"). |
@@ -144,7 +149,7 @@ secrets or passwords.
 
 1. **Startup**: `app serve` / `app migrate up` entrypoint invokes
    `internal/platform/database.Open`, which:
-   1. Resolves `DB_DRIVER` and either `DATABASE_URL` (direct) or Cloud SQL env (`DB_INSTANCE_CONNECTION_NAME`, …).
+   1. Resolves `DB_DRIVER` and either split direct `DB_*` fields or Cloud SQL env (`DB_INSTANCE_CONNECTION_NAME`, …).
    2. For Cloud SQL: registers the dialect driver via `cloudsqlconn` helpers (`pgxv5` / `mysql` / `mssql`) with `WithIAMAuthN()` (Postgres/MySQL) and `WithDefaultDialOptions(WithPrivateIP())` when private IP is enabled.
    3. Hands `*sql.DB` to the matching GORM dialector.
 2. **IAM token acquisition**: On the first `Dial()`, cloudsqlconn exchanges the workload
@@ -199,7 +204,7 @@ Notes:
 | **IAM Database Authentication (default, required for prod)** | All Cloud Run / GKE / GCE workloads | 1. Grant the workload service account `roles/cloudsql.instanceUser` on the instance. 2. Create an IAM database user inside Postgres: `CREATE USER "blog-iam@my-project.iam" WITH LOGIN; GRANT CONNECT ON DATABASE blog TO "blog-iam@my-project.iam"; GRANT ALL PRIVILEGES ON ALL TABLES IN SCHEMA public TO "blog-iam@my-project.iam"; GRANT ALL PRIVILEGES ON ALL SEQUENCES IN SCHEMA public TO "blog-iam@my-project.iam";` (MySQL equivalent: `CREATE USER 'blog-iam'@'%' IDENTIFIED WITH authentication_iam AS 'blog-iam@my-project.iam'; GRANT ALL PRIVILEGES ON blog.* TO 'blog-iam'@'%';`) 3. Pass `cloudsqlconn.WithIAMAuthN()` when creating the Dialer. |
 | **Application Default Credentials (local dev)** | Developer laptops connecting to a **dedicated dev** Cloud SQL instance (never prod) | Developer runs `gcloud auth application-default login` once, sets `DB_GOOGLE_CREDENTIALS_SOURCE=adc`; still uses IAM DB auth — no password needed. |
 | **Build-in service account key via secrets manager (strict fallback)** | Legacy edge cases; strictly forbidden for prod workload service accounts unless Workload Identity is unavailable | Store the JSON key payload in Secret Manager, reference via `GOOGLE_APPLICATION_CREDENTIALS=/secrets/sa-key.json`; rotate keys every 90 days. Audit with `gcloud asset search-all-iam-policies` periodically. |
-| **Built-in database username/password** | **Never in prod**; only local Docker-compose Postgres without cloudsqlconn | Simple `DATABASE_URL=postgres://blog:blog@127.0.0.1:5432/blog?sslmode=disable`; the bootstrap layer detects when `DB_INSTANCE_CONNECTION_NAME` is unset and skips the cloudsqlconn Dialer entirely, falling back to direct `libpq`/`pgx`. |
+| **Built-in database username/password** | **Never in prod**; only local Docker-compose Postgres without cloudsqlconn | Set `DB_HOST=127.0.0.1`, `DB_USER`/`DB_PASSWORD`/`DB_NAME`, `DB_SSLMODE=disable`; the bootstrap layer detects when `DB_INSTANCE_CONNECTION_NAME` is unset and skips the cloudsqlconn Dialer entirely, falling back to direct `libpq`/`pgx`. |
 
 #### Connection pooling best practices
 

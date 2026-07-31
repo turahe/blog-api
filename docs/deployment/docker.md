@@ -12,7 +12,7 @@ docker build \
 
 Multi-stage [Dockerfile](../../Dockerfile):
 
-1. `golang:1.26-alpine` — compile `./cmd/app` with `-trimpath` and version ldflags
+1. `golang:1.26-alpine` — compile `./cmd` with `-trimpath` and version ldflags
 2. `gcr.io/distroless/static-debian12:nonroot` — copy binary only
 
 ## Runtime
@@ -25,7 +25,8 @@ Multi-stage [Dockerfile](../../Dockerfile):
 | Port | `8080` |
 | CGO | disabled |
 
-Pass configuration via environment (see [.env.example](../../.env.example)). Do not bake `.env` into the image.
+Pass configuration via environment (see [config.md](./config.md) and
+[.env.example](../../.env.example)). Do not bake `.env` into the image.
 
 ## Example run (API only)
 

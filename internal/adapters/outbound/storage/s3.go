@@ -1,0 +1,160 @@
+package storage
+
+import (
+	"context"
+	"errors"
+	"fmt"
+	"net/http"
+	"strings"
+	"time"
+
+	"github.com/aws/aws-sdk-go-v2/aws"
+	v4 "github.com/aws/aws-sdk-go-v2/aws/signer/v4"
+	awsconfig "github.com/aws/aws-sdk-go-v2/config"
+	"github.com/aws/aws-sdk-go-v2/credentials"
+	"github.com/aws/aws-sdk-go-v2/service/s3"
+	"github.com/aws/smithy-go"
+	"github.com/turahe/blog-api/internal/core/media/ports"
+	appconfig "github.com/turahe/blog-api/internal/platform/config"
+)
+
+type headObjectClient interface {
+	HeadObject(ctx context.Context, params *s3.HeadObjectInput, optFns ...func(*s3.Options)) (*s3.HeadObjectOutput, error)
+}
+
+type presignPutClient interface {
+	PresignPutObject(ctx context.Context, params *s3.PutObjectInput, optFns ...func(*s3.PresignOptions)) (*v4.PresignedHTTPRequest, error)
+}
+
+type Client struct {
+	bucket       string
+	endpoint     string
+	usePathStyle bool
+	head         headObjectClient
+	presign      presignPutClient
+}
+
+var _ ports.ObjectStorage = (*Client)(nil)
+
+func NewS3(ctx context.Context, cfg appconfig.Config) (*Client, error) {
+	bucket := strings.TrimSpace(cfg.S3Bucket)
+	if bucket == "" {
+		return nil, fmt.Errorf("S3_BUCKET must not be empty")
+	}
+	if strings.TrimSpace(cfg.S3AccessKey) == "" {
+		return nil, fmt.Errorf("S3_ACCESS_KEY must not be empty")
+	}
+	if strings.TrimSpace(cfg.S3SecretKey) == "" {
+		return nil, fmt.Errorf("S3_SECRET_KEY must not be empty")
+	}
+
+	region := strings.TrimSpace(cfg.S3Region)
+	if region == "" {
+		region = "auto"
+	}
+	endpoint := strings.TrimSpace(cfg.S3Endpoint)
+	usePathStyle := cfg.S3ForcePathStyle || endpoint != ""
+
+	awsCfg, err := awsconfig.LoadDefaultConfig(
+		ctx,
+		awsconfig.WithRegion(region),
+		awsconfig.WithCredentialsProvider(credentials.NewStaticCredentialsProvider(
+			cfg.S3AccessKey,
+			cfg.S3SecretKey,
+			"",
+		)),
+	)
+	if err != nil {
+		return nil, fmt.Errorf("load aws config: %w", err)
+	}
+
+	s3Client := s3.NewFromConfig(awsCfg, func(o *s3.Options) {
+		o.UsePathStyle = usePathStyle
+		if endpoint != "" {
+			o.BaseEndpoint = aws.String(endpoint)
+		}
+	})
+
+	return &Client{
+		bucket:       bucket,
+		endpoint:     endpoint,
+		usePathStyle: usePathStyle,
+		head:         s3Client,
+		presign:      s3.NewPresignClient(s3Client),
+	}, nil
+}
+
+func (c *Client) PresignPut(ctx context.Context, key, contentType string, ttl time.Duration) (string, map[string]string, error) {
+	input := &s3.PutObjectInput{
+		Bucket: aws.String(c.bucket),
+		Key:    aws.String(key),
+	}
+	if contentType = strings.TrimSpace(contentType); contentType != "" {
+		input.ContentType = aws.String(contentType)
+	}
+
+	request, err := c.presign.PresignPutObject(ctx, input, func(o *s3.PresignOptions) {
+		o.Expires = ttl
+	})
+	if err != nil {
+		return "", nil, err
+	}
+
+	headers := signedHeaders(request.SignedHeader)
+	if contentType != "" {
+		headers["Content-Type"] = contentType
+	}
+
+	return request.URL, headers, nil
+}
+
+func (c *Client) HeadObject(ctx context.Context, key string) (ports.ObjectInfo, error) {
+	output, err := c.head.HeadObject(ctx, &s3.HeadObjectInput{
+		Bucket: aws.String(c.bucket),
+		Key:    aws.String(key),
+	})
+	if err != nil {
+		if isObjectNotFound(err) {
+			return ports.ObjectInfo{}, fmt.Errorf("%w: bucket=%s key=%s", ports.ErrObjectNotFound, c.bucket, key)
+		}
+		return ports.ObjectInfo{}, err
+	}
+
+	return ports.ObjectInfo{
+		Size:        aws.ToInt64(output.ContentLength),
+		ContentType: strings.TrimSpace(aws.ToString(output.ContentType)),
+		ETag:        strings.Trim(aws.ToString(output.ETag), `"`),
+	}, nil
+}
+
+func signedHeaders(header http.Header) map[string]string {
+	if len(header) == 0 {
+		return map[string]string{}
+	}
+
+	headers := make(map[string]string, len(header))
+	for key, values := range header {
+		if strings.EqualFold(key, "host") || len(values) == 0 {
+			continue
+		}
+		headers[key] = strings.Join(values, ", ")
+	}
+	return headers
+}
+
+func isObjectNotFound(err error) bool {
+	var apiErr smithy.APIError
+	if errors.As(err, &apiErr) {
+		switch apiErr.ErrorCode() {
+		case "NotFound", "NoSuchKey", "404":
+			return true
+		}
+	}
+
+	var statusErr interface{ HTTPStatusCode() int }
+	if errors.As(err, &statusErr) && statusErr.HTTPStatusCode() == http.StatusNotFound {
+		return true
+	}
+
+	return false
+}

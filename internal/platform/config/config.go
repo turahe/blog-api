@@ -3,6 +3,8 @@ package config
 import (
 	"errors"
 	"fmt"
+	"net"
+	"net/url"
 	"os"
 	"strconv"
 	"strings"
@@ -10,38 +12,42 @@ import (
 )
 
 const (
-	defaultAddress     = "0.0.0.0:8080"
-	defaultDatabaseURL = "postgres://blog:blog@127.0.0.1:5432/blog?sslmode=disable"
-	defaultRedisURL    = "redis://127.0.0.1:6379/0"
-	defaultDBDriver    = "postgres"
+	defaultAddress  = "0.0.0.0:8080"
+	defaultDBDriver = "postgres"
 )
 
 type Config struct {
-	Environment               string
-	Address                   string
-	DBDriver                  string
-	DatabaseURL               string
-	DBUser                    string
-	DBPassword                string
-	DBName                    string
-	DBInstanceConnectionName  string
-	DBIAMAuthEnabled          bool
-	DBPrivateIPEnabled        bool
-	DBGoogleCredentialsSource string
-	RedisURL                  string
-	TrustedProxies            []string
-	ShutdownTimeout           time.Duration
-	ReadTimeout               time.Duration
-	ReadHeaderTimeout         time.Duration
-	IdleTimeout               time.Duration
-	DBMaxOpen                 int
-	DBMaxIdle                 int
-	DBMaxLifetime             time.Duration
-	DBMaxIdleTime             time.Duration
-	SessionKey                string
-	CSRFKey                   string
-	Pepper                    string
-	JWTIssuer                 string
+	Environment                   string
+	Address                       string
+	DBDriver                      string
+	DBHost                        string
+	DBPort                        int
+	DBUser                        string
+	DBPassword                    string
+	DBName                        string
+	DBSSLMode                     string
+	DBInstanceConnectionName      string
+	DBIAMAuthEnabled              bool
+	DBPrivateIPEnabled            bool
+	DBGoogleCredentialsSource     string
+	RedisDriver                   string
+	RedisHost                     string
+	RedisPort                     int
+	RedisPassword                 string
+	RedisDB                       int
+	TrustedProxies                []string
+	ShutdownTimeout               time.Duration
+	ReadTimeout                   time.Duration
+	ReadHeaderTimeout             time.Duration
+	IdleTimeout                   time.Duration
+	DBMaxOpen                     int
+	DBMaxIdle                     int
+	DBMaxLifetime                 time.Duration
+	DBMaxIdleTime                 time.Duration
+	SessionKey                    string
+	CSRFKey                       string
+	Pepper                        string
+	JWTIssuer                     string
 	AccessTokenTTL                time.Duration
 	RefreshTokenTTL               time.Duration
 	MessageBroker                 string
@@ -51,6 +57,17 @@ type Config struct {
 	GooglePubSubProjectID         string
 	GooglePubSubCredentialsSource string
 	MessageTopicPrefix            string
+	S3Endpoint                    string
+	S3Region                      string
+	S3Bucket                      string
+	S3AccessKey                   string
+	S3SecretKey                   string
+	S3PublicBaseURL               string
+	S3Disk                        string
+	S3ForcePathStyle              bool
+	MediaAllowedMIMETypes         []string
+	MediaMaxUploadBytes           int64
+	MediaPresignTTL               time.Duration
 }
 
 // UsesCloudSQL reports whether Cloud SQL connector settings are active.
@@ -60,6 +77,179 @@ func (c Config) UsesCloudSQL() bool {
 
 func (c Config) MessagingEnabled() bool {
 	return strings.TrimSpace(c.MessageBroker) != ""
+}
+
+// ParseMIMEList splits a comma-separated MIME allowlist and trims whitespace.
+func ParseMIMEList(raw string) []string {
+	return splitCSV(raw)
+}
+
+// MediaEnabled reports whether media storage credentials are configured.
+func (c Config) MediaEnabled() bool {
+	return strings.TrimSpace(c.S3Bucket) != "" &&
+		strings.TrimSpace(c.S3AccessKey) != "" &&
+		strings.TrimSpace(c.S3SecretKey) != ""
+}
+
+// ValidateMedia checks the upload policy and storage target settings.
+func (c Config) ValidateMedia() error {
+	if !c.MediaEnabled() {
+		return nil
+	}
+	switch c.S3Disk {
+	case "minio", "s3", "r2", "do_spaces":
+	default:
+		return fmt.Errorf("unsupported S3_DISK %q", c.S3Disk)
+	}
+	if len(c.MediaAllowedMIMETypes) == 0 {
+		return errors.New("MEDIA_ALLOWED_MIME_TYPES must not be empty when media is enabled")
+	}
+	if c.MediaMaxUploadBytes < 1 {
+		return errors.New("MEDIA_MAX_UPLOAD_BYTES must be positive")
+	}
+	if c.MediaPresignTTL <= 0 {
+		return errors.New("MEDIA_PRESIGN_TTL must be positive")
+	}
+	return nil
+}
+
+// NormalizeDBDriver maps aliases to canonical DB_DRIVER names.
+func NormalizeDBDriver(raw string) (string, error) {
+	switch strings.ToLower(strings.TrimSpace(raw)) {
+	case "", "postgres", "postgresql", "pg":
+		return "postgres", nil
+	case "mysql", "mariadb":
+		return "mysql", nil
+	case "sqlserver", "mssql":
+		return "sqlserver", nil
+	default:
+		return "", fmt.Errorf("unsupported DB_DRIVER %q (want postgres, mysql, or sqlserver)", raw)
+	}
+}
+
+func defaultDBPort(driver string) int {
+	switch driver {
+	case "mysql":
+		return 3306
+	case "sqlserver":
+		return 1433
+	default:
+		return 5432
+	}
+}
+
+// DatabaseDSN builds a driver-specific DSN from split DB_* settings.
+func (c Config) DatabaseDSN() (string, error) {
+	driver, err := NormalizeDBDriver(c.DBDriver)
+	if err != nil {
+		return "", err
+	}
+	port := c.DBPort
+	if port == 0 {
+		port = defaultDBPort(driver)
+	}
+	hostPort := net.JoinHostPort(c.DBHost, strconv.Itoa(port))
+	switch driver {
+	case "postgres":
+		u := &url.URL{
+			Scheme: "postgres",
+			User:   url.UserPassword(c.DBUser, c.DBPassword),
+			Host:   hostPort,
+			Path:   "/" + c.DBName,
+		}
+		q := u.Query()
+		sslmode := c.DBSSLMode
+		if sslmode == "" {
+			sslmode = "disable"
+		}
+		q.Set("sslmode", sslmode)
+		u.RawQuery = q.Encode()
+		return u.String(), nil
+	case "mysql":
+		userInfo := url.UserPassword(c.DBUser, c.DBPassword)
+		return fmt.Sprintf("%s@tcp(%s)/%s?parseTime=true", userInfo.String(), hostPort, c.DBName), nil
+	case "sqlserver":
+		u := &url.URL{
+			Scheme: "sqlserver",
+			User:   url.UserPassword(c.DBUser, c.DBPassword),
+			Host:   hostPort,
+		}
+		q := u.Query()
+		q.Set("database", c.DBName)
+		u.RawQuery = q.Encode()
+		return u.String(), nil
+	default:
+		return "", fmt.Errorf("unsupported DB_DRIVER %q", driver)
+	}
+}
+
+// ValidateDatabase checks split database settings for direct connections.
+// Cloud SQL mode only requires instance/user/name (validated elsewhere).
+func (c Config) ValidateDatabase() error {
+	if c.UsesCloudSQL() {
+		return nil
+	}
+	driver, err := NormalizeDBDriver(c.DBDriver)
+	if err != nil {
+		return err
+	}
+	if strings.TrimSpace(c.DBHost) == "" {
+		return errors.New("DB_HOST must not be empty")
+	}
+	port := c.DBPort
+	if port == 0 {
+		port = defaultDBPort(driver)
+	}
+	if port < 1 || port > 65535 {
+		return fmt.Errorf("DB_PORT must be between 1 and 65535 (got %d)", port)
+	}
+	if strings.TrimSpace(c.DBUser) == "" {
+		return errors.New("DB_USER must not be empty")
+	}
+	if strings.TrimSpace(c.DBName) == "" {
+		return errors.New("DB_NAME must not be empty")
+	}
+	if driver == "postgres" {
+		sslmode := strings.ToLower(strings.TrimSpace(c.DBSSLMode))
+		if sslmode == "" {
+			sslmode = "disable"
+		}
+		if c.Environment == "production" && sslmode == "disable" {
+			return errors.New("DB_SSLMODE cannot be disable in production")
+		}
+	}
+	return nil
+}
+
+// RedisURL builds the go-redis connection URL from split Redis settings.
+// Both redis and valkey speak the Redis wire protocol, so the URL scheme is always redis://.
+func (c Config) RedisURL() string {
+	u := &url.URL{
+		Scheme: "redis",
+		Host:   net.JoinHostPort(c.RedisHost, strconv.Itoa(c.RedisPort)),
+		Path:   "/" + strconv.Itoa(c.RedisDB),
+	}
+	if c.RedisPassword != "" {
+		u.User = url.UserPassword("", c.RedisPassword)
+	}
+	return u.String()
+}
+
+// ValidateRedis checks split Redis connection settings.
+func (c Config) ValidateRedis() error {
+	if c.RedisDriver != "redis" && c.RedisDriver != "valkey" {
+		return fmt.Errorf("unsupported REDIS_DRIVER %q (want redis or valkey)", c.RedisDriver)
+	}
+	if strings.TrimSpace(c.RedisHost) == "" {
+		return errors.New("REDIS_HOST must not be empty")
+	}
+	if c.RedisPort < 1 || c.RedisPort > 65535 {
+		return fmt.Errorf("REDIS_PORT must be between 1 and 65535 (got %d)", c.RedisPort)
+	}
+	if c.RedisDB < 0 {
+		return fmt.Errorf("REDIS_DB must be zero or greater (got %d)", c.RedisDB)
+	}
+	return nil
 }
 
 func normalizeMessageBroker(raw string) string {
@@ -103,32 +293,45 @@ func (c Config) ValidateMessaging() error {
 }
 
 func Load() (Config, error) {
+	driver := env("DB_DRIVER", defaultDBDriver)
+	normalized, _ := NormalizeDBDriver(driver)
+	port := integer("DB_PORT", 0)
+	if port == 0 {
+		port = defaultDBPort(normalized)
+	}
+
 	cfg := Config{
-		Environment:               env("APP_ENV", "local"),
-		Address:                   env("APP_ADDR", defaultAddress),
-		DBDriver:                  env("DB_DRIVER", defaultDBDriver),
-		DatabaseURL:               env("DATABASE_URL", defaultDatabaseURL),
-		DBUser:                    env("DB_USER", ""),
-		DBPassword:                env("DB_PASSWORD", ""),
-		DBName:                    env("DB_NAME", ""),
-		DBInstanceConnectionName:  env("DB_INSTANCE_CONNECTION_NAME", ""),
-		DBIAMAuthEnabled:          boolEnv("DB_IAM_AUTH_ENABLED", false),
-		DBPrivateIPEnabled:        boolEnv("DB_PRIVATE_IP_ENABLED", true),
-		DBGoogleCredentialsSource: env("DB_GOOGLE_CREDENTIALS_SOURCE", "workload-identity"),
-		RedisURL:                  env("REDIS_URL", defaultRedisURL),
-		TrustedProxies:            splitCSV(os.Getenv("APP_TRUSTED_PROXIES")),
-		ShutdownTimeout:           duration("APP_SHUTDOWN_TIMEOUT", 15*time.Second),
-		ReadTimeout:               duration("APP_READ_TIMEOUT", 15*time.Second),
-		ReadHeaderTimeout:         duration("APP_READ_HEADER_TIMEOUT", 5*time.Second),
-		IdleTimeout:               duration("APP_IDLE_TIMEOUT", 60*time.Second),
-		DBMaxOpen:                 integer("DB_POOL_MAX_OPEN", 25),
-		DBMaxIdle:                 integer("DB_POOL_MAX_IDLE", 10),
-		DBMaxLifetime:             durationOrSeconds("DB_POOL_MAX_LIFETIME", "DB_POOL_MAX_LIFETIME_SECONDS", 30*time.Minute),
-		DBMaxIdleTime:             durationOrSeconds("DB_POOL_MAX_IDLE_TIME", "DB_POOL_MAX_IDLETIME_SECONDS", 10*time.Minute),
-		SessionKey:                env("APP_SESSION_KEY", ""),
-		CSRFKey:                   env("APP_CSRF_KEY", ""),
-		Pepper:                    env("APP_PEPPER", ""),
-		JWTIssuer:                 env("APP_JWT_ISSUER", "blog-api"),
+		Environment:                   env("APP_ENV", "local"),
+		Address:                       env("APP_ADDR", defaultAddress),
+		DBDriver:                      driver,
+		DBHost:                        env("DB_HOST", "127.0.0.1"),
+		DBPort:                        port,
+		DBUser:                        env("DB_USER", "blog"),
+		DBPassword:                    env("DB_PASSWORD", "blog"),
+		DBName:                        env("DB_NAME", "blog"),
+		DBSSLMode:                     env("DB_SSLMODE", "disable"),
+		DBInstanceConnectionName:      env("DB_INSTANCE_CONNECTION_NAME", ""),
+		DBIAMAuthEnabled:              boolEnv("DB_IAM_AUTH_ENABLED", false),
+		DBPrivateIPEnabled:            boolEnv("DB_PRIVATE_IP_ENABLED", true),
+		DBGoogleCredentialsSource:     env("DB_GOOGLE_CREDENTIALS_SOURCE", "workload-identity"),
+		RedisDriver:                   strings.ToLower(env("REDIS_DRIVER", "redis")),
+		RedisHost:                     env("REDIS_HOST", "127.0.0.1"),
+		RedisPort:                     integer("REDIS_PORT", 6379),
+		RedisPassword:                 env("REDIS_PASSWORD", ""),
+		RedisDB:                       integer("REDIS_DB", 0),
+		TrustedProxies:                splitCSV(os.Getenv("APP_TRUSTED_PROXIES")),
+		ShutdownTimeout:               duration("APP_SHUTDOWN_TIMEOUT", 15*time.Second),
+		ReadTimeout:                   duration("APP_READ_TIMEOUT", 15*time.Second),
+		ReadHeaderTimeout:             duration("APP_READ_HEADER_TIMEOUT", 5*time.Second),
+		IdleTimeout:                   duration("APP_IDLE_TIMEOUT", 60*time.Second),
+		DBMaxOpen:                     integer("DB_POOL_MAX_OPEN", 25),
+		DBMaxIdle:                     integer("DB_POOL_MAX_IDLE", 10),
+		DBMaxLifetime:                 durationOrSeconds("DB_POOL_MAX_LIFETIME", "DB_POOL_MAX_LIFETIME_SECONDS", 30*time.Minute),
+		DBMaxIdleTime:                 durationOrSeconds("DB_POOL_MAX_IDLE_TIME", "DB_POOL_MAX_IDLETIME_SECONDS", 10*time.Minute),
+		SessionKey:                    env("APP_SESSION_KEY", ""),
+		CSRFKey:                       env("APP_CSRF_KEY", ""),
+		Pepper:                        env("APP_PEPPER", ""),
+		JWTIssuer:                     env("APP_JWT_ISSUER", "blog-api"),
 		AccessTokenTTL:                duration("APP_ACCESS_TOKEN_TTL", 15*time.Minute),
 		RefreshTokenTTL:               duration("APP_REFRESH_TOKEN_TTL", 30*24*time.Hour),
 		MessageBroker:                 strings.ToLower(env("MESSAGE_BROKER", "")),
@@ -138,6 +341,17 @@ func Load() (Config, error) {
 		GooglePubSubProjectID:         env("GOOGLE_PUBSUB_PROJECT_ID", ""),
 		GooglePubSubCredentialsSource: env("GOOGLE_PUBSUB_CREDENTIALS_SOURCE", "workload-identity"),
 		MessageTopicPrefix:            env("MESSAGE_TOPIC_PREFIX", "blog."),
+		S3Endpoint:                    env("S3_ENDPOINT", "http://127.0.0.1:9000"),
+		S3Region:                      env("S3_REGION", "auto"),
+		S3Bucket:                      env("S3_BUCKET", ""),
+		S3AccessKey:                   env("S3_ACCESS_KEY", ""),
+		S3SecretKey:                   env("S3_SECRET_KEY", ""),
+		S3PublicBaseURL:               env("S3_PUBLIC_BASE_URL", ""),
+		S3Disk:                        strings.ToLower(env("S3_DISK", "minio")),
+		S3ForcePathStyle:              boolEnv("S3_FORCE_PATH_STYLE", true),
+		MediaAllowedMIMETypes:         ParseMIMEList(env("MEDIA_ALLOWED_MIME_TYPES", "image/jpeg,image/png,image/webp,image/gif")),
+		MediaMaxUploadBytes:           int64(integer("MEDIA_MAX_UPLOAD_BYTES", 10<<20)),
+		MediaPresignTTL:               duration("MEDIA_PRESIGN_TTL", 15*time.Minute),
 	}
 
 	if cfg.Address == "" {
@@ -149,22 +363,24 @@ func Load() (Config, error) {
 		}
 		cfg.SessionKey = "local-dev-session-key-32bytes-min!!"
 	}
-	if cfg.Environment == "production" {
-		if !cfg.UsesCloudSQL() {
-			if strings.Contains(cfg.DatabaseURL, "sslmode=disable") {
-				return Config{}, errors.New("DATABASE_URL cannot disable TLS in production")
-			}
-			if cfg.DatabaseURL == defaultDatabaseURL {
-				return Config{}, errors.New("DATABASE_URL must be configured in production")
-			}
-		} else if cfg.DBInstanceConnectionName == "" || cfg.DBName == "" || cfg.DBUser == "" {
+	if cfg.Environment == "production" && cfg.UsesCloudSQL() {
+		if cfg.DBInstanceConnectionName == "" || cfg.DBName == "" || cfg.DBUser == "" {
 			return Config{}, errors.New("Cloud SQL requires DB_INSTANCE_CONNECTION_NAME, DB_NAME, and DB_USER in production")
 		}
+	}
+	if err := cfg.ValidateDatabase(); err != nil {
+		return Config{}, err
 	}
 	if cfg.DBMaxOpen < 1 || cfg.DBMaxIdle < 0 || cfg.DBMaxIdle > cfg.DBMaxOpen {
 		return Config{}, fmt.Errorf("invalid database pool limits: idle=%d open=%d", cfg.DBMaxIdle, cfg.DBMaxOpen)
 	}
+	if err := cfg.ValidateRedis(); err != nil {
+		return Config{}, err
+	}
 	if err := cfg.ValidateMessaging(); err != nil {
+		return Config{}, err
+	}
+	if err := cfg.ValidateMedia(); err != nil {
 		return Config{}, err
 	}
 	return cfg, nil

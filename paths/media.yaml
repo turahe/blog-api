@@ -105,21 +105,21 @@
   post:
     tags:
     - Admin / Media
-    summary: Upload a new media asset
+    summary: Create a pending media asset and return a presigned upload URL
     operationId: admin.media.create
     requestBody:
       required: true
       content:
-        multipart/form-data:
+        application/json:
           schema:
-            $ref: ../components/schemas/Media.yaml#/MediaUploadRequest
+            $ref: ../components/schemas/Media.yaml#/MediaPresignRequest
     responses:
       '201':
-        description: Asset created (or queued if async scanning)
+        description: Pending asset created with presigned PUT URL
         content:
           application/json:
             schema:
-              $ref: ../components/schemas/Media.yaml#/EnvelopeMediaResponse
+              $ref: ../components/schemas/Media.yaml#/EnvelopeMediaPresignResponse
       '400':
         $ref: ../components/responses.yaml#/ValidationError
       '401':
@@ -158,6 +158,40 @@
         $ref: ../components/responses.yaml#/UnauthorizedError
       '403':
         $ref: ../components/responses.yaml#/ForbiddenError
+/api/v1/admin/media/{id}/complete:
+  post:
+    tags:
+    - Admin / Media
+    summary: Finalize a pending media upload after the client PUT to storage
+    operationId: admin.media.complete
+    parameters:
+    - name: id
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+    responses:
+      '200':
+        description: Asset ready
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas/Media.yaml#/EnvelopeMediaResponse
+      '400':
+        $ref: ../components/responses.yaml#/ValidationError
+      '401':
+        $ref: ../components/responses.yaml#/UnauthorizedError
+      '403':
+        $ref: ../components/responses.yaml#/ForbiddenError
+      '404':
+        $ref: ../components/responses.yaml#/NotFoundError
+      '409':
+        description: Upload incomplete or expired
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas/Common.yaml#/EnvelopeError
 /api/v1/admin/media/{id}/tags:
   patch:
     tags:

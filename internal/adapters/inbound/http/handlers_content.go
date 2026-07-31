@@ -11,6 +11,7 @@ import (
 	"github.com/turahe/blog-api/internal/adapters/outbound/persistence"
 	categorydomain "github.com/turahe/blog-api/internal/core/category/domain"
 	categoryservice "github.com/turahe/blog-api/internal/core/category/service"
+	mediadomain "github.com/turahe/blog-api/internal/core/media/domain"
 	postdomain "github.com/turahe/blog-api/internal/core/post/domain"
 	postservice "github.com/turahe/blog-api/internal/core/post/service"
 )
@@ -104,6 +105,76 @@ func adminPublishPostHandler(posts *postservice.PostService) gin.HandlerFunc {
 			return
 		}
 		success(c, nethttp.StatusOK, postJSON(post))
+	}
+}
+
+type postMediaReplaceRequest struct {
+	EnforceCoverConsistency *bool `json:"enforce_cover_consistency"`
+	Items                   []struct {
+		MediaAssetID string `json:"media_asset_id"`
+		Kind         string `json:"kind"`
+		SortOrder    int    `json:"sort_order"`
+	} `json:"items"`
+}
+
+func adminReplacePostMediaHandler(posts *postservice.PostService) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		postID, err := uuid.Parse(strings.TrimSpace(c.Param("param1")))
+		if err != nil {
+			failure(c, nethttp.StatusBadRequest, "validation_error", "Invalid post id")
+			return
+		}
+		var req postMediaReplaceRequest
+		if err := c.ShouldBindJSON(&req); err != nil {
+			failure(c, nethttp.StatusBadRequest, "validation_error", "Invalid request body")
+			return
+		}
+		enforce := true
+		if req.EnforceCoverConsistency != nil {
+			enforce = *req.EnforceCoverConsistency
+		}
+		items := make([]mediadomain.PostMediaItem, 0, len(req.Items))
+		for _, item := range req.Items {
+			mediaID, err := uuid.Parse(strings.TrimSpace(item.MediaAssetID))
+			if err != nil {
+				failure(c, nethttp.StatusBadRequest, "validation_error", "Invalid media_asset_id")
+				return
+			}
+			items = append(items, mediadomain.PostMediaItem{
+				MediaAssetID: mediaID,
+				Kind:         item.Kind,
+				SortOrder:    item.SortOrder,
+			})
+		}
+		out, err := posts.ReplaceMedia(c.Request.Context(), postID, items, enforce)
+		if errors.Is(err, postdomain.ErrNotFound) {
+			failure(c, nethttp.StatusNotFound, "not_found", "Post not found")
+			return
+		}
+		if errors.Is(err, postservice.ErrValidation) {
+			failure(c, nethttp.StatusBadRequest, "validation_error", err.Error())
+			return
+		}
+		if err != nil {
+			failure(c, nethttp.StatusInternalServerError, "internal_error", "Failed to replace post media")
+			return
+		}
+		payload := make([]gin.H, 0, len(out))
+		for _, item := range out {
+			row := gin.H{
+				"media_asset_id": item.MediaAssetID.String(),
+				"kind":           item.Kind,
+				"sort_order":     item.SortOrder,
+			}
+			if item.Media != nil {
+				row["media"] = mediaAssetJSON(*item.Media)
+			}
+			payload = append(payload, row)
+		}
+		success(c, nethttp.StatusOK, gin.H{
+			"post_id": postID.String(),
+			"items":   payload,
+		})
 	}
 }
 

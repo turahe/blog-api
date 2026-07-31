@@ -26,7 +26,34 @@ Recommended tiers:
 - Redis or equivalent distributed cache for repeated transforms
 - optional object-storage-backed cached variants for heavy traffic paths
 
-## Upload Workflow
+## Upload Workflow (MVP — implemented)
+
+Admin upload uses **presigned PUT** (bytes go client → object storage, not through the API).
+
+1. `POST /api/v1/admin/media` (`admin.media.create`, permission `media.create`) with JSON:
+   `original_filename`, `content_type`, `size_bytes`, optional `tags`
+2. API validates MIME allowlist / max size / filename, creates a `pending` `media_assets` row, returns
+   `upload_url`, `required_headers`, `expires_at`, `media_id`, `storage_key`, `disk`
+3. Client `PUT`s the file to `upload_url` with the required headers (at least `Content-Type`)
+4. `POST /api/v1/admin/media/{id}/complete` (`admin.media.complete`, same permission) — API `HeadObject`s
+   storage, then marks the asset `ready` (or returns `media.upload_incomplete` / `media.upload_expired`)
+
+Config: `S3_*` + `MEDIA_ALLOWED_MIME_TYPES`, `MEDIA_MAX_UPLOAD_BYTES`, `MEDIA_PRESIGN_TTL` — see
+[config.md](../deployment/config.md). Design: [2026-07-31-media-upload-design.md](../superpowers/specs/2026-07-31-media-upload-design.md).
+
+**Deferred (not in this slice):** multipart through API, malware scan, on-the-fly transform,
+outbox events.
+
+## Featured media on posts
+
+`PATCH /api/v1/admin/posts/{id}/media` (`admin.posts.media.replace`, permission `post.update`):
+
+- Replaces all `post_media` rows for the post (`cover` | `inline_image` | `attachment`)
+- Only **ready** media assets may be attached
+- At most one `kind=cover` item; syncs `posts.cover_image_media_id`
+- Migration: `00006_media_relations.sql`
+
+## Upload Workflow (target / full)
 
 1. validate file size and mime type
 2. read and inspect image metadata

@@ -11,10 +11,13 @@ import (
 	httpadapter "github.com/turahe/blog-api/internal/adapters/inbound/http"
 	"github.com/turahe/blog-api/internal/adapters/outbound/persistence"
 	outboundrbac "github.com/turahe/blog-api/internal/adapters/outbound/rbac"
+	"github.com/turahe/blog-api/internal/adapters/outbound/storage"
 	authservice "github.com/turahe/blog-api/internal/core/auth/service"
 	categoryservice "github.com/turahe/blog-api/internal/core/category/service"
 	healthports "github.com/turahe/blog-api/internal/core/health/ports"
 	healthservice "github.com/turahe/blog-api/internal/core/health/service"
+	mediaports "github.com/turahe/blog-api/internal/core/media/ports"
+	mediaservice "github.com/turahe/blog-api/internal/core/media/service"
 	postservice "github.com/turahe/blog-api/internal/core/post/service"
 	userservice "github.com/turahe/blog-api/internal/core/user/service"
 	"github.com/turahe/blog-api/internal/platform/config"
@@ -34,6 +37,7 @@ type Runtime struct {
 	Users      *userservice.UserService
 	Posts      *postservice.PostService
 	Categories *categoryservice.CategoryService
+	Media      mediaports.Service
 }
 
 type checker struct {
@@ -49,7 +53,7 @@ func NewRuntime(ctx context.Context, cfg config.Config, logger *slog.Logger, ver
 	if err != nil {
 		return nil, err
 	}
-	redisClient, err := redisplatform.Open(ctx, cfg.RedisURL)
+	redisClient, err := redisplatform.Open(ctx, cfg.RedisURL())
 	if err != nil {
 		_ = db.Close()
 		return nil, err
@@ -79,6 +83,29 @@ func NewRuntime(ctx context.Context, cfg config.Config, logger *slog.Logger, ver
 	posts := postservice.New(postsRepo, ids, clock)
 	userSvc := userservice.New(users)
 	categories := categoryservice.New(categoriesRepo)
+
+	var media mediaports.Service
+	var mediaRepo *persistence.MediaRepository
+	if cfg.MediaEnabled() {
+		objectStorage, err := storage.NewS3(ctx, cfg)
+		if err != nil {
+			_ = redisClient.Close()
+			_ = db.Close()
+			return nil, fmt.Errorf("create media storage: %w", err)
+		}
+		mediaRepo = persistence.NewMediaRepository(db.GORM)
+		media = mediaservice.New(
+			mediaRepo,
+			objectStorage,
+			ids,
+			clock,
+			cfg.S3Disk,
+			cfg.MediaAllowedMIMETypes,
+			cfg.MediaMaxUploadBytes,
+			cfg.MediaPresignTTL,
+		)
+		posts.WithMedia(persistence.NewPostMediaRepository(db.GORM), mediaRepo)
+	}
 
 	enforcer, err := outboundrbac.NewEnforcer(db.GORM)
 	if err != nil {
@@ -110,6 +137,7 @@ func NewRuntime(ctx context.Context, cfg config.Config, logger *slog.Logger, ver
 		Posts:          posts,
 		Categories:     categories,
 		Tags:           tagsRepo,
+		Media:          media,
 		Version:        version,
 		TrustedProxies: cfg.TrustedProxies,
 	})
@@ -121,7 +149,7 @@ func NewRuntime(ctx context.Context, cfg config.Config, logger *slog.Logger, ver
 
 	return &Runtime{
 		Config: cfg, Database: db, Redis: redisClient,
-		Auth: auth, Users: userSvc, Posts: posts, Categories: categories,
+		Auth: auth, Users: userSvc, Posts: posts, Categories: categories, Media: media,
 		Server: &nethttp.Server{
 			Addr: cfg.Address, Handler: router,
 			ReadTimeout: cfg.ReadTimeout, ReadHeaderTimeout: cfg.ReadHeaderTimeout,

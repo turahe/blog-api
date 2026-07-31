@@ -73,6 +73,7 @@ var Routes = []Route{
 	{Method: "POST", Path: "/api/v1/admin/impersonation/start", OperationID: "admin.impersonation.start", Group: GroupAdmin, Auth: AuthRequired},
 	{Method: "POST", Path: "/api/v1/admin/impersonation/stop", OperationID: "admin.impersonation.stop", Group: GroupAdmin, Auth: AuthRequired},
 	{Method: "POST", Path: "/api/v1/admin/media", OperationID: "admin.media.create", Group: GroupAdmin, Auth: AuthRequired},
+	{Method: "POST", Path: "/api/v1/admin/media/:param1/complete", OperationID: "admin.media.complete", Group: GroupAdmin, Auth: AuthRequired},
 	{Method: "POST", Path: "/api/v1/admin/newsletter/issues", OperationID: "admin.newsletter.issues.send", Group: GroupAdmin, Auth: AuthRequired},
 	{Method: "POST", Path: "/api/v1/admin/posts", OperationID: "admin.posts.create", Group: GroupAdmin, Auth: AuthRequired},
 	{Method: "POST", Path: "/api/v1/admin/posts/:param1/publish", OperationID: "admin.posts.publish", Group: GroupAdmin, Auth: AuthRequired},

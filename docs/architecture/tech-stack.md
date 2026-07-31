@@ -27,7 +27,7 @@
 ## Data and Async
 
 - Relational store holds users, roles, permissions, posts, comments, audit logs, and outbox data
-- Supported dialects (local `DATABASE_URL` or Cloud SQL):
+- Supported dialects (local split `DB_*` settings or Cloud SQL):
   | `DB_DRIVER` | Engine | GORM driver | Notes |
   |-------------|--------|-------------|-------|
   | `postgres` (default) | PostgreSQL 15+ | `gorm.io/driver/postgres` + `jackc/pgx/v5` | Source-of-truth schema and Goose migrations |

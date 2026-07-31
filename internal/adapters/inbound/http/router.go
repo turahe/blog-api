@@ -10,6 +10,7 @@ import (
 	authports "github.com/turahe/blog-api/internal/core/auth/ports"
 	categoryservice "github.com/turahe/blog-api/internal/core/category/service"
 	healthports "github.com/turahe/blog-api/internal/core/health/ports"
+	mediaports "github.com/turahe/blog-api/internal/core/media/ports"
 	postservice "github.com/turahe/blog-api/internal/core/post/service"
 	rbacports "github.com/turahe/blog-api/internal/core/rbac/ports"
 	userservice "github.com/turahe/blog-api/internal/core/user/service"
@@ -25,6 +26,7 @@ type Dependencies struct {
 	Posts          *postservice.PostService
 	Categories     *categoryservice.CategoryService
 	Tags           *persistence.TagRepository
+	Media          mediaports.Service
 	Version        string
 	TrustedProxies []string
 }
@@ -105,15 +107,19 @@ func handlerFor(deps Dependencies) func(v1.Route) gin.HandlerFunc {
 		implemented["public.posts.get"] = getPublishedPostHandler(deps.Posts)
 		createPost := adminCreatePostHandler(deps.Posts)
 		publishPost := adminPublishPostHandler(deps.Posts)
+		replaceMedia := adminReplacePostMediaHandler(deps.Posts)
 		if deps.RBAC != nil {
 			implemented["admin.posts.create"] = chain(requirePermission(deps.RBAC, "post.create"), createPost)
 			implemented["admin.posts.publish"] = chain(requirePermission(deps.RBAC, "post.publish"), publishPost)
+			implemented["admin.posts.media.replace"] = chain(requirePermission(deps.RBAC, "post.update"), replaceMedia)
 		} else if deps.Roles != nil {
 			implemented["admin.posts.create"] = chain(requireRoles(deps.Roles, "admin", "editor", "author"), createPost)
 			implemented["admin.posts.publish"] = chain(requireRoles(deps.Roles, "admin", "editor"), publishPost)
+			implemented["admin.posts.media.replace"] = chain(requireRoles(deps.Roles, "admin", "editor", "author"), replaceMedia)
 		} else {
 			implemented["admin.posts.create"] = createPost
 			implemented["admin.posts.publish"] = publishPost
+			implemented["admin.posts.media.replace"] = replaceMedia
 		}
 	}
 	if deps.Categories != nil {
@@ -122,6 +128,34 @@ func handlerFor(deps Dependencies) func(v1.Route) gin.HandlerFunc {
 	}
 	if deps.Tags != nil {
 		implemented["public.tags.list"] = listTagsHandler(deps.Tags)
+	}
+	if deps.Media != nil {
+		presignMedia := adminPresignMediaHandler(deps.Media)
+		completeMedia := adminCompleteMediaHandler(deps.Media)
+		listMedia := adminListMediaHandler(deps.Media)
+		deleteMedia := adminDeleteMediaHandler(deps.Media)
+		tagsMedia := adminPatchMediaTagsHandler(deps.Media)
+		publicGet := publicGetMediaHandler(deps.Media)
+		implemented["public.media.get"] = publicGet
+		if deps.RBAC != nil {
+			implemented["admin.media.create"] = chain(requirePermission(deps.RBAC, "media.create"), presignMedia)
+			implemented["admin.media.complete"] = chain(requirePermission(deps.RBAC, "media.create"), completeMedia)
+			implemented["admin.media.list"] = chain(requirePermission(deps.RBAC, "media.create"), listMedia)
+			implemented["admin.media.tags.patch"] = chain(requirePermission(deps.RBAC, "media.create"), tagsMedia)
+			implemented["admin.media.delete"] = chain(requirePermission(deps.RBAC, "media.delete"), deleteMedia)
+		} else if deps.Roles != nil {
+			implemented["admin.media.create"] = chain(requireRoles(deps.Roles, "admin", "editor", "author"), presignMedia)
+			implemented["admin.media.complete"] = chain(requireRoles(deps.Roles, "admin", "editor", "author"), completeMedia)
+			implemented["admin.media.list"] = chain(requireRoles(deps.Roles, "admin", "editor", "author"), listMedia)
+			implemented["admin.media.tags.patch"] = chain(requireRoles(deps.Roles, "admin", "editor", "author"), tagsMedia)
+			implemented["admin.media.delete"] = chain(requireRoles(deps.Roles, "admin", "editor"), deleteMedia)
+		} else {
+			implemented["admin.media.create"] = presignMedia
+			implemented["admin.media.complete"] = completeMedia
+			implemented["admin.media.list"] = listMedia
+			implemented["admin.media.tags.patch"] = tagsMedia
+			implemented["admin.media.delete"] = deleteMedia
+		}
 	}
 	return func(route v1.Route) gin.HandlerFunc {
 		if handler, ok := implemented[route.OperationID]; ok {

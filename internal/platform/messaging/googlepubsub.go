@@ -26,9 +26,9 @@ func openGooglePubSub(_ context.Context, bus *Bus, cfg config.Config) error {
 	}
 
 	subscriber, err := googlecloud.NewSubscriber(googlecloud.SubscriberConfig{
-		ProjectID:                  cfg.GooglePubSubProjectID,
-		ClientOptions:              opts,
-		GenerateSubscriptionName:   googlecloud.TopicSubscriptionName,
+		ProjectID:                cfg.GooglePubSubProjectID,
+		ClientOptions:            opts,
+		GenerateSubscriptionName: googlecloud.TopicSubscriptionName,
 	}, bus.Logger)
 	if err != nil {
 		_ = publisher.Close()

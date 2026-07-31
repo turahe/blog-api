@@ -7,7 +7,7 @@ Workflow: [.github/workflows/go.yml](../../.github/workflows/go.yml)
 1. `go mod download`
 2. `go test -count=1 ./...`
 3. `go vet ./...`
-4. `go build ./cmd/app`
+4. `go build -o app ./cmd`
 
 Also run locally before release:
 

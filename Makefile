@@ -1,7 +1,7 @@
 .PHONY: build test lint contracts routes run infra-up infra-down infra-up-messaging infra-down-messaging migrate-up
 
 build:
-	go build ./cmd/app
+	go build -o app ./cmd
 
 test:
 	go test -count=1 ./cmd/... ./internal/...
@@ -18,7 +18,7 @@ routes:
 	gofmt -w internal/adapters/inbound/http/v1/routes_gen.go
 
 run:
-	go run ./cmd/app serve
+	go run ./cmd serve
 
 infra-up:
 	docker compose up -d postgres redis minio
@@ -34,4 +34,4 @@ infra-down-messaging:
 	docker compose rm -f kafka rabbitmq
 
 migrate-up:
-	go run ./cmd/app migrate up
+	go run ./cmd migrate up
