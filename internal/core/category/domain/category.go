@@ -9,6 +9,8 @@ import (
 
 var (
 	ErrNotFound = errors.New("category not found")
+	ErrConflict = errors.New("conflict")
+	ErrInUse    = errors.New("category in use")
 )
 
 type Category struct {
@@ -17,6 +19,11 @@ type Category struct {
 	Slug        string
 	Description string
 	ParentID    *uuid.UUID
+	ImageID     *uuid.UUID
+	Lft         int
+	Rgt         int
+	Depth       int
+	SortOrder   int
 	CreatedAt   time.Time
 	UpdatedAt   time.Time
 }
