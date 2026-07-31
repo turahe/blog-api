@@ -83,7 +83,7 @@ func NewRuntime(ctx context.Context, cfg config.Config, logger *slog.Logger, ver
 	}, nil)
 	posts := postservice.New(postsRepo, ids, clock)
 	userSvc := userservice.New(users)
-	categories := categoryservice.New(categoriesRepo)
+	categories := categoryservice.New(categoriesRepo, ids, clock)
 	tags := tagservice.New(tagsRepo, ids, clock)
 	posts.WithTags(tags)
 
