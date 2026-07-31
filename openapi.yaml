@@ -102,6 +102,10 @@ paths:
     $ref: ./paths/posts.yaml#/~1api~1v1~1admin~1posts~1{id}
   /api/v1/admin/posts/{id}/publish:
     $ref: ./paths/posts.yaml#/~1api~1v1~1admin~1posts~1{id}~1publish
+  /api/v1/admin/posts/{id}/unpublish:
+    $ref: ./paths/posts.yaml#/~1api~1v1~1admin~1posts~1{id}~1unpublish
+  /api/v1/admin/posts/{id}/archive:
+    $ref: ./paths/posts.yaml#/~1api~1v1~1admin~1posts~1{id}~1archive
   /api/v1/admin/posts/{id}/media:
     $ref: ./paths/posts.yaml#/~1api~1v1~1admin~1posts~1{id}~1media
   /api/v1/admin/posts/{id}/revisions:

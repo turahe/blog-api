@@ -233,6 +233,58 @@
         $ref: ../components/responses.yaml#/ForbiddenError
       '404':
         $ref: ../components/responses.yaml#/NotFoundError
+/api/v1/admin/posts/{id}/unpublish:
+  post:
+    tags:
+    - Admin / Posts
+    summary: Unpublish a post (published to draft)
+    operationId: admin.posts.unpublish
+    parameters:
+    - name: id
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+    responses:
+      '200':
+        description: Unpublished
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas/posts.yaml#/EnvelopePostResponse
+      '400':
+        $ref: ../components/responses.yaml#/ValidationError
+      '403':
+        $ref: ../components/responses.yaml#/ForbiddenError
+      '404':
+        $ref: ../components/responses.yaml#/NotFoundError
+/api/v1/admin/posts/{id}/archive:
+  post:
+    tags:
+    - Admin / Posts
+    summary: Archive a post
+    operationId: admin.posts.archive
+    parameters:
+    - name: id
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+    responses:
+      '200':
+        description: Archived
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas/posts.yaml#/EnvelopePostResponse
+      '400':
+        $ref: ../components/responses.yaml#/ValidationError
+      '403':
+        $ref: ../components/responses.yaml#/ForbiddenError
+      '404':
+        $ref: ../components/responses.yaml#/NotFoundError
 /api/v1/admin/posts/{id}/media:
   patch:
     tags:

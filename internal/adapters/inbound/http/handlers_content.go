@@ -108,19 +108,29 @@ func adminCreatePostHandler(posts postAdminAPI) gin.HandlerFunc {
 }
 
 func adminPublishPostHandler(posts *postservice.PostService) gin.HandlerFunc {
+	return adminPostStatusTransitionHandler(posts.Publish, "Failed to publish post")
+}
+
+func adminUnpublishPostHandler(posts *postservice.PostService) gin.HandlerFunc {
+	return adminPostStatusTransitionHandler(posts.Unpublish, "Failed to unpublish post")
+}
+
+func adminArchivePostHandler(posts *postservice.PostService) gin.HandlerFunc {
+	return adminPostStatusTransitionHandler(posts.Archive, "Failed to archive post")
+}
+
+func adminPostStatusTransitionHandler(
+	fn func(context.Context, uuid.UUID) (postdomain.Post, error),
+	_ string,
+) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		id, err := uuid.Parse(strings.TrimSpace(c.Param("param1")))
 		if err != nil {
 			failure(c, nethttp.StatusBadRequest, "validation_error", "Invalid post id")
 			return
 		}
-		post, err := posts.Publish(c.Request.Context(), id)
-		if errors.Is(err, postdomain.ErrNotFound) {
-			failure(c, nethttp.StatusNotFound, "not_found", "Post not found")
-			return
-		}
-		if err != nil {
-			failure(c, nethttp.StatusInternalServerError, "internal_error", "Failed to publish post")
+		post, err := fn(c.Request.Context(), id)
+		if mapPostError(c, err) {
 			return
 		}
 		success(c, nethttp.StatusOK, postJSON(post))

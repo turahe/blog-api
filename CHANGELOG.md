@@ -1,5 +1,13 @@
 # Changelog
 
+## 2026-07-31 — Post unpublish + archive
+
+### Added
+
+- `admin.posts.unpublish` — move published posts back to draft (keeps `published_at`)
+- `admin.posts.archive` — move any live post to archived (idempotent)
+- Seed permission `post.archive` for admin and editor (unpublish reuses `post.publish`)
+
 ## 2026-07-31 — Admin tags catalog + post attach
 
 ### Added

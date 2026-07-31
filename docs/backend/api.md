@@ -184,6 +184,8 @@ Full wire format, client integration, security, and scaling guidance is in the f
 - `GET /api/v1/admin/posts`
 - `POST /api/v1/admin/posts` (optional `tags: string[]` create-or-link attach on create)
 - `POST /api/v1/admin/posts/:id/publish`
+- `POST /api/v1/admin/posts/:id/unpublish` (published → draft; requires `post.publish`)
+- `POST /api/v1/admin/posts/:id/archive` (requires `post.archive`)
 - `PATCH /api/v1/admin/posts/:id` (partial post update; ownership-aware; optional `tags: string[]` create-or-link attach)
 - `PATCH /api/v1/admin/posts/:id/media` (replace post attachments join rows)
 - `POST /api/v1/admin/tags` (create curated tag; slug optional, derived from name)

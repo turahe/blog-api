@@ -394,3 +394,91 @@ func TestAdminUpdatePostHandlerMapsTagNotFound(t *testing.T) {
 	require.False(t, envelope.OK)
 	require.Equal(t, "not_found", envelope.Error.Code)
 }
+
+type memoryPostRepo struct {
+	posts map[uuid.UUID]postdomain.Post
+}
+
+func (m *memoryPostRepo) ListPublished(context.Context, postdomain.ListFilter) (postdomain.ListResult, error) {
+	return postdomain.ListResult{}, nil
+}
+func (m *memoryPostRepo) ListAdmin(context.Context, postdomain.AdminListFilter) (postdomain.ListResult, error) {
+	return postdomain.ListResult{}, nil
+}
+func (m *memoryPostRepo) GetPublishedBySlug(context.Context, string) (postdomain.Post, error) {
+	return postdomain.Post{}, postdomain.ErrNotFound
+}
+func (m *memoryPostRepo) GetByID(_ context.Context, id uuid.UUID) (postdomain.Post, error) {
+	post, ok := m.posts[id]
+	if !ok {
+		return postdomain.Post{}, postdomain.ErrNotFound
+	}
+	return post, nil
+}
+func (m *memoryPostRepo) Create(_ context.Context, post postdomain.Post) (postdomain.Post, error) {
+	m.posts[post.ID] = post
+	return post, nil
+}
+func (m *memoryPostRepo) Update(_ context.Context, post postdomain.Post) (postdomain.Post, error) {
+	m.posts[post.ID] = post
+	return post, nil
+}
+func (m *memoryPostRepo) SlugTaken(context.Context, string, uuid.UUID) (bool, error) {
+	return false, nil
+}
+func (m *memoryPostRepo) SetCoverImage(context.Context, uuid.UUID, *uuid.UUID, time.Time) error {
+	return nil
+}
+
+type fixedClock struct{ now time.Time }
+
+func (c fixedClock) Now() time.Time { return c.now }
+
+type fixedIDs struct{ next uuid.UUID }
+
+func (f fixedIDs) New() uuid.UUID { return f.next }
+
+func TestAdminUnpublishPostHandler(t *testing.T) {
+	t.Parallel()
+	gin.SetMode(gin.TestMode)
+
+	now := time.Date(2026, 7, 31, 18, 0, 0, 0, time.UTC)
+	publishedAt := now.Add(-time.Hour)
+	postID := uuid.MustParse("66666666-6666-6666-6666-666666666666")
+	repo := &memoryPostRepo{posts: map[uuid.UUID]postdomain.Post{
+		postID: {ID: postID, Title: "T", Slug: "t", Status: postdomain.StatusPublished, PublishedAt: &publishedAt, Version: 1},
+	}}
+	svc := postservice.New(repo, fixedIDs{next: uuid.New()}, fixedClock{now: now})
+
+	w := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(w)
+	c.Params = gin.Params{{Key: "param1", Value: postID.String()}}
+	c.Request = httptest.NewRequest(nethttp.MethodPost, "/api/v1/admin/posts/"+postID.String()+"/unpublish", nil)
+
+	adminUnpublishPostHandler(svc)(c)
+
+	require.Equal(t, nethttp.StatusOK, w.Code)
+	require.Equal(t, postdomain.StatusDraft, repo.posts[postID].Status)
+}
+
+func TestAdminArchivePostHandler(t *testing.T) {
+	t.Parallel()
+	gin.SetMode(gin.TestMode)
+
+	now := time.Date(2026, 7, 31, 18, 0, 0, 0, time.UTC)
+	postID := uuid.MustParse("77777777-7777-7777-7777-777777777777")
+	repo := &memoryPostRepo{posts: map[uuid.UUID]postdomain.Post{
+		postID: {ID: postID, Title: "T", Slug: "t", Status: postdomain.StatusDraft, Version: 1},
+	}}
+	svc := postservice.New(repo, fixedIDs{next: uuid.New()}, fixedClock{now: now})
+
+	w := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(w)
+	c.Params = gin.Params{{Key: "param1", Value: postID.String()}}
+	c.Request = httptest.NewRequest(nethttp.MethodPost, "/api/v1/admin/posts/"+postID.String()+"/archive", nil)
+
+	adminArchivePostHandler(svc)(c)
+
+	require.Equal(t, nethttp.StatusOK, w.Code)
+	require.Equal(t, postdomain.StatusArchived, repo.posts[postID].Status)
+}

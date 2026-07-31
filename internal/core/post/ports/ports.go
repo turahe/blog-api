@@ -33,6 +33,8 @@ type Service interface {
 	GetPublishedBySlug(ctx context.Context, slug string) (postdomain.Post, error)
 	CreateDraft(ctx context.Context, authorID uuid.UUID, title, slug, excerpt, content string, categoryID *uuid.UUID, tags *[]string) (postdomain.Post, []tagdomain.Tag, error)
 	Publish(ctx context.Context, id uuid.UUID) (postdomain.Post, error)
+	Unpublish(ctx context.Context, id uuid.UUID) (postdomain.Post, error)
+	Archive(ctx context.Context, id uuid.UUID) (postdomain.Post, error)
 	Update(ctx context.Context, id, actorID uuid.UUID, unrestricted bool, in postdomain.UpdateInput) (postdomain.Post, []tagdomain.Tag, error)
 	ReplaceMedia(ctx context.Context, postID uuid.UUID, items []mediadomain.PostMediaItem, enforceCoverConsistency bool) ([]mediadomain.PostMediaItem, error)
 }

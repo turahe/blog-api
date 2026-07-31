@@ -112,7 +112,7 @@ func (r *PostRepository) Create(ctx context.Context, post postdomain.Post) (post
 		ID: post.ID, AuthorID: post.AuthorID, CategoryID: post.CategoryID,
 		Title: post.Title, Slug: post.Slug, Content: post.Content,
 		CoverImageMediaID: post.CoverImageMediaID,
-		Status: string(post.Status), Version: post.Version,
+		Status:            string(post.Status), Version: post.Version,
 		PublishedAt: post.PublishedAt, CreatedAt: post.CreatedAt, UpdatedAt: post.UpdatedAt,
 	}
 	if post.Excerpt != "" {
@@ -195,4 +195,3 @@ func mapPost(model PostModel) postdomain.Post {
 	}
 	return post
 }
-

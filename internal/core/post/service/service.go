@@ -167,6 +167,42 @@ func (s *PostService) Publish(ctx context.Context, id uuid.UUID) (postdomain.Pos
 	return s.repo.Update(ctx, post)
 }
 
+func (s *PostService) Unpublish(ctx context.Context, id uuid.UUID) (postdomain.Post, error) {
+	post, err := s.repo.GetByID(ctx, id)
+	if err != nil {
+		return postdomain.Post{}, err
+	}
+	if post.DeletedAt != nil {
+		return postdomain.Post{}, postdomain.ErrNotFound
+	}
+	if post.Status != postdomain.StatusPublished {
+		return postdomain.Post{}, fmt.Errorf("%w: only published posts can be unpublished", ErrValidation)
+	}
+	now := s.clock.Now()
+	post.Status = postdomain.StatusDraft
+	post.UpdatedAt = now
+	post.Version++
+	return s.repo.Update(ctx, post)
+}
+
+func (s *PostService) Archive(ctx context.Context, id uuid.UUID) (postdomain.Post, error) {
+	post, err := s.repo.GetByID(ctx, id)
+	if err != nil {
+		return postdomain.Post{}, err
+	}
+	if post.DeletedAt != nil {
+		return postdomain.Post{}, postdomain.ErrNotFound
+	}
+	if post.Status == postdomain.StatusArchived {
+		return post, nil
+	}
+	now := s.clock.Now()
+	post.Status = postdomain.StatusArchived
+	post.UpdatedAt = now
+	post.Version++
+	return s.repo.Update(ctx, post)
+}
+
 func (s *PostService) Update(
 	ctx context.Context,
 	id, actorID uuid.UUID,

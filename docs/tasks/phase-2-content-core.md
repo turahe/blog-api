@@ -24,7 +24,8 @@ on-the-fly transform and public-read caching remain open.
 - [x] `public.posts.get` — `GET /api/v1/posts/{slug}`
 - [x] `admin.posts.list` — `GET /api/v1/admin/posts` with status, author, and category filters
 - [x] Post update endpoint
-- [ ] Post unpublish / archive transition
+- [x] `admin.posts.unpublish` — `POST /api/v1/admin/posts/{id}/unpublish` (published → draft)
+- [x] `admin.posts.archive` — `POST /api/v1/admin/posts/{id}/archive`
 - [ ] Soft delete and restore semantics consistent with [model.md](../backend/model.md)
 - [ ] Cursor or page pagination on both list endpoints with `meta` populated per the envelope
 - [ ] Slug uniqueness collision handling with a deterministic suffix strategy

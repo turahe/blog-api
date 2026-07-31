@@ -506,3 +506,81 @@ func TestPostServiceUpdateRejectsInvalidTagsBeforePersistingUpdate(t *testing.T)
 	require.Equal(t, 0, repo.updateCalls)
 	require.Equal(t, 1, len(repo.posts))
 }
+
+func TestUnpublishMovesPublishedToDraft(t *testing.T) {
+	t.Parallel()
+
+	now := time.Date(2026, 7, 31, 15, 0, 0, 0, time.UTC)
+	publishedAt := now.Add(-time.Hour)
+	postID := uuid.New()
+	repo := newFakePostRepo(postdomain.Post{
+		ID:          postID,
+		Status:      postdomain.StatusPublished,
+		PublishedAt: &publishedAt,
+		Version:     2,
+		UpdatedAt:   publishedAt,
+	})
+	svc := New(repo, nil, fixedClock{now: now})
+
+	got, err := svc.Unpublish(context.Background(), postID)
+	require.NoError(t, err)
+	require.Equal(t, postdomain.StatusDraft, got.Status)
+	require.Equal(t, &publishedAt, got.PublishedAt)
+	require.EqualValues(t, 3, got.Version)
+	require.Equal(t, now, got.UpdatedAt)
+}
+
+func TestUnpublishRejectsNonPublished(t *testing.T) {
+	t.Parallel()
+
+	postID := uuid.New()
+	repo := newFakePostRepo(postdomain.Post{ID: postID, Status: postdomain.StatusDraft, Version: 1})
+	svc := New(repo, nil, fixedClock{now: time.Now()})
+
+	_, err := svc.Unpublish(context.Background(), postID)
+	require.ErrorIs(t, err, ErrValidation)
+	require.Equal(t, 0, repo.updateCalls)
+}
+
+func TestArchiveSetsArchivedStatus(t *testing.T) {
+	t.Parallel()
+
+	now := time.Date(2026, 7, 31, 16, 0, 0, 0, time.UTC)
+	postID := uuid.New()
+	repo := newFakePostRepo(postdomain.Post{ID: postID, Status: postdomain.StatusPublished, Version: 1})
+	svc := New(repo, nil, fixedClock{now: now})
+
+	got, err := svc.Archive(context.Background(), postID)
+	require.NoError(t, err)
+	require.Equal(t, postdomain.StatusArchived, got.Status)
+	require.EqualValues(t, 2, got.Version)
+	require.Equal(t, now, got.UpdatedAt)
+}
+
+func TestArchiveIdempotentWhenAlreadyArchived(t *testing.T) {
+	t.Parallel()
+
+	postID := uuid.New()
+	repo := newFakePostRepo(postdomain.Post{ID: postID, Status: postdomain.StatusArchived, Version: 4})
+	svc := New(repo, nil, fixedClock{now: time.Now()})
+
+	got, err := svc.Archive(context.Background(), postID)
+	require.NoError(t, err)
+	require.Equal(t, postdomain.StatusArchived, got.Status)
+	require.EqualValues(t, 4, got.Version)
+	require.Equal(t, 0, repo.updateCalls)
+}
+
+func TestUnpublishSoftDeletedReturnsNotFound(t *testing.T) {
+	t.Parallel()
+
+	deleted := time.Now().UTC()
+	postID := uuid.New()
+	repo := newFakePostRepo(postdomain.Post{
+		ID: postID, Status: postdomain.StatusPublished, DeletedAt: &deleted,
+	})
+	svc := New(repo, nil, fixedClock{now: time.Now()})
+
+	_, err := svc.Unpublish(context.Background(), postID)
+	require.ErrorIs(t, err, postdomain.ErrNotFound)
+}
