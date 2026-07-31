@@ -1,5 +1,27 @@
 # Changelog
 
+## 2026-08-01 — Admin categories + nested set
+
+### Added
+
+- Hexagonal category admin module extensions: create, update, delete, move (reparent/reorder), and list in tree order
+- `admin.categories.list`, `admin.categories.create`, `admin.categories.update`, `admin.categories.delete`, `admin.categories.move`
+- Migration `00007_category_nested_set.sql` adds `lft`, `rgt`, `depth`, and `sort_order` columns
+- RBAC permissions `category.read`, `category.create`, `category.update`, `category.delete` seeded for admin and editor roles
+- Public category list/get expose nest metadata (`lft`, `rgt`, `depth`, `sort_order`, `image_id`); list uses envelope `{ items }`
+
+### Notes
+
+- After migrating, run `make migrate-up` (or restart with auto-migrate) so `CategoryService.RebuildAll` rewrites bounds from adjacency
+- Re-seed or manually grant `category.*` permissions on existing deployments that skip bootstrap seed
+- Delete returns `409 category_in_use` when posts reference the category or it has children
+- Reparent/reorder via move only; PATCH rejects `parent_id`
+
+### Updated
+
+- Phase 2 content backlog marks admin category CRUD/reorder and nested-set tree as complete
+- Admin categories API docs and design spec status set to implemented
+
 ## 2026-07-31 — Admin tags catalog + post attach
 
 ### Added

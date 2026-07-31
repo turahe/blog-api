@@ -1,7 +1,7 @@
 # Admin Categories + Nested Set Design
 
 Date: 2026-08-01
-Status: approved-design
+Status: implemented
 Scope: Admin category create/update/delete/move/list, nested-set columns via full-tree rebuild, optional `image_id` storage without media expansion.
 
 ## Goal

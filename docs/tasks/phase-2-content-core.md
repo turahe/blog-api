@@ -9,7 +9,7 @@ Index: [README.md](./README.md).
 ## Status
 
 **Partial** — post create/publish/update (with tag attach), admin post list, admin tag catalog,
-and public post/category/tag reads are wired.
+admin category CRUD/move (nested-set tree), and public post/category/tag reads are wired.
 Media upload, list/delete/tags, public get, and post featured-media replace are wired;
 on-the-fly transform and public-read caching remain open.
 
@@ -37,12 +37,12 @@ on-the-fly transform and public-read caching remain open.
 - [x] `public.categories.list` — `GET /api/v1/categories`
 - [x] `public.categories.get` — `GET /api/v1/categories/{slug}`
 - [x] `public.tags.list` — `GET /api/v1/tags`
-- [ ] Admin category create, update, delete, and reorder endpoints
+- [x] Admin category create, update, delete, and reorder endpoints
 - [x] `admin.tags.create` — `POST /api/v1/admin/tags`
 - [x] `admin.tags.update` — `PATCH /api/v1/admin/tags/{id}`
 - [x] `admin.tags.merge` — `POST /api/v1/admin/tags/{id}/merge`
 - [x] `admin.tags.delete` — `DELETE /api/v1/admin/tags/{id}`
-- [ ] Category tree / nesting support if the product requires it — confirm against [PRD.md](../product/PRD.md)
+- [x] Category tree / nesting via nested-set rebuild (`lft`, `rgt`, `depth`, `sort_order`; adjacency source of truth)
 - [x] Attach and detach tags on post create/update via `tags: string[]` (create-or-link; omit = unchanged, `[]` = clear)
 
 ## Epic: media upload and listing

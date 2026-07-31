@@ -190,6 +190,11 @@ Full wire format, client integration, security, and scaling guidance is in the f
 - `PATCH /api/v1/admin/tags/:id` (rename or reslug tag)
 - `POST /api/v1/admin/tags/:id/merge` (reassign post links from source to target, delete source)
 - `DELETE /api/v1/admin/tags/:id` (hard delete when unused; 409 when posts still reference the tag)
+- `GET /api/v1/admin/categories` (tree order; requires `category.read`)
+- `POST /api/v1/admin/categories` (create with optional `parent_id`, `before_id`, `image_id`; requires `category.create`)
+- `PATCH /api/v1/admin/categories/:id` (name/slug/description/image_id only; requires `category.update`)
+- `POST /api/v1/admin/categories/:id/move` (reparent/reorder via `parent_id` + optional `before_id`; requires `category.update`)
+- `DELETE /api/v1/admin/categories/:id` (hard delete when unused; 409 `category_in_use` when posts or children remain; requires `category.delete`)
 - `GET /api/v1/admin/posts/:id/revisions` (list revisions, paginated + filters)
 - `GET /api/v1/admin/posts/:id/revisions/:revision_id_or_number` (get single revision with snapshot + diff)
 - `POST /api/v1/admin/posts/:id/revisions/:revision_id_or_number/restore` (restore revision as new revision; body: restore_note optional)
@@ -243,12 +248,23 @@ Full wire format, client integration, security, and scaling guidance is in the f
 - slug changes trigger a `blog.post.slug_changed` event and create a new post revision with diff/changelog
 - all SEO field updates are included in the next post revision snapshot + diff + changelog
 
+## Admin Category Endpoint Rules
+
+- `GET /api/v1/admin/categories` requires auth + `category.read`; returns categories in nested-set order (`lft ASC`)
+- `POST /api/v1/admin/categories` requires auth + `category.create`; optional `parent_id`, `before_id`, and `image_id`
+- `PATCH /api/v1/admin/categories/:id` requires auth + `category.update`; allowlisted fields only (`name`, `slug`, `description`, `image_id`); reject `parent_id` on PATCH
+- `POST /api/v1/admin/categories/:id/move` requires auth + `category.update`; body `{ parent_id, before_id? }` for reparent/reorder (`parent_id: null` = root)
+- `DELETE /api/v1/admin/categories/:id` requires auth + `category.delete`; hard delete when no posts and no children; otherwise `409 category_in_use`
+- adjacency (`parent_id`) is source of truth; service rebuilds `lft`/`rgt`/`depth`/`sort_order` after structural writes
+- public list/get include nest fields and `image_id`; list envelope is `{ items: [...] }` per `EnvelopeCategoryList` (no `image` expansion in this slice)
+
 ## Example Public Endpoints
 
 - `GET /api/v1/posts`
 - `GET /api/v1/posts/:slug`
 - `GET /api/v1/posts/:slug/seo-meta` (public structured SEO meta tags payload for SSR; published posts only, cached)
-- `GET /api/v1/categories`
+- `GET /api/v1/categories` (ordered by `lft`; `data.items[]` includes `lft`, `rgt`, `depth`, `sort_order`, `image_id`)
+- `GET /api/v1/categories/:slug` (single category with nest metadata and `image_id`)
 - `GET /api/v1/tags`
 - `POST /api/v1/posts/:id/comments`
 - `GET /api/v1/media/:id`
