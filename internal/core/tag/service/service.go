@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"regexp"
 	"strings"
 	"time"
 	"unicode/utf8"
@@ -16,6 +17,7 @@ import (
 var (
 	ErrValidation = errors.New("validation error")
 	ErrConflict   = tagdomain.ErrConflict
+	slugPattern   = regexp.MustCompile(`^[a-z0-9]+(?:-[a-z0-9]+)*$`)
 )
 
 type IDGenerator interface {
@@ -52,11 +54,14 @@ func (s *Service) Create(ctx context.Context, name, slug string) (tagdomain.Tag,
 	slug = strings.TrimSpace(slug)
 	if slug == "" {
 		slug = slugify(name)
+		if slug == "" {
+			return tagdomain.Tag{}, fmt.Errorf("%w: invalid slug", ErrValidation)
+		}
 	} else {
 		slug = strings.ToLower(slug)
-	}
-	if slug == "" {
-		return tagdomain.Tag{}, fmt.Errorf("%w: invalid slug", ErrValidation)
+		if !slugPattern.MatchString(slug) {
+			return tagdomain.Tag{}, fmt.Errorf("%w: invalid slug", ErrValidation)
+		}
 	}
 
 	taken, err := s.repo.SlugTaken(ctx, slug, uuid.Nil)
@@ -102,6 +107,9 @@ func (s *Service) Update(ctx context.Context, id uuid.UUID, name, slug *string) 
 		slugVal := strings.TrimSpace(strings.ToLower(*slug))
 		if slugVal == "" {
 			return tagdomain.Tag{}, fmt.Errorf("%w: slug required", ErrValidation)
+		}
+		if !slugPattern.MatchString(slugVal) {
+			return tagdomain.Tag{}, fmt.Errorf("%w: invalid slug", ErrValidation)
 		}
 		if slugVal != tag.Slug {
 			taken, err := s.repo.SlugTaken(ctx, slugVal, tag.ID)

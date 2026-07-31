@@ -148,6 +148,28 @@ func TestCreateSlugifiesNameAndRejectsEmptyName(t *testing.T) {
 	require.ErrorIs(t, err, ErrValidation)
 }
 
+func TestCreateRejectsInvalidExplicitSlug(t *testing.T) {
+	t.Parallel()
+
+	repo := newFakeRepo()
+	svc := New(repo, fixedIDs{next: uuid.New()}, fixedClock{now: time.Now()})
+
+	_, err := svc.Create(context.Background(), "Tag", "Bad Slug")
+	require.ErrorIs(t, err, ErrValidation)
+}
+
+func TestUpdateRejectsInvalidExplicitSlug(t *testing.T) {
+	t.Parallel()
+
+	tagID := uuid.New()
+	repo := newFakeRepo(tagdomain.Tag{ID: tagID, Name: "Tag", Slug: "tag"})
+	svc := New(repo, fixedIDs{next: uuid.New()}, fixedClock{now: time.Now()})
+
+	slug := "bad_slug"
+	_, err := svc.Update(context.Background(), tagID, nil, &slug)
+	require.ErrorIs(t, err, ErrValidation)
+}
+
 func TestCreateReturnsConflictWhenSlugTaken(t *testing.T) {
 	t.Parallel()
 
