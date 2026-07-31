@@ -1,5 +1,17 @@
 # Changelog
 
+## 2026-07-31 — Admin posts list + update
+
+### Added
+
+- `admin.posts.list` with status, author, category, and search filters plus envelope pagination
+- `admin.posts.update` for partial post edits with ownership-aware access control and slug conflict handling
+
+### Updated
+
+- Phase 2 content backlog now marks admin post list and update as complete
+- Admin posts API docs note the list and PATCH update endpoints
+
 ## 2026-07-31 — Media feature completion (list/delete/tags/get + post media)
 
 ### Added

@@ -1,8 +1,11 @@
 package http
 
 import (
+	"context"
+	"encoding/json"
 	"errors"
 	nethttp "net/http"
+	"strconv"
 	"strings"
 	"time"
 
@@ -22,6 +25,19 @@ type createPostRequest struct {
 	Excerpt    string  `json:"excerpt"`
 	Content    string  `json:"content"`
 	CategoryID *string `json:"category_id"`
+}
+
+type postAdminAPI interface {
+	ListAdmin(ctx context.Context, filter postdomain.AdminListFilter) (postdomain.ListResult, error)
+	Update(ctx context.Context, id, actorID uuid.UUID, unrestricted bool, in postdomain.UpdateInput) (postdomain.Post, error)
+}
+
+type updatePostRequest struct {
+	Title      *string          `json:"title"`
+	Slug       *string          `json:"slug"`
+	Excerpt    *string          `json:"excerpt"`
+	Content    *string          `json:"content"`
+	CategoryID *json.RawMessage `json:"category_id"`
 }
 
 func listCategoriesHandler(cats *categoryservice.CategoryService) gin.HandlerFunc {
@@ -108,6 +124,130 @@ func adminPublishPostHandler(posts *postservice.PostService) gin.HandlerFunc {
 	}
 }
 
+func adminListPostsHandler(posts *postservice.PostService, roles roleLookup) gin.HandlerFunc {
+	return adminListPostsHandlerWithDeps(posts, roles)
+}
+
+func adminListPostsHandlerWithDeps(posts postAdminAPI, roles roleLookup) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		userID, ok := currentUserID(c)
+		if !ok {
+			failure(c, nethttp.StatusUnauthorized, "unauthorized", "Authentication required")
+			return
+		}
+
+		page, _ := strconv.Atoi(c.DefaultQuery("page", "1"))
+		perPage, _ := strconv.Atoi(c.DefaultQuery("per_page", "20"))
+		authorID, err := postservice.ParseOptionalUUID(c.Query("author_id"))
+		if err != nil {
+			failure(c, nethttp.StatusBadRequest, "validation_error", "Invalid author_id")
+			return
+		}
+		categoryID, err := postservice.ParseOptionalUUID(c.Query("category_id"))
+		if err != nil {
+			failure(c, nethttp.StatusBadRequest, "validation_error", "Invalid category_id")
+			return
+		}
+
+		unrestricted, err := resolveUnrestrictedEditor(c.Request.Context(), roles, userID)
+		if err != nil {
+			failure(c, nethttp.StatusInternalServerError, "internal_error", "Failed to resolve roles")
+			return
+		}
+
+		filter := postdomain.AdminListFilter{
+			Page:       page,
+			PerPage:    perPage,
+			Status:     c.Query("status"),
+			AuthorID:   authorID,
+			CategoryID: categoryID,
+			Query:      c.Query("q"),
+		}
+		if !unrestricted {
+			filter.ScopeAuthorID = &userID
+		}
+
+		result, err := posts.ListAdmin(c.Request.Context(), filter)
+		if mapPostError(c, err) {
+			return
+		}
+
+		items := make([]gin.H, 0, len(result.Items))
+		for _, post := range result.Items {
+			items = append(items, postJSON(post))
+		}
+		successWithMeta(c, nethttp.StatusOK, items, &Meta{
+			Page:    result.Page,
+			PerPage: result.PerPage,
+			Total:   result.Total,
+		})
+	}
+}
+
+func adminUpdatePostHandler(posts *postservice.PostService, roles roleLookup) gin.HandlerFunc {
+	return adminUpdatePostHandlerWithDeps(posts, roles)
+}
+
+func adminUpdatePostHandlerWithDeps(posts postAdminAPI, roles roleLookup) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		userID, ok := currentUserID(c)
+		if !ok {
+			failure(c, nethttp.StatusUnauthorized, "unauthorized", "Authentication required")
+			return
+		}
+
+		postID, err := uuid.Parse(strings.TrimSpace(c.Param("param1")))
+		if err != nil {
+			failure(c, nethttp.StatusBadRequest, "validation_error", "Invalid post id")
+			return
+		}
+
+		var req updatePostRequest
+		if err := c.ShouldBindJSON(&req); err != nil {
+			failure(c, nethttp.StatusBadRequest, "validation_error", "Invalid request body")
+			return
+		}
+
+		unrestricted, err := resolveUnrestrictedEditor(c.Request.Context(), roles, userID)
+		if err != nil {
+			failure(c, nethttp.StatusInternalServerError, "internal_error", "Failed to resolve roles")
+			return
+		}
+
+		in := postdomain.UpdateInput{
+			Title:   req.Title,
+			Slug:    req.Slug,
+			Excerpt: req.Excerpt,
+			Content: req.Content,
+		}
+		if req.CategoryID != nil {
+			in.CategoryID.Present = true
+			if isJSONNull(*req.CategoryID) {
+				in.CategoryID.Value = nil
+			} else {
+				var raw string
+				if err := json.Unmarshal(*req.CategoryID, &raw); err != nil {
+					failure(c, nethttp.StatusBadRequest, "validation_error", "Invalid category_id")
+					return
+				}
+				categoryID, err := uuid.Parse(strings.TrimSpace(raw))
+				if err != nil {
+					failure(c, nethttp.StatusBadRequest, "validation_error", "Invalid category_id")
+					return
+				}
+				in.CategoryID.Value = &categoryID
+			}
+		}
+
+		post, err := posts.Update(c.Request.Context(), postID, userID, unrestricted, in)
+		if mapPostError(c, err) {
+			return
+		}
+
+		success(c, nethttp.StatusOK, postJSON(post))
+	}
+}
+
 type postMediaReplaceRequest struct {
 	EnforceCoverConsistency *bool `json:"enforce_cover_consistency"`
 	Items                   []struct {
@@ -176,6 +316,48 @@ func adminReplacePostMediaHandler(posts *postservice.PostService) gin.HandlerFun
 			"items":   payload,
 		})
 	}
+}
+
+func isUnrestrictedEditor(roles []string) bool {
+	for _, role := range roles {
+		switch strings.TrimSpace(strings.ToLower(role)) {
+		case "admin", "editor":
+			return true
+		}
+	}
+	return false
+}
+
+func resolveUnrestrictedEditor(ctx context.Context, roles roleLookup, userID uuid.UUID) (bool, error) {
+	if roles == nil {
+		return false, nil
+	}
+	names, err := roles.ListRoleNames(ctx, userID)
+	if err != nil {
+		return false, err
+	}
+	return isUnrestrictedEditor(names), nil
+}
+
+func isJSONNull(raw json.RawMessage) bool {
+	return strings.TrimSpace(string(raw)) == "null"
+}
+
+func mapPostError(c *gin.Context, err error) bool {
+	if err == nil {
+		return false
+	}
+	switch {
+	case errors.Is(err, postservice.ErrValidation):
+		failure(c, nethttp.StatusBadRequest, "validation_error", err.Error())
+	case errors.Is(err, postdomain.ErrNotFound):
+		failure(c, nethttp.StatusNotFound, "not_found", "Post not found")
+	case errors.Is(err, postservice.ErrConflict):
+		failure(c, nethttp.StatusConflict, "conflict", "Post conflict")
+	default:
+		failure(c, nethttp.StatusInternalServerError, "internal_error", "Failed to process post")
+	}
+	return true
 }
 
 func categoryJSON(cat categorydomain.Category) gin.H {

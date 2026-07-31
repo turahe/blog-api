@@ -46,6 +46,41 @@ func (r *PostRepository) ListPublished(ctx context.Context, filter postdomain.Li
 	return postdomain.ListResult{Items: items, Total: total, Page: filter.Page, PerPage: filter.PerPage}, nil
 }
 
+func (r *PostRepository) ListAdmin(ctx context.Context, filter postdomain.AdminListFilter) (postdomain.ListResult, error) {
+	q := r.db.WithContext(ctx).Model(&PostModel{}).Where("deleted_at IS NULL")
+	if filter.Status != "" {
+		q = q.Where("status = ?", filter.Status)
+	}
+	if filter.AuthorID != nil {
+		q = q.Where("author_id = ?", *filter.AuthorID)
+	}
+	if filter.CategoryID != nil {
+		q = q.Where("category_id = ?", *filter.CategoryID)
+	}
+	if filter.Query != "" {
+		like := "%" + filter.Query + "%"
+		q = q.Where("title ILIKE ? OR slug ILIKE ?", like, like)
+	}
+
+	var total int64
+	if err := q.Count(&total).Error; err != nil {
+		return postdomain.ListResult{}, err
+	}
+
+	var models []PostModel
+	offset := (filter.Page - 1) * filter.PerPage
+	if err := q.Order("created_at DESC").
+		Limit(filter.PerPage).Offset(offset).Find(&models).Error; err != nil {
+		return postdomain.ListResult{}, err
+	}
+
+	items := make([]postdomain.Post, 0, len(models))
+	for _, model := range models {
+		items = append(items, mapPost(model))
+	}
+	return postdomain.ListResult{Items: items, Total: total, Page: filter.Page, PerPage: filter.PerPage}, nil
+}
+
 func (r *PostRepository) GetPublishedBySlug(ctx context.Context, slug string) (postdomain.Post, error) {
 	var model PostModel
 	err := r.db.WithContext(ctx).
@@ -108,6 +143,14 @@ func (r *PostRepository) Update(ctx context.Context, post postdomain.Post) (post
 		return postdomain.Post{}, err
 	}
 	return r.GetByID(ctx, post.ID)
+}
+
+func (r *PostRepository) SlugTaken(ctx context.Context, slug string, excludeID uuid.UUID) (bool, error) {
+	var n int64
+	err := r.db.WithContext(ctx).Model(&PostModel{}).
+		Where("slug = ? AND id <> ? AND deleted_at IS NULL", slug, excludeID).
+		Count(&n).Error
+	return n > 0, err
 }
 
 func (r *PostRepository) SetCoverImage(ctx context.Context, postID uuid.UUID, mediaID *uuid.UUID, updatedAt time.Time) error {

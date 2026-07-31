@@ -149,6 +149,24 @@ PostCreateRequest:
             - attachment
           sort_order:
             type: integer
+PostUpdateRequest:
+  type: object
+  minProperties: 1
+  properties:
+    title:
+      type: string
+      minLength: 1
+      maxLength: 200
+    slug:
+      type: string
+    excerpt:
+      type: string
+    content:
+      type: string
+    category_id:
+      type: string
+      format: uuid
+      nullable: true
 PostMediaReplaceRequest:
   type: object
   required:

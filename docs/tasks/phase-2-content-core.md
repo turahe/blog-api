@@ -8,7 +8,7 @@ Index: [README.md](./README.md).
 
 ## Status
 
-**Partial** — post create/publish and public post/category/tag reads are wired.
+**Partial** — post create/publish, admin post list/update, and public post/category/tag reads are wired.
 Media upload, list/delete/tags, public get, and post featured-media replace are wired;
 on-the-fly transform and public-read caching remain open.
 
@@ -21,8 +21,8 @@ on-the-fly transform and public-read caching remain open.
 - [x] `admin.posts.publish` — `POST /api/v1/admin/posts/{id}/publish` (guarded by `post.publish`)
 - [x] `public.posts.list` — `GET /api/v1/posts` (published only)
 - [x] `public.posts.get` — `GET /api/v1/posts/{slug}`
-- [ ] `admin.posts.list` — `GET /api/v1/admin/posts` with status, author, and category filters
-- [ ] Post update endpoint, or a documented decision that revisions cover editing
+- [x] `admin.posts.list` — `GET /api/v1/admin/posts` with status, author, and category filters
+- [x] Post update endpoint
 - [ ] Post unpublish / archive transition
 - [ ] Soft delete and restore semantics consistent with [model.md](../backend/model.md)
 - [ ] Cursor or page pagination on both list endpoints with `meta` populated per the envelope

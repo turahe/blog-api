@@ -9,6 +9,7 @@ import (
 
 var (
 	ErrNotFound = errors.New("post not found")
+	ErrConflict = errors.New("conflict")
 )
 
 type Status string
@@ -42,6 +43,30 @@ type ListFilter struct {
 	PerPage    int
 	CategoryID *uuid.UUID
 	TagID      *uuid.UUID
+}
+
+type AdminListFilter struct {
+	Page          int
+	PerPage       int
+	Status        string
+	AuthorID      *uuid.UUID
+	CategoryID    *uuid.UUID
+	Query         string
+	ScopeAuthorID *uuid.UUID
+}
+
+// Present=false means omit; Present=true applies Value (nil clears).
+type OptionalCategoryID struct {
+	Present bool
+	Value   *uuid.UUID
+}
+
+type UpdateInput struct {
+	Title      *string
+	Slug       *string
+	Excerpt    *string
+	Content    *string
+	CategoryID OptionalCategoryID
 }
 
 type ListResult struct {

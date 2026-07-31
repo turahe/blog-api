@@ -61,6 +61,7 @@ var Routes = []Route{
 	{Method: "GET", Path: "/health/version", OperationID: "health.version", Group: GroupHealth, Auth: AuthNone},
 	{Method: "PATCH", Path: "/api/v1/admin/media/:param1/tags", OperationID: "admin.media.tags.patch", Group: GroupAdmin, Auth: AuthRequired},
 	{Method: "PATCH", Path: "/api/v1/admin/newsletter/issues/:param1", OperationID: "admin.newsletter.issues.patch", Group: GroupAdmin, Auth: AuthRequired},
+	{Method: "PATCH", Path: "/api/v1/admin/posts/:param1", OperationID: "admin.posts.update", Group: GroupAdmin, Auth: AuthRequired},
 	{Method: "PATCH", Path: "/api/v1/admin/posts/:param1/media", OperationID: "admin.posts.media.replace", Group: GroupAdmin, Auth: AuthRequired},
 	{Method: "PATCH", Path: "/api/v1/admin/users/:param1/profile", OperationID: "admin.users.profile.patch", Group: GroupAdmin, Auth: AuthRequired},
 	{Method: "PATCH", Path: "/api/v1/comments/:param1", OperationID: "self.comments.patch", Group: GroupSelf, Auth: AuthRequired},

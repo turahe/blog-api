@@ -115,9 +115,23 @@
         type: string
         enum:
         - draft
-        - review
+        - scheduled
         - published
         - archived
+    - name: author_id
+      in: query
+      schema:
+        type: string
+        format: uuid
+    - name: category_id
+      in: query
+      schema:
+        type: string
+        format: uuid
+    - name: q
+      in: query
+      schema:
+        type: string
     responses:
       '200':
         content:
@@ -153,6 +167,42 @@
         $ref: ../components/responses.yaml#/UnauthorizedError
       '403':
         $ref: ../components/responses.yaml#/ForbiddenError
+/api/v1/admin/posts/{id}:
+  patch:
+    tags:
+    - Admin / Posts
+    summary: Update post content fields
+    operationId: admin.posts.update
+    parameters:
+    - name: id
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: ../components/schemas/posts.yaml#/PostUpdateRequest
+    responses:
+      '200':
+        description: Updated
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas/posts.yaml#/EnvelopePostResponse
+      '400':
+        $ref: ../components/responses.yaml#/ValidationError
+      '401':
+        $ref: ../components/responses.yaml#/UnauthorizedError
+      '403':
+        $ref: ../components/responses.yaml#/ForbiddenError
+      '404':
+        $ref: ../components/responses.yaml#/NotFoundError
+      '409':
+        description: Slug conflict
 /api/v1/admin/posts/{id}/publish:
   post:
     tags:

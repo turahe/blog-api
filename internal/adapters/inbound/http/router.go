@@ -105,20 +105,28 @@ func handlerFor(deps Dependencies) func(v1.Route) gin.HandlerFunc {
 	if deps.Posts != nil {
 		implemented["public.posts.list"] = listPublishedPostsHandler(deps.Posts)
 		implemented["public.posts.get"] = getPublishedPostHandler(deps.Posts)
+		listPosts := adminListPostsHandler(deps.Posts, deps.Roles)
 		createPost := adminCreatePostHandler(deps.Posts)
 		publishPost := adminPublishPostHandler(deps.Posts)
+		updatePost := adminUpdatePostHandler(deps.Posts, deps.Roles)
 		replaceMedia := adminReplacePostMediaHandler(deps.Posts)
 		if deps.RBAC != nil {
+			implemented["admin.posts.list"] = chain(requirePermission(deps.RBAC, "post.read"), listPosts)
 			implemented["admin.posts.create"] = chain(requirePermission(deps.RBAC, "post.create"), createPost)
 			implemented["admin.posts.publish"] = chain(requirePermission(deps.RBAC, "post.publish"), publishPost)
+			implemented["admin.posts.update"] = chain(requirePermission(deps.RBAC, "post.update"), updatePost)
 			implemented["admin.posts.media.replace"] = chain(requirePermission(deps.RBAC, "post.update"), replaceMedia)
 		} else if deps.Roles != nil {
+			implemented["admin.posts.list"] = chain(requireRoles(deps.Roles, "admin", "editor", "author"), listPosts)
 			implemented["admin.posts.create"] = chain(requireRoles(deps.Roles, "admin", "editor", "author"), createPost)
 			implemented["admin.posts.publish"] = chain(requireRoles(deps.Roles, "admin", "editor"), publishPost)
+			implemented["admin.posts.update"] = chain(requireRoles(deps.Roles, "admin", "editor", "author"), updatePost)
 			implemented["admin.posts.media.replace"] = chain(requireRoles(deps.Roles, "admin", "editor", "author"), replaceMedia)
 		} else {
+			implemented["admin.posts.list"] = listPosts
 			implemented["admin.posts.create"] = createPost
 			implemented["admin.posts.publish"] = publishPost
+			implemented["admin.posts.update"] = updatePost
 			implemented["admin.posts.media.replace"] = replaceMedia
 		}
 	}

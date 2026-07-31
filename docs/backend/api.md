@@ -184,6 +184,7 @@ Full wire format, client integration, security, and scaling guidance is in the f
 - `GET /api/v1/admin/posts`
 - `POST /api/v1/admin/posts`
 - `POST /api/v1/admin/posts/:id/publish`
+- `PATCH /api/v1/admin/posts/:id` (partial post update; ownership-aware)
 - `PATCH /api/v1/admin/posts/:id/media` (replace post attachments join rows)
 - `GET /api/v1/admin/posts/:id/revisions` (list revisions, paginated + filters)
 - `GET /api/v1/admin/posts/:id/revisions/:revision_id_or_number` (get single revision with snapshot + diff)

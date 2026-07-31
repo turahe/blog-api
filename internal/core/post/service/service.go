@@ -17,6 +17,7 @@ import (
 
 var (
 	ErrValidation = errors.New("validation error")
+	ErrConflict   = postdomain.ErrConflict
 	slugPattern   = regexp.MustCompile(`^[a-z0-9]+(?:-[a-z0-9]+)*$`)
 )
 
@@ -54,6 +55,21 @@ func (s *PostService) ListPublished(ctx context.Context, filter postdomain.ListF
 		filter.PerPage = 20
 	}
 	return s.repo.ListPublished(ctx, filter)
+}
+
+func (s *PostService) ListAdmin(ctx context.Context, filter postdomain.AdminListFilter) (postdomain.ListResult, error) {
+	if filter.Page < 1 {
+		filter.Page = 1
+	}
+	if filter.PerPage < 1 || filter.PerPage > 100 {
+		filter.PerPage = 20
+	}
+	if filter.ScopeAuthorID != nil {
+		filter.AuthorID = filter.ScopeAuthorID
+	}
+	filter.Status = strings.TrimSpace(strings.ToLower(filter.Status))
+	filter.Query = strings.TrimSpace(filter.Query)
+	return s.repo.ListAdmin(ctx, filter)
 }
 
 func (s *PostService) GetPublishedBySlug(ctx context.Context, slug string) (postdomain.Post, error) {
@@ -107,6 +123,70 @@ func (s *PostService) Publish(ctx context.Context, id uuid.UUID) (postdomain.Pos
 	post.Status = postdomain.StatusPublished
 	post.PublishedAt = &now
 	post.UpdatedAt = now
+	post.Version++
+	return s.repo.Update(ctx, post)
+}
+
+func (s *PostService) Update(
+	ctx context.Context,
+	id, actorID uuid.UUID,
+	unrestricted bool,
+	in postdomain.UpdateInput,
+) (postdomain.Post, error) {
+	if in.Title == nil && in.Slug == nil && in.Excerpt == nil && in.Content == nil && !in.CategoryID.Present {
+		return postdomain.Post{}, fmt.Errorf("%w: no fields to update", ErrValidation)
+	}
+
+	post, err := s.repo.GetByID(ctx, id)
+	if err != nil {
+		return postdomain.Post{}, err
+	}
+	if post.DeletedAt != nil {
+		return postdomain.Post{}, postdomain.ErrNotFound
+	}
+	if !unrestricted && post.AuthorID != actorID {
+		return postdomain.Post{}, postdomain.ErrNotFound
+	}
+
+	if in.Title != nil {
+		title := strings.TrimSpace(*in.Title)
+		if title == "" {
+			return postdomain.Post{}, fmt.Errorf("%w: title required", ErrValidation)
+		}
+		post.Title = title
+	}
+
+	if in.Slug != nil {
+		slug := strings.TrimSpace(strings.ToLower(*in.Slug))
+		if slug == "" {
+			return postdomain.Post{}, fmt.Errorf("%w: slug required", ErrValidation)
+		}
+		if !slugPattern.MatchString(slug) {
+			return postdomain.Post{}, fmt.Errorf("%w: invalid slug", ErrValidation)
+		}
+		if slug != post.Slug {
+			taken, err := s.repo.SlugTaken(ctx, slug, post.ID)
+			if err != nil {
+				return postdomain.Post{}, err
+			}
+			if taken {
+				return postdomain.Post{}, ErrConflict
+			}
+		}
+		post.Slug = slug
+	}
+
+	if in.Excerpt != nil {
+		post.Excerpt = strings.TrimSpace(*in.Excerpt)
+	}
+	if in.Content != nil {
+		post.Content = *in.Content
+	}
+	if in.CategoryID.Present {
+		post.CategoryID = in.CategoryID.Value
+	}
+
+	post.UpdatedAt = s.clock.Now()
 	post.Version++
 	return s.repo.Update(ctx, post)
 }

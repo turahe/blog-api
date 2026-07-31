@@ -96,6 +96,8 @@ paths:
     $ref: ./paths/posts.yaml#/~1api~1v1~1posts~1{slug}~1seo-meta
   /api/v1/admin/posts:
     $ref: ./paths/posts.yaml#/~1api~1v1~1admin~1posts
+  /api/v1/admin/posts/{id}:
+    $ref: ./paths/posts.yaml#/~1api~1v1~1admin~1posts~1{id}
   /api/v1/admin/posts/{id}/publish:
     $ref: ./paths/posts.yaml#/~1api~1v1~1admin~1posts~1{id}~1publish
   /api/v1/admin/posts/{id}/media:
@@ -402,6 +404,8 @@ components:
       $ref: ./components/schemas/posts.yaml#/Post
     PostCreateRequest:
       $ref: ./components/schemas/posts.yaml#/PostCreateRequest
+    PostUpdateRequest:
+      $ref: ./components/schemas/posts.yaml#/PostUpdateRequest
     PostMediaItem:
       $ref: ./components/schemas/posts.yaml#/PostMediaItem
     PostMediaReplaceRequest:
