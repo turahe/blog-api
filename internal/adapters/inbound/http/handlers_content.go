@@ -7,12 +7,9 @@ import (
 	nethttp "net/http"
 	"strconv"
 	"strings"
-	"time"
 
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
-	categorydomain "github.com/turahe/blog-api/internal/core/category/domain"
-	categoryservice "github.com/turahe/blog-api/internal/core/category/service"
 	mediadomain "github.com/turahe/blog-api/internal/core/media/domain"
 	postdomain "github.com/turahe/blog-api/internal/core/post/domain"
 	postservice "github.com/turahe/blog-api/internal/core/post/service"
@@ -42,36 +39,6 @@ type updatePostRequest struct {
 	Content    *string          `json:"content"`
 	CategoryID *json.RawMessage `json:"category_id"`
 	Tags       *[]string        `json:"tags"`
-}
-
-func listCategoriesHandler(cats *categoryservice.CategoryService) gin.HandlerFunc {
-	return func(c *gin.Context) {
-		items, err := cats.List(c.Request.Context())
-		if err != nil {
-			failure(c, nethttp.StatusInternalServerError, "internal_error", "Failed to list categories")
-			return
-		}
-		out := make([]gin.H, 0, len(items))
-		for _, item := range items {
-			out = append(out, categoryJSON(item))
-		}
-		success(c, nethttp.StatusOK, out)
-	}
-}
-
-func getCategoryHandler(cats *categoryservice.CategoryService) gin.HandlerFunc {
-	return func(c *gin.Context) {
-		item, err := cats.GetBySlug(c.Request.Context(), c.Param("param1"))
-		if errors.Is(err, categorydomain.ErrNotFound) {
-			failure(c, nethttp.StatusNotFound, "not_found", "Category not found")
-			return
-		}
-		if err != nil {
-			failure(c, nethttp.StatusInternalServerError, "internal_error", "Failed to load category")
-			return
-		}
-		success(c, nethttp.StatusOK, categoryJSON(item))
-	}
 }
 
 func adminCreatePostHandler(posts postAdminAPI) gin.HandlerFunc {
@@ -368,22 +335,6 @@ func mapPostError(c *gin.Context, err error) bool {
 		failure(c, nethttp.StatusInternalServerError, "internal_error", "Failed to process post")
 	}
 	return true
-}
-
-func categoryJSON(cat categorydomain.Category) gin.H {
-	var parent any
-	if cat.ParentID != nil {
-		parent = cat.ParentID.String()
-	}
-	return gin.H{
-		"id":          cat.ID.String(),
-		"name":        cat.Name,
-		"slug":        cat.Slug,
-		"description": cat.Description,
-		"parent_id":   parent,
-		"created_at":  cat.CreatedAt.UTC().Format(time.RFC3339),
-		"updated_at":  cat.UpdatedAt.UTC().Format(time.RFC3339),
-	}
 }
 
 func postWithTagsJSON(post postdomain.Post, tags []tagdomain.Tag) gin.H {

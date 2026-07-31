@@ -62,6 +62,65 @@ EnvelopeCategoryResponse:
     properties:
       data:
         $ref: Categories.yaml#/Category
+CategoryCreateRequest:
+  type: object
+  required:
+  - name
+  properties:
+    name:
+      type: string
+      minLength: 1
+      maxLength: 120
+    slug:
+      type: string
+    description:
+      type: string
+      maxLength: 2000
+    parent_id:
+      type: string
+      format: uuid
+      nullable: true
+    image_id:
+      type: string
+      format: uuid
+      nullable: true
+CategoryUpdateRequest:
+  type: object
+  minProperties: 1
+  properties:
+    name:
+      type: string
+      minLength: 1
+      maxLength: 120
+    slug:
+      type: string
+    description:
+      type: string
+      maxLength: 2000
+      nullable: true
+    parent_id:
+      type: string
+      format: uuid
+      nullable: true
+    image_id:
+      type: string
+      format: uuid
+      nullable: true
+CategoryReorderRequest:
+  type: object
+  required:
+  - ordered_ids
+  properties:
+    parent_id:
+      type: string
+      format: uuid
+      nullable: true
+    ordered_ids:
+      type: array
+      minItems: 1
+      items:
+        type: string
+        format: uuid
 Tag:
   type: object
   required:

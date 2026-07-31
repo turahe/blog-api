@@ -1,7 +1,7 @@
 # Admin Categories CRUD + Reorder Design
 
 Date: 2026-07-31
-Status: approved (user waived interactive approval; proceed to implement)
+Status: implemented
 Scope: Admin category create, update, delete, and sibling reorder. Public list/get keep working.
 
 ## Goal

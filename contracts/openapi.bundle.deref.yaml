@@ -239,7 +239,7 @@ paths:
         content:
           application/json:
             schema:
-              allOf: &ref_149
+              allOf: &ref_154
                 - type: object
                   properties: &ref_25
                     display_name:
@@ -354,7 +354,7 @@ paths:
           content:
             application/json:
               schema:
-                allOf: &ref_126
+                allOf: &ref_131
                   - type: object
                     required: *ref_0
                     properties: *ref_1
@@ -388,10 +388,10 @@ paths:
           application/json:
             schema:
               type: object
-              required: &ref_164
+              required: &ref_169
                 - full_name
                 - email
-              properties: &ref_165
+              properties: &ref_170
                 full_name:
                   type: string
                 email:
@@ -441,9 +441,9 @@ paths:
           application/json:
             schema:
               type: object
-              required: &ref_132
+              required: &ref_137
                 - email_or_username
-              properties: &ref_133
+              properties: &ref_138
                 email_or_username:
                   type: string
                   minLength: 3
@@ -495,7 +495,7 @@ paths:
           content:
             application/json:
               schema:
-                allOf: &ref_114
+                allOf: &ref_119
                   - type: object
                     required: *ref_0
                     properties: *ref_1
@@ -528,11 +528,11 @@ paths:
           application/json:
             schema:
               type: object
-              required: &ref_134
+              required: &ref_139
                 - token
                 - new_password
                 - confirm_password
-              properties: &ref_135
+              properties: &ref_140
                 token:
                   type: string
                 new_password:
@@ -594,7 +594,7 @@ paths:
           content:
             application/json:
               schema:
-                allOf: &ref_105
+                allOf: &ref_111
                   - type: object
                     required: *ref_0
                     properties: *ref_1
@@ -611,12 +611,12 @@ paths:
                             properties: *ref_15
                           size_variants:
                             type: object
-                            required: &ref_93
+                            required: &ref_94
                               - s64
                               - s128
                               - s256
                               - s512
-                            properties: &ref_94
+                            properties: &ref_95
                               s64:
                                 type: string
                                 format: uri
@@ -697,11 +697,11 @@ paths:
           application/json:
             schema:
               type: object
-              required: &ref_136
+              required: &ref_141
                 - current_password
                 - new_password
                 - confirm_password
-              properties: &ref_137
+              properties: &ref_142
                 current_password:
                   type: string
                   minLength: 1
@@ -724,7 +724,7 @@ paths:
           content:
             application/json:
               schema:
-                allOf: &ref_113
+                allOf: &ref_118
                   - type: object
                     required: *ref_0
                     properties: *ref_1
@@ -773,10 +773,10 @@ paths:
           application/json:
             schema:
               type: object
-              required: &ref_95
+              required: &ref_101
                 - new_email
                 - password_proof
-              properties: &ref_96
+              properties: &ref_102
                 new_email:
                   type: string
                   format: email
@@ -1038,12 +1038,12 @@ paths:
                             type: array
                             items:
                               type: object
-                              required: &ref_162
+                              required: &ref_167
                                 - id
                                 - activity_type
                                 - summary
                                 - created_at
-                              properties: &ref_163
+                              properties: &ref_168
                                 id:
                                   type: string
                                   format: uuid
@@ -1106,7 +1106,7 @@ paths:
           content:
             application/json:
               schema:
-                allOf: &ref_98
+                allOf: &ref_104
                   - type: object
                     required: *ref_0
                     properties: *ref_1
@@ -1157,9 +1157,9 @@ paths:
           application/json:
             schema:
               type: object
-              required: &ref_73
+              required: &ref_74
                 - scope
-              properties: &ref_74
+              properties: &ref_75
                 scope:
                   type: string
                   enum:
@@ -1224,7 +1224,7 @@ paths:
           content:
             application/json:
               schema:
-                allOf: &ref_121
+                allOf: &ref_126
                   - type: object
                     required: *ref_0
                     properties: *ref_1
@@ -1232,11 +1232,11 @@ paths:
                     properties:
                       data:
                         type: object
-                        required: &ref_57
+                        required: &ref_58
                           - id
                           - full_name
                           - avatar_url
-                        properties: &ref_58
+                        properties: &ref_59
                           id:
                             type: string
                             format: uuid
@@ -1313,12 +1313,12 @@ paths:
                     properties:
                       data:
                         type: object
-                        required: &ref_77
+                        required: &ref_78
                           - user
                           - profile
                           - privacy
                           - activity_summary
-                        properties: &ref_78
+                        properties: &ref_79
                           user:
                             type: object
                             required: *ref_8
@@ -1377,7 +1377,7 @@ paths:
           application/json:
             schema:
               type: object
-              properties: &ref_79
+              properties: &ref_80
                 full_name:
                   type: string
                   minLength: 1
@@ -1450,9 +1450,9 @@ paths:
           application/json:
             schema:
               type: object
-              required: &ref_75
+              required: &ref_76
                 - mode
-              properties: &ref_76
+              properties: &ref_77
                 mode:
                   type: string
                   enum:
@@ -1658,11 +1658,11 @@ paths:
                                   type: array
                                   items:
                                     type: object
-                                    required: &ref_52
+                                    required: &ref_53
                                       - id
                                       - name
                                       - slug
-                                    properties: &ref_53
+                                    properties: &ref_54
                                       id:
                                         type: string
                                         format: uuid
@@ -1689,7 +1689,7 @@ paths:
         - name: include
           in: query
           description: Comma-separated includes; `cover` or `media` or `cover,media`
-          schema: &ref_72
+          schema: &ref_73
             type: string
       responses:
         '200':
@@ -1730,7 +1730,7 @@ paths:
           content:
             application/json:
               schema:
-                allOf: &ref_119
+                allOf: &ref_124
                   - type: object
                     required: *ref_0
                     properties: *ref_1
@@ -1738,9 +1738,9 @@ paths:
                     properties:
                       data:
                         type: object
-                        required: &ref_143
+                        required: &ref_148
                           - title
-                        properties: &ref_144
+                        properties: &ref_149
                           title:
                             type: string
                           meta_description:
@@ -1873,10 +1873,10 @@ paths:
           application/json:
             schema:
               type: object
-              required: &ref_138
+              required: &ref_143
                 - title
                 - content
-              properties: &ref_139
+              properties: &ref_144
                 title:
                   type: string
                   minLength: 1
@@ -2038,7 +2038,7 @@ paths:
             schema:
               type: object
               minProperties: 1
-              properties: &ref_140
+              properties: &ref_145
                 title:
                   type: string
                   minLength: 1
@@ -2132,9 +2132,9 @@ paths:
           application/json:
             schema:
               type: object
-              required: &ref_141
+              required: &ref_146
                 - items
-              properties: &ref_142
+              properties: &ref_147
                 enforce_cover_consistency:
                   type: boolean
                   default: true
@@ -2150,7 +2150,7 @@ paths:
           content:
             application/json:
               schema:
-                allOf: &ref_115
+                allOf: &ref_120
                   - type: object
                     required: *ref_0
                     properties: *ref_1
@@ -2225,7 +2225,7 @@ paths:
           content:
             application/json:
               schema:
-                allOf: &ref_116
+                allOf: &ref_121
                   - type: object
                     required: *ref_0
                     properties: *ref_1
@@ -2381,7 +2381,7 @@ paths:
           content:
             application/json:
               schema:
-                allOf: &ref_117
+                allOf: &ref_122
                   - type: object
                     required: *ref_0
                     properties: *ref_1
@@ -2439,7 +2439,7 @@ paths:
           content:
             application/json:
               schema:
-                allOf: &ref_118
+                allOf: &ref_123
                   - type: object
                     required: *ref_0
                     properties: *ref_1
@@ -2563,7 +2563,7 @@ paths:
             schema:
               type: object
               description: Partial update. Only allowlisted fields are accepted; unknown keys rejected.
-              allOf: &ref_148
+              allOf: &ref_153
                 - type: object
                   properties: *ref_39
       responses:
@@ -2608,7 +2608,7 @@ paths:
           application/json:
             schema:
               type: object
-              properties: &ref_147
+              properties: &ref_152
                 seo:
                   type: object
                   properties: *ref_39
@@ -2630,7 +2630,7 @@ paths:
           content:
             application/json:
               schema:
-                allOf: &ref_120
+                allOf: &ref_125
                   - type: object
                     required: *ref_0
                     properties: *ref_1
@@ -2638,11 +2638,11 @@ paths:
                     properties:
                       data:
                         type: object
-                        required: &ref_145
+                        required: &ref_150
                           - search_preview
                           - og_preview
                           - twitter_preview
-                        properties: &ref_146
+                        properties: &ref_151
                           search_preview:
                             type: object
                             required:
@@ -2770,10 +2770,10 @@ paths:
                     properties:
                       data:
                         type: object
-                        required: &ref_160
+                        required: &ref_165
                           - access_token
                           - refresh_token
-                        properties: &ref_161
+                        properties: &ref_166
                           access_token:
                             type: string
                             format: jwt
@@ -2881,7 +2881,7 @@ paths:
           content:
             application/json:
               schema:
-                allOf: &ref_97
+                allOf: &ref_103
                   - type: object
                     required: *ref_0
                     properties: *ref_1
@@ -3019,7 +3019,7 @@ paths:
           content:
             application/json:
               schema:
-                allOf: &ref_122
+                allOf: &ref_127
                   - type: object
                     required: *ref_0
                     properties: *ref_1
@@ -3034,13 +3034,13 @@ paths:
                             type: array
                             items:
                               type: object
-                              required: &ref_150
+                              required: &ref_155
                                 - key
                                 - value
                                 - value_type
                                 - category
                                 - sensitivity
-                              properties: &ref_151
+                              properties: &ref_156
                                 key:
                                   type: string
                                 value: {}
@@ -3099,9 +3099,9 @@ paths:
           application/json:
             schema:
               type: object
-              required: &ref_153
+              required: &ref_158
                 - updates
-              properties: &ref_154
+              properties: &ref_159
                 updates:
                   type: array
                   minItems: 1
@@ -3120,7 +3120,7 @@ paths:
           content:
             application/json:
               schema:
-                allOf: &ref_124
+                allOf: &ref_129
                   - type: object
                     required: *ref_0
                     properties: *ref_1
@@ -3181,7 +3181,7 @@ paths:
           content:
             application/json:
               schema:
-                allOf: &ref_123
+                allOf: &ref_128
                   - type: object
                     required: *ref_0
                     properties: *ref_1
@@ -3196,7 +3196,7 @@ paths:
                             type: array
                             items:
                               type: object
-                              properties: &ref_152
+                              properties: &ref_157
                                 id:
                                   type: string
                                   format: uuid
@@ -3242,9 +3242,9 @@ paths:
           application/json:
             schema:
               type: object
-              required: &ref_128
+              required: &ref_133
                 - target_user_id
-              properties: &ref_129
+              properties: &ref_134
                 target_user_id:
                   type: string
                   format: uuid
@@ -3264,7 +3264,7 @@ paths:
           content:
             application/json:
               schema:
-                allOf: &ref_109
+                allOf: &ref_114
                   - type: object
                     required: *ref_0
                     properties: *ref_1
@@ -3345,7 +3345,7 @@ paths:
           content:
             application/json:
               schema:
-                allOf: &ref_110
+                allOf: &ref_115
                   - type: object
                     required: *ref_0
                     properties: *ref_1
@@ -3386,7 +3386,7 @@ paths:
           content:
             application/json:
               schema:
-                allOf: &ref_108
+                allOf: &ref_113
                   - type: object
                     required: *ref_0
                     properties: *ref_1
@@ -3468,7 +3468,7 @@ paths:
           content:
             application/json:
               schema:
-                allOf: &ref_101
+                allOf: &ref_107
                   - type: object
                     required: *ref_0
                     properties: *ref_1
@@ -3476,7 +3476,7 @@ paths:
                     properties:
                       data:
                         type: object
-                        properties: &ref_84
+                        properties: &ref_85
                           stat_cards:
                             type: object
                             required:
@@ -3543,7 +3543,7 @@ paths:
           content:
             application/json:
               schema:
-                allOf: &ref_102
+                allOf: &ref_108
                   - type: object
                     required: *ref_0
                     properties: *ref_1
@@ -3607,7 +3607,7 @@ paths:
           content:
             application/json:
               schema:
-                allOf: &ref_100
+                allOf: &ref_106
                   - type: object
                     required: *ref_0
                     properties: *ref_1
@@ -3686,7 +3686,7 @@ paths:
           content:
             application/json:
               schema:
-                allOf: &ref_103
+                allOf: &ref_109
                   - type: object
                     required: *ref_0
                     properties: *ref_1
@@ -3744,7 +3744,7 @@ paths:
           content:
             application/json:
               schema:
-                allOf: &ref_104
+                allOf: &ref_110
                   - type: object
                     required: *ref_0
                     properties: *ref_1
@@ -3853,7 +3853,7 @@ paths:
           content:
             application/json:
               schema:
-                allOf: &ref_99
+                allOf: &ref_105
                   - type: object
                     required: *ref_0
                     properties: *ref_1
@@ -4008,11 +4008,11 @@ paths:
           application/json:
             schema:
               type: object
-              required: &ref_193
+              required: &ref_198
                 - original_filename
                 - content_type
                 - size_bytes
-              properties: &ref_194
+              properties: &ref_199
                 original_filename:
                   type: string
                   minLength: 1
@@ -4032,7 +4032,7 @@ paths:
           content:
             application/json:
               schema:
-                allOf: &ref_197
+                allOf: &ref_202
                   - type: object
                     required: *ref_0
                     properties: *ref_1
@@ -4040,14 +4040,14 @@ paths:
                     properties:
                       data:
                         type: object
-                        required: &ref_195
+                        required: &ref_200
                           - media_id
                           - storage_key
                           - upload_url
                           - required_headers
                           - expires_at
                           - disk
-                        properties: &ref_196
+                        properties: &ref_201
                           media_id:
                             type: string
                             format: uuid
@@ -4110,7 +4110,7 @@ paths:
           content:
             application/json:
               schema:
-                allOf: &ref_111
+                allOf: &ref_116
                   - type: object
                     required: *ref_0
                     properties: *ref_1
@@ -4257,7 +4257,7 @@ paths:
           content:
             application/json:
               schema:
-                allOf: &ref_106
+                allOf: &ref_112
                   - type: object
                     required: *ref_0
                     properties: *ref_1
@@ -4337,7 +4337,7 @@ paths:
           content:
             application/json:
               schema:
-                allOf: &ref_107
+                allOf: &ref_52
                   - type: object
                     required: *ref_0
                     properties: *ref_1
@@ -4351,6 +4351,197 @@ paths:
         '404':
           description: Resource not found
           content: *ref_26
+  /api/v1/admin/categories:
+    post:
+      tags:
+        - Admin / Categories
+      summary: Create category
+      operationId: admin.categories.create
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: &ref_96
+                - name
+              properties: &ref_97
+                name:
+                  type: string
+                  minLength: 1
+                  maxLength: 120
+                slug:
+                  type: string
+                description:
+                  type: string
+                  maxLength: 2000
+                parent_id:
+                  type: string
+                  format: uuid
+                  nullable: true
+                image_id:
+                  type: string
+                  format: uuid
+                  nullable: true
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema:
+                allOf: *ref_52
+        '400':
+          description: Validation error
+          content: *ref_11
+        '401':
+          description: Authentication required
+          content: *ref_6
+        '403':
+          description: Permission denied
+          content: *ref_10
+        '409':
+          description: Slug conflict
+          content:
+            application/json:
+              schema:
+                allOf: *ref_5
+  /api/v1/admin/categories/reorder:
+    post:
+      tags:
+        - Admin / Categories
+      summary: Reorder sibling categories
+      operationId: admin.categories.reorder
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: &ref_99
+                - ordered_ids
+              properties: &ref_100
+                parent_id:
+                  type: string
+                  format: uuid
+                  nullable: true
+                ordered_ids:
+                  type: array
+                  minItems: 1
+                  items:
+                    type: string
+                    format: uuid
+      responses:
+        '200':
+          description: Empty success
+          content: *ref_45
+        '400':
+          description: Validation error
+          content: *ref_11
+        '401':
+          description: Authentication required
+          content: *ref_6
+        '403':
+          description: Permission denied
+          content: *ref_10
+        '404':
+          description: Resource not found
+          content: *ref_26
+  /api/v1/admin/categories/{id}:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+    patch:
+      tags:
+        - Admin / Categories
+      summary: Update category
+      operationId: admin.categories.update
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              minProperties: 1
+              properties: &ref_98
+                name:
+                  type: string
+                  minLength: 1
+                  maxLength: 120
+                slug:
+                  type: string
+                description:
+                  type: string
+                  maxLength: 2000
+                  nullable: true
+                parent_id:
+                  type: string
+                  format: uuid
+                  nullable: true
+                image_id:
+                  type: string
+                  format: uuid
+                  nullable: true
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                allOf: *ref_52
+        '400':
+          description: Validation error
+          content: *ref_11
+        '401':
+          description: Authentication required
+          content: *ref_6
+        '403':
+          description: Permission denied
+          content: *ref_10
+        '404':
+          description: Resource not found
+          content: *ref_26
+        '409':
+          description: Conflict
+          content:
+            application/json:
+              schema:
+                allOf: *ref_5
+    delete:
+      tags:
+        - Admin / Categories
+      summary: Delete category
+      operationId: admin.categories.delete
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Empty success
+          content: *ref_45
+        '401':
+          description: Authentication required
+          content: *ref_6
+        '403':
+          description: Permission denied
+          content: *ref_10
+        '404':
+          description: Resource not found
+          content: *ref_26
+        '409':
+          description: Category has children
+          content:
+            application/json:
+              schema:
+                allOf: *ref_5
   /api/v1/tags:
     get:
       tags:
@@ -4364,7 +4555,7 @@ paths:
           content:
             application/json:
               schema:
-                allOf: &ref_125
+                allOf: &ref_130
                   - type: object
                     required: *ref_0
                     properties: *ref_1
@@ -4379,8 +4570,8 @@ paths:
                             type: array
                             items:
                               type: object
-                              required: *ref_52
-                              properties: *ref_53
+                              required: *ref_53
+                              properties: *ref_54
   /api/v1/admin/tags:
     post:
       tags:
@@ -4395,9 +4586,9 @@ paths:
           application/json:
             schema:
               type: object
-              required: &ref_155
+              required: &ref_160
                 - name
-              properties: &ref_156
+              properties: &ref_161
                 name:
                   type: string
                   minLength: 1
@@ -4410,7 +4601,7 @@ paths:
           content:
             application/json:
               schema:
-                allOf: &ref_54
+                allOf: &ref_55
                   - type: object
                     required: *ref_0
                     properties: *ref_1
@@ -4418,8 +4609,8 @@ paths:
                     properties:
                       data:
                         type: object
-                        required: *ref_52
-                        properties: *ref_53
+                        required: *ref_53
+                        properties: *ref_54
         '400':
           description: Validation error
           content: *ref_11
@@ -4457,7 +4648,7 @@ paths:
             schema:
               type: object
               minProperties: 1
-              properties: &ref_159
+              properties: &ref_164
                 name:
                   type: string
                   minLength: 1
@@ -4470,7 +4661,7 @@ paths:
           content:
             application/json:
               schema:
-                allOf: *ref_54
+                allOf: *ref_55
         '400':
           description: Validation error
           content: *ref_11
@@ -4536,9 +4727,9 @@ paths:
           application/json:
             schema:
               type: object
-              required: &ref_157
+              required: &ref_162
                 - into_id
-              properties: &ref_158
+              properties: &ref_163
                 into_id:
                   type: string
                   format: uuid
@@ -4548,7 +4739,7 @@ paths:
           content:
             application/json:
               schema:
-                allOf: *ref_54
+                allOf: *ref_55
         '400':
           description: Validation error
           content: *ref_11
@@ -4580,10 +4771,10 @@ paths:
           application/json:
             schema:
               type: object
-              required: &ref_80
+              required: &ref_81
                 - granted
                 - scope
-              properties: &ref_81
+              properties: &ref_82
                 token:
                   type: string
                   nullable: true
@@ -4605,7 +4796,7 @@ paths:
           content:
             application/json:
               schema:
-                allOf: &ref_55
+                allOf: &ref_56
                   - type: object
                     required: *ref_0
                     properties: *ref_1
@@ -4651,7 +4842,7 @@ paths:
           content:
             application/json:
               schema:
-                allOf: *ref_55
+                allOf: *ref_56
           description: OK
   /api/v1/analytics/consent/{token}:
     delete:
@@ -4683,11 +4874,11 @@ paths:
           application/json:
             schema:
               type: object
-              required: &ref_85
+              required: &ref_86
                 - consent_token
                 - path
                 - occurred_at
-              properties: &ref_86
+              properties: &ref_87
                 consent_token:
                   type: string
                 session_id:
@@ -4742,11 +4933,11 @@ paths:
           application/json:
             schema:
               type: object
-              required: &ref_91
+              required: &ref_92
                 - consent_token
                 - path
                 - started_at
-              properties: &ref_92
+              properties: &ref_93
                 consent_token:
                   type: string
                 session_id:
@@ -4790,12 +4981,12 @@ paths:
           application/json:
             schema:
               type: object
-              required: &ref_82
+              required: &ref_83
                 - consent_token
                 - from_path
                 - to_path
                 - occurred_at
-              properties: &ref_83
+              properties: &ref_84
                 consent_token:
                   type: string
                 session_id:
@@ -4842,11 +5033,11 @@ paths:
           application/json:
             schema:
               type: object
-              required: &ref_89
+              required: &ref_90
                 - consent_token
                 - normalized_query
                 - occurred_at
-              properties: &ref_90
+              properties: &ref_91
                 consent_token:
                   type: string
                 session_id:
@@ -4889,13 +5080,13 @@ paths:
           application/json:
             schema:
               type: object
-              required: &ref_87
+              required: &ref_88
                 - consent_token
                 - search_id
                 - position
                 - clicked_resource_type
                 - clicked_resource_id
-              properties: &ref_88
+              properties: &ref_89
                 consent_token:
                   type: string
                 search_id:
@@ -4957,7 +5148,7 @@ paths:
           content:
             application/json:
               schema:
-                allOf: &ref_56
+                allOf: &ref_57
                   - type: object
                     required: *ref_0
                     properties: *ref_1
@@ -4987,7 +5178,7 @@ paths:
           content:
             application/json:
               schema:
-                allOf: *ref_56
+                allOf: *ref_57
   /health/version:
     get:
       tags:
@@ -5000,7 +5191,7 @@ paths:
           content:
             application/json:
               schema:
-                allOf: &ref_127
+                allOf: &ref_132
                   - type: object
                     required: *ref_0
                     properties: *ref_1
@@ -5042,7 +5233,7 @@ paths:
           content:
             application/json:
               schema:
-                allOf: &ref_112
+                allOf: &ref_117
                   - type: object
                     required: *ref_0
                     properties: *ref_1
@@ -5057,11 +5248,11 @@ paths:
                             type: array
                             items:
                               type: object
-                              required: &ref_130
+                              required: &ref_135
                                 - id
                                 - type
                                 - title
-                              properties: &ref_131
+                              properties: &ref_136
                                 id:
                                   type: string
                                   format: uuid
@@ -5264,7 +5455,7 @@ paths:
           content:
             application/json:
               schema:
-                allOf: &ref_62
+                allOf: &ref_63
                   - type: object
                     required: *ref_0
                     properties: *ref_1
@@ -5282,14 +5473,14 @@ paths:
                             type: array
                             items:
                               type: object
-                              required: &ref_59
+                              required: &ref_60
                                 - id
                                 - post_id
                                 - content
                                 - status
                                 - author_id
                                 - depth
-                              properties: &ref_60
+                              properties: &ref_61
                                 id:
                                   type: string
                                   format: uuid
@@ -5308,8 +5499,8 @@ paths:
                                   nullable: true
                                   allOf:
                                     - type: object
-                                      required: *ref_57
-                                      properties: *ref_58
+                                      required: *ref_58
+                                      properties: *ref_59
                                 author_display_name:
                                   type: string
                                   nullable: true
@@ -5338,7 +5529,7 @@ paths:
                                   nullable: true
                                   allOf:
                                     - type: object
-                                      properties: &ref_167
+                                      properties: &ref_172
                                         moderated_by_id:
                                           type: string
                                           format: uuid
@@ -5371,7 +5562,7 @@ paths:
                                   nullable: true
                                   allOf:
                                     - type: object
-                                      properties: &ref_166
+                                      properties: &ref_171
                                         score:
                                           type: number
                                           format: float
@@ -5427,8 +5618,8 @@ paths:
                                   maxItems: 50
                                   items:
                                     type: object
-                                    required: *ref_59
-                                    properties: *ref_60
+                                    required: *ref_60
+                                    properties: *ref_61
                                 upvote_count:
                                   type: integer
                                   minimum: 0
@@ -5492,9 +5683,9 @@ paths:
           application/json:
             schema:
               type: object
-              required: &ref_168
+              required: &ref_173
                 - content
-              properties: &ref_169
+              properties: &ref_174
                 parent_id:
                   type: string
                   format: uuid
@@ -5538,7 +5729,7 @@ paths:
           content:
             application/json:
               schema:
-                allOf: &ref_61
+                allOf: &ref_62
                   - type: object
                     required: *ref_0
                     properties: *ref_1
@@ -5546,8 +5737,8 @@ paths:
                     properties:
                       data:
                         type: object
-                        required: *ref_59
-                        properties: *ref_60
+                        required: *ref_60
+                        properties: *ref_61
         '400':
           description: Validation error
           content: *ref_11
@@ -5598,7 +5789,7 @@ paths:
           content:
             application/json:
               schema:
-                allOf: &ref_173
+                allOf: &ref_178
                   - type: object
                     required: *ref_0
                     properties: *ref_1
@@ -5612,14 +5803,14 @@ paths:
                         properties:
                           root:
                             type: object
-                            required: *ref_59
-                            properties: *ref_60
+                            required: *ref_60
+                            properties: *ref_61
                           descendants:
                             type: array
                             items:
                               type: object
-                              required: *ref_59
-                              properties: *ref_60
+                              required: *ref_60
+                              properties: *ref_61
           description: Comment with threaded descendants limited by tree_depth
         '404':
           description: Resource not found
@@ -5642,7 +5833,7 @@ paths:
           application/json:
             schema:
               type: object
-              properties: &ref_170
+              properties: &ref_175
                 content:
                   type: string
                   minLength: 1
@@ -5655,7 +5846,7 @@ paths:
           content:
             application/json:
               schema:
-                allOf: *ref_61
+                allOf: *ref_62
           description: Updated comment after edit
         '400':
           description: Validation error
@@ -5778,7 +5969,7 @@ paths:
           content:
             application/json:
               schema:
-                allOf: *ref_61
+                allOf: *ref_62
           description: Toggled upvote; comment reflects updated upvote_count
         '401':
           description: Authentication required
@@ -5827,7 +6018,7 @@ paths:
           content:
             application/json:
               schema:
-                allOf: *ref_62
+                allOf: *ref_63
           description: Comments authored by the authenticated user
         '401':
           description: Authentication required
@@ -5929,7 +6120,7 @@ paths:
           content:
             application/json:
               schema:
-                allOf: *ref_62
+                allOf: *ref_63
           description: Triage list of comments for moderation
         '401':
           description: Authentication required
@@ -5955,7 +6146,7 @@ paths:
           content:
             application/json:
               schema:
-                allOf: *ref_61
+                allOf: *ref_62
           description: Full comment with moderation metadata and spam assessment
         '401':
           description: Authentication required
@@ -6027,9 +6218,9 @@ paths:
           application/json:
             schema:
               type: object
-              required: &ref_171
+              required: &ref_176
                 - action
-              properties: &ref_172
+              properties: &ref_177
                 action:
                   type: string
                   enum:
@@ -6049,7 +6240,7 @@ paths:
           content:
             application/json:
               schema:
-                allOf: *ref_61
+                allOf: *ref_62
           description: Comment with updated moderation status and audit reference
         '400':
           description: Validation error
@@ -6156,7 +6347,7 @@ paths:
           content:
             application/json:
               schema:
-                allOf: &ref_174
+                allOf: &ref_179
                   - type: object
                     required: *ref_0
                     properties: *ref_1
@@ -6232,9 +6423,9 @@ paths:
           application/json:
             schema:
               type: object
-              required: &ref_180
+              required: &ref_185
                 - email
-              properties: &ref_181
+              properties: &ref_186
                 email:
                   type: string
                   format: email
@@ -6265,7 +6456,7 @@ paths:
                     type: string
                 preferences:
                   type: object
-                  properties: &ref_63
+                  properties: &ref_64
                     format:
                       type: string
                       enum:
@@ -6312,7 +6503,7 @@ paths:
           content:
             application/json:
               schema:
-                allOf: &ref_64
+                allOf: &ref_65
                   - type: object
                     required: *ref_0
                     properties: *ref_1
@@ -6320,11 +6511,11 @@ paths:
                     properties:
                       data:
                         type: object
-                        required: &ref_65
+                        required: &ref_66
                           - id
                           - email
                           - status
-                        properties: &ref_66
+                        properties: &ref_67
                           id:
                             type: string
                             format: uuid
@@ -6373,11 +6564,11 @@ paths:
                             nullable: true
                             allOf:
                               - type: object
-                                required: &ref_175
+                                required: &ref_180
                                   - given
                                   - gdpr_legal_basis
                                   - opted_in_at
-                                properties: &ref_176
+                                properties: &ref_181
                                   given:
                                     type: boolean
                                   gdpr_legal_basis:
@@ -6403,10 +6594,10 @@ paths:
                             type: array
                             items:
                               type: object
-                              required: &ref_178
+                              required: &ref_183
                                 - list_id
                                 - subscribed_at
-                              properties: &ref_179
+                              properties: &ref_184
                                 list_id:
                                   type: string
                                   maxLength: 64
@@ -6454,7 +6645,7 @@ paths:
                             nullable: true
                             allOf:
                               - type: object
-                                properties: &ref_177
+                                properties: &ref_182
                                   provider:
                                     type: string
                                     enum:
@@ -6495,7 +6686,7 @@ paths:
                             nullable: true
                             allOf:
                               - type: object
-                                properties: *ref_63
+                                properties: *ref_64
         '202':
           description: Submission accepted; existing pending/active subscriber flow handled (silent no-op on duplicates)
           content:
@@ -6529,9 +6720,9 @@ paths:
           application/json:
             schema:
               type: object
-              required: &ref_182
+              required: &ref_187
                 - token
-              properties: &ref_183
+              properties: &ref_188
                 token:
                   type: string
                   minLength: 16
@@ -6542,7 +6733,7 @@ paths:
           content:
             application/json:
               schema:
-                allOf: *ref_64
+                allOf: *ref_65
         '400':
           description: Validation error
           content: *ref_11
@@ -6570,9 +6761,9 @@ paths:
           application/json:
             schema:
               type: object
-              required: &ref_184
+              required: &ref_189
                 - email
-              properties: &ref_185
+              properties: &ref_190
                 email:
                   type: string
                   format: email
@@ -6608,9 +6799,9 @@ paths:
           application/json:
             schema:
               type: object
-              required: &ref_186
+              required: &ref_191
                 - token
-              properties: &ref_187
+              properties: &ref_192
                 token:
                   type: string
                   minLength: 16
@@ -6642,7 +6833,7 @@ paths:
           content:
             application/json:
               schema:
-                allOf: *ref_64
+                allOf: *ref_65
         '400':
           description: Validation error
           content: *ref_11
@@ -6671,7 +6862,7 @@ paths:
           content:
             application/json:
               schema:
-                allOf: *ref_64
+                allOf: *ref_65
           description: Subscriber preferences for the signed token identity
         '400':
           description: Validation error
@@ -6719,13 +6910,13 @@ paths:
                     type: string
                 preferences:
                   type: object
-                  properties: *ref_63
+                  properties: *ref_64
       responses:
         '200':
           content:
             application/json:
               schema:
-                allOf: *ref_64
+                allOf: *ref_65
           description: Updated subscriber preferences record
         '400':
           description: Validation error
@@ -6744,7 +6935,7 @@ paths:
           content:
             application/json:
               schema:
-                allOf: &ref_67
+                allOf: &ref_68
                   - type: object
                     required: *ref_0
                     properties: *ref_1
@@ -6762,8 +6953,8 @@ paths:
                             type: array
                             items:
                               type: object
-                              required: *ref_65
-                              properties: *ref_66
+                              required: *ref_66
+                              properties: *ref_67
                           total:
                             type: integer
                             minimum: 0
@@ -6807,13 +6998,13 @@ paths:
                     type: string
                 preferences:
                   type: object
-                  properties: *ref_63
+                  properties: *ref_64
       responses:
         '200':
           content:
             application/json:
               schema:
-                allOf: *ref_64
+                allOf: *ref_65
           description: Subscriber record (newly created or reactivated)
         '201':
           description: New subscriber row created for the user email
@@ -6856,7 +7047,7 @@ paths:
           content:
             application/json:
               schema:
-                allOf: *ref_64
+                allOf: *ref_65
           description: Subscriber record updated to unsubscribed
         '401':
           description: Authentication required
@@ -6949,7 +7140,7 @@ paths:
           content:
             application/json:
               schema:
-                allOf: *ref_67
+                allOf: *ref_68
             text/csv:
               schema:
                 type: string
@@ -6979,7 +7170,7 @@ paths:
           content:
             application/json:
               schema:
-                allOf: *ref_64
+                allOf: *ref_65
           description: Subscriber detail including consents, sync status, lists, engagement
         '401':
           description: Authentication required
@@ -7067,7 +7258,7 @@ paths:
           content:
             application/json:
               schema:
-                allOf: &ref_192
+                allOf: &ref_197
                   - type: object
                     required: *ref_0
                     properties: *ref_1
@@ -7085,12 +7276,12 @@ paths:
                             type: array
                             items:
                               type: object
-                              required: &ref_68
+                              required: &ref_69
                                 - id
                                 - subject
                                 - list_id
                                 - status
-                              properties: &ref_69
+                              properties: &ref_70
                                 id:
                                   type: string
                                   format: uuid
@@ -7198,9 +7389,9 @@ paths:
           application/json:
             schema:
               type: object
-              required: &ref_188
+              required: &ref_193
                 - subject
-              properties: &ref_189
+              properties: &ref_194
                 subject:
                   type: string
                   minLength: 1
@@ -7247,7 +7438,7 @@ paths:
           content:
             application/json:
               schema:
-                allOf: &ref_70
+                allOf: &ref_71
                   - type: object
                     required: *ref_0
                     properties: *ref_1
@@ -7255,8 +7446,8 @@ paths:
                     properties:
                       data:
                         type: object
-                        required: *ref_68
-                        properties: *ref_69
+                        required: *ref_69
+                        properties: *ref_70
         '400':
           description: Validation error
           content: *ref_11
@@ -7286,7 +7477,7 @@ paths:
           content:
             application/json:
               schema:
-                allOf: *ref_70
+                allOf: *ref_71
           description: Newsletter issue record with send summary and statistics
         '401':
           description: Authentication required
@@ -7353,7 +7544,7 @@ paths:
           content:
             application/json:
               schema:
-                allOf: *ref_70
+                allOf: *ref_71
           description: Updated newsletter issue record
         '400':
           description: Validation error
@@ -7380,7 +7571,7 @@ paths:
           content:
             application/json:
               schema:
-                allOf: &ref_71
+                allOf: &ref_72
                   - type: object
                     required: *ref_0
                     properties: *ref_1
@@ -7388,9 +7579,9 @@ paths:
                     properties:
                       data:
                         type: object
-                        required: &ref_190
+                        required: &ref_195
                           - provider
-                        properties: &ref_191
+                        properties: &ref_196
                           provider:
                             type: string
                             enum:
@@ -7513,7 +7704,7 @@ paths:
           content:
             application/json:
               schema:
-                allOf: *ref_71
+                allOf: *ref_72
           description: Updated ESP provider configuration
         '400':
           description: Validation error
@@ -7543,7 +7734,7 @@ components:
       name: include
       in: query
       description: Comma-separated includes; `cover` or `media` or `cover,media`
-      schema: *ref_72
+      schema: *ref_73
     IncludeCategoryImage:
       name: include
       in: query
@@ -7580,160 +7771,172 @@ components:
   schemas:
     ActivityEraseRequest:
       type: object
-      required: *ref_73
-      properties: *ref_74
+      required: *ref_74
+      properties: *ref_75
     AdminUserPasswordResetRequest:
       type: object
-      required: *ref_75
-      properties: *ref_76
+      required: *ref_76
+      properties: *ref_77
     AdminUserProfile:
       type: object
-      required: *ref_77
-      properties: *ref_78
+      required: *ref_78
+      properties: *ref_79
     AdminUserProfilePatchRequest:
       type: object
-      properties: *ref_79
+      properties: *ref_80
     AnalyticsConsentRequest:
       type: object
-      required: *ref_80
-      properties: *ref_81
+      required: *ref_81
+      properties: *ref_82
     AnalyticsNavigationRequest:
       type: object
-      required: *ref_82
-      properties: *ref_83
+      required: *ref_83
+      properties: *ref_84
     AnalyticsOverview:
       type: object
-      properties: *ref_84
+      properties: *ref_85
     AnalyticsPageViewRequest:
       type: object
-      required: *ref_85
-      properties: *ref_86
+      required: *ref_86
+      properties: *ref_87
     AnalyticsSearchClickRequest:
       type: object
-      required: *ref_87
-      properties: *ref_88
+      required: *ref_88
+      properties: *ref_89
     AnalyticsSearchRequest:
       type: object
-      required: *ref_89
-      properties: *ref_90
+      required: *ref_90
+      properties: *ref_91
     AnalyticsTimeSpentRequest:
       type: object
-      required: *ref_91
-      properties: *ref_92
+      required: *ref_92
+      properties: *ref_93
     AvatarSizeVariants:
       type: object
-      required: *ref_93
-      properties: *ref_94
+      required: *ref_94
+      properties: *ref_95
     Category:
       type: object
       required: *ref_50
       properties: *ref_51
+    CategoryCreateRequest:
+      type: object
+      required: *ref_96
+      properties: *ref_97
+    CategoryUpdateRequest:
+      type: object
+      minProperties: 1
+      properties: *ref_98
+    CategoryReorderRequest:
+      type: object
+      required: *ref_99
+      properties: *ref_100
     EmailChangeRequest:
       type: object
-      required: *ref_95
-      properties: *ref_96
+      required: *ref_101
+      properties: *ref_102
     Envelope:
       type: object
       required: *ref_0
       properties: *ref_1
     Envelope2FAStatus:
-      allOf: *ref_97
+      allOf: *ref_103
     EnvelopeActivityExportAccepted:
-      allOf: *ref_98
+      allOf: *ref_104
     EnvelopeAdminUserProfile:
       allOf: *ref_30
     EnvelopeAnalyticsConsent:
-      allOf: *ref_55
+      allOf: *ref_56
     EnvelopeAnalyticsExport:
-      allOf: *ref_99
-    EnvelopeAnalyticsNavigation:
-      allOf: *ref_100
-    EnvelopeAnalyticsOverview:
-      allOf: *ref_101
-    EnvelopeAnalyticsPages:
-      allOf: *ref_102
-    EnvelopeAnalyticsRetention:
-      allOf: *ref_103
-    EnvelopeAnalyticsSearch:
-      allOf: *ref_104
-    EnvelopeAvatarResponse:
       allOf: *ref_105
-    EnvelopeCategoryList:
+    EnvelopeAnalyticsNavigation:
       allOf: *ref_106
-    EnvelopeCategoryResponse:
+    EnvelopeAnalyticsOverview:
       allOf: *ref_107
+    EnvelopeAnalyticsPages:
+      allOf: *ref_108
+    EnvelopeAnalyticsRetention:
+      allOf: *ref_109
+    EnvelopeAnalyticsSearch:
+      allOf: *ref_110
+    EnvelopeAvatarResponse:
+      allOf: *ref_111
+    EnvelopeCategoryList:
+      allOf: *ref_112
+    EnvelopeCategoryResponse:
+      allOf: *ref_52
     EnvelopeEmpty:
       allOf: *ref_12
     EnvelopeError:
       allOf: *ref_5
     EnvelopeHealth:
-      allOf: *ref_56
+      allOf: *ref_57
     EnvelopeImpersonationCurrent:
-      allOf: *ref_108
+      allOf: *ref_113
     EnvelopeImpersonationStart:
-      allOf: *ref_109
+      allOf: *ref_114
     EnvelopeImpersonationStop:
-      allOf: *ref_110
+      allOf: *ref_115
     EnvelopeMediaList:
-      allOf: *ref_111
+      allOf: *ref_116
     EnvelopeMediaResponse:
       allOf: *ref_48
     EnvelopeNotificationList:
-      allOf: *ref_112
+      allOf: *ref_117
     EnvelopePasswordChangedResponse:
-      allOf: *ref_113
+      allOf: *ref_118
     EnvelopePasswordResetTokenValidity:
-      allOf: *ref_114
+      allOf: *ref_119
     EnvelopePostList:
       allOf: *ref_36
     EnvelopePostMediaResponse:
-      allOf: *ref_115
+      allOf: *ref_120
     EnvelopePostResponse:
       allOf: *ref_37
     EnvelopePostRevisionList:
-      allOf: *ref_116
+      allOf: *ref_121
     EnvelopePostRevisionResponse:
-      allOf: *ref_117
+      allOf: *ref_122
     EnvelopePostRevisionRestoreResponse:
-      allOf: *ref_118
+      allOf: *ref_123
     EnvelopePostSEOMetaPublic:
-      allOf: *ref_119
+      allOf: *ref_124
     EnvelopePostSEOPreviewResponse:
-      allOf: *ref_120
+      allOf: *ref_125
     EnvelopePostSEOResponse:
       allOf: *ref_43
     EnvelopePublicUserProfile:
-      allOf: *ref_121
+      allOf: *ref_126
     EnvelopeSettingsGet:
-      allOf: *ref_122
+      allOf: *ref_127
     EnvelopeSettingsHistoryList:
-      allOf: *ref_123
+      allOf: *ref_128
     EnvelopeSettingsUpdate:
-      allOf: *ref_124
+      allOf: *ref_129
     EnvelopeTagList:
-      allOf: *ref_125
+      allOf: *ref_130
     EnvelopeTagResponse:
-      allOf: *ref_54
+      allOf: *ref_55
     EnvelopeTokenResponse:
       allOf: *ref_44
     EnvelopeUserActivityList:
       allOf: *ref_32
     EnvelopeUserList:
-      allOf: *ref_126
+      allOf: *ref_131
     EnvelopeUserPrivacyResponse:
       allOf: *ref_21
     EnvelopeUserResponse:
       allOf: *ref_4
     EnvelopeVersion:
-      allOf: *ref_127
+      allOf: *ref_132
     Error:
       type: object
       required: *ref_2
       properties: *ref_3
     ImpersonationStartRequest:
       type: object
-      required: *ref_128
-      properties: *ref_129
+      required: *ref_133
+      properties: *ref_134
     LoginRequest:
       type: object
       required: *ref_46
@@ -7763,39 +7966,39 @@ components:
       properties: *ref_42
     Notification:
       type: object
-      required: *ref_130
-      properties: *ref_131
+      required: *ref_135
+      properties: *ref_136
     PasswordForgotRequest:
       type: object
-      required: *ref_132
-      properties: *ref_133
+      required: *ref_137
+      properties: *ref_138
     PasswordResetCompleteRequest:
       type: object
-      required: *ref_134
-      properties: *ref_135
+      required: *ref_139
+      properties: *ref_140
     PasswordUpdateRequest:
       type: object
-      required: *ref_136
-      properties: *ref_137
+      required: *ref_141
+      properties: *ref_142
     Post:
       type: object
       required: *ref_34
       properties: *ref_35
     PostCreateRequest:
       type: object
-      required: *ref_138
-      properties: *ref_139
+      required: *ref_143
+      properties: *ref_144
     PostUpdateRequest:
       type: object
       minProperties: 1
-      properties: *ref_140
+      properties: *ref_145
     PostMediaItem:
       type: object
       properties: *ref_38
     PostMediaReplaceRequest:
       type: object
-      required: *ref_141
-      properties: *ref_142
+      required: *ref_146
+      properties: *ref_147
     PostRevision:
       type: object
       required: *ref_40
@@ -7805,71 +8008,71 @@ components:
       properties: *ref_39
     PostSEOMetaPublic:
       type: object
-      required: *ref_143
-      properties: *ref_144
+      required: *ref_148
+      properties: *ref_149
     PostSEOPreview:
-      type: object
-      required: *ref_145
-      properties: *ref_146
-    PostSEOPreviewRequest:
-      type: object
-      properties: *ref_147
-    PostSEOUpdateRequest:
-      type: object
-      description: Partial update. Only allowlisted fields are accepted; unknown keys rejected.
-      allOf: *ref_148
-    ProfileUpdateRequest:
-      allOf: *ref_149
-    PublicUserProfile:
-      type: object
-      required: *ref_57
-      properties: *ref_58
-    Setting:
       type: object
       required: *ref_150
       properties: *ref_151
-    SettingsHistoryItem:
+    PostSEOPreviewRequest:
       type: object
       properties: *ref_152
-    SettingsUpdateRequest:
+    PostSEOUpdateRequest:
       type: object
-      required: *ref_153
-      properties: *ref_154
-    Tag:
+      description: Partial update. Only allowlisted fields are accepted; unknown keys rejected.
+      allOf: *ref_153
+    ProfileUpdateRequest:
+      allOf: *ref_154
+    PublicUserProfile:
       type: object
-      required: *ref_52
-      properties: *ref_53
-    TagCreateRequest:
+      required: *ref_58
+      properties: *ref_59
+    Setting:
       type: object
       required: *ref_155
       properties: *ref_156
-    TagMergeRequest:
+    SettingsHistoryItem:
       type: object
-      required: *ref_157
-      properties: *ref_158
-    TagUpdateRequest:
+      properties: *ref_157
+    SettingsUpdateRequest:
       type: object
-      minProperties: 1
+      required: *ref_158
       properties: *ref_159
-    TokenPair:
+    Tag:
+      type: object
+      required: *ref_53
+      properties: *ref_54
+    TagCreateRequest:
       type: object
       required: *ref_160
       properties: *ref_161
+    TagMergeRequest:
+      type: object
+      required: *ref_162
+      properties: *ref_163
+    TagUpdateRequest:
+      type: object
+      minProperties: 1
+      properties: *ref_164
+    TokenPair:
+      type: object
+      required: *ref_165
+      properties: *ref_166
     User:
       type: object
       required: *ref_8
       properties: *ref_9
     UserActivityItem:
       type: object
-      required: *ref_162
-      properties: *ref_163
+      required: *ref_167
+      properties: *ref_168
     UserActivityType:
       type: string
       enum: *ref_23
     UserCreateRequest:
       type: object
-      required: *ref_164
-      properties: *ref_165
+      required: *ref_169
+      properties: *ref_170
     UserPrivacySettings:
       type: object
       required: *ref_19
@@ -7888,21 +8091,21 @@ components:
       properties: *ref_24
     Comment:
       type: object
-      required: *ref_59
-      properties: *ref_60
+      required: *ref_60
+      properties: *ref_61
     CommentSpamAssessment:
       type: object
-      properties: *ref_166
+      properties: *ref_171
     CommentModerationSummary:
       type: object
-      properties: *ref_167
+      properties: *ref_172
     CommentCreateRequest:
       type: object
-      required: *ref_168
-      properties: *ref_169
+      required: *ref_173
+      properties: *ref_174
     CommentUpdateRequest:
       type: object
-      properties: *ref_170
+      properties: *ref_175
     CommentListQuery:
       type: object
       properties:
@@ -7937,82 +8140,82 @@ components:
           format: date-time
     CommentModerateRequest:
       type: object
-      required: *ref_171
-      properties: *ref_172
+      required: *ref_176
+      properties: *ref_177
     EnvelopeCommentResponse:
-      allOf: *ref_61
-    EnvelopeCommentList:
       allOf: *ref_62
+    EnvelopeCommentList:
+      allOf: *ref_63
     EnvelopeCommentThread:
-      allOf: *ref_173
+      allOf: *ref_178
     EnvelopeCommentStats:
-      allOf: *ref_174
+      allOf: *ref_179
     NewsletterSubscriber:
       type: object
-      required: *ref_65
-      properties: *ref_66
+      required: *ref_66
+      properties: *ref_67
     NewsletterConsents:
-      type: object
-      required: *ref_175
-      properties: *ref_176
-    NewsletterSubscriberPreferences:
-      type: object
-      properties: *ref_63
-    NewsletterProviderSync:
-      type: object
-      properties: *ref_177
-    NewsletterListMembership:
-      type: object
-      required: *ref_178
-      properties: *ref_179
-    NewsletterSubscribeRequest:
       type: object
       required: *ref_180
       properties: *ref_181
+    NewsletterSubscriberPreferences:
+      type: object
+      properties: *ref_64
+    NewsletterProviderSync:
+      type: object
+      properties: *ref_182
+    NewsletterListMembership:
+      type: object
+      required: *ref_183
+      properties: *ref_184
+    NewsletterSubscribeRequest:
+      type: object
+      required: *ref_185
+      properties: *ref_186
     NewsletterConfirmRequest:
       type: object
-      required: *ref_182
-      properties: *ref_183
+      required: *ref_187
+      properties: *ref_188
     NewsletterResendConfirmRequest:
       type: object
-      required: *ref_184
-      properties: *ref_185
+      required: *ref_189
+      properties: *ref_190
     NewsletterUnsubscribeRequest:
       type: object
-      required: *ref_186
-      properties: *ref_187
+      required: *ref_191
+      properties: *ref_192
     NewsletterSendIssue:
       type: object
-      required: *ref_68
-      properties: *ref_69
+      required: *ref_69
+      properties: *ref_70
     NewsletterSendRequest:
-      type: object
-      required: *ref_188
-      properties: *ref_189
-    NewsletterProviderConfig:
-      type: object
-      required: *ref_190
-      properties: *ref_191
-    EnvelopeNewsletterSubscriberResponse:
-      allOf: *ref_64
-    EnvelopeNewsletterSubscriberList:
-      allOf: *ref_67
-    EnvelopeNewsletterIssueResponse:
-      allOf: *ref_70
-    EnvelopeNewsletterIssueList:
-      allOf: *ref_192
-    EnvelopeNewsletterProviderConfig:
-      allOf: *ref_71
-    MediaPresignRequest:
       type: object
       required: *ref_193
       properties: *ref_194
-    MediaPresignData:
+    NewsletterProviderConfig:
       type: object
       required: *ref_195
       properties: *ref_196
-    EnvelopeMediaPresignResponse:
+    EnvelopeNewsletterSubscriberResponse:
+      allOf: *ref_65
+    EnvelopeNewsletterSubscriberList:
+      allOf: *ref_68
+    EnvelopeNewsletterIssueResponse:
+      allOf: *ref_71
+    EnvelopeNewsletterIssueList:
       allOf: *ref_197
+    EnvelopeNewsletterProviderConfig:
+      allOf: *ref_72
+    MediaPresignRequest:
+      type: object
+      required: *ref_198
+      properties: *ref_199
+    MediaPresignData:
+      type: object
+      required: *ref_200
+      properties: *ref_201
+    EnvelopeMediaPresignResponse:
+      allOf: *ref_202
   responses:
     EmptyOk:
       description: Empty success

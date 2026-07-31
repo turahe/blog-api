@@ -26,16 +26,13 @@ Each phase file says *what is left to build*; the goals below say *what each pha
 
 Snapshot of the tree these files were written against:
 
-- **HTTP surface** — 109 contract routes in `internal/adapters/inbound/http/v1/routes_gen.go`.
-  About 19 are wired to real handlers; the rest return `501` through `notImplementedHandler`.
-- **Wired operations** — `health.live`, `health.ready`, `health.version`, `auth.login`,
-  `auth.refresh`, `auth.logout`, `auth.password.forgot`, `auth.password.reset`,
-  `auth.password.reset_token_validity`, `me.get`, `me.password.update`, `admin.users.list`,
-  `admin.posts.create`, `admin.posts.publish`, `public.posts.list`, `public.posts.get`,
-  `public.categories.list`, `public.categories.get`, `public.tags.list`.
-- **Schema** — migrations `00001`–`00004` create users, roles, permissions, user_roles,
-  role_permissions, posts, categories, tags, post_tags, comments, audit_logs, outbox_events,
-  refresh_sessions, password_reset_tokens, casbin_rules.
+- **HTTP surface** — 119 contract routes in `internal/adapters/inbound/http/v1/routes_gen.go`.
+  Wired handlers cover health, auth, me, admin users/posts/tags/categories/media, and public
+  post/category/tag/media reads; the rest return `501` through `notImplementedHandler`.
+- **Wired operations** — include `admin.categories.create|update|delete|reorder`,
+  `admin.tags.*`, `admin.posts.*` (list/create/update/publish/media.replace), media admin +
+  public get, plus earlier auth/me/health/public content reads.
+- **Schema** — migrations `00001`–`00007` (foundation through `categories.sort_order` and media relations).
 - **Platform** — multi-dialect database (`postgres` / `mysql` / `sqlserver`) plus Cloud SQL
   connector, Redis, JWT, Casbin enforcer, and multi-broker Watermill messaging
   (`MESSAGE_BROKER`) with an `app worker` scaffold.

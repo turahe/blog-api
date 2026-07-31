@@ -1,5 +1,19 @@
 # Changelog
 
+## 2026-07-31 — Admin categories CRUD + reorder
+
+### Added
+
+- Admin category create, update, delete, and sibling reorder (`admin.categories.*`)
+- Migration `00007_category_sort_order.sql` (`categories.sort_order` + parent/sort index)
+- Seed permissions `category.create` / `category.update` / `category.delete` for admin and editor
+
+### Behavior
+
+- Optional `parent_id` nesting without nested-set math; cycle and self-parent rejected
+- Delete refuses categories that still have children (`409 category_has_children`)
+- Posts referencing a deleted category detach via existing `ON DELETE SET NULL`
+
 ## 2026-07-31 — Admin tags catalog + post attach
 
 ### Added

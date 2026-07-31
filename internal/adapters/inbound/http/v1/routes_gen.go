@@ -3,6 +3,7 @@
 package v1
 
 var Routes = []Route{
+	{Method: "DELETE", Path: "/api/v1/admin/categories/:param1", OperationID: "admin.categories.delete", Group: GroupAdmin, Auth: AuthRequired},
 	{Method: "DELETE", Path: "/api/v1/admin/comments/:param1", OperationID: "admin.comments.delete", Group: GroupAdmin, Auth: AuthRequired},
 	{Method: "DELETE", Path: "/api/v1/admin/media/:param1", OperationID: "admin.media.delete", Group: GroupAdmin, Auth: AuthRequired},
 	{Method: "DELETE", Path: "/api/v1/admin/newsletter/subscribers/:param1", OperationID: "admin.newsletter.subscribers.delete", Group: GroupAdmin, Auth: AuthRequired},
@@ -60,6 +61,7 @@ var Routes = []Route{
 	{Method: "GET", Path: "/health/live", OperationID: "health.live", Group: GroupHealth, Auth: AuthNone},
 	{Method: "GET", Path: "/health/ready", OperationID: "health.ready", Group: GroupHealth, Auth: AuthNone},
 	{Method: "GET", Path: "/health/version", OperationID: "health.version", Group: GroupHealth, Auth: AuthNone},
+	{Method: "PATCH", Path: "/api/v1/admin/categories/:param1", OperationID: "admin.categories.update", Group: GroupAdmin, Auth: AuthRequired},
 	{Method: "PATCH", Path: "/api/v1/admin/media/:param1/tags", OperationID: "admin.media.tags.patch", Group: GroupAdmin, Auth: AuthRequired},
 	{Method: "PATCH", Path: "/api/v1/admin/newsletter/issues/:param1", OperationID: "admin.newsletter.issues.patch", Group: GroupAdmin, Auth: AuthRequired},
 	{Method: "PATCH", Path: "/api/v1/admin/posts/:param1", OperationID: "admin.posts.update", Group: GroupAdmin, Auth: AuthRequired},
@@ -71,6 +73,8 @@ var Routes = []Route{
 	{Method: "PATCH", Path: "/api/v1/newsletter/preferences/:param1", OperationID: "public.newsletter.preferences.patch", Group: GroupPublic, Auth: AuthNone},
 	{Method: "POST", Path: "/api/v1/admin/analytics/export", OperationID: "admin.analytics.export", Group: GroupAdmin, Auth: AuthRequired},
 	{Method: "POST", Path: "/api/v1/admin/auth/login", OperationID: "admin.auth.login", Group: GroupAdmin, Auth: AuthNone},
+	{Method: "POST", Path: "/api/v1/admin/categories", OperationID: "admin.categories.create", Group: GroupAdmin, Auth: AuthRequired},
+	{Method: "POST", Path: "/api/v1/admin/categories/reorder", OperationID: "admin.categories.reorder", Group: GroupAdmin, Auth: AuthRequired},
 	{Method: "POST", Path: "/api/v1/admin/comments/:param1/moderate", OperationID: "admin.comments.moderate", Group: GroupAdmin, Auth: AuthRequired},
 	{Method: "POST", Path: "/api/v1/admin/comments/bulk-moderate", OperationID: "admin.comments.bulk_moderate", Group: GroupAdmin, Auth: AuthRequired},
 	{Method: "POST", Path: "/api/v1/admin/impersonation/start", OperationID: "admin.impersonation.start", Group: GroupAdmin, Auth: AuthRequired},
