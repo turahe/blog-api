@@ -166,6 +166,12 @@ paths:
     $ref: ./paths/categories.yaml#/~1api~1v1~1categories
   /api/v1/categories/{slug}:
     $ref: ./paths/categories.yaml#/~1api~1v1~1categories~1{slug}
+  /api/v1/admin/categories:
+    $ref: ./paths/categories.yaml#/~1api~1v1~1admin~1categories
+  /api/v1/admin/categories/{id}:
+    $ref: ./paths/categories.yaml#/~1api~1v1~1admin~1categories~1{id}
+  /api/v1/admin/categories/{id}/move:
+    $ref: ./paths/categories.yaml#/~1api~1v1~1admin~1categories~1{id}~1move
   /api/v1/tags:
     $ref: ./paths/tags.yaml#/~1api~1v1~1tags
   /api/v1/admin/tags:
@@ -296,6 +302,12 @@ components:
       $ref: ./components/schemas/Media.yaml#/AvatarSizeVariants
     Category:
       $ref: ./components/schemas/Categories.yaml#/Category
+    CategoryCreateRequest:
+      $ref: ./components/schemas/Categories.yaml#/CategoryCreateRequest
+    CategoryMoveRequest:
+      $ref: ./components/schemas/Categories.yaml#/CategoryMoveRequest
+    CategoryUpdateRequest:
+      $ref: ./components/schemas/Categories.yaml#/CategoryUpdateRequest
     EmailChangeRequest:
       $ref: ./components/schemas/User.yaml#/EmailChangeRequest
     Envelope:
