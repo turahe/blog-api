@@ -68,6 +68,102 @@ func adminCompleteMediaHandler(media mediaports.Service) gin.HandlerFunc {
 	}
 }
 
+func adminListMediaHandler(media mediaports.Service) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		page := parsePositiveInt(c.Query("page"), 1)
+		perPage := parsePositiveInt(c.Query("per_page"), 20)
+		result, err := media.List(c.Request.Context(), mediadomain.ListFilter{
+			Page:    page,
+			PerPage: perPage,
+			Query:   c.Query("q"),
+			Disk:    c.Query("disk"),
+		})
+		if mapMediaError(c, err) {
+			return
+		}
+		items := make([]gin.H, 0, len(result.Items))
+		for _, asset := range result.Items {
+			items = append(items, mediaAssetJSON(asset))
+		}
+		successWithMeta(c, nethttp.StatusOK, gin.H{"items": items}, &Meta{
+			Page:    result.Page,
+			PerPage: result.PerPage,
+			Total:   result.Total,
+		})
+	}
+}
+
+func adminDeleteMediaHandler(media mediaports.Service) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		id, err := uuid.Parse(strings.TrimSpace(c.Param("param1")))
+		if err != nil {
+			failure(c, nethttp.StatusBadRequest, "validation_error", "Invalid media id")
+			return
+		}
+		if err := media.Delete(c.Request.Context(), id); mapMediaError(c, err) {
+			return
+		}
+		success(c, nethttp.StatusOK, nil)
+	}
+}
+
+type mediaTagsRequest struct {
+	Tags []string `json:"tags"`
+}
+
+func adminPatchMediaTagsHandler(media mediaports.Service) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		id, err := uuid.Parse(strings.TrimSpace(c.Param("param1")))
+		if err != nil {
+			failure(c, nethttp.StatusBadRequest, "validation_error", "Invalid media id")
+			return
+		}
+		var req mediaTagsRequest
+		if err := c.ShouldBindJSON(&req); err != nil {
+			failure(c, nethttp.StatusBadRequest, "validation_error", "Invalid request body")
+			return
+		}
+		asset, err := media.UpdateTags(c.Request.Context(), id, req.Tags)
+		if mapMediaError(c, err) {
+			return
+		}
+		success(c, nethttp.StatusOK, mediaAssetJSON(asset))
+	}
+}
+
+func publicGetMediaHandler(media mediaports.Service) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		id, err := uuid.Parse(strings.TrimSpace(c.Param("param1")))
+		if err != nil {
+			failure(c, nethttp.StatusBadRequest, "validation_error", "Invalid media id")
+			return
+		}
+		asset, err := media.GetReady(c.Request.Context(), id)
+		if mapMediaError(c, err) {
+			return
+		}
+		success(c, nethttp.StatusOK, mediaAssetJSON(asset))
+	}
+}
+
+func parsePositiveInt(raw string, fallback int) int {
+	raw = strings.TrimSpace(raw)
+	if raw == "" {
+		return fallback
+	}
+	var n int
+	for _, ch := range raw {
+		if ch < '0' || ch > '9' {
+			return fallback
+		}
+		n = n*10 + int(ch-'0')
+	}
+	if n < 1 {
+		return fallback
+	}
+	return n
+}
+
 func mapMediaError(c *gin.Context, err error) bool {
 	if err == nil {
 		return false

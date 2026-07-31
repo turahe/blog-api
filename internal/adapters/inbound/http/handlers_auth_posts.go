@@ -241,21 +241,26 @@ func postJSON(post postdomain.Post) gin.H {
 	if post.CategoryID != nil {
 		categoryID = post.CategoryID.String()
 	}
+	var coverImageMediaID any
+	if post.CoverImageMediaID != nil {
+		coverImageMediaID = post.CoverImageMediaID.String()
+	}
 	var publishedAt any
 	if post.PublishedAt != nil {
 		publishedAt = post.PublishedAt.UTC().Format(time.RFC3339)
 	}
 	return gin.H{
-		"id":           post.ID.String(),
-		"author_id":    post.AuthorID.String(),
-		"category_id":  categoryID,
-		"title":        post.Title,
-		"slug":         post.Slug,
-		"excerpt":      post.Excerpt,
-		"content":      post.Content,
-		"status":       string(post.Status),
-		"published_at": publishedAt,
-		"created_at":   post.CreatedAt.UTC().Format(time.RFC3339),
-		"updated_at":   post.UpdatedAt.UTC().Format(time.RFC3339),
+		"id":                   post.ID.String(),
+		"author_id":            post.AuthorID.String(),
+		"category_id":          categoryID,
+		"title":                post.Title,
+		"slug":                 post.Slug,
+		"excerpt":              post.Excerpt,
+		"content":              post.Content,
+		"cover_image_media_id": coverImageMediaID,
+		"status":               string(post.Status),
+		"published_at":         publishedAt,
+		"created_at":           post.CreatedAt.UTC().Format(time.RFC3339),
+		"updated_at":           post.UpdatedAt.UTC().Format(time.RFC3339),
 	}
 }

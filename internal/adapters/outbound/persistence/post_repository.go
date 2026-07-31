@@ -3,6 +3,7 @@ package persistence
 import (
 	"context"
 	"errors"
+	"time"
 
 	"github.com/google/uuid"
 	postdomain "github.com/turahe/blog-api/internal/core/post/domain"
@@ -75,6 +76,7 @@ func (r *PostRepository) Create(ctx context.Context, post postdomain.Post) (post
 	model := PostModel{
 		ID: post.ID, AuthorID: post.AuthorID, CategoryID: post.CategoryID,
 		Title: post.Title, Slug: post.Slug, Content: post.Content,
+		CoverImageMediaID: post.CoverImageMediaID,
 		Status: string(post.Status), Version: post.Version,
 		PublishedAt: post.PublishedAt, CreatedAt: post.CreatedAt, UpdatedAt: post.UpdatedAt,
 	}
@@ -89,14 +91,15 @@ func (r *PostRepository) Create(ctx context.Context, post postdomain.Post) (post
 
 func (r *PostRepository) Update(ctx context.Context, post postdomain.Post) (postdomain.Post, error) {
 	updates := map[string]any{
-		"title":        post.Title,
-		"slug":         post.Slug,
-		"content":      post.Content,
-		"status":       string(post.Status),
-		"version":      post.Version,
-		"published_at": post.PublishedAt,
-		"updated_at":   post.UpdatedAt,
-		"category_id":  post.CategoryID,
+		"title":                 post.Title,
+		"slug":                  post.Slug,
+		"content":               post.Content,
+		"status":                string(post.Status),
+		"version":               post.Version,
+		"published_at":          post.PublishedAt,
+		"updated_at":            post.UpdatedAt,
+		"category_id":           post.CategoryID,
+		"cover_image_media_id":  post.CoverImageMediaID,
 	}
 	if post.Excerpt != "" {
 		updates["excerpt"] = post.Excerpt
@@ -107,19 +110,36 @@ func (r *PostRepository) Update(ctx context.Context, post postdomain.Post) (post
 	return r.GetByID(ctx, post.ID)
 }
 
+func (r *PostRepository) SetCoverImage(ctx context.Context, postID uuid.UUID, mediaID *uuid.UUID, updatedAt time.Time) error {
+	res := r.db.WithContext(ctx).Model(&PostModel{}).
+		Where("id = ? AND deleted_at IS NULL", postID).
+		Updates(map[string]any{
+			"cover_image_media_id": mediaID,
+			"updated_at":           updatedAt,
+		})
+	if res.Error != nil {
+		return res.Error
+	}
+	if res.RowsAffected == 0 {
+		return postdomain.ErrNotFound
+	}
+	return nil
+}
+
 func mapPost(model PostModel) postdomain.Post {
 	post := postdomain.Post{
-		ID:          model.ID,
-		AuthorID:    model.AuthorID,
-		CategoryID:  model.CategoryID,
-		Title:       model.Title,
-		Slug:        model.Slug,
-		Content:     model.Content,
-		Status:      postdomain.Status(model.Status),
-		Version:     model.Version,
-		PublishedAt: model.PublishedAt,
-		CreatedAt:   model.CreatedAt,
-		UpdatedAt:   model.UpdatedAt,
+		ID:                model.ID,
+		AuthorID:          model.AuthorID,
+		CategoryID:        model.CategoryID,
+		Title:             model.Title,
+		Slug:              model.Slug,
+		Content:           model.Content,
+		CoverImageMediaID: model.CoverImageMediaID,
+		Status:            postdomain.Status(model.Status),
+		Version:           model.Version,
+		PublishedAt:       model.PublishedAt,
+		CreatedAt:         model.CreatedAt,
+		UpdatedAt:         model.UpdatedAt,
 	}
 	if model.Excerpt != nil {
 		post.Excerpt = *model.Excerpt
@@ -130,3 +150,4 @@ func mapPost(model PostModel) postdomain.Post {
 	}
 	return post
 }
+

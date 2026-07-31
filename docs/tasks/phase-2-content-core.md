@@ -8,8 +8,9 @@ Index: [README.md](./README.md).
 
 ## Status
 
-**Partial** — post create and publish plus public post, category, and tag reads are wired.
-Media upload MVP (presign + complete) is wired; list/delete/transform and public-read caching remain open.
+**Partial** — post create/publish and public post/category/tag reads are wired.
+Media upload, list/delete/tags, public get, and post featured-media replace are wired;
+on-the-fly transform and public-read caching remain open.
 
 ## Epic: posts
 
@@ -47,14 +48,15 @@ Media upload MVP (presign + complete) is wired; list/delete/transform and public
 - [x] Media domain and service under `internal/core/media`
 - [x] `admin.media.create` — `POST /api/v1/admin/media` (JSON **presign**, not multipart)
 - [x] `admin.media.complete` — `POST /api/v1/admin/media/{id}/complete`
-- [ ] `admin.media.list` — `GET /api/v1/admin/media`
-- [ ] `admin.media.delete` — `DELETE /api/v1/admin/media/{id}`
-- [ ] `admin.media.tags.patch` — `PATCH /api/v1/admin/media/{id}/tags`
-- [ ] `admin.posts.media.replace` — `PATCH /api/v1/admin/posts/{id}/media`
-- [ ] `public.media.get` — `GET /api/v1/media/{id}`
-- [ ] `public.media.transform` — `GET /api/v1/media/{id}/transform`
+- [x] `admin.media.list` — `GET /api/v1/admin/media`
+- [x] `admin.media.delete` — `DELETE /api/v1/admin/media/{id}` (soft delete; clears FK refs)
+- [x] `admin.media.tags.patch` — `PATCH /api/v1/admin/media/{id}/tags`
+- [x] `admin.posts.media.replace` — `PATCH /api/v1/admin/posts/{id}/media` (`post_media` + cover sync)
+- [x] `public.media.get` — `GET /api/v1/media/{id}` (ready assets only)
+- [ ] `public.media.transform` — `GET /api/v1/media/{id}/transform` (deferred)
 - [x] Upload validation: MIME allowlist, size ceiling, and filename sanitisation
 - [x] Presigned-URL strategy documented in [media.md](../backend/media.md)
+- [x] Media relations migration `00006_media_relations.sql` (`post_media`, `cover_image_media_id`, avatar/category FKs)
 
 Spec: [media-management.md](../features/media-management.md) · MVP design: [2026-07-31-media-upload-design.md](../superpowers/specs/2026-07-31-media-upload-design.md)
 

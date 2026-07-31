@@ -85,6 +85,7 @@ func NewRuntime(ctx context.Context, cfg config.Config, logger *slog.Logger, ver
 	categories := categoryservice.New(categoriesRepo)
 
 	var media mediaports.Service
+	var mediaRepo *persistence.MediaRepository
 	if cfg.MediaEnabled() {
 		objectStorage, err := storage.NewS3(ctx, cfg)
 		if err != nil {
@@ -92,7 +93,7 @@ func NewRuntime(ctx context.Context, cfg config.Config, logger *slog.Logger, ver
 			_ = db.Close()
 			return nil, fmt.Errorf("create media storage: %w", err)
 		}
-		mediaRepo := persistence.NewMediaRepository(db.GORM)
+		mediaRepo = persistence.NewMediaRepository(db.GORM)
 		media = mediaservice.New(
 			mediaRepo,
 			objectStorage,
@@ -103,6 +104,7 @@ func NewRuntime(ctx context.Context, cfg config.Config, logger *slog.Logger, ver
 			cfg.MediaMaxUploadBytes,
 			cfg.MediaPresignTTL,
 		)
+		posts.WithMedia(persistence.NewPostMediaRepository(db.GORM), mediaRepo)
 	}
 
 	enforcer, err := outboundrbac.NewEnforcer(db.GORM)

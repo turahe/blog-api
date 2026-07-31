@@ -42,19 +42,20 @@ type RefreshSessionModel struct {
 func (RefreshSessionModel) TableName() string { return "refresh_sessions" }
 
 type PostModel struct {
-	ID          uuid.UUID  `gorm:"type:uuid;primaryKey"`
-	AuthorID    uuid.UUID  `gorm:"type:uuid;column:author_id"`
-	CategoryID  *uuid.UUID `gorm:"type:uuid;column:category_id"`
-	Title       string
-	Slug        string
-	Excerpt     *string
-	Content     string
-	Status      string
-	Version     int64
-	PublishedAt *time.Time
-	CreatedAt   time.Time
-	UpdatedAt   time.Time
-	DeletedAt   gorm.DeletedAt `gorm:"index"`
+	ID                uuid.UUID  `gorm:"type:uuid;primaryKey"`
+	AuthorID          uuid.UUID  `gorm:"type:uuid;column:author_id"`
+	CategoryID        *uuid.UUID `gorm:"type:uuid;column:category_id"`
+	Title             string
+	Slug              string
+	Excerpt           *string
+	Content           string
+	CoverImageMediaID *uuid.UUID `gorm:"type:uuid;column:cover_image_media_id"`
+	Status            string
+	Version           int64
+	PublishedAt       *time.Time
+	CreatedAt         time.Time
+	UpdatedAt         time.Time
+	DeletedAt         gorm.DeletedAt `gorm:"index"`
 }
 
 func (PostModel) TableName() string { return "posts" }

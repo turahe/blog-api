@@ -86,6 +86,71 @@ func (r *MediaRepository) Update(ctx context.Context, asset mediadomain.MediaAss
 	return r.GetByID(ctx, asset.ID)
 }
 
+func (r *MediaRepository) List(ctx context.Context, filter mediadomain.ListFilter) (mediadomain.ListResult, error) {
+	q := r.db.WithContext(ctx).Model(&MediaAssetModel{}).Where("deleted_at IS NULL")
+	if filter.Query != "" {
+		like := "%" + filter.Query + "%"
+		q = q.Where("original_filename ILIKE ? OR storage_key ILIKE ?", like, like)
+	}
+	if filter.Disk != "" {
+		q = q.Where("disk = ?", filter.Disk)
+	}
+	if filter.Status != "" {
+		q = q.Where("status = ?", filter.Status)
+	}
+
+	var total int64
+	if err := q.Count(&total).Error; err != nil {
+		return mediadomain.ListResult{}, err
+	}
+
+	var models []MediaAssetModel
+	offset := (filter.Page - 1) * filter.PerPage
+	if err := q.Order("created_at DESC").Limit(filter.PerPage).Offset(offset).Find(&models).Error; err != nil {
+		return mediadomain.ListResult{}, err
+	}
+
+	items := make([]mediadomain.MediaAsset, 0, len(models))
+	for _, model := range models {
+		items = append(items, mapMediaAsset(model))
+	}
+	return mediadomain.ListResult{Items: items, Total: total, Page: filter.Page, PerPage: filter.PerPage}, nil
+}
+
+func (r *MediaRepository) SoftDelete(ctx context.Context, id uuid.UUID, deletedAt time.Time) error {
+	res := r.db.WithContext(ctx).Model(&MediaAssetModel{}).
+		Where("id = ? AND deleted_at IS NULL", id).
+		Updates(map[string]any{
+			"deleted_at": gorm.DeletedAt{Time: deletedAt, Valid: true},
+			"updated_at": deletedAt,
+		})
+	if res.Error != nil {
+		return res.Error
+	}
+	if res.RowsAffected == 0 {
+		return mediadomain.ErrNotFound
+	}
+	return nil
+}
+
+func (r *MediaRepository) ClearEntityReferences(ctx context.Context, id uuid.UUID) error {
+	return r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		if err := tx.Exec(`UPDATE users SET avatar_id = NULL WHERE avatar_id = ?`, id).Error; err != nil {
+			return err
+		}
+		if err := tx.Exec(`UPDATE categories SET image_id = NULL WHERE image_id = ?`, id).Error; err != nil {
+			return err
+		}
+		if err := tx.Exec(`UPDATE posts SET cover_image_media_id = NULL WHERE cover_image_media_id = ?`, id).Error; err != nil {
+			return err
+		}
+		if err := tx.Exec(`DELETE FROM post_media WHERE media_asset_id = ?`, id).Error; err != nil {
+			return err
+		}
+		return nil
+	})
+}
+
 func mapMediaAssetModel(asset mediadomain.MediaAsset) MediaAssetModel {
 	model := MediaAssetModel{
 		ID:               asset.ID,

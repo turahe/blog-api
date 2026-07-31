@@ -40,3 +40,32 @@ type PresignResult struct {
 	RequiredHeaders map[string]string
 	ExpiresAt       time.Time
 }
+
+type ListFilter struct {
+	Page    int
+	PerPage int
+	Query   string
+	Disk    string
+	Status  string
+}
+
+type ListResult struct {
+	Items   []MediaAsset
+	Total   int64
+	Page    int
+	PerPage int
+}
+
+const (
+	KindCover       = "cover"
+	KindInlineImage = "inline_image"
+	KindAttachment  = "attachment"
+)
+
+type PostMediaItem struct {
+	MediaAssetID uuid.UUID
+	Kind         string
+	SortOrder    int
+	Media        *MediaAsset
+}
+

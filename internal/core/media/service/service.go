@@ -174,6 +174,82 @@ func (s *Service) CompleteUpload(ctx context.Context, id uuid.UUID) (mediadomain
 	return asset, nil
 }
 
+func (s *Service) List(ctx context.Context, filter mediadomain.ListFilter) (mediadomain.ListResult, error) {
+	if filter.Page < 1 {
+		filter.Page = 1
+	}
+	if filter.PerPage < 1 || filter.PerPage > 100 {
+		filter.PerPage = 20
+	}
+	filter.Query = strings.TrimSpace(filter.Query)
+	filter.Disk = strings.TrimSpace(strings.ToLower(filter.Disk))
+	filter.Status = strings.TrimSpace(strings.ToLower(filter.Status))
+	return s.repo.List(ctx, filter)
+}
+
+func (s *Service) Get(ctx context.Context, id uuid.UUID) (mediadomain.MediaAsset, error) {
+	asset, err := s.repo.GetByID(ctx, id)
+	if err != nil {
+		if errors.Is(err, ErrNotFound) {
+			return mediadomain.MediaAsset{}, ErrNotFound
+		}
+		return mediadomain.MediaAsset{}, err
+	}
+	return asset, nil
+}
+
+func (s *Service) GetReady(ctx context.Context, id uuid.UUID) (mediadomain.MediaAsset, error) {
+	asset, err := s.Get(ctx, id)
+	if err != nil {
+		return mediadomain.MediaAsset{}, err
+	}
+	if asset.Status != mediadomain.StatusReady {
+		return mediadomain.MediaAsset{}, ErrNotFound
+	}
+	return asset, nil
+}
+
+func (s *Service) Delete(ctx context.Context, id uuid.UUID) error {
+	if _, err := s.Get(ctx, id); err != nil {
+		return err
+	}
+	now := s.clock.Now()
+	if err := s.repo.ClearEntityReferences(ctx, id); err != nil {
+		return err
+	}
+	return s.repo.SoftDelete(ctx, id, now)
+}
+
+func (s *Service) UpdateTags(ctx context.Context, id uuid.UUID, tags []string) (mediadomain.MediaAsset, error) {
+	asset, err := s.Get(ctx, id)
+	if err != nil {
+		return mediadomain.MediaAsset{}, err
+	}
+	cleaned := make([]string, 0, len(tags))
+	seen := map[string]struct{}{}
+	for _, tag := range tags {
+		tag = strings.TrimSpace(tag)
+		if tag == "" {
+			continue
+		}
+		if len(tag) > 64 {
+			return mediadomain.MediaAsset{}, fmt.Errorf("%w: tag too long", ErrValidation)
+		}
+		key := strings.ToLower(tag)
+		if _, ok := seen[key]; ok {
+			continue
+		}
+		seen[key] = struct{}{}
+		cleaned = append(cleaned, tag)
+		if len(cleaned) > 50 {
+			return mediadomain.MediaAsset{}, fmt.Errorf("%w: too many tags", ErrValidation)
+		}
+	}
+	asset.Tags = cleaned
+	asset.UpdatedAt = s.clock.Now()
+	return s.repo.Update(ctx, asset)
+}
+
 func (s *Service) isAllowedContentType(contentType string) bool {
 	_, ok := s.allowMIME[contentType]
 	return ok

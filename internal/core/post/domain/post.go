@@ -21,19 +21,20 @@ const (
 )
 
 type Post struct {
-	ID          uuid.UUID
-	AuthorID    uuid.UUID
-	CategoryID  *uuid.UUID
-	Title       string
-	Slug        string
-	Excerpt     string
-	Content     string
-	Status      Status
-	Version     int64
-	PublishedAt *time.Time
-	CreatedAt   time.Time
-	UpdatedAt   time.Time
-	DeletedAt   *time.Time
+	ID                uuid.UUID
+	AuthorID          uuid.UUID
+	CategoryID        *uuid.UUID
+	Title             string
+	Slug              string
+	Excerpt           string
+	Content           string
+	CoverImageMediaID *uuid.UUID
+	Status            Status
+	Version           int64
+	PublishedAt       *time.Time
+	CreatedAt         time.Time
+	UpdatedAt         time.Time
+	DeletedAt         *time.Time
 }
 
 type ListFilter struct {

@@ -29,6 +29,26 @@ func (f *fakeMediaService) CompleteUpload(ctx context.Context, id uuid.UUID) (me
 	return f.completeFn(ctx, id)
 }
 
+func (f *fakeMediaService) List(ctx context.Context, filter mediadomain.ListFilter) (mediadomain.ListResult, error) {
+	return mediadomain.ListResult{}, nil
+}
+
+func (f *fakeMediaService) Get(ctx context.Context, id uuid.UUID) (mediadomain.MediaAsset, error) {
+	return mediadomain.MediaAsset{}, mediaservice.ErrNotFound
+}
+
+func (f *fakeMediaService) GetReady(ctx context.Context, id uuid.UUID) (mediadomain.MediaAsset, error) {
+	return mediadomain.MediaAsset{}, mediaservice.ErrNotFound
+}
+
+func (f *fakeMediaService) Delete(ctx context.Context, id uuid.UUID) error {
+	return nil
+}
+
+func (f *fakeMediaService) UpdateTags(ctx context.Context, id uuid.UUID, tags []string) (mediadomain.MediaAsset, error) {
+	return mediadomain.MediaAsset{}, mediaservice.ErrNotFound
+}
+
 func TestMediaPresignHappyPath(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	mediaID := uuid.MustParse("11111111-1111-1111-1111-111111111111")

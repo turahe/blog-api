@@ -1,5 +1,18 @@
 # Changelog
 
+## 2026-07-31 — Media feature completion (list/delete/tags/get + post media)
+
+### Added
+
+- `admin.media.list`, `admin.media.delete`, `admin.media.tags.patch`, `public.media.get`
+- `admin.posts.media.replace` with `post_media` join rows and `posts.cover_image_media_id` sync
+- Migration `00006_media_relations.sql` (`post_media`, cover/avatar/category FKs)
+
+### Notes
+
+- `public.media.transform` remains deferred (501 stub)
+- Soft delete clears FK references and `post_media` rows; object bytes are not removed from storage yet
+
 ## 2026-07-31 — Media upload MVP (presign + complete)
 
 ### Added

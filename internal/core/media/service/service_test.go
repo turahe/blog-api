@@ -195,6 +195,32 @@ func (r *fakeRepo) Update(_ context.Context, asset mediadomain.MediaAsset) (medi
 	return r.store(asset), nil
 }
 
+func (r *fakeRepo) List(_ context.Context, filter mediadomain.ListFilter) (mediadomain.ListResult, error) {
+	items := make([]mediadomain.MediaAsset, 0, len(r.assets))
+	for _, asset := range r.assets {
+		if asset.DeletedAt != nil {
+			continue
+		}
+		items = append(items, cloneAsset(asset))
+	}
+	return mediadomain.ListResult{Items: items, Total: int64(len(items)), Page: filter.Page, PerPage: filter.PerPage}, nil
+}
+
+func (r *fakeRepo) SoftDelete(_ context.Context, id uuid.UUID, deletedAt time.Time) error {
+	asset, ok := r.assets[id]
+	if !ok || asset.DeletedAt != nil {
+		return ErrNotFound
+	}
+	asset.DeletedAt = &deletedAt
+	asset.UpdatedAt = deletedAt
+	r.assets[id] = asset
+	return nil
+}
+
+func (r *fakeRepo) ClearEntityReferences(_ context.Context, _ uuid.UUID) error {
+	return nil
+}
+
 func (r *fakeRepo) store(asset mediadomain.MediaAsset) mediadomain.MediaAsset {
 	cloned := cloneAsset(asset)
 	r.assets[asset.ID] = cloned

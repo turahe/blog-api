@@ -41,8 +41,17 @@ Admin upload uses **presigned PUT** (bytes go client → object storage, not thr
 Config: `S3_*` + `MEDIA_ALLOWED_MIME_TYPES`, `MEDIA_MAX_UPLOAD_BYTES`, `MEDIA_PRESIGN_TTL` — see
 [config.md](../deployment/config.md). Design: [2026-07-31-media-upload-design.md](../superpowers/specs/2026-07-31-media-upload-design.md).
 
-**Deferred (not in MVP):** multipart through API, malware scan, list/delete/tags, on-the-fly transform,
-outbox events, `post_media` wiring.
+**Deferred (not in this slice):** multipart through API, malware scan, on-the-fly transform,
+outbox events.
+
+## Featured media on posts
+
+`PATCH /api/v1/admin/posts/{id}/media` (`admin.posts.media.replace`, permission `post.update`):
+
+- Replaces all `post_media` rows for the post (`cover` | `inline_image` | `attachment`)
+- Only **ready** media assets may be attached
+- At most one `kind=cover` item; syncs `posts.cover_image_media_id`
+- Migration: `00006_media_relations.sql`
 
 ## Upload Workflow (target / full)
 
