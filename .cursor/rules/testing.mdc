@@ -1,0 +1,13 @@
+---
+description: Go test conventions for unit and HTTP adapter tests
+globs: "**/*_test.go"
+alwaysApply: false
+---
+
+# Testing
+
+- Domain/service tests: no Gin/GORM/Redis imports.
+- HTTP: `NewRouter` + `httptest`; table-drive status + `error.code`.
+- After route gen changes: `go test ./internal/adapters/inbound/http/...`
+- Prefer file/package-scoped `go test` over full suite while iterating.
+- Do not delete failing tests to green CI. Matrix: `docs/testing/`.

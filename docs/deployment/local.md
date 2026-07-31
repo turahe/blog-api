@@ -12,12 +12,19 @@
 ```bash
 cp .env.example .env
 # edit APP_SESSION_KEY, APP_CSRF_KEY, APP_PEPPER to random values (≥32 chars for session key)
+set -a
+. ./.env
+set +a
 
 make infra-up          # postgres, redis, minio
-make migrate-up        # go run ./cmd/app migrate up
-go run ./cmd/app seed  # roles + admin@example.com / ChangeMeNow!123
-make run               # go run ./cmd/app serve
+make migrate-up        # go run ./cmd migrate up
+go run ./cmd seed      # roles + admin@example.com / ChangeMeNow!123
+make run               # go run ./cmd serve
 ```
+
+The Go process does not load `.env` automatically; source it as shown above. See
+[config.md](./config.md) for all variables and the distinction between application and
+Compose-only settings.
 
 Auth smoke:
 
@@ -77,7 +84,7 @@ Set in `.env`:
 Run worker:
 
 ```bash
-go run ./cmd/app worker
+go run ./cmd worker
 ```
 
 Google Cloud Pub/Sub uses a real GCP project (`MESSAGE_BROKER=googlepubsub`); no Compose emulator.

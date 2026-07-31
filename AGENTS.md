@@ -42,6 +42,7 @@ Co-Authored-By: <agent model name> <noreply@example.com>
 | Deployment | `docs/deployment/` |
 | API surface | `docs/backend/api.md` |
 | Data models | `docs/backend/model.md` |
+| Task backlog | `docs/tasks/README.md` |
 | AI context | `docs/ai-context.md` |
 
 ## Skills

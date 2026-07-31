@@ -46,17 +46,10 @@ All SSE endpoints:
 
 ```text
 project/
-├── cmd/
-│   └── app/
-│       ├── main.go       # Cobra entrypoint
-│       ├── root.go
-│       ├── serve.go      # app serve
-│       ├── worker.go     # app worker
-│       ├── scheduler.go  # app scheduler
-│       ├── migrate.go    # app migrate up / app migrate down
-│       ├── seed.go       # app seed
-│       ├── doctor.go     # app doctor
-│       └── version.go    # app version
+├── cmd/                  # package main — Cobra entrypoint and subcommands
+│   ├── main.go
+│   ├── command.go        # serve / migrate / seed / doctor / version
+│   └── worker.go         # app worker
 │
 ├── internal/
 │   ├── bootstrap/        # DI and lifecycle wiring

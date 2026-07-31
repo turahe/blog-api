@@ -1,0 +1,18 @@
+---
+description: Relative-link-only Markdown documentation rules
+globs: docs/**/*.md,README.md,AGENTS.md
+alwaysApply: false
+---
+
+# Docs links
+
+- Repository-internal links must be relative (e.g. `[api.md](../backend/api.md)`).
+- Forbidden: `/docs/...` root-absolute, `file://`, broken targets.
+- Prefer display text = basename + optional section cue.
+- After renames: update all references; run:
+
+```bash
+node scripts/docs/validate_relative_links.cjs docs contracts paths README.md
+```
+
+Full rules: `docs/guides/relative-link-usage-rules.md`.

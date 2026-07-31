@@ -4,6 +4,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/lib/pq"
 	"gorm.io/gorm"
 )
 
@@ -57,6 +58,27 @@ type PostModel struct {
 }
 
 func (PostModel) TableName() string { return "posts" }
+
+type MediaAssetModel struct {
+	ID               uuid.UUID      `gorm:"type:uuid;primaryKey"`
+	StorageKey       string         `gorm:"column:storage_key"`
+	OriginalFilename string         `gorm:"column:original_filename"`
+	ContentType      string         `gorm:"column:content_type"`
+	SizeBytes        int64          `gorm:"column:size_bytes"`
+	Width            *int           `gorm:"column:width"`
+	Height           *int           `gorm:"column:height"`
+	ChecksumSHA256   *string        `gorm:"column:checksum_sha256"`
+	Disk             string         `gorm:"column:disk"`
+	Status           string         `gorm:"column:status"`
+	UploadedBy       *uuid.UUID     `gorm:"type:uuid;column:uploaded_by"`
+	Tags             pq.StringArray `gorm:"type:text[];column:tags"`
+	PresignExpiresAt *time.Time     `gorm:"column:presign_expires_at"`
+	CreatedAt        time.Time      `gorm:"column:created_at"`
+	UpdatedAt        time.Time      `gorm:"column:updated_at"`
+	DeletedAt        gorm.DeletedAt `gorm:"column:deleted_at;index"`
+}
+
+func (MediaAssetModel) TableName() string { return "media_assets" }
 
 type RoleModel struct {
 	ID          uuid.UUID `gorm:"type:uuid;primaryKey"`

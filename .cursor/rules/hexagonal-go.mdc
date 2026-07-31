@@ -1,0 +1,22 @@
+---
+description: Hexagonal Go package boundaries for core and adapters
+globs: internal/**/*.go,cmd/**/*.go
+alwaysApply: false
+---
+
+# Hexagonal Go
+
+```text
+cmd              → bootstrap only (package main)
+internal/core/*/domain  → entities, invariants (no infra imports)
+internal/core/*/ports   → interfaces only
+internal/core/*/service → use cases via ports
+internal/adapters/inbound/http  → Gin, DTOs, middleware
+internal/adapters/outbound/*    → GORM, Redis, storage, events
+internal/platform/*             → shared infra primitives
+```
+
+- Handlers translate HTTP → service calls; no business rules in handlers.
+- Repositories map DB models ↔ domain; do not leak GORM types into core.
+- Pass `context.Context` across service and adapter boundaries.
+- Constructor injection in `internal/bootstrap`; avoid package-level mutable state.

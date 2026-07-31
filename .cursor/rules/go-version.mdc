@@ -1,0 +1,23 @@
+---
+description: Mandatory Go 1.26 rules for all Go code
+globs:
+  - "**/*.go"
+  - "go.mod"
+  - "go.sum"
+alwaysApply: true
+---
+
+# Go Version Policy
+
+The project MUST use Go 1.26.x.
+
+Rules:
+
+1. Never use Go versions older than 1.26.
+2. Never change `go.mod` to an older Go version.
+3. Use Go 1.26-compatible standard library APIs.
+4. Verify `go version` before major Go implementation changes.
+5. Keep Docker images on Go 1.26.x.
+6. Keep CI/CD Go versions aligned with Go 1.26.x.
+7. If a dependency requires a different Go version, stop and report the conflict.
+8. Do not silently downgrade Go to resolve dependency issues.

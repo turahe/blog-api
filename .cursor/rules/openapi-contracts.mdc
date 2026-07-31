@@ -1,0 +1,14 @@
+---
+description: Contract-first OpenAPI and generated Gin routes
+globs: contracts/**/*,paths/**/*,openapi.yaml,scripts/contracts/**/*,internal/adapters/inbound/http/v1/**
+alwaysApply: false
+---
+
+# OpenAPI contracts
+
+- Source of truth: `contracts/openapi.yaml` + `paths/*.yaml` (+ AsyncAPI for streams/events).
+- Add/change path → update contract → `make contracts` → `make routes`.
+- `operationId` namespace = route group (`admin`, `me`, `self`, `public`, `auth`, `analytics`, `health`).
+- Auth mode from `security`: inherit bearer = required; `[]` = none; `[bearerAuth, []]` = optional.
+- Do not attach auth to a URL prefix that mixes modes (comments, admin login).
+- New namespace requires: generator `GROUP_CONSTANTS`, chain in `router.go`, docs in `docs/backend/api.md`.

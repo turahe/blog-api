@@ -1,0 +1,13 @@
+---
+description: Deploy and Docker conventions for local and release
+globs: Dockerfile,compose.yaml,.env.example,.github/workflows/**/*,docs/deployment/**/*
+alwaysApply: false
+---
+
+# Deployment
+
+- Local: `make infra-up` → `make migrate-up` → `make run` (see `docs/deployment/local.md`).
+- Image: multi-stage distroless nonroot; never bake `.env` into layers.
+- Release order: build → migrate up → roll API → smoke health/auth/public.
+- Document new env vars in `.env.example` without real secrets.
+- Checklist: `docs/deployment/checklist.md`.

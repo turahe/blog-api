@@ -1,0 +1,146 @@
+# Phase 5 — Product Expansion
+
+## Goal
+
+Broaden the product surface: richer admin capabilities, search integration, the admin analytics
+dashboard, privacy and consent management, and media pipeline improvements.
+Index: [README.md](./README.md).
+
+## Status
+
+**Planned** — none of the settings, impersonation, revision, SEO, or newsletter operations are
+wired; all return `501`. Search and privacy management have no schema or service yet.
+
+## Epic: settings management
+
+- [ ] Settings schema and storage — see [settings.md](../backend/settings.md)
+- [ ] Settings service with typed groups and validation
+- [ ] `admin.settings.get` — `GET /api/v1/admin/settings`
+- [ ] `admin.settings.put` — `PUT /api/v1/admin/settings`
+- [ ] `admin.settings.history` — `GET /api/v1/admin/settings/history`
+- [ ] Cached read path with invalidation on write
+- [ ] Guard secret-bearing settings so they are never returned in plain text
+
+Spec: [settings-management.md](../features/settings-management.md)
+
+## Epic: impersonation
+
+- [ ] Impersonation session model and audit trail
+- [ ] `admin.impersonation.start` — `POST /api/v1/admin/impersonation/start`
+- [ ] `admin.impersonation.stop` — `POST /api/v1/admin/impersonation/stop`
+- [ ] `admin.impersonation.current` — `GET /api/v1/admin/impersonation/current`
+- [ ] Distinguish actor from subject in JWT claims and in every audit record
+- [ ] Hard ceiling on impersonation session lifetime
+- [ ] Block privilege escalation: an impersonator must not gain permissions they lack
+- [ ] Security review before enabling in production
+
+Specs: [impersonation.md](../features/impersonation.md), [impersonation.md](../backend/impersonation.md)
+
+## Epic: post versioning
+
+- [ ] Revision storage and diffing — see [post-versions.md](../backend/post-versions.md)
+- [ ] `admin.posts.revisions.list` — `GET /api/v1/admin/posts/{id}/revisions`
+- [ ] `admin.posts.revisions.get` — `GET /api/v1/admin/posts/{id}/revisions/{revisionId}`
+- [ ] `admin.posts.revisions.restore` — `POST /api/v1/admin/posts/{id}/revisions/{revisionId}/restore`
+- [ ] Capture a revision on every post mutation, including publish transitions
+- [ ] Revision retention or pruning policy
+
+Spec: [post-versioning.md](../features/post-versioning.md)
+
+## Epic: post SEO
+
+- [ ] SEO fields storage — see [post-seo.md](../backend/post-seo.md)
+- [ ] `admin.posts.seo.get` — `GET /api/v1/admin/posts/{id}/seo`
+- [ ] `admin.posts.seo.update` — `PUT /api/v1/admin/posts/{id}/seo`
+- [ ] `admin.posts.seo.preview` — `POST /api/v1/admin/posts/{id}/seo/preview`
+- [ ] `public.posts.seo_meta` — `GET /api/v1/posts/{slug}/seo-meta`
+- [ ] Derive sensible defaults from post title, excerpt, and cover media
+- [ ] Sanitise SEO text so it cannot inject markup into rendered meta tags
+
+Spec: [post-seo.md](../features/post-seo.md)
+
+## Epic: newsletter subscriptions
+
+- [ ] Subscriber and issue storage with double opt-in state
+- [ ] `public.newsletter.subscribe` — `POST /api/v1/newsletter/subscribe`
+- [ ] `public.newsletter.confirm` — `POST /api/v1/newsletter/confirm`
+- [ ] `public.newsletter.confirm_resend` — `POST /api/v1/newsletter/confirm/resend`
+- [ ] `public.newsletter.unsubscribe` — `POST /api/v1/newsletter/unsubscribe`
+- [ ] `public.newsletter.preferences.get` — `GET /api/v1/newsletter/preferences/{token}`
+- [ ] `public.newsletter.preferences.patch` — `PATCH /api/v1/newsletter/preferences/{token}`
+- [ ] `me.newsletter.subscribe` — `POST /api/v1/me/newsletter/subscribe`
+- [ ] `me.newsletter.unsubscribe` — `POST /api/v1/me/newsletter/unsubscribe`
+- [ ] `me.newsletter.subscriptions.list` — `GET /api/v1/me/newsletter/subscriptions`
+- [ ] `admin.newsletter.subscribers.list` — `GET /api/v1/admin/newsletter/subscribers`
+- [ ] `admin.newsletter.subscribers.get` — `GET /api/v1/admin/newsletter/subscribers/{id}`
+- [ ] `admin.newsletter.subscribers.delete` — `DELETE /api/v1/admin/newsletter/subscribers/{id}`
+- [ ] `admin.newsletter.issues.list` — `GET /api/v1/admin/newsletter/issues`
+- [ ] `admin.newsletter.issues.get` — `GET /api/v1/admin/newsletter/issues/{id}`
+- [ ] `admin.newsletter.issues.patch` — `PATCH /api/v1/admin/newsletter/issues/{id}`
+- [ ] `admin.newsletter.issues.send` — `POST /api/v1/admin/newsletter/issues`
+- [ ] `admin.newsletter.provider_config.get` — `GET /api/v1/admin/newsletter/provider-config`
+- [ ] `admin.newsletter.provider_config.put` — `PUT /api/v1/admin/newsletter/provider-config`
+- [ ] Unsubscribe tokens must be unguessable and single-purpose
+- [ ] Send issues through a Phase 4 consumer, never inline in the request
+
+Spec: [newsletter-subscriptions.md](../features/newsletter-subscriptions.md)
+
+## Epic: search integration
+
+- [ ] Choose the search backend: database full-text versus an external engine, and record the decision
+- [ ] Search port in the core layer with a swappable outbound adapter
+- [ ] Search query support on `public.posts.list`, or a dedicated search operation added to `paths/`
+- [ ] Indexing on publish, update, and delete, driven by Phase 4 events
+- [ ] Reindex command exposed through `cmd`
+- [ ] Relevance and highlighting expectations documented
+
+## Epic: privacy and consent management
+
+- [ ] Consent storage with purpose, version, and timestamp
+- [ ] `analytics.consent.store` — `POST /api/v1/analytics/consent`
+- [ ] `analytics.consent.get` — `GET /api/v1/analytics/consent`
+- [ ] `analytics.consent.withdraw` — `DELETE /api/v1/analytics/consent/{id}`
+- [ ] `me.privacy.get` — `GET /api/v1/me/privacy`
+- [ ] `me.privacy.update` — `PUT /api/v1/me/privacy`
+- [ ] `me.activity.export` — `GET /api/v1/me/activity/export`
+- [ ] `me.activity.erase` — `POST /api/v1/me/activity/erase`
+- [ ] Enforce consent at the analytics ingest boundary, not only in the UI
+- [ ] Export and erase must run asynchronously with a retrievable result
+
+## Epic: media pipeline improvements
+
+- [ ] Asynchronous derivative generation triggered by `media.uploaded`
+- [ ] Variant set definition (thumbnail, card, hero) driven by settings
+- [ ] Optional format conversion and compression policy
+- [ ] Orphan media detection and cleanup job
+- [ ] Storage usage reporting per user or per tenant
+
+## Dependencies and order
+
+1. Settings gates newsletter provider config and media variant definitions.
+2. Post revisions and SEO both depend on the Phase 2 admin post update endpoint.
+3. Newsletter sending depends on the Phase 1 mailer and the Phase 4 consumer runtime.
+4. Search indexing depends on Phase 4 domain events.
+5. Consent enforcement must land before Phase 6 telemetry ingest goes live.
+6. Impersonation depends on a working audit writer from Phase 3.
+
+## Cross-cutting
+
+- [ ] Update `paths/admin.yaml`, `paths/newsletter.yaml`, `paths/analytics.yaml` first, then `make routes`
+- [ ] Authorization tests for every new admin operation
+- [ ] Impersonation-specific security review and audit assertions
+- [ ] Token-handling review for newsletter and privacy tokens
+- [ ] Document the privacy stance in [overview.md](../security/overview.md)
+
+## References
+
+| Topic | Doc |
+| --- | --- |
+| API surface | [api.md](../backend/api.md) |
+| Settings | [settings.md](../backend/settings.md) |
+| Post versions | [post-versions.md](../backend/post-versions.md) |
+| Post SEO | [post-seo.md](../backend/post-seo.md) |
+| Impersonation | [impersonation.md](../backend/impersonation.md) |
+| Media | [media.md](../backend/media.md) |
+| Email | [email.md](../backend/email.md) |
+| Product requirements | [PRD.md](../product/PRD.md) |

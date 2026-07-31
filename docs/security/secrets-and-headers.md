@@ -9,8 +9,8 @@ Source of truth for local keys: [.env.example](../../.env.example).
 | `APP_SESSION_KEY` | ≥ 32 random bytes; rotate on compromise |
 | `APP_CSRF_KEY` | ≥ 32 random bytes; distinct from session key |
 | `APP_PEPPER` | server-side password pepper; never commit real value |
-| `DATABASE_URL` | least privilege DB role in staging/prod |
-| `REDIS_URL` | network-restricted; AUTH in non-local envs |
+| `DB_PASSWORD` | least privilege DB role in staging/prod; never commit real value |
+| `REDIS_PASSWORD` | store as a secret; network-restrict Redis and require AUTH outside local environments |
 | `S3_*` | scoped bucket credentials; no admin cloud keys in the API |
 
 Never commit `.env`. Distroless runtime image must not bake secrets into layers

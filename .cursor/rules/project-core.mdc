@@ -1,0 +1,13 @@
+---
+description: Core blog-api agent conventions (hexagonal, contracts, docs)
+alwaysApply: true
+---
+
+# Project core
+
+- Prefer small, focused diffs. Do not invent endpoints absent from OpenAPI.
+- Core (`internal/core`) must not import Gin, GORM, Redis, or Watermill.
+- After OpenAPI/`paths/` changes: `make contracts` then `make routes`.
+- Never hand-edit `routes_gen.go`.
+- Markdown: relative links only; validate with `scripts/docs/validate_relative_links.cjs`.
+- Read `AGENTS.md` for commands. Security/testing/deploy ops: `docs/security/`, `docs/testing/`, `docs/deployment/`.

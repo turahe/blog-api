@@ -1,7 +1,7 @@
 # Multi-Broker Messaging Design
 
-Date: 2026-07-30  
-Status: implemented — implementation plan at [../plans/2026-07-30-messaging-brokers.md](../plans/2026-07-30-messaging-brokers.md)  
+Date: 2026-07-30
+Status: implemented — implementation plan at [2026-07-30-messaging-brokers.md](../plans/2026-07-30-messaging-brokers.md)
 Scope: Watermill transport selection for Kafka, RabbitMQ, and Google Cloud Pub/Sub, plus local Compose for Kafka/RabbitMQ.
 
 ## Goal
@@ -94,3 +94,8 @@ Document profile usage in deployment/local docs and Makefile targets if needed (
 3. Tech stack and events docs describe all three transports
 4. Core remains free of Watermill/broker imports
 5. Misconfigured broker fails fast at startup with a clear error
+
+## Follow-up
+
+Remaining outbox, consumer, and hardening work is tracked in
+[phase-4-event-driven-platform.md](../../tasks/phase-4-event-driven-platform.md).

@@ -49,7 +49,7 @@ func NewRuntime(ctx context.Context, cfg config.Config, logger *slog.Logger, ver
 	if err != nil {
 		return nil, err
 	}
-	redisClient, err := redisplatform.Open(ctx, cfg.RedisURL)
+	redisClient, err := redisplatform.Open(ctx, cfg.RedisURL())
 	if err != nil {
 		_ = db.Close()
 		return nil, err

@@ -1,0 +1,14 @@
+---
+description: Gin HTTP adapter, envelopes, and route-group middleware
+globs: internal/adapters/inbound/http/**/*
+alwaysApply: false
+---
+
+# HTTP adapters
+
+- Success/error via `success` / `failure` / `failureWithDetails` — keep envelope `{ok,data,meta,error}`.
+- Register contract routes with `v1.Register(router, groupMiddleware(), handlerFor)` — auth chain then group chain then handler.
+- Stub unimplemented ops with `501` + `operation_id`, `route_group`, `auth_mode`.
+- Global middleware: request ID, security headers, access log, recovery.
+- Access logs may include `operation_id`, `route_group`, `auth_mode` — never secrets.
+- Tests: `httptest` + real router; assert status and `error.code`.

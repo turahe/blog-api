@@ -241,9 +241,9 @@ Install the following on your host machine:
 
 | Tool | Min version | Install check |
 |---|---|---|
-| Go | 1.22 | `go version` |
-| Node.js | 20.19 | `node -v` |
-| npm | 10.x (ships with Node 20) | `npm -v` |
+| Go | 1.26 | `go version` |
+| Node.js | 26 | `node -v` |
+| npm | 11.x (ships with Node 26) | `npm -v` |
 | Docker | 24 | `docker version` |
 | Docker Compose | v2 | `docker compose version` |
 
@@ -288,10 +288,20 @@ APP_CSRF_KEY=replace_me_with_32b_random
 APP_PEPPER=replace_me_for_hmac_lookups
 
 # ---------- PostgreSQL ----------
-DATABASE_URL=postgres://blog:blog@127.0.0.1:5432/blog?sslmode=disable
+DB_DRIVER=postgres
+DB_HOST=127.0.0.1
+DB_PORT=5432
+DB_USER=blog
+DB_PASSWORD=blog
+DB_NAME=blog
+DB_SSLMODE=disable
 
 # ---------- Redis ----------
-REDIS_URL=redis://127.0.0.1:6379/0
+REDIS_DRIVER=redis
+REDIS_HOST=127.0.0.1
+REDIS_PORT=6379
+REDIS_PASSWORD=
+REDIS_DB=0
 
 # ---------- Media (S3-compatible) ----------
 S3_ENDPOINT=http://127.0.0.1:9000     # MinIO for local; R2/S3 for real envs
@@ -329,8 +339,8 @@ docker compose ps        # confirm all three are "healthy"
 
 ```bash
 # Load .env and run migrations + seeding
-go run ./cmd/app migrate up
-go run ./cmd/app seed
+go run ./cmd migrate up
+go run ./cmd seed
 ```
 
 ### 4.7 Validate Contracts & Run Tests
@@ -353,7 +363,7 @@ Expected results:
 
 ```bash
 # Runs `app serve` on APP_ADDR (default 0.0.0.0:8080)
-go run ./cmd/app serve
+go run ./cmd serve
 ```
 
 Sanity-check the running service:
@@ -540,7 +550,7 @@ WORKDIR /src
 COPY go.mod go.sum ./
 RUN go mod download
 COPY . .
-RUN CGO_ENABLED=0 GOOS=linux go build -trimpath -ldflags='-s -w' -o /out/app ./cmd/app
+RUN CGO_ENABLED=0 GOOS=linux go build -trimpath -ldflags='-s -w' -o /out/app ./cmd
 
 FROM gcr.io/distroless/static-debian12:nonroot
 COPY --from=build /out/app /bin/app
@@ -566,7 +576,7 @@ This is the documented release checklist from
    - AsyncAPI: `npx @asyncapi/cli validate contracts/asyncapi.yaml`
 3. **Run automated tests**: `go test -count=1 ./...`
 4. **Apply DB migrations** *before* enabling new traffic:
-   `DATABASE_URL=... ./app migrate up`
+   `./app migrate up` (with `DB_HOST` / `DB_USER` / `DB_PASSWORD` / `DB_NAME` set)
 5. **Deploy API** (`/bin/app serve`) with a rolling / canary strategy.
 6. **Deploy workers and scheduler** if separated: `/bin/app worker`,
    `/bin/app scheduler`. Workers consume the outbox via Watermill.
@@ -718,7 +728,7 @@ Use the **Bug Report** issue template. Include *at least*:
    test is worth a thousand words.
 3. **Expected behavior** vs. **actual behavior**.
 4. **Logs / stack traces**: attach redacted `slog` output, a GORM query log
-  , or a panic trace. **Never paste DATABASE_URL, session keys, bearer
+  , or a panic trace. **Never paste `DB_PASSWORD`, session keys, bearer
    tokens, passwords, or real user data.** Redact before pasting.
 
 ### 8.2 Requesting a Feature
@@ -797,6 +807,8 @@ Deeper reads live under `docs/` and are the source of truth for design
 decisions. Start here:
 
 - [Product Requirements (PRD)][prd-doc] — goals, scope, success criteria.
+- [Task Backlog][tasks-doc] — per-phase checklists and current build status.
+- [Project Configuration][config-doc] — environment variables, defaults, and validation.
 - [Architecture Overview][arch-doc] — hexagonal modular monolith, package
   layout, contract ownership.
 - [Tech Stack][tech-doc] — pinned versions + rationale.
@@ -814,6 +826,8 @@ decisions. Start here:
 [pkg-json]:         ./package.json
 [db-doc]:           ./docs/backend/database.md
 [prd-doc]:          ./docs/product/PRD.md
+[tasks-doc]:        ./docs/tasks/README.md
+[config-doc]:       ./docs/deployment/config.md
 [arch-doc]:         ./docs/architecture/architecture.md
 [tech-doc]:         ./docs/architecture/tech-stack.md
 [sec-doc]:          ./docs/architecture/security.md

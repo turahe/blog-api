@@ -1,0 +1,14 @@
+---
+description: Security requirements for auth, RBAC, CSRF, and secrets
+globs: internal/**/*.go,docs/security/**/*,.env.example
+alwaysApply: false
+---
+
+# Security
+
+- Authorize server-side; never trust client roles or IDs.
+- CSRF on browser cookie mutations; step-up on high-risk actions.
+- No passwords/tokens/TOTP/decrypted PII in logs.
+- Allowlisted PATCH/PUT keys; unknown → `400` with stable `error.code`.
+- Privacy-hidden public profiles → `404` (not `403`) when policy says so.
+- Checklist: `docs/security/checklist.md`. Details: `docs/security/authn-authz.md`.
