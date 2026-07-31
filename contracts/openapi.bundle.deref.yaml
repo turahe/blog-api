@@ -4366,6 +4366,12 @@ paths:
             application/json:
               schema:
                 allOf: *ref_52
+        '401':
+          description: Authentication required
+          content: *ref_6
+        '403':
+          description: Permission denied
+          content: *ref_10
     post:
       tags:
         - Admin
@@ -4413,6 +4419,12 @@ paths:
         '400':
           description: Validation error
           content: *ref_11
+        '401':
+          description: Authentication required
+          content: *ref_6
+        '403':
+          description: Permission denied
+          content: *ref_10
         '409':
           description: Conflict
           content:
@@ -4461,6 +4473,15 @@ paths:
             application/json:
               schema:
                 allOf: *ref_53
+        '400':
+          description: Validation error
+          content: *ref_11
+        '401':
+          description: Authentication required
+          content: *ref_6
+        '403':
+          description: Permission denied
+          content: *ref_10
         '404':
           description: Resource not found
           content: *ref_26
@@ -4479,6 +4500,12 @@ paths:
       responses:
         '204':
           description: Deleted
+        '401':
+          description: Authentication required
+          content: *ref_6
+        '403':
+          description: Permission denied
+          content: *ref_10
         '404':
           description: Resource not found
           content: *ref_26
@@ -4529,6 +4556,12 @@ paths:
         '400':
           description: Validation error
           content: *ref_11
+        '401':
+          description: Authentication required
+          content: *ref_6
+        '403':
+          description: Permission denied
+          content: *ref_10
         '404':
           description: Resource not found
           content: *ref_26
