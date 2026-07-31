@@ -359,6 +359,74 @@ func TestPostServiceCreateDraftWithoutTagsUsesExistingTagList(t *testing.T) {
 	require.Empty(t, tags.replaceTagIDs)
 }
 
+func TestPostServiceUpdateWithEmptyTagsClearsTags(t *testing.T) {
+	t.Parallel()
+
+	now := time.Date(2026, 7, 31, 23, 15, 0, 0, time.UTC)
+	postID := uuid.New()
+	actorID := uuid.New()
+	repo := newFakePostRepo(postdomain.Post{
+		ID:        postID,
+		AuthorID:  actorID,
+		Title:     "Title",
+		Slug:      "title",
+		Status:    postdomain.StatusDraft,
+		Version:   1,
+		CreatedAt: now.Add(-time.Hour),
+		UpdatedAt: now.Add(-time.Hour),
+	})
+	tags := &fakeTagLinker{
+		resolveTags: []tagdomain.Tag{},
+		listTags:    []tagdomain.Tag{},
+	}
+	svc := New(repo, nil, fixedClock{now: now}).WithTags(tags)
+
+	emptyTags := []string{}
+	got, resolved, err := svc.Update(context.Background(), postID, actorID, false, postdomain.UpdateInput{Tags: &emptyTags})
+
+	require.NoError(t, err)
+	require.Equal(t, postID, got.ID)
+	require.Empty(t, tags.resolveNames)
+	require.Equal(t, postID, tags.replacePostID)
+	require.Empty(t, tags.replaceTagIDs)
+	require.Empty(t, resolved)
+	require.Equal(t, 1, repo.updateCalls)
+}
+
+func TestPostServiceUpdateOmitTagsUsesListByPostID(t *testing.T) {
+	t.Parallel()
+
+	now := time.Date(2026, 7, 31, 23, 30, 0, 0, time.UTC)
+	postID := uuid.New()
+	actorID := uuid.New()
+	tagID := uuid.New()
+	repo := newFakePostRepo(postdomain.Post{
+		ID:        postID,
+		AuthorID:  actorID,
+		Title:     "Old title",
+		Slug:      "title",
+		Status:    postdomain.StatusDraft,
+		Version:   1,
+		CreatedAt: now.Add(-time.Hour),
+		UpdatedAt: now.Add(-time.Hour),
+	})
+	tags := &fakeTagLinker{
+		listTags: []tagdomain.Tag{{ID: tagID, Name: "Go", Slug: "go"}},
+	}
+	svc := New(repo, nil, fixedClock{now: now}).WithTags(tags)
+
+	title := "New title"
+	got, resolved, err := svc.Update(context.Background(), postID, actorID, false, postdomain.UpdateInput{Title: &title})
+
+	require.NoError(t, err)
+	require.Equal(t, postID, got.ID)
+	require.Equal(t, "New title", got.Title)
+	require.Equal(t, postID, tags.listPostID)
+	require.Equal(t, uuid.Nil, tags.replacePostID)
+	require.Equal(t, tags.listTags, resolved)
+	require.Equal(t, 1, repo.updateCalls)
+}
+
 func TestPostServiceUpdateAllowsTagsOnlyPatch(t *testing.T) {
 	t.Parallel()
 
