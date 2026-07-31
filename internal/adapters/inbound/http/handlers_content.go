@@ -16,19 +16,22 @@ import (
 	mediadomain "github.com/turahe/blog-api/internal/core/media/domain"
 	postdomain "github.com/turahe/blog-api/internal/core/post/domain"
 	postservice "github.com/turahe/blog-api/internal/core/post/service"
+	tagdomain "github.com/turahe/blog-api/internal/core/tag/domain"
 )
 
 type createPostRequest struct {
-	Title      string  `json:"title"`
-	Slug       string  `json:"slug"`
-	Excerpt    string  `json:"excerpt"`
-	Content    string  `json:"content"`
-	CategoryID *string `json:"category_id"`
+	Title      string    `json:"title"`
+	Slug       string    `json:"slug"`
+	Excerpt    string    `json:"excerpt"`
+	Content    string    `json:"content"`
+	CategoryID *string   `json:"category_id"`
+	Tags       *[]string `json:"tags"`
 }
 
 type postAdminAPI interface {
 	ListAdmin(ctx context.Context, filter postdomain.AdminListFilter) (postdomain.ListResult, error)
-	Update(ctx context.Context, id, actorID uuid.UUID, unrestricted bool, in postdomain.UpdateInput) (postdomain.Post, error)
+	CreateDraft(ctx context.Context, authorID uuid.UUID, title, slug, excerpt, content string, categoryID *uuid.UUID, tags *[]string) (postdomain.Post, []tagdomain.Tag, error)
+	Update(ctx context.Context, id, actorID uuid.UUID, unrestricted bool, in postdomain.UpdateInput) (postdomain.Post, []tagdomain.Tag, error)
 }
 
 type updatePostRequest struct {
@@ -37,6 +40,7 @@ type updatePostRequest struct {
 	Excerpt    *string          `json:"excerpt"`
 	Content    *string          `json:"content"`
 	CategoryID *json.RawMessage `json:"category_id"`
+	Tags       *[]string        `json:"tags"`
 }
 
 func listCategoriesHandler(cats *categoryservice.CategoryService) gin.HandlerFunc {
@@ -69,7 +73,7 @@ func getCategoryHandler(cats *categoryservice.CategoryService) gin.HandlerFunc {
 	}
 }
 
-func adminCreatePostHandler(posts *postservice.PostService) gin.HandlerFunc {
+func adminCreatePostHandler(posts postAdminAPI) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		userID, ok := currentUserID(c)
 		if !ok {
@@ -90,7 +94,7 @@ func adminCreatePostHandler(posts *postservice.PostService) gin.HandlerFunc {
 			}
 			categoryID = &id
 		}
-		post, err := posts.CreateDraft(c.Request.Context(), userID, req.Title, req.Slug, req.Excerpt, req.Content, categoryID)
+		post, tags, err := posts.CreateDraft(c.Request.Context(), userID, req.Title, req.Slug, req.Excerpt, req.Content, categoryID, req.Tags)
 		if errors.Is(err, postservice.ErrValidation) {
 			failure(c, nethttp.StatusBadRequest, "validation_error", err.Error())
 			return
@@ -99,7 +103,7 @@ func adminCreatePostHandler(posts *postservice.PostService) gin.HandlerFunc {
 			failure(c, nethttp.StatusInternalServerError, "internal_error", "Failed to create post")
 			return
 		}
-		success(c, nethttp.StatusCreated, postJSON(post))
+		success(c, nethttp.StatusCreated, postWithTagsJSON(post, tags))
 	}
 }
 
@@ -218,6 +222,7 @@ func adminUpdatePostHandlerWithDeps(posts postAdminAPI, roles roleLookup) gin.Ha
 			Slug:    req.Slug,
 			Excerpt: req.Excerpt,
 			Content: req.Content,
+			Tags:    req.Tags,
 		}
 		if req.CategoryID != nil {
 			in.CategoryID.Present = true
@@ -238,12 +243,12 @@ func adminUpdatePostHandlerWithDeps(posts postAdminAPI, roles roleLookup) gin.Ha
 			}
 		}
 
-		post, err := posts.Update(c.Request.Context(), postID, userID, unrestricted, in)
+		post, tags, err := posts.Update(c.Request.Context(), postID, userID, unrestricted, in)
 		if mapPostError(c, err) {
 			return
 		}
 
-		success(c, nethttp.StatusOK, postJSON(post))
+		success(c, nethttp.StatusOK, postWithTagsJSON(post, tags))
 	}
 }
 
@@ -373,4 +378,18 @@ func categoryJSON(cat categorydomain.Category) gin.H {
 		"created_at":  cat.CreatedAt.UTC().Format(time.RFC3339),
 		"updated_at":  cat.UpdatedAt.UTC().Format(time.RFC3339),
 	}
+}
+
+func postWithTagsJSON(post postdomain.Post, tags []tagdomain.Tag) gin.H {
+	payload := postJSON(post)
+	if tags == nil {
+		payload["tags"] = []gin.H{}
+		return payload
+	}
+	encoded := make([]gin.H, 0, len(tags))
+	for _, tag := range tags {
+		encoded = append(encoded, tagJSON(tag))
+	}
+	payload["tags"] = encoded
+	return payload
 }

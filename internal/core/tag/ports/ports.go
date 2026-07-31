@@ -28,4 +28,6 @@ type Service interface {
 	Merge(ctx context.Context, sourceID, intoID uuid.UUID) error
 	Delete(ctx context.Context, id uuid.UUID) error
 	ResolveOrCreate(ctx context.Context, names []string) ([]tagdomain.Tag, error)
+	ReplacePostTags(ctx context.Context, postID uuid.UUID, tagIDs []uuid.UUID) error
+	ListByPostID(ctx context.Context, postID uuid.UUID) ([]tagdomain.Tag, error)
 }

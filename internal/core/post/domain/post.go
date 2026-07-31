@@ -67,6 +67,7 @@ type UpdateInput struct {
 	Excerpt    *string
 	Content    *string
 	CategoryID OptionalCategoryID
+	Tags       *[]string
 }
 
 type ListResult struct {

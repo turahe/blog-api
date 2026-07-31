@@ -13,6 +13,7 @@ import (
 	mediaports "github.com/turahe/blog-api/internal/core/media/ports"
 	postdomain "github.com/turahe/blog-api/internal/core/post/domain"
 	"github.com/turahe/blog-api/internal/core/post/ports"
+	tagdomain "github.com/turahe/blog-api/internal/core/tag/domain"
 )
 
 var (
@@ -31,6 +32,7 @@ type Clock interface {
 
 type PostService struct {
 	repo      ports.Repository
+	tags      ports.TagLinker
 	postMedia mediaports.PostMediaRepository
 	media     mediaports.Repository
 	ids       IDGenerator
@@ -44,6 +46,11 @@ func New(repo ports.Repository, ids IDGenerator, clock Clock) *PostService {
 func (s *PostService) WithMedia(postMedia mediaports.PostMediaRepository, media mediaports.Repository) *PostService {
 	s.postMedia = postMedia
 	s.media = media
+	return s
+}
+
+func (s *PostService) WithTags(tags ports.TagLinker) *PostService {
+	s.tags = tags
 	return s
 }
 
@@ -85,14 +92,15 @@ func (s *PostService) CreateDraft(
 	authorID uuid.UUID,
 	title, slug, excerpt, content string,
 	categoryID *uuid.UUID,
-) (postdomain.Post, error) {
+	tags *[]string,
+) (postdomain.Post, []tagdomain.Tag, error) {
 	title = strings.TrimSpace(title)
 	slug = strings.TrimSpace(strings.ToLower(slug))
 	if title == "" || slug == "" {
-		return postdomain.Post{}, fmt.Errorf("%w: title and slug required", ErrValidation)
+		return postdomain.Post{}, nil, fmt.Errorf("%w: title and slug required", ErrValidation)
 	}
 	if !slugPattern.MatchString(slug) {
-		return postdomain.Post{}, fmt.Errorf("%w: invalid slug", ErrValidation)
+		return postdomain.Post{}, nil, fmt.Errorf("%w: invalid slug", ErrValidation)
 	}
 	now := s.clock.Now()
 	post := postdomain.Post{
@@ -108,7 +116,11 @@ func (s *PostService) CreateDraft(
 		CreatedAt:  now,
 		UpdatedAt:  now,
 	}
-	return s.repo.Create(ctx, post)
+	post, err := s.repo.Create(ctx, post)
+	if err != nil {
+		return postdomain.Post{}, nil, err
+	}
+	return s.attachTags(ctx, post, tags)
 }
 
 func (s *PostService) Publish(ctx context.Context, id uuid.UUID) (postdomain.Post, error) {
@@ -132,26 +144,26 @@ func (s *PostService) Update(
 	id, actorID uuid.UUID,
 	unrestricted bool,
 	in postdomain.UpdateInput,
-) (postdomain.Post, error) {
-	if in.Title == nil && in.Slug == nil && in.Excerpt == nil && in.Content == nil && !in.CategoryID.Present {
-		return postdomain.Post{}, fmt.Errorf("%w: no fields to update", ErrValidation)
+) (postdomain.Post, []tagdomain.Tag, error) {
+	if in.Title == nil && in.Slug == nil && in.Excerpt == nil && in.Content == nil && !in.CategoryID.Present && in.Tags == nil {
+		return postdomain.Post{}, nil, fmt.Errorf("%w: no fields to update", ErrValidation)
 	}
 
 	post, err := s.repo.GetByID(ctx, id)
 	if err != nil {
-		return postdomain.Post{}, err
+		return postdomain.Post{}, nil, err
 	}
 	if post.DeletedAt != nil {
-		return postdomain.Post{}, postdomain.ErrNotFound
+		return postdomain.Post{}, nil, postdomain.ErrNotFound
 	}
 	if !unrestricted && post.AuthorID != actorID {
-		return postdomain.Post{}, postdomain.ErrNotFound
+		return postdomain.Post{}, nil, postdomain.ErrNotFound
 	}
 
 	if in.Title != nil {
 		title := strings.TrimSpace(*in.Title)
 		if title == "" {
-			return postdomain.Post{}, fmt.Errorf("%w: title required", ErrValidation)
+			return postdomain.Post{}, nil, fmt.Errorf("%w: title required", ErrValidation)
 		}
 		post.Title = title
 	}
@@ -159,18 +171,18 @@ func (s *PostService) Update(
 	if in.Slug != nil {
 		slug := strings.TrimSpace(strings.ToLower(*in.Slug))
 		if slug == "" {
-			return postdomain.Post{}, fmt.Errorf("%w: slug required", ErrValidation)
+			return postdomain.Post{}, nil, fmt.Errorf("%w: slug required", ErrValidation)
 		}
 		if !slugPattern.MatchString(slug) {
-			return postdomain.Post{}, fmt.Errorf("%w: invalid slug", ErrValidation)
+			return postdomain.Post{}, nil, fmt.Errorf("%w: invalid slug", ErrValidation)
 		}
 		if slug != post.Slug {
 			taken, err := s.repo.SlugTaken(ctx, slug, post.ID)
 			if err != nil {
-				return postdomain.Post{}, err
+				return postdomain.Post{}, nil, err
 			}
 			if taken {
-				return postdomain.Post{}, ErrConflict
+				return postdomain.Post{}, nil, ErrConflict
 			}
 		}
 		post.Slug = slug
@@ -188,7 +200,11 @@ func (s *PostService) Update(
 
 	post.UpdatedAt = s.clock.Now()
 	post.Version++
-	return s.repo.Update(ctx, post)
+	post, err = s.repo.Update(ctx, post)
+	if err != nil {
+		return postdomain.Post{}, nil, err
+	}
+	return s.attachTags(ctx, post, in.Tags)
 }
 
 func (s *PostService) ReplaceMedia(
@@ -271,6 +287,35 @@ func (s *PostService) ReplaceMedia(
 		return nil, err
 	}
 	return normalized, nil
+}
+
+func (s *PostService) attachTags(ctx context.Context, post postdomain.Post, tags *[]string) (postdomain.Post, []tagdomain.Tag, error) {
+	if tags == nil {
+		if s.tags == nil {
+			return post, nil, nil
+		}
+		current, err := s.tags.ListByPostID(ctx, post.ID)
+		if err != nil {
+			return postdomain.Post{}, nil, err
+		}
+		return post, current, nil
+	}
+	if s.tags == nil {
+		return postdomain.Post{}, nil, fmt.Errorf("%w: tag associations not configured", ErrValidation)
+	}
+
+	resolved, err := s.tags.ResolveOrCreate(ctx, *tags)
+	if err != nil {
+		return postdomain.Post{}, nil, err
+	}
+	tagIDs := make([]uuid.UUID, 0, len(resolved))
+	for _, tag := range resolved {
+		tagIDs = append(tagIDs, tag.ID)
+	}
+	if err := s.tags.ReplacePostTags(ctx, post.ID, tagIDs); err != nil {
+		return postdomain.Post{}, nil, err
+	}
+	return post, resolved, nil
 }
 
 func ParseOptionalUUID(raw string) (*uuid.UUID, error) {

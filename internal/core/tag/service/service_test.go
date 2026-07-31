@@ -281,3 +281,27 @@ func TestResolveOrCreateDedupesCreatesMissingReturnsExisting(t *testing.T) {
 	require.Equal(t, "Rust Lang", got[1].Name)
 	require.Equal(t, "rust-lang", got[1].Slug)
 }
+
+func TestReplacePostTagsDelegatesToRepo(t *testing.T) {
+	t.Parallel()
+
+	postID := uuid.New()
+	tagID := uuid.New()
+	repo := newFakeRepo()
+	svc := New(repo, fixedIDs{next: uuid.New()}, fixedClock{now: time.Now()})
+
+	err := svc.ReplacePostTags(context.Background(), postID, []uuid.UUID{tagID})
+	require.NoError(t, err)
+}
+
+func TestListByPostIDDelegatesToRepo(t *testing.T) {
+	t.Parallel()
+
+	postID := uuid.New()
+	repo := newFakeRepo()
+	svc := New(repo, fixedIDs{next: uuid.New()}, fixedClock{now: time.Now()})
+
+	got, err := svc.ListByPostID(context.Background(), postID)
+	require.NoError(t, err)
+	require.Nil(t, got)
+}

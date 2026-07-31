@@ -85,6 +85,7 @@ func NewRuntime(ctx context.Context, cfg config.Config, logger *slog.Logger, ver
 	userSvc := userservice.New(users)
 	categories := categoryservice.New(categoriesRepo)
 	tags := tagservice.New(tagsRepo, ids, clock)
+	posts.WithTags(tags)
 
 	var media mediaports.Service
 	var mediaRepo *persistence.MediaRepository

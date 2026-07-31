@@ -7,7 +7,14 @@ import (
 	"github.com/google/uuid"
 	mediadomain "github.com/turahe/blog-api/internal/core/media/domain"
 	postdomain "github.com/turahe/blog-api/internal/core/post/domain"
+	tagdomain "github.com/turahe/blog-api/internal/core/tag/domain"
 )
+
+type TagLinker interface {
+	ResolveOrCreate(ctx context.Context, names []string) ([]tagdomain.Tag, error)
+	ReplacePostTags(ctx context.Context, postID uuid.UUID, tagIDs []uuid.UUID) error
+	ListByPostID(ctx context.Context, postID uuid.UUID) ([]tagdomain.Tag, error)
+}
 
 type Repository interface {
 	ListPublished(ctx context.Context, filter postdomain.ListFilter) (postdomain.ListResult, error)
@@ -24,9 +31,8 @@ type Service interface {
 	ListPublished(ctx context.Context, filter postdomain.ListFilter) (postdomain.ListResult, error)
 	ListAdmin(ctx context.Context, filter postdomain.AdminListFilter) (postdomain.ListResult, error)
 	GetPublishedBySlug(ctx context.Context, slug string) (postdomain.Post, error)
-	CreateDraft(ctx context.Context, authorID uuid.UUID, title, slug, excerpt, content string, categoryID *uuid.UUID) (postdomain.Post, error)
+	CreateDraft(ctx context.Context, authorID uuid.UUID, title, slug, excerpt, content string, categoryID *uuid.UUID, tags *[]string) (postdomain.Post, []tagdomain.Tag, error)
 	Publish(ctx context.Context, id uuid.UUID) (postdomain.Post, error)
-	Update(ctx context.Context, id, actorID uuid.UUID, unrestricted bool, in postdomain.UpdateInput) (postdomain.Post, error)
+	Update(ctx context.Context, id, actorID uuid.UUID, unrestricted bool, in postdomain.UpdateInput) (postdomain.Post, []tagdomain.Tag, error)
 	ReplaceMedia(ctx context.Context, postID uuid.UUID, items []mediadomain.PostMediaItem, enforceCoverConsistency bool) ([]mediadomain.PostMediaItem, error)
 }
-

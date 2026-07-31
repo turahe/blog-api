@@ -8,6 +8,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/require"
 	postdomain "github.com/turahe/blog-api/internal/core/post/domain"
+	tagdomain "github.com/turahe/blog-api/internal/core/tag/domain"
 )
 
 type fixedClock struct {
@@ -16,6 +17,14 @@ type fixedClock struct {
 
 func (c fixedClock) Now() time.Time {
 	return c.now
+}
+
+type fixedIDs struct {
+	next uuid.UUID
+}
+
+func (f fixedIDs) New() uuid.UUID {
+	return f.next
 }
 
 type fakePostRepo struct {
@@ -28,6 +37,18 @@ type fakePostRepo struct {
 	updateCalls      int
 	updatedPost      postdomain.Post
 	setCoverImageErr error
+}
+
+type fakeTagLinker struct {
+	resolveNames  []string
+	resolveTags   []tagdomain.Tag
+	resolveErr    error
+	replacePostID uuid.UUID
+	replaceTagIDs []uuid.UUID
+	replaceErr    error
+	listPostID    uuid.UUID
+	listTags      []tagdomain.Tag
+	listErr       error
 }
 
 func newFakePostRepo(posts ...postdomain.Post) *fakePostRepo {
@@ -89,6 +110,22 @@ func (f *fakePostRepo) SetCoverImage(context.Context, uuid.UUID, *uuid.UUID, tim
 	return f.setCoverImageErr
 }
 
+func (f *fakeTagLinker) ResolveOrCreate(_ context.Context, names []string) ([]tagdomain.Tag, error) {
+	f.resolveNames = append([]string(nil), names...)
+	return f.resolveTags, f.resolveErr
+}
+
+func (f *fakeTagLinker) ReplacePostTags(_ context.Context, postID uuid.UUID, tagIDs []uuid.UUID) error {
+	f.replacePostID = postID
+	f.replaceTagIDs = append([]uuid.UUID(nil), tagIDs...)
+	return f.replaceErr
+}
+
+func (f *fakeTagLinker) ListByPostID(_ context.Context, postID uuid.UUID) ([]tagdomain.Tag, error) {
+	f.listPostID = postID
+	return f.listTags, f.listErr
+}
+
 func TestPostServiceListAdminClampsAndScopesAuthorFilter(t *testing.T) {
 	t.Parallel()
 
@@ -143,7 +180,7 @@ func TestPostServiceUpdateOwnPostRestrictedActorSucceedsAndIncrementsVersion(t *
 	slug := "  New-Slug  "
 	excerpt := "  New excerpt  "
 	content := "New content"
-	got, err := svc.Update(context.Background(), postID, actorID, false, postdomain.UpdateInput{
+	got, _, err := svc.Update(context.Background(), postID, actorID, false, postdomain.UpdateInput{
 		Title:   &title,
 		Slug:    &slug,
 		Excerpt: &excerpt,
@@ -179,7 +216,7 @@ func TestPostServiceUpdateOtherAuthorsPostRestrictedActorReturnsNotFound(t *test
 	svc := New(repo, nil, fixedClock{now: time.Now()})
 
 	title := "Updated"
-	_, err := svc.Update(context.Background(), postID, uuid.New(), false, postdomain.UpdateInput{
+	_, _, err := svc.Update(context.Background(), postID, uuid.New(), false, postdomain.UpdateInput{
 		Title: &title,
 	})
 
@@ -202,7 +239,7 @@ func TestPostServiceUpdateRejectsInvalidSlug(t *testing.T) {
 	svc := New(repo, nil, fixedClock{now: time.Now()})
 
 	slug := "not valid"
-	_, err := svc.Update(context.Background(), postID, actorID, false, postdomain.UpdateInput{
+	_, _, err := svc.Update(context.Background(), postID, actorID, false, postdomain.UpdateInput{
 		Slug: &slug,
 	})
 
@@ -226,7 +263,7 @@ func TestPostServiceUpdateReturnsConflictWhenSlugTaken(t *testing.T) {
 	svc := New(repo, nil, fixedClock{now: time.Now()})
 
 	slug := "taken-slug"
-	_, err := svc.Update(context.Background(), postID, actorID, false, postdomain.UpdateInput{
+	_, _, err := svc.Update(context.Background(), postID, actorID, false, postdomain.UpdateInput{
 		Slug: &slug,
 	})
 
@@ -248,7 +285,7 @@ func TestPostServiceUpdateRejectsEmptyUpdate(t *testing.T) {
 	})
 	svc := New(repo, nil, fixedClock{now: time.Now()})
 
-	_, err := svc.Update(context.Background(), postID, actorID, false, postdomain.UpdateInput{})
+	_, _, err := svc.Update(context.Background(), postID, actorID, false, postdomain.UpdateInput{})
 
 	require.ErrorIs(t, err, ErrValidation)
 	require.Equal(t, 0, repo.updateCalls)
@@ -271,10 +308,86 @@ func TestPostServiceUpdateSoftDeletedPostReturnsNotFound(t *testing.T) {
 	svc := New(repo, nil, fixedClock{now: time.Now()})
 
 	title := "Updated"
-	_, err := svc.Update(context.Background(), postID, actorID, false, postdomain.UpdateInput{
+	_, _, err := svc.Update(context.Background(), postID, actorID, false, postdomain.UpdateInput{
 		Title: &title,
 	})
 
 	require.ErrorIs(t, err, postdomain.ErrNotFound)
 	require.Equal(t, 0, repo.updateCalls)
+}
+
+func TestPostServiceCreateDraftWithTagsResolvesAndReplaces(t *testing.T) {
+	t.Parallel()
+
+	now := time.Date(2026, 7, 31, 22, 0, 0, 0, time.UTC)
+	postID := uuid.New()
+	tagID := uuid.New()
+	repo := newFakePostRepo()
+	tags := &fakeTagLinker{
+		resolveTags: []tagdomain.Tag{{ID: tagID, Name: "Go", Slug: "go"}},
+		listTags:    []tagdomain.Tag{{ID: tagID, Name: "Go", Slug: "go"}},
+	}
+	svc := New(repo, fixedIDs{next: postID}, fixedClock{now: now}).WithTags(tags)
+
+	tagNames := []string{"Go"}
+	got, resolved, err := svc.CreateDraft(context.Background(), uuid.New(), "Title", "title", "", "Content", nil, &tagNames)
+
+	require.NoError(t, err)
+	require.Equal(t, postID, got.ID)
+	require.Equal(t, []string{"Go"}, tags.resolveNames)
+	require.Equal(t, postID, tags.replacePostID)
+	require.Equal(t, []uuid.UUID{tagID}, tags.replaceTagIDs)
+	require.Equal(t, resolved, tags.listTags)
+	require.Equal(t, resolved, tags.resolveTags)
+}
+
+func TestPostServiceCreateDraftWithoutTagsUsesExistingTagList(t *testing.T) {
+	t.Parallel()
+
+	now := time.Date(2026, 7, 31, 22, 30, 0, 0, time.UTC)
+	postID := uuid.New()
+	repo := newFakePostRepo()
+	tags := &fakeTagLinker{listTags: []tagdomain.Tag{}}
+	svc := New(repo, fixedIDs{next: postID}, fixedClock{now: now}).WithTags(tags)
+
+	got, resolved, err := svc.CreateDraft(context.Background(), uuid.New(), "Title", "title", "", "Content", nil, nil)
+
+	require.NoError(t, err)
+	require.Equal(t, postID, got.ID)
+	require.Empty(t, resolved)
+	require.Equal(t, postID, tags.listPostID)
+	require.Empty(t, tags.replaceTagIDs)
+}
+
+func TestPostServiceUpdateAllowsTagsOnlyPatch(t *testing.T) {
+	t.Parallel()
+
+	now := time.Date(2026, 7, 31, 23, 0, 0, 0, time.UTC)
+	postID := uuid.New()
+	actorID := uuid.New()
+	tagID := uuid.New()
+	repo := newFakePostRepo(postdomain.Post{
+		ID:        postID,
+		AuthorID:  actorID,
+		Title:     "Title",
+		Slug:      "title",
+		Status:    postdomain.StatusDraft,
+		Version:   1,
+		CreatedAt: now.Add(-time.Hour),
+		UpdatedAt: now.Add(-time.Hour),
+	})
+	tags := &fakeTagLinker{
+		resolveTags: []tagdomain.Tag{{ID: tagID, Name: "Go", Slug: "go"}},
+		listTags:    []tagdomain.Tag{{ID: tagID, Name: "Go", Slug: "go"}},
+	}
+	svc := New(repo, nil, fixedClock{now: now}).WithTags(tags)
+
+	tagNames := []string{"Go"}
+	got, resolved, err := svc.Update(context.Background(), postID, actorID, false, postdomain.UpdateInput{Tags: &tagNames})
+
+	require.NoError(t, err)
+	require.Equal(t, postID, got.ID)
+	require.Equal(t, []uuid.UUID{tagID}, tags.replaceTagIDs)
+	require.Equal(t, resolved, tags.resolveTags)
+	require.Equal(t, 1, repo.updateCalls)
 }

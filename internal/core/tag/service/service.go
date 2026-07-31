@@ -184,6 +184,14 @@ func (s *Service) ResolveOrCreate(ctx context.Context, names []string) ([]tagdom
 	return out, nil
 }
 
+func (s *Service) ReplacePostTags(ctx context.Context, postID uuid.UUID, tagIDs []uuid.UUID) error {
+	return s.repo.ReplacePostTags(ctx, postID, tagIDs)
+}
+
+func (s *Service) ListByPostID(ctx context.Context, postID uuid.UUID) ([]tagdomain.Tag, error) {
+	return s.repo.ListByPostID(ctx, postID)
+}
+
 func slugify(name string) string {
 	s := strings.ToLower(strings.TrimSpace(name))
 	s = strings.Map(func(r rune) rune {

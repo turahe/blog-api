@@ -14,18 +14,24 @@ import (
 	"github.com/stretchr/testify/require"
 	postdomain "github.com/turahe/blog-api/internal/core/post/domain"
 	postservice "github.com/turahe/blog-api/internal/core/post/service"
+	tagdomain "github.com/turahe/blog-api/internal/core/tag/domain"
 )
 
 type fakePostAdminService struct {
 	listAdminFn func(ctx context.Context, filter postdomain.AdminListFilter) (postdomain.ListResult, error)
-	updateFn    func(ctx context.Context, id, actorID uuid.UUID, unrestricted bool, in postdomain.UpdateInput) (postdomain.Post, error)
+	createFn    func(ctx context.Context, authorID uuid.UUID, title, slug, excerpt, content string, categoryID *uuid.UUID, tags *[]string) (postdomain.Post, []tagdomain.Tag, error)
+	updateFn    func(ctx context.Context, id, actorID uuid.UUID, unrestricted bool, in postdomain.UpdateInput) (postdomain.Post, []tagdomain.Tag, error)
 }
 
 func (f *fakePostAdminService) ListAdmin(ctx context.Context, filter postdomain.AdminListFilter) (postdomain.ListResult, error) {
 	return f.listAdminFn(ctx, filter)
 }
 
-func (f *fakePostAdminService) Update(ctx context.Context, id, actorID uuid.UUID, unrestricted bool, in postdomain.UpdateInput) (postdomain.Post, error) {
+func (f *fakePostAdminService) CreateDraft(ctx context.Context, authorID uuid.UUID, title, slug, excerpt, content string, categoryID *uuid.UUID, tags *[]string) (postdomain.Post, []tagdomain.Tag, error) {
+	return f.createFn(ctx, authorID, title, slug, excerpt, content, categoryID, tags)
+}
+
+func (f *fakePostAdminService) Update(ctx context.Context, id, actorID uuid.UUID, unrestricted bool, in postdomain.UpdateInput) (postdomain.Post, []tagdomain.Tag, error) {
 	return f.updateFn(ctx, id, actorID, unrestricted, in)
 }
 
@@ -74,9 +80,13 @@ func TestAdminListPostsHandlerReturnsMetaTotalAndScopesRestrictedAuthors(t *test
 				PerPage: 10,
 			}, nil
 		},
-		updateFn: func(context.Context, uuid.UUID, uuid.UUID, bool, postdomain.UpdateInput) (postdomain.Post, error) {
+		createFn: func(context.Context, uuid.UUID, string, string, string, string, *uuid.UUID, *[]string) (postdomain.Post, []tagdomain.Tag, error) {
+			t.Fatal("unexpected create call")
+			return postdomain.Post{}, nil, nil
+		},
+		updateFn: func(context.Context, uuid.UUID, uuid.UUID, bool, postdomain.UpdateInput) (postdomain.Post, []tagdomain.Tag, error) {
 			t.Fatal("unexpected update call")
-			return postdomain.Post{}, nil
+			return postdomain.Post{}, nil, nil
 		},
 	}
 
@@ -107,9 +117,13 @@ func TestAdminUpdatePostHandlerRejectsEmptyBody(t *testing.T) {
 			t.Fatal("unexpected list call")
 			return postdomain.ListResult{}, nil
 		},
-		updateFn: func(context.Context, uuid.UUID, uuid.UUID, bool, postdomain.UpdateInput) (postdomain.Post, error) {
+		createFn: func(context.Context, uuid.UUID, string, string, string, string, *uuid.UUID, *[]string) (postdomain.Post, []tagdomain.Tag, error) {
+			t.Fatal("unexpected create call")
+			return postdomain.Post{}, nil, nil
+		},
+		updateFn: func(context.Context, uuid.UUID, uuid.UUID, bool, postdomain.UpdateInput) (postdomain.Post, []tagdomain.Tag, error) {
 			t.Fatal("unexpected update call")
-			return postdomain.Post{}, nil
+			return postdomain.Post{}, nil, nil
 		},
 	}
 
@@ -142,13 +156,17 @@ func TestAdminUpdatePostHandlerMapsConflict(t *testing.T) {
 			t.Fatal("unexpected list call")
 			return postdomain.ListResult{}, nil
 		},
-		updateFn: func(_ context.Context, id, actorID uuid.UUID, unrestricted bool, in postdomain.UpdateInput) (postdomain.Post, error) {
+		createFn: func(context.Context, uuid.UUID, string, string, string, string, *uuid.UUID, *[]string) (postdomain.Post, []tagdomain.Tag, error) {
+			t.Fatal("unexpected create call")
+			return postdomain.Post{}, nil, nil
+		},
+		updateFn: func(_ context.Context, id, actorID uuid.UUID, unrestricted bool, in postdomain.UpdateInput) (postdomain.Post, []tagdomain.Tag, error) {
 			require.Equal(t, postID, id)
 			require.Equal(t, userID, actorID)
 			require.True(t, unrestricted)
 			require.NotNil(t, in.Slug)
 			require.Equal(t, "taken-slug", *in.Slug)
-			return postdomain.Post{}, postservice.ErrConflict
+			return postdomain.Post{}, nil, postservice.ErrConflict
 		},
 	}
 
@@ -170,4 +188,114 @@ func TestAdminUpdatePostHandlerMapsConflict(t *testing.T) {
 	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &envelope))
 	require.False(t, envelope.OK)
 	require.Equal(t, "conflict", envelope.Error.Code)
+}
+
+func TestAdminCreatePostHandlerReturnsTags(t *testing.T) {
+	t.Parallel()
+	gin.SetMode(gin.TestMode)
+
+	userID := uuid.MustParse("66666666-6666-6666-6666-666666666666")
+	postID := uuid.MustParse("77777777-7777-7777-7777-777777777777")
+	tagID := uuid.MustParse("88888888-8888-8888-8888-888888888888")
+	now := time.Date(2026, 7, 31, 13, 0, 0, 0, time.UTC)
+
+	svc := &fakePostAdminService{
+		createFn: func(_ context.Context, authorID uuid.UUID, title, slug, excerpt, content string, categoryID *uuid.UUID, tags *[]string) (postdomain.Post, []tagdomain.Tag, error) {
+			require.Equal(t, userID, authorID)
+			require.Equal(t, "Title", title)
+			require.Equal(t, "title", slug)
+			require.Equal(t, "Excerpt", excerpt)
+			require.Equal(t, "Content", content)
+			require.Nil(t, categoryID)
+			require.NotNil(t, tags)
+			require.Equal(t, []string{"Go"}, *tags)
+			return postdomain.Post{
+				ID:        postID,
+				AuthorID:  authorID,
+				Title:     title,
+				Slug:      slug,
+				Excerpt:   excerpt,
+				Content:   content,
+				Status:    postdomain.StatusDraft,
+				Version:   1,
+				CreatedAt: now,
+				UpdatedAt: now,
+			}, []tagdomain.Tag{{ID: tagID, Name: "Go", Slug: "go", CreatedAt: now}}, nil
+		},
+		updateFn: func(context.Context, uuid.UUID, uuid.UUID, bool, postdomain.UpdateInput) (postdomain.Post, []tagdomain.Tag, error) {
+			t.Fatal("unexpected update call")
+			return postdomain.Post{}, nil, nil
+		},
+	}
+
+	w := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(w)
+	c.Request = httptest.NewRequest(nethttp.MethodPost, "/api/v1/admin/posts", bytes.NewBufferString(`{"title":"Title","slug":"title","excerpt":"Excerpt","content":"Content","tags":["Go"]}`))
+	c.Request.Header.Set("Content-Type", "application/json")
+	c.Set(contextUserIDKey, userID)
+
+	adminCreatePostHandler(svc)(c)
+
+	require.Equal(t, nethttp.StatusCreated, w.Code)
+	var envelope Envelope
+	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &envelope))
+	require.True(t, envelope.OK)
+	data, ok := envelope.Data.(map[string]any)
+	require.True(t, ok)
+	require.Equal(t, "go", data["tags"].([]any)[0].(map[string]any)["slug"])
+}
+
+func TestAdminUpdatePostHandlerAllowsTagsOnlyPatch(t *testing.T) {
+	t.Parallel()
+	gin.SetMode(gin.TestMode)
+
+	postID := uuid.MustParse("99999999-9999-9999-9999-999999999999")
+	userID := uuid.MustParse("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa")
+	tagID := uuid.MustParse("bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb")
+	now := time.Date(2026, 7, 31, 14, 0, 0, 0, time.UTC)
+
+	svc := &fakePostAdminService{
+		createFn: func(context.Context, uuid.UUID, string, string, string, string, *uuid.UUID, *[]string) (postdomain.Post, []tagdomain.Tag, error) {
+			t.Fatal("unexpected create call")
+			return postdomain.Post{}, nil, nil
+		},
+		updateFn: func(_ context.Context, id, actorID uuid.UUID, unrestricted bool, in postdomain.UpdateInput) (postdomain.Post, []tagdomain.Tag, error) {
+			require.Equal(t, postID, id)
+			require.Equal(t, userID, actorID)
+			require.True(t, unrestricted)
+			require.Nil(t, in.Title)
+			require.Nil(t, in.Slug)
+			require.Nil(t, in.Excerpt)
+			require.Nil(t, in.Content)
+			require.NotNil(t, in.Tags)
+			require.Equal(t, []string{"Go"}, *in.Tags)
+			return postdomain.Post{
+				ID:        postID,
+				AuthorID:  userID,
+				Title:     "Title",
+				Slug:      "title",
+				Status:    postdomain.StatusDraft,
+				Version:   2,
+				CreatedAt: now.Add(-time.Hour),
+				UpdatedAt: now,
+			}, []tagdomain.Tag{{ID: tagID, Name: "Go", Slug: "go", CreatedAt: now}}, nil
+		},
+	}
+
+	w := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(w)
+	c.Params = gin.Params{{Key: "param1", Value: postID.String()}}
+	c.Request = httptest.NewRequest(nethttp.MethodPatch, "/api/v1/admin/posts/"+postID.String(), bytes.NewBufferString(`{"tags":["Go"]}`))
+	c.Request.Header.Set("Content-Type", "application/json")
+	c.Set(contextUserIDKey, userID)
+
+	adminUpdatePostHandlerWithDeps(svc, fakeRoleLookup{names: []string{"admin"}})(c)
+
+	require.Equal(t, nethttp.StatusOK, w.Code)
+	var envelope Envelope
+	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &envelope))
+	require.True(t, envelope.OK)
+	data, ok := envelope.Data.(map[string]any)
+	require.True(t, ok)
+	require.Equal(t, "go", data["tags"].([]any)[0].(map[string]any)["slug"])
 }
