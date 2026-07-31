@@ -99,7 +99,7 @@ TagMergeRequest:
 
 Path `{id}` is the **source** tag (merged away). `into_id` is the **target** that remains.
 
-Responses use existing `Tag` / `EnvelopeTagList` / `EnvelopeTagResponse` in `components/schemas/Categories.yaml` (add envelope single-tag if missing). Errors: `400`, `401`/`403`, `404`, `409`.
+Responses use existing `Tag` and `EnvelopeTagList` in `components/schemas/Categories.yaml`. Add `EnvelopeTagResponse` (single-tag envelope) for create/update/merge. Errors: `400`, `401`/`403`, `404`, `409`.
 
 ### Posts — replace `tag_ids` with names
 
@@ -116,7 +116,7 @@ tags:
 
 Apply to `PostCreateRequest` and `PostUpdateRequest` (update: omit = unchanged; `[]` = clear).
 
-Admin/public post JSON may include `tags: Tag[]` when the handler loads them after write; list endpoints may omit tags until a follow-up if loading is expensive — **create/update responses must return resolved tags**.
+Post **create/update** responses must include resolved `tags: Tag[]`. Public/admin **list** responses may omit `tags` in this slice (avoid N+1); public get may omit too unless already loading joins.
 
 ## Domain rules
 
