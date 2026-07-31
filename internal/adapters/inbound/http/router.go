@@ -133,6 +133,31 @@ func handlerFor(deps Dependencies) func(v1.Route) gin.HandlerFunc {
 	if deps.Categories != nil {
 		implemented["public.categories.list"] = listCategoriesHandler(deps.Categories)
 		implemented["public.categories.get"] = getCategoryHandler(deps.Categories)
+		listAdmin := listCategoriesHandler(deps.Categories)
+		createCat := adminCreateCategoryHandler(deps.Categories)
+		updateCat := adminUpdateCategoryHandler(deps.Categories)
+		deleteCat := adminDeleteCategoryHandler(deps.Categories)
+		moveCat := adminMoveCategoryHandler(deps.Categories)
+		if deps.RBAC != nil {
+			implemented["admin.categories.list"] = chain(requirePermission(deps.RBAC, "category.read"), listAdmin)
+			implemented["admin.categories.create"] = chain(requirePermission(deps.RBAC, "category.create"), createCat)
+			implemented["admin.categories.update"] = chain(requirePermission(deps.RBAC, "category.update"), updateCat)
+			implemented["admin.categories.delete"] = chain(requirePermission(deps.RBAC, "category.delete"), deleteCat)
+			implemented["admin.categories.move"] = chain(requirePermission(deps.RBAC, "category.update"), moveCat)
+		} else if deps.Roles != nil {
+			gate := requireRoles(deps.Roles, "admin", "editor")
+			implemented["admin.categories.list"] = chain(gate, listAdmin)
+			implemented["admin.categories.create"] = chain(gate, createCat)
+			implemented["admin.categories.update"] = chain(gate, updateCat)
+			implemented["admin.categories.delete"] = chain(gate, deleteCat)
+			implemented["admin.categories.move"] = chain(gate, moveCat)
+		} else {
+			implemented["admin.categories.list"] = listAdmin
+			implemented["admin.categories.create"] = createCat
+			implemented["admin.categories.update"] = updateCat
+			implemented["admin.categories.delete"] = deleteCat
+			implemented["admin.categories.move"] = moveCat
+		}
 	}
 	if deps.Tags != nil {
 		implemented["public.tags.list"] = listTagsHandler(deps.Tags)

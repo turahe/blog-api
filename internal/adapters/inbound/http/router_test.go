@@ -15,6 +15,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/require"
 	authdomain "github.com/turahe/blog-api/internal/core/auth/domain"
+	categoryservice "github.com/turahe/blog-api/internal/core/category/service"
 	healthservice "github.com/turahe/blog-api/internal/core/health/service"
 	tagservice "github.com/turahe/blog-api/internal/core/tag/service"
 )
@@ -129,6 +130,37 @@ func TestAccessLogCarriesRouteGroup(t *testing.T) {
 	require.Equal(t, "admin.users.list", entry["operation_id"])
 	require.Equal(t, "admin", entry["route_group"])
 	require.Equal(t, "required", entry["auth_mode"])
+}
+
+func TestAdminCategoriesRouteRequiresAdminOrEditorRole(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	userID := uuid.MustParse("88888888-8888-8888-8888-888888888888")
+	router, err := NewRouter(Dependencies{
+		Logger: slog.New(slog.NewTextHandler(io.Discard, nil)),
+		Health: healthservice.New("test"),
+		Auth: fakeAuthService{
+			parseAccessFn: func(token string) (authdomain.AccessClaims, error) {
+				require.Equal(t, "test", token)
+				return authdomain.AccessClaims{Subject: userID}, nil
+			},
+		},
+		Categories: &categoryservice.CategoryService{},
+		Roles:      fakeRoleLookup{names: []string{"author"}},
+	})
+	require.NoError(t, err)
+
+	recorder := httptest.NewRecorder()
+	request := httptest.NewRequest(nethttp.MethodPost, "/api/v1/admin/categories", bytes.NewBufferString(`{"name":"Tech"}`))
+	request.Header.Set("Content-Type", "application/json")
+	request.Header.Set("Authorization", "Bearer test")
+	router.ServeHTTP(recorder, request)
+
+	require.Equal(t, nethttp.StatusForbidden, recorder.Code)
+
+	var envelope Envelope
+	require.NoError(t, json.Unmarshal(recorder.Body.Bytes(), &envelope))
+	require.False(t, envelope.OK)
+	require.Equal(t, "forbidden", envelope.Error.Code)
 }
 
 func TestAdminTagsRouteRequiresAdminOrEditorRole(t *testing.T) {

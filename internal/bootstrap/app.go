@@ -84,6 +84,9 @@ func NewRuntime(ctx context.Context, cfg config.Config, logger *slog.Logger, ver
 	posts := postservice.New(postsRepo, ids, clock)
 	userSvc := userservice.New(users)
 	categories := categoryservice.New(categoriesRepo, ids, clock)
+	if err := categories.RebuildAll(ctx); err != nil {
+		logger.Warn("category tree rebuild failed at startup", "error", err)
+	}
 	tags := tagservice.New(tagsRepo, ids, clock)
 	posts.WithTags(tags)
 
