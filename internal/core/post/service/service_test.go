@@ -9,6 +9,7 @@ import (
 	"github.com/stretchr/testify/require"
 	postdomain "github.com/turahe/blog-api/internal/core/post/domain"
 	tagdomain "github.com/turahe/blog-api/internal/core/tag/domain"
+	tagservice "github.com/turahe/blog-api/internal/core/tag/service"
 )
 
 type fixedClock struct {
@@ -34,6 +35,7 @@ type fakePostRepo struct {
 	listAdminErr     error
 	slugTakenBySlug  map[string]bool
 	slugTakenErr     error
+	createCalls      int
 	updateCalls      int
 	updatedPost      postdomain.Post
 	setCoverImageErr error
@@ -84,6 +86,7 @@ func (f *fakePostRepo) GetByID(_ context.Context, id uuid.UUID) (postdomain.Post
 }
 
 func (f *fakePostRepo) Create(_ context.Context, post postdomain.Post) (postdomain.Post, error) {
+	f.createCalls++
 	f.posts[post.ID] = post
 	return post, nil
 }
@@ -339,6 +342,7 @@ func TestPostServiceCreateDraftWithTagsResolvesAndReplaces(t *testing.T) {
 	require.Equal(t, []uuid.UUID{tagID}, tags.replaceTagIDs)
 	require.Equal(t, resolved, tags.listTags)
 	require.Equal(t, resolved, tags.resolveTags)
+	require.Equal(t, 1, repo.createCalls)
 }
 
 func TestPostServiceCreateDraftWithoutTagsUsesExistingTagList(t *testing.T) {
@@ -357,6 +361,7 @@ func TestPostServiceCreateDraftWithoutTagsUsesExistingTagList(t *testing.T) {
 	require.Empty(t, resolved)
 	require.Equal(t, postID, tags.listPostID)
 	require.Empty(t, tags.replaceTagIDs)
+	require.Equal(t, 1, repo.createCalls)
 }
 
 func TestPostServiceUpdateWithEmptyTagsClearsTags(t *testing.T) {
@@ -458,4 +463,46 @@ func TestPostServiceUpdateAllowsTagsOnlyPatch(t *testing.T) {
 	require.Equal(t, []uuid.UUID{tagID}, tags.replaceTagIDs)
 	require.Equal(t, resolved, tags.resolveTags)
 	require.Equal(t, 1, repo.updateCalls)
+}
+
+func TestPostServiceCreateDraftRejectsInvalidTagsBeforePersistingPost(t *testing.T) {
+	t.Parallel()
+
+	repo := newFakePostRepo()
+	tags := &fakeTagLinker{resolveErr: tagservice.ErrValidation}
+	svc := New(repo, fixedIDs{next: uuid.New()}, fixedClock{now: time.Now()}).WithTags(tags)
+
+	tagNames := []string{"bad tag"}
+	_, _, err := svc.CreateDraft(context.Background(), uuid.New(), "Title", "title", "", "Content", nil, &tagNames)
+
+	require.ErrorIs(t, err, tagservice.ErrValidation)
+	require.Equal(t, 0, repo.createCalls)
+	require.Empty(t, repo.posts)
+}
+
+func TestPostServiceUpdateRejectsInvalidTagsBeforePersistingUpdate(t *testing.T) {
+	t.Parallel()
+
+	now := time.Date(2026, 7, 31, 23, 45, 0, 0, time.UTC)
+	postID := uuid.New()
+	actorID := uuid.New()
+	repo := newFakePostRepo(postdomain.Post{
+		ID:        postID,
+		AuthorID:  actorID,
+		Title:     "Title",
+		Slug:      "title",
+		Status:    postdomain.StatusDraft,
+		Version:   1,
+		CreatedAt: now.Add(-time.Hour),
+		UpdatedAt: now.Add(-time.Hour),
+	})
+	tags := &fakeTagLinker{resolveErr: tagservice.ErrValidation}
+	svc := New(repo, nil, fixedClock{now: now}).WithTags(tags)
+
+	tagNames := []string{"bad tag"}
+	_, _, err := svc.Update(context.Background(), postID, actorID, false, postdomain.UpdateInput{Tags: &tagNames})
+
+	require.ErrorIs(t, err, tagservice.ErrValidation)
+	require.Equal(t, 0, repo.updateCalls)
+	require.Equal(t, 1, len(repo.posts))
 }

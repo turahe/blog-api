@@ -102,6 +102,17 @@ func (s *PostService) CreateDraft(
 	if !slugPattern.MatchString(slug) {
 		return postdomain.Post{}, nil, fmt.Errorf("%w: invalid slug", ErrValidation)
 	}
+	var resolvedTags []tagdomain.Tag
+	var err error
+	if tags != nil {
+		if s.tags == nil {
+			return postdomain.Post{}, nil, fmt.Errorf("%w: tag associations not configured", ErrValidation)
+		}
+		resolvedTags, err = s.tags.ResolveOrCreate(ctx, *tags)
+		if err != nil {
+			return postdomain.Post{}, nil, err
+		}
+	}
 	now := s.clock.Now()
 	post := postdomain.Post{
 		ID:         s.ids.New(),
@@ -116,11 +127,28 @@ func (s *PostService) CreateDraft(
 		CreatedAt:  now,
 		UpdatedAt:  now,
 	}
-	post, err := s.repo.Create(ctx, post)
+	post, err = s.repo.Create(ctx, post)
 	if err != nil {
 		return postdomain.Post{}, nil, err
 	}
-	return s.attachTags(ctx, post, tags)
+	if tags != nil {
+		tagIDs := make([]uuid.UUID, 0, len(resolvedTags))
+		for _, tag := range resolvedTags {
+			tagIDs = append(tagIDs, tag.ID)
+		}
+		if err := s.tags.ReplacePostTags(ctx, post.ID, tagIDs); err != nil {
+			return postdomain.Post{}, nil, err
+		}
+		return post, resolvedTags, nil
+	}
+	if s.tags == nil {
+		return post, nil, nil
+	}
+	current, err := s.tags.ListByPostID(ctx, post.ID)
+	if err != nil {
+		return postdomain.Post{}, nil, err
+	}
+	return post, current, nil
 }
 
 func (s *PostService) Publish(ctx context.Context, id uuid.UUID) (postdomain.Post, error) {
@@ -198,13 +226,41 @@ func (s *PostService) Update(
 		post.CategoryID = in.CategoryID.Value
 	}
 
+	var resolvedTags []tagdomain.Tag
+	if in.Tags != nil {
+		if s.tags == nil {
+			return postdomain.Post{}, nil, fmt.Errorf("%w: tag associations not configured", ErrValidation)
+		}
+		resolvedTags, err = s.tags.ResolveOrCreate(ctx, *in.Tags)
+		if err != nil {
+			return postdomain.Post{}, nil, err
+		}
+	}
+
 	post.UpdatedAt = s.clock.Now()
 	post.Version++
 	post, err = s.repo.Update(ctx, post)
 	if err != nil {
 		return postdomain.Post{}, nil, err
 	}
-	return s.attachTags(ctx, post, in.Tags)
+	if in.Tags != nil {
+		tagIDs := make([]uuid.UUID, 0, len(resolvedTags))
+		for _, tag := range resolvedTags {
+			tagIDs = append(tagIDs, tag.ID)
+		}
+		if err := s.tags.ReplacePostTags(ctx, post.ID, tagIDs); err != nil {
+			return postdomain.Post{}, nil, err
+		}
+		return post, resolvedTags, nil
+	}
+	if s.tags == nil {
+		return post, nil, nil
+	}
+	current, err := s.tags.ListByPostID(ctx, post.ID)
+	if err != nil {
+		return postdomain.Post{}, nil, err
+	}
+	return post, current, nil
 }
 
 func (s *PostService) ReplaceMedia(
@@ -287,35 +343,6 @@ func (s *PostService) ReplaceMedia(
 		return nil, err
 	}
 	return normalized, nil
-}
-
-func (s *PostService) attachTags(ctx context.Context, post postdomain.Post, tags *[]string) (postdomain.Post, []tagdomain.Tag, error) {
-	if tags == nil {
-		if s.tags == nil {
-			return post, nil, nil
-		}
-		current, err := s.tags.ListByPostID(ctx, post.ID)
-		if err != nil {
-			return postdomain.Post{}, nil, err
-		}
-		return post, current, nil
-	}
-	if s.tags == nil {
-		return postdomain.Post{}, nil, fmt.Errorf("%w: tag associations not configured", ErrValidation)
-	}
-
-	resolved, err := s.tags.ResolveOrCreate(ctx, *tags)
-	if err != nil {
-		return postdomain.Post{}, nil, err
-	}
-	tagIDs := make([]uuid.UUID, 0, len(resolved))
-	for _, tag := range resolved {
-		tagIDs = append(tagIDs, tag.ID)
-	}
-	if err := s.tags.ReplacePostTags(ctx, post.ID, tagIDs); err != nil {
-		return postdomain.Post{}, nil, err
-	}
-	return post, resolved, nil
 }
 
 func ParseOptionalUUID(raw string) (*uuid.UUID, error) {

@@ -15,6 +15,7 @@ import (
 	postdomain "github.com/turahe/blog-api/internal/core/post/domain"
 	postservice "github.com/turahe/blog-api/internal/core/post/service"
 	tagdomain "github.com/turahe/blog-api/internal/core/tag/domain"
+	tagservice "github.com/turahe/blog-api/internal/core/tag/service"
 )
 
 type fakePostAdminService struct {
@@ -298,4 +299,98 @@ func TestAdminUpdatePostHandlerAllowsTagsOnlyPatch(t *testing.T) {
 	data, ok := envelope.Data.(map[string]any)
 	require.True(t, ok)
 	require.Equal(t, "go", data["tags"].([]any)[0].(map[string]any)["slug"])
+}
+
+func TestAdminCreatePostHandlerMapsTagValidation(t *testing.T) {
+	t.Parallel()
+	gin.SetMode(gin.TestMode)
+
+	userID := uuid.MustParse("cccccccc-cccc-cccc-cccc-cccccccccccc")
+	svc := &fakePostAdminService{
+		createFn: func(context.Context, uuid.UUID, string, string, string, string, *uuid.UUID, *[]string) (postdomain.Post, []tagdomain.Tag, error) {
+			return postdomain.Post{}, nil, tagservice.ErrValidation
+		},
+		updateFn: func(context.Context, uuid.UUID, uuid.UUID, bool, postdomain.UpdateInput) (postdomain.Post, []tagdomain.Tag, error) {
+			t.Fatal("unexpected update call")
+			return postdomain.Post{}, nil, nil
+		},
+	}
+
+	w := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(w)
+	c.Request = httptest.NewRequest(nethttp.MethodPost, "/api/v1/admin/posts", bytes.NewBufferString(`{"title":"Title","slug":"title","tags":["bad tag"]}`))
+	c.Request.Header.Set("Content-Type", "application/json")
+	c.Set(contextUserIDKey, userID)
+
+	adminCreatePostHandler(svc)(c)
+
+	require.Equal(t, nethttp.StatusBadRequest, w.Code)
+	var envelope Envelope
+	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &envelope))
+	require.False(t, envelope.OK)
+	require.Equal(t, "validation_error", envelope.Error.Code)
+}
+
+func TestAdminUpdatePostHandlerMapsTagConflict(t *testing.T) {
+	t.Parallel()
+	gin.SetMode(gin.TestMode)
+
+	postID := uuid.MustParse("dddddddd-dddd-dddd-dddd-dddddddddddd")
+	userID := uuid.MustParse("eeeeeeee-eeee-eeee-eeee-eeeeeeeeeeee")
+	svc := &fakePostAdminService{
+		createFn: func(context.Context, uuid.UUID, string, string, string, string, *uuid.UUID, *[]string) (postdomain.Post, []tagdomain.Tag, error) {
+			t.Fatal("unexpected create call")
+			return postdomain.Post{}, nil, nil
+		},
+		updateFn: func(context.Context, uuid.UUID, uuid.UUID, bool, postdomain.UpdateInput) (postdomain.Post, []tagdomain.Tag, error) {
+			return postdomain.Post{}, nil, tagdomain.ErrConflict
+		},
+	}
+
+	w := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(w)
+	c.Params = gin.Params{{Key: "param1", Value: postID.String()}}
+	c.Request = httptest.NewRequest(nethttp.MethodPatch, "/api/v1/admin/posts/"+postID.String(), bytes.NewBufferString(`{"tags":["Go"]}`))
+	c.Request.Header.Set("Content-Type", "application/json")
+	c.Set(contextUserIDKey, userID)
+
+	adminUpdatePostHandlerWithDeps(svc, fakeRoleLookup{names: []string{"admin"}})(c)
+
+	require.Equal(t, nethttp.StatusConflict, w.Code)
+	var envelope Envelope
+	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &envelope))
+	require.False(t, envelope.OK)
+	require.Equal(t, "conflict", envelope.Error.Code)
+}
+
+func TestAdminUpdatePostHandlerMapsTagNotFound(t *testing.T) {
+	t.Parallel()
+	gin.SetMode(gin.TestMode)
+
+	postID := uuid.MustParse("ffffffff-ffff-ffff-ffff-ffffffffffff")
+	userID := uuid.MustParse("12121212-1212-1212-1212-121212121212")
+	svc := &fakePostAdminService{
+		createFn: func(context.Context, uuid.UUID, string, string, string, string, *uuid.UUID, *[]string) (postdomain.Post, []tagdomain.Tag, error) {
+			t.Fatal("unexpected create call")
+			return postdomain.Post{}, nil, nil
+		},
+		updateFn: func(context.Context, uuid.UUID, uuid.UUID, bool, postdomain.UpdateInput) (postdomain.Post, []tagdomain.Tag, error) {
+			return postdomain.Post{}, nil, tagdomain.ErrNotFound
+		},
+	}
+
+	w := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(w)
+	c.Params = gin.Params{{Key: "param1", Value: postID.String()}}
+	c.Request = httptest.NewRequest(nethttp.MethodPatch, "/api/v1/admin/posts/"+postID.String(), bytes.NewBufferString(`{"tags":["Go"]}`))
+	c.Request.Header.Set("Content-Type", "application/json")
+	c.Set(contextUserIDKey, userID)
+
+	adminUpdatePostHandlerWithDeps(svc, fakeRoleLookup{names: []string{"editor"}})(c)
+
+	require.Equal(t, nethttp.StatusNotFound, w.Code)
+	var envelope Envelope
+	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &envelope))
+	require.False(t, envelope.OK)
+	require.Equal(t, "not_found", envelope.Error.Code)
 }

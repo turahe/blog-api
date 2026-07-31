@@ -26,6 +26,7 @@ var rolePermissions = map[string][]string{
 	"admin": {
 		"user.read", "user.create", "user.update",
 		"post.read", "post.create", "post.update", "post.publish",
+		"tag.create", "tag.update", "tag.delete",
 		"settings.read", "settings.update",
 		"media.create", "media.delete",
 		"comments.moderate",
@@ -34,6 +35,7 @@ var rolePermissions = map[string][]string{
 	"editor": {
 		"user.read",
 		"post.read", "post.create", "post.update", "post.publish",
+		"tag.create", "tag.update", "tag.delete",
 		"media.create", "media.delete",
 		"comments.moderate",
 	},

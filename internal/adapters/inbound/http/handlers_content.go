@@ -17,6 +17,7 @@ import (
 	postdomain "github.com/turahe/blog-api/internal/core/post/domain"
 	postservice "github.com/turahe/blog-api/internal/core/post/service"
 	tagdomain "github.com/turahe/blog-api/internal/core/tag/domain"
+	tagservice "github.com/turahe/blog-api/internal/core/tag/service"
 )
 
 type createPostRequest struct {
@@ -95,8 +96,7 @@ func adminCreatePostHandler(posts postAdminAPI) gin.HandlerFunc {
 			categoryID = &id
 		}
 		post, tags, err := posts.CreateDraft(c.Request.Context(), userID, req.Title, req.Slug, req.Excerpt, req.Content, categoryID, req.Tags)
-		if errors.Is(err, postservice.ErrValidation) {
-			failure(c, nethttp.StatusBadRequest, "validation_error", err.Error())
+		if mapPostError(c, err) {
 			return
 		}
 		if err != nil {
@@ -354,10 +354,16 @@ func mapPostError(c *gin.Context, err error) bool {
 	switch {
 	case errors.Is(err, postservice.ErrValidation):
 		failure(c, nethttp.StatusBadRequest, "validation_error", err.Error())
+	case errors.Is(err, tagservice.ErrValidation):
+		failure(c, nethttp.StatusBadRequest, "validation_error", err.Error())
 	case errors.Is(err, postdomain.ErrNotFound):
 		failure(c, nethttp.StatusNotFound, "not_found", "Post not found")
+	case errors.Is(err, tagdomain.ErrNotFound):
+		failure(c, nethttp.StatusNotFound, "not_found", "Tag not found")
 	case errors.Is(err, postservice.ErrConflict):
 		failure(c, nethttp.StatusConflict, "conflict", "Post conflict")
+	case errors.Is(err, tagdomain.ErrConflict):
+		failure(c, nethttp.StatusConflict, "conflict", "Tag conflict")
 	default:
 		failure(c, nethttp.StatusInternalServerError, "internal_error", "Failed to process post")
 	}

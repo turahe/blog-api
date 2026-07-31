@@ -35,6 +35,10 @@
               $ref: ../components/schemas/Categories.yaml#/EnvelopeTagResponse
       '400':
         $ref: ../components/responses.yaml#/ValidationError
+      '401':
+        $ref: ../components/responses.yaml#/UnauthorizedError
+      '403':
+        $ref: ../components/responses.yaml#/ForbiddenError
       '409':
         description: Slug conflict
         content:
@@ -69,6 +73,12 @@
           application/json:
             schema:
               $ref: ../components/schemas/Categories.yaml#/EnvelopeTagResponse
+      '400':
+        $ref: ../components/responses.yaml#/ValidationError
+      '401':
+        $ref: ../components/responses.yaml#/UnauthorizedError
+      '403':
+        $ref: ../components/responses.yaml#/ForbiddenError
       '404':
         $ref: ../components/responses.yaml#/NotFoundError
       '409':
@@ -85,8 +95,12 @@
     security:
     - bearerAuth: []
     responses:
-      '204':
-        description: Deleted
+      '200':
+        $ref: ../components/responses.yaml#/EmptyOk
+      '401':
+        $ref: ../components/responses.yaml#/UnauthorizedError
+      '403':
+        $ref: ../components/responses.yaml#/ForbiddenError
       '404':
         $ref: ../components/responses.yaml#/NotFoundError
       '409':
@@ -123,6 +137,12 @@
           application/json:
             schema:
               $ref: ../components/schemas/Categories.yaml#/EnvelopeTagResponse
+      '400':
+        $ref: ../components/responses.yaml#/ValidationError
+      '401':
+        $ref: ../components/responses.yaml#/UnauthorizedError
+      '403':
+        $ref: ../components/responses.yaml#/ForbiddenError
       '404':
         $ref: ../components/responses.yaml#/NotFoundError
       '409':
