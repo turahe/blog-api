@@ -2052,6 +2052,10 @@ paths:
           content: *ref_26
         '409':
           description: Slug conflict
+          content:
+            application/json:
+              schema:
+                allOf: *ref_5
   /api/v1/admin/posts/{id}/publish:
     post:
       tags:

@@ -203,6 +203,10 @@
         $ref: ../components/responses.yaml#/NotFoundError
       '409':
         description: Slug conflict
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas/Common.yaml#/EnvelopeError
 /api/v1/admin/posts/{id}/publish:
   post:
     tags:

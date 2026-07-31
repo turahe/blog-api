@@ -126,17 +126,19 @@ func (r *PostRepository) Create(ctx context.Context, post postdomain.Post) (post
 
 func (r *PostRepository) Update(ctx context.Context, post postdomain.Post) (postdomain.Post, error) {
 	updates := map[string]any{
-		"title":                 post.Title,
-		"slug":                  post.Slug,
-		"content":               post.Content,
-		"status":                string(post.Status),
-		"version":               post.Version,
-		"published_at":          post.PublishedAt,
-		"updated_at":            post.UpdatedAt,
-		"category_id":           post.CategoryID,
-		"cover_image_media_id":  post.CoverImageMediaID,
+		"title":                post.Title,
+		"slug":                 post.Slug,
+		"content":              post.Content,
+		"status":               string(post.Status),
+		"version":              post.Version,
+		"published_at":         post.PublishedAt,
+		"updated_at":           post.UpdatedAt,
+		"category_id":          post.CategoryID,
+		"cover_image_media_id": post.CoverImageMediaID,
 	}
-	if post.Excerpt != "" {
+	if post.Excerpt == "" {
+		updates["excerpt"] = nil
+	} else {
 		updates["excerpt"] = post.Excerpt
 	}
 	if err := r.db.WithContext(ctx).Model(&PostModel{}).Where("id = ?", post.ID).Updates(updates).Error; err != nil {
