@@ -1,7 +1,7 @@
 # Admin Posts List + Update Design
 
 Date: 2026-07-31
-Status: approved — awaiting implementation plan
+Status: approved — implementation plan at [2026-07-31-admin-posts-list-update.md](../plans/2026-07-31-admin-posts-list-update.md)
 Scope: Wire `admin.posts.list` and add `admin.posts.update` (PATCH) with role-aware ownership.
 
 ## Goal
