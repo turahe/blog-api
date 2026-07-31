@@ -8,7 +8,8 @@ Index: [README.md](./README.md).
 
 ## Status
 
-**Partial** — post create/publish, admin post list/update, and public post/category/tag reads are wired.
+**Partial** — post create/publish/update (with tag attach), admin post list, admin tag catalog,
+and public post/category/tag reads are wired.
 Media upload, list/delete/tags, public get, and post featured-media replace are wired;
 on-the-fly transform and public-read caching remain open.
 
@@ -37,9 +38,12 @@ on-the-fly transform and public-read caching remain open.
 - [x] `public.categories.get` — `GET /api/v1/categories/{slug}`
 - [x] `public.tags.list` — `GET /api/v1/tags`
 - [ ] Admin category create, update, delete, and reorder endpoints
-- [ ] Admin tag create, merge, and delete endpoints
+- [x] `admin.tags.create` — `POST /api/v1/admin/tags`
+- [x] `admin.tags.update` — `PATCH /api/v1/admin/tags/{id}`
+- [x] `admin.tags.merge` — `POST /api/v1/admin/tags/{id}/merge`
+- [x] `admin.tags.delete` — `DELETE /api/v1/admin/tags/{id}`
 - [ ] Category tree / nesting support if the product requires it — confirm against [PRD.md](../product/PRD.md)
-- [ ] Attach and detach tags when creating or updating a post
+- [x] Attach and detach tags on post create/update via `tags: string[]` (create-or-link; omit = unchanged, `[]` = clear)
 
 ## Epic: media upload and listing
 
@@ -88,7 +92,7 @@ Specs: [user-profile-management.md](../features/user-profile-management.md),
 1. The object-storage adapter blocks every media endpoint and avatar upload.
 2. Avatar and email-change flows need the real mailer from Phase 1.
 3. Caching should land after admin post mutation endpoints exist, so invalidation has real triggers.
-4. Tag attach/detach depends on admin post update.
+4. Tag attach/detach is wired on admin post create/update; public tag list uses `TagService`.
 
 ## Cross-cutting
 

@@ -31,7 +31,7 @@ hand-maintained routing or auth table.
 | `me` | `/api/v1/me` | 18 | required | bearer or session auth, CSRF for browser clients, step-up re-verify on high-risk actions |
 | `self` | `/api/v1/me/comments`, `/api/v1/comments/:id` | 4 | required | same as `me`, plus per-resource ownership check |
 | `public` | `/api/v1/posts`, `/api/v1/categories`, `/api/v1/tags`, `/api/v1/media`, `/api/v1/users`, `/api/v1/comments`, `/api/v1/newsletter` | 19 | 17 none, 2 optional | anonymous-safe, cache-friendly, privacy filtering, spam and captcha checks on writes |
-| `admin` | `/api/v1/admin` | 49 | 48 required, 1 none | bearer auth, RBAC permission check, CSRF, audit logging |
+| `admin` | `/api/v1/admin` | 55 | 54 required, 1 none | bearer auth, RBAC permission check, CSRF, audit logging |
 | `analytics` | `/api/v1/analytics` | 8 | none | consent gating, bot filtering, high-volume ingest rate limits |
 
 ### Auth modes
@@ -182,10 +182,14 @@ Full wire format, client integration, security, and scaling guidance is in the f
 - `POST /api/v1/admin/users/:id/password/admin-reset` (requires `user.password.admin_reset`; sends reset email or force-password-on-next-login)
 - `GET /api/v1/admin/users/:id/activity` (requires `user.activity.read_all`; ignores target user privacy)
 - `GET /api/v1/admin/posts`
-- `POST /api/v1/admin/posts`
+- `POST /api/v1/admin/posts` (optional `tags: string[]` create-or-link attach on create)
 - `POST /api/v1/admin/posts/:id/publish`
-- `PATCH /api/v1/admin/posts/:id` (partial post update; ownership-aware)
+- `PATCH /api/v1/admin/posts/:id` (partial post update; ownership-aware; optional `tags: string[]` create-or-link attach)
 - `PATCH /api/v1/admin/posts/:id/media` (replace post attachments join rows)
+- `POST /api/v1/admin/tags` (create curated tag; slug optional, derived from name)
+- `PATCH /api/v1/admin/tags/:id` (rename or reslug tag)
+- `POST /api/v1/admin/tags/:id/merge` (reassign post links from source to target, delete source)
+- `DELETE /api/v1/admin/tags/:id` (hard delete when unused; 409 when posts still reference the tag)
 - `GET /api/v1/admin/posts/:id/revisions` (list revisions, paginated + filters)
 - `GET /api/v1/admin/posts/:id/revisions/:revision_id_or_number` (get single revision with snapshot + diff)
 - `POST /api/v1/admin/posts/:id/revisions/:revision_id_or_number/restore` (restore revision as new revision; body: restore_note optional)

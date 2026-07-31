@@ -1,5 +1,19 @@
 # Changelog
 
+## 2026-07-31 — Admin tags catalog + post attach
+
+### Added
+
+- Hexagonal tag module (`internal/core/tag`) with create, update, merge, delete, and resolve-or-create
+- `admin.tags.create`, `admin.tags.update`, `admin.tags.merge`, `admin.tags.delete` for staff tag curation
+- Post create/update accept `tags: string[]` (create-or-link by name; omit = unchanged, `[]` = clear)
+- `public.tags.list` now routes through `TagService` instead of direct repository access
+
+### Updated
+
+- Phase 2 content backlog marks admin tag ops and post tag attach as complete
+- Admin posts API docs note tag attach on create/update; design spec status set to implemented
+
 ## 2026-07-31 — Admin posts list + update
 
 ### Added

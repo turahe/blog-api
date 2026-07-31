@@ -1,7 +1,7 @@
 # Tags Admin + Post Attach Design
 
 Date: 2026-07-31
-Status: approved
+Status: implemented
 Scope: Admin tag create/update/merge/delete, and create-or-link attach on post create/update.
 
 ## Goal
