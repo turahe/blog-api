@@ -19,6 +19,7 @@ import (
 	mediaports "github.com/turahe/blog-api/internal/core/media/ports"
 	mediaservice "github.com/turahe/blog-api/internal/core/media/service"
 	postservice "github.com/turahe/blog-api/internal/core/post/service"
+	tagservice "github.com/turahe/blog-api/internal/core/tag/service"
 	userservice "github.com/turahe/blog-api/internal/core/user/service"
 	"github.com/turahe/blog-api/internal/platform/config"
 	"github.com/turahe/blog-api/internal/platform/database"
@@ -83,6 +84,7 @@ func NewRuntime(ctx context.Context, cfg config.Config, logger *slog.Logger, ver
 	posts := postservice.New(postsRepo, ids, clock)
 	userSvc := userservice.New(users)
 	categories := categoryservice.New(categoriesRepo)
+	tags := tagservice.New(tagsRepo, ids, clock)
 
 	var media mediaports.Service
 	var mediaRepo *persistence.MediaRepository
@@ -136,7 +138,7 @@ func NewRuntime(ctx context.Context, cfg config.Config, logger *slog.Logger, ver
 		RBAC:           enforcer,
 		Posts:          posts,
 		Categories:     categories,
-		Tags:           tagsRepo,
+		Tags:           tags,
 		Media:          media,
 		Version:        version,
 		TrustedProxies: cfg.TrustedProxies,

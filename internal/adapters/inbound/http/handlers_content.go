@@ -11,7 +11,6 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
-	"github.com/turahe/blog-api/internal/adapters/outbound/persistence"
 	categorydomain "github.com/turahe/blog-api/internal/core/category/domain"
 	categoryservice "github.com/turahe/blog-api/internal/core/category/service"
 	mediadomain "github.com/turahe/blog-api/internal/core/media/domain"
@@ -373,25 +372,5 @@ func categoryJSON(cat categorydomain.Category) gin.H {
 		"parent_id":   parent,
 		"created_at":  cat.CreatedAt.UTC().Format(time.RFC3339),
 		"updated_at":  cat.UpdatedAt.UTC().Format(time.RFC3339),
-	}
-}
-
-func listTagsHandler(tags *persistence.TagRepository) gin.HandlerFunc {
-	return func(c *gin.Context) {
-		items, err := tags.List(c.Request.Context())
-		if err != nil {
-			failure(c, nethttp.StatusInternalServerError, "internal_error", "Failed to list tags")
-			return
-		}
-		out := make([]gin.H, 0, len(items))
-		for _, tag := range items {
-			out = append(out, gin.H{
-				"id":         tag.ID.String(),
-				"name":       tag.Name,
-				"slug":       tag.Slug,
-				"created_at": tag.CreatedAt.UTC().Format(time.RFC3339),
-			})
-		}
-		success(c, nethttp.StatusOK, out)
 	}
 }

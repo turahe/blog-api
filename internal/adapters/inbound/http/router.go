@@ -6,13 +6,13 @@ import (
 
 	"github.com/gin-gonic/gin"
 	v1 "github.com/turahe/blog-api/internal/adapters/inbound/http/v1"
-	"github.com/turahe/blog-api/internal/adapters/outbound/persistence"
 	authports "github.com/turahe/blog-api/internal/core/auth/ports"
 	categoryservice "github.com/turahe/blog-api/internal/core/category/service"
 	healthports "github.com/turahe/blog-api/internal/core/health/ports"
 	mediaports "github.com/turahe/blog-api/internal/core/media/ports"
 	postservice "github.com/turahe/blog-api/internal/core/post/service"
 	rbacports "github.com/turahe/blog-api/internal/core/rbac/ports"
+	tagservice "github.com/turahe/blog-api/internal/core/tag/service"
 	userservice "github.com/turahe/blog-api/internal/core/user/service"
 )
 
@@ -25,7 +25,7 @@ type Dependencies struct {
 	RBAC           rbacports.Enforcer
 	Posts          *postservice.PostService
 	Categories     *categoryservice.CategoryService
-	Tags           *persistence.TagRepository
+	Tags           *tagservice.Service
 	Media          mediaports.Service
 	Version        string
 	TrustedProxies []string
@@ -136,6 +136,27 @@ func handlerFor(deps Dependencies) func(v1.Route) gin.HandlerFunc {
 	}
 	if deps.Tags != nil {
 		implemented["public.tags.list"] = listTagsHandler(deps.Tags)
+		createTag := adminCreateTagHandler(deps.Tags)
+		updateTag := adminUpdateTagHandler(deps.Tags)
+		mergeTag := adminMergeTagHandler(deps.Tags)
+		deleteTag := adminDeleteTagHandler(deps.Tags)
+		if deps.RBAC != nil {
+			implemented["admin.tags.create"] = chain(requirePermission(deps.RBAC, "tag.create"), createTag)
+			implemented["admin.tags.update"] = chain(requirePermission(deps.RBAC, "tag.update"), updateTag)
+			implemented["admin.tags.merge"] = chain(requirePermission(deps.RBAC, "tag.update"), mergeTag)
+			implemented["admin.tags.delete"] = chain(requirePermission(deps.RBAC, "tag.delete"), deleteTag)
+		} else if deps.Roles != nil {
+			gate := requireRoles(deps.Roles, "admin", "editor")
+			implemented["admin.tags.create"] = chain(gate, createTag)
+			implemented["admin.tags.update"] = chain(gate, updateTag)
+			implemented["admin.tags.merge"] = chain(gate, mergeTag)
+			implemented["admin.tags.delete"] = chain(gate, deleteTag)
+		} else {
+			implemented["admin.tags.create"] = createTag
+			implemented["admin.tags.update"] = updateTag
+			implemented["admin.tags.merge"] = mergeTag
+			implemented["admin.tags.delete"] = deleteTag
+		}
 	}
 	if deps.Media != nil {
 		presignMedia := adminPresignMediaHandler(deps.Media)
