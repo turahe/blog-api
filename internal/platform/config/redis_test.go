@@ -41,6 +41,7 @@ func TestValidateRedisRejectsRedissDriver(t *testing.T) {
 }
 
 func TestLoadRedisFromSplitEnvironment(t *testing.T) {
+	setJWTKeys(t)
 	t.Setenv("REDIS_DRIVER", "valkey")
 	t.Setenv("REDIS_HOST", "redis.internal")
 	t.Setenv("REDIS_PORT", "6381")
@@ -81,6 +82,7 @@ func TestLoadRejectsInvalidRedisConfig(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			setJWTKeys(t)
 			t.Setenv(tt.key, tt.value)
 			if _, err := Load(); err == nil {
 				t.Fatal("expected Redis configuration error")

@@ -1,5 +1,17 @@
 # Changelog
 
+## 2026-08-02 — JWT RS256
+
+### Changed
+
+- Access tokens are signed and verified with RS256 (RSA PEM) instead of HS256
+- `APP_SESSION_KEY` peppers opaque refresh/reset token hashes only
+- JWT keys load from `APP_JWT_PRIVATE_KEY` / `APP_JWT_PUBLIC_KEY` or `*_PATH` file vars (path wins)
+
+### Added
+
+- Local-dev RSA keypair under `configs/dev/` for path-based configuration
+
 ## 2026-08-01 — Admin categories + nested set
 
 ### Added

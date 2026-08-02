@@ -6,7 +6,9 @@ Source of truth for local keys: [.env.example](../../.env.example).
 
 | Variable | Rules |
 | --- | --- |
-| `APP_SESSION_KEY` | ≥ 32 random bytes; rotate on compromise |
+| `APP_SESSION_KEY` | ≥ 32 random bytes; peppers refresh/reset token hashes; rotate on compromise |
+| `APP_JWT_PRIVATE_KEY` / `APP_JWT_PRIVATE_KEY_PATH` | RSA private PEM (RS256); prefer file path in prod; never commit production keys |
+| `APP_JWT_PUBLIC_KEY` / `APP_JWT_PUBLIC_KEY_PATH` | Matching RSA public PEM; path wins when both inline and path are set |
 | `APP_CSRF_KEY` | ≥ 32 random bytes; distinct from session key |
 | `APP_PEPPER` | server-side password pepper; never commit real value |
 | `DB_PASSWORD` | least privilege DB role in staging/prod; never commit real value |

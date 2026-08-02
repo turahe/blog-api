@@ -64,6 +64,7 @@ func TestDatabaseDSNSQLServer(t *testing.T) {
 }
 
 func TestLoadDatabaseFromSplitEnvironment(t *testing.T) {
+	setJWTKeys(t)
 	t.Setenv("DB_DRIVER", "postgres")
 	t.Setenv("DB_HOST", "db.internal")
 	t.Setenv("DB_PORT", "5433")
@@ -82,6 +83,7 @@ func TestLoadDatabaseFromSplitEnvironment(t *testing.T) {
 }
 
 func TestLoadRejectsProductionPostgresWithoutTLS(t *testing.T) {
+	setJWTKeys(t)
 	t.Setenv("APP_ENV", "production")
 	t.Setenv("APP_SESSION_KEY", "production-session-key-32bytes-min!")
 	t.Setenv("DB_DRIVER", "postgres")

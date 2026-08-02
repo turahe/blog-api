@@ -286,6 +286,8 @@ APP_ADDR=0.0.0.0:8080                # listen address for `app serve`
 APP_SESSION_KEY=replace_me_with_32b_random
 APP_CSRF_KEY=replace_me_with_32b_random
 APP_PEPPER=replace_me_for_hmac_lookups
+APP_JWT_PRIVATE_KEY_PATH=configs/dev/jwt-rsa-private.pem
+APP_JWT_PUBLIC_KEY_PATH=configs/dev/jwt-rsa-public.pem
 
 # ---------- PostgreSQL ----------
 DB_DRIVER=postgres

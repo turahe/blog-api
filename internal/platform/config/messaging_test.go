@@ -68,6 +68,7 @@ func TestValidateMessagingUnknownBroker(t *testing.T) {
 }
 
 func TestLoadMessagingFromEnv(t *testing.T) {
+	setJWTKeys(t)
 	t.Setenv("MESSAGE_BROKER", "kafka")
 	t.Setenv("KAFKA_BROKERS", "127.0.0.1:9092,127.0.0.1:9093")
 	t.Setenv("KAFKA_CONSUMER_GROUP", "blog-api")
@@ -88,6 +89,7 @@ func TestLoadMessagingFromEnv(t *testing.T) {
 }
 
 func TestLoadMessagingAMQPAliasFromEnv(t *testing.T) {
+	setJWTKeys(t)
 	t.Setenv("MESSAGE_BROKER", "amqp")
 	t.Setenv("RABBITMQ_URL", "amqp://guest:guest@localhost:5672/")
 	cfg, err := Load()

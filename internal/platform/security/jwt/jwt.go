@@ -2,9 +2,12 @@ package jwt
 
 import (
 	"crypto/rand"
+	"crypto/rsa"
 	"crypto/sha256"
+	"crypto/x509"
 	"encoding/base64"
 	"encoding/hex"
+	"encoding/pem"
 	"fmt"
 	"time"
 
@@ -14,18 +17,39 @@ import (
 )
 
 type Service struct {
-	secret []byte
-	issuer string
+	privateKey *rsa.PrivateKey
+	publicKey  *rsa.PublicKey
+	hashKey    []byte
+	issuer     string
 }
 
-func New(secret string, issuer string) (*Service, error) {
-	if len(secret) < 32 {
-		return nil, fmt.Errorf("JWT signing secret must be at least 32 bytes")
+// New builds an RS256 token service.
+// privatePEM / publicPEM are PKCS#1 or PKCS#8 / PKIX PEM blocks.
+// hashKey peppers opaque refresh and reset token hashes (APP_SESSION_KEY).
+func New(privatePEM, publicPEM, hashKey, issuer string) (*Service, error) {
+	if len(hashKey) < 32 {
+		return nil, fmt.Errorf("JWT hash key must be at least 32 bytes")
+	}
+	privateKey, err := parseRSAPrivateKey([]byte(privatePEM))
+	if err != nil {
+		return nil, fmt.Errorf("parse JWT private key: %w", err)
+	}
+	publicKey, err := parseRSAPublicKey([]byte(publicPEM))
+	if err != nil {
+		return nil, fmt.Errorf("parse JWT public key: %w", err)
+	}
+	if privateKey.N.Cmp(publicKey.N) != 0 || privateKey.E != publicKey.E {
+		return nil, fmt.Errorf("JWT public key does not match private key")
 	}
 	if issuer == "" {
 		issuer = "blog-api"
 	}
-	return &Service{secret: []byte(secret), issuer: issuer}, nil
+	return &Service{
+		privateKey: privateKey,
+		publicKey:  publicKey,
+		hashKey:    []byte(hashKey),
+		issuer:     issuer,
+	}, nil
 }
 
 type accessClaims struct {
@@ -35,7 +59,7 @@ type accessClaims struct {
 }
 
 func (s *Service) IssueAccess(claims authdomain.AccessClaims) (string, error) {
-	token := jwtlib.NewWithClaims(jwtlib.SigningMethodHS256, accessClaims{
+	token := jwtlib.NewWithClaims(jwtlib.SigningMethodRS256, accessClaims{
 		Email:    claims.Email,
 		Username: claims.Username,
 		RegisteredClaims: jwtlib.RegisteredClaims{
@@ -46,15 +70,15 @@ func (s *Service) IssueAccess(claims authdomain.AccessClaims) (string, error) {
 			ExpiresAt: jwtlib.NewNumericDate(claims.ExpiresAt),
 		},
 	})
-	return token.SignedString(s.secret)
+	return token.SignedString(s.privateKey)
 }
 
 func (s *Service) ParseAccess(token string) (authdomain.AccessClaims, error) {
 	parsed, err := jwtlib.ParseWithClaims(token, &accessClaims{}, func(t *jwtlib.Token) (any, error) {
-		if t.Method != jwtlib.SigningMethodHS256 {
+		if t.Method != jwtlib.SigningMethodRS256 {
 			return nil, fmt.Errorf("unexpected signing method")
 		}
-		return s.secret, nil
+		return s.publicKey, nil
 	})
 	if err != nil || !parsed.Valid {
 		return authdomain.AccessClaims{}, authdomain.ErrInvalidToken
@@ -94,7 +118,7 @@ func (s *Service) IssueRefresh() (raw string, hash string, err error) {
 }
 
 func (s *Service) HashRefresh(raw string) string {
-	sum := sha256.Sum256(append(append([]byte("refresh:"), s.secret...), []byte(raw)...))
+	sum := sha256.Sum256(append(append([]byte("refresh:"), s.hashKey...), []byte(raw)...))
 	return hex.EncodeToString(sum[:])
 }
 
@@ -113,6 +137,42 @@ func (s *Service) IssueResetToken() (raw string, hash string, jti string, err er
 }
 
 func (s *Service) HashResetToken(raw string) string {
-	sum := sha256.Sum256(append(append([]byte("reset:"), s.secret...), []byte(raw)...))
+	sum := sha256.Sum256(append(append([]byte("reset:"), s.hashKey...), []byte(raw)...))
 	return hex.EncodeToString(sum[:])
+}
+
+func parseRSAPrivateKey(pemBytes []byte) (*rsa.PrivateKey, error) {
+	block, _ := pem.Decode(pemBytes)
+	if block == nil {
+		return nil, fmt.Errorf("no PEM block found")
+	}
+	if key, err := x509.ParsePKCS8PrivateKey(block.Bytes); err == nil {
+		rsaKey, ok := key.(*rsa.PrivateKey)
+		if !ok {
+			return nil, fmt.Errorf("not an RSA private key")
+		}
+		return rsaKey, nil
+	}
+	if key, err := x509.ParsePKCS1PrivateKey(block.Bytes); err == nil {
+		return key, nil
+	}
+	return nil, fmt.Errorf("unsupported private key encoding")
+}
+
+func parseRSAPublicKey(pemBytes []byte) (*rsa.PublicKey, error) {
+	block, _ := pem.Decode(pemBytes)
+	if block == nil {
+		return nil, fmt.Errorf("no PEM block found")
+	}
+	if key, err := x509.ParsePKIXPublicKey(block.Bytes); err == nil {
+		rsaKey, ok := key.(*rsa.PublicKey)
+		if !ok {
+			return nil, fmt.Errorf("not an RSA public key")
+		}
+		return rsaKey, nil
+	}
+	if key, err := x509.ParsePKCS1PublicKey(block.Bytes); err == nil {
+		return key, nil
+	}
+	return nil, fmt.Errorf("unsupported public key encoding")
 }

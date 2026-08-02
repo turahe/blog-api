@@ -60,7 +60,7 @@ func NewRuntime(ctx context.Context, cfg config.Config, logger *slog.Logger, ver
 		return nil, err
 	}
 
-	tokenService, err := jwttoken.New(cfg.SessionKey, cfg.JWTIssuer)
+	tokenService, err := jwttoken.New(cfg.JWTPrivateKey, cfg.JWTPublicKey, cfg.SessionKey, cfg.JWTIssuer)
 	if err != nil {
 		_ = redisClient.Close()
 		_ = db.Close()

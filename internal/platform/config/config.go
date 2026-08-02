@@ -47,6 +47,8 @@ type Config struct {
 	SessionKey                    string
 	CSRFKey                       string
 	Pepper                        string
+	JWTPrivateKey                 string
+	JWTPublicKey                  string
 	JWTIssuer                     string
 	AccessTokenTTL                time.Duration
 	RefreshTokenTTL               time.Duration
@@ -354,6 +356,17 @@ func Load() (Config, error) {
 		MediaPresignTTL:               duration("MEDIA_PRESIGN_TTL", 15*time.Minute),
 	}
 
+	privateKey, err := pemFromEnvOrFile("APP_JWT_PRIVATE_KEY", "APP_JWT_PRIVATE_KEY_PATH")
+	if err != nil {
+		return Config{}, fmt.Errorf("load JWT private key: %w", err)
+	}
+	publicKey, err := pemFromEnvOrFile("APP_JWT_PUBLIC_KEY", "APP_JWT_PUBLIC_KEY_PATH")
+	if err != nil {
+		return Config{}, fmt.Errorf("load JWT public key: %w", err)
+	}
+	cfg.JWTPrivateKey = privateKey
+	cfg.JWTPublicKey = publicKey
+
 	if cfg.Address == "" {
 		return Config{}, errors.New("APP_ADDR must not be empty")
 	}
@@ -362,6 +375,9 @@ func Load() (Config, error) {
 			return Config{}, errors.New("APP_SESSION_KEY must be at least 32 characters")
 		}
 		cfg.SessionKey = "local-dev-session-key-32bytes-min!!"
+	}
+	if cfg.JWTPrivateKey == "" || cfg.JWTPublicKey == "" {
+		return Config{}, errors.New("JWT RSA keys are required: set APP_JWT_PRIVATE_KEY or APP_JWT_PRIVATE_KEY_PATH, and APP_JWT_PUBLIC_KEY or APP_JWT_PUBLIC_KEY_PATH")
 	}
 	if cfg.Environment == "production" && cfg.UsesCloudSQL() {
 		if cfg.DBInstanceConnectionName == "" || cfg.DBName == "" || cfg.DBUser == "" {
@@ -391,6 +407,28 @@ func env(key, fallback string) string {
 		return value
 	}
 	return fallback
+}
+
+// pemFromEnvOrFile loads a PEM from an inline env var or a path env var.
+// Path wins when both are set. Inline values may use literal "\n" for newlines.
+func pemFromEnvOrFile(inlineKey, pathKey string) (string, error) {
+	path := strings.TrimSpace(os.Getenv(pathKey))
+	if path != "" {
+		raw, err := os.ReadFile(path)
+		if err != nil {
+			return "", fmt.Errorf("read %s (%s): %w", pathKey, path, err)
+		}
+		pem := strings.TrimSpace(string(raw))
+		if pem == "" {
+			return "", fmt.Errorf("%s (%s) is empty", pathKey, path)
+		}
+		return pem, nil
+	}
+	inline := strings.TrimSpace(os.Getenv(inlineKey))
+	if inline == "" {
+		return "", nil
+	}
+	return strings.ReplaceAll(inline, `\n`, "\n"), nil
 }
 
 func boolEnv(key string, fallback bool) bool {

@@ -59,15 +59,19 @@ Do not use `0.0.0.0/0`, `*`, or arbitrary client-controlled addresses in
 
 | Variable | Default | Required | Purpose |
 | --- | --- | --- | --- |
-| `APP_SESSION_KEY` | local development fallback | Yes in production | JWT signing key. Production requires at least 32 characters. |
+| `APP_SESSION_KEY` | local development fallback | Yes in production | Pepper for opaque refresh/reset token hashes. Production requires at least 32 characters. |
 | `APP_CSRF_KEY` | empty | Not currently enforced | Reserved CSRF secret loaded into config; CSRF integration is not wired yet. |
 | `APP_PEPPER` | empty | Not currently enforced | Reserved server-side pepper loaded into config; current password hashing does not consume it. |
+| `APP_JWT_PRIVATE_KEY` / `APP_JWT_PRIVATE_KEY_PATH` | none | Yes | RSA private key PEM for RS256 access-token signing. Path wins when both are set. |
+| `APP_JWT_PUBLIC_KEY` / `APP_JWT_PUBLIC_KEY_PATH` | none | Yes | RSA public key PEM for RS256 verification. Path wins when both are set. |
 | `APP_JWT_ISSUER` | `blog-api` | No | JWT issuer claim. |
 | `APP_ACCESS_TOKEN_TTL` | `15m` | No | Access-token lifetime. |
 | `APP_REFRESH_TOKEN_TTL` | `720h` | No | Refresh-session lifetime. |
 
-Use independent random values for each secret. Never log or commit them. Rotating
-`APP_SESSION_KEY` invalidates existing access tokens. Additional handling rules are in
+Use independent random values for each secret. Never log or commit production PEMs.
+Local development can point at [`configs/dev/`](../../configs/dev/README.md). Rotating the RSA
+private key invalidates existing access tokens; rotating `APP_SESSION_KEY` invalidates hashed
+refresh/reset tokens. Additional handling rules are in
 [secrets-and-headers.md](../security/secrets-and-headers.md).
 
 ## Database

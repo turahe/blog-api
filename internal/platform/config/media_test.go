@@ -83,6 +83,7 @@ func TestValidateMediaRequiresPositivePresignTTL(t *testing.T) {
 }
 
 func TestLoadMediaDefaults(t *testing.T) {
+	setJWTKeys(t)
 	t.Setenv("S3_BUCKET", "blog-media")
 	t.Setenv("S3_ACCESS_KEY", "minioadmin")
 	t.Setenv("S3_SECRET_KEY", "minioadmin")
