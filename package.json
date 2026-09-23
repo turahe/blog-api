@@ -13,7 +13,7 @@
   },
   "devDependencies": {
     "@mermaid-js/parser": "^2.0.0",
-    "@redocly/cli": "^1.25.0",
+    "@redocly/cli": "^2.53.3",
     "jsdom": "^29.1.1",
     "mermaid": "^12.0.0"
   }
