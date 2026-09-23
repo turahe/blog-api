@@ -12,7 +12,7 @@ docker build \
 
 Multi-stage [Dockerfile](../../Dockerfile):
 
-1. `golang:1.26-alpine` — compile `./cmd` with `-trimpath` and version ldflags
+1. `golang:1.26-alpine` — compile `.` (root `main.go`) with `-trimpath` and version ldflags into `cmd`
 2. `gcr.io/distroless/static-debian12:nonroot` — copy binary only
 
 ## Runtime

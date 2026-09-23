@@ -40,7 +40,7 @@ Design: [2026-07-30-messaging-brokers-design.md](../superpowers/specs/2026-07-30
 - [ ] Publish `comment.created` and `comment.moderated` (needs Phase 3)
 - [ ] Publish `user.registered` and `user.password_reset_requested`
 - [ ] Publish `media.uploaded` and `media.transform_requested` (needs Phase 2 media)
-- [ ] Keep `contracts/asyncapi.yaml` authoritative and validated in `make contracts`
+- [ ] Keep `contracts/asyncapi.yaml` authoritative and validated in committed OpenAPI bundles under `contracts/`
 
 ## Epic: durable outbox
 

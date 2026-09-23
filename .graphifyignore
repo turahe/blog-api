@@ -9,16 +9,13 @@ CLAUDE.md
 graphify-out/
 
 # Deps / caches / generated tooling artefacts
-node_modules/
-.redocly-cache/
 dist/
 coverage.out
 reports/
 __pycache__/
 *.py[cod]
 
-# Lockfiles & env noise
-package-lock.json
+# Env noise
 .env
 .env.*
 *.local
@@ -32,7 +29,3 @@ data/
 docs/prompts/
 docs/superpowers/
 docs/tasks/
-
-# Contract bundle artefacts (built via `make contracts`)
-contracts/openapi.bundle.yaml
-contracts/openapi.bundle.deref.yaml

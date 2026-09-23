@@ -2,7 +2,7 @@
 
 ## Overview
 
-This competency framework operationalizes the end-to-end skills, workflows, and deliverable standards required to design, author, embed, maintain, and govern **production-grade Mermaid.js diagrams** in real-world documentation systems. It is used by every documentation contributor on this repository (OpenAPI contract authors, backend architecture writers, feature specifiers, QA) and is enforced by the pre-commit diagram validation pipeline in `scripts/docs/`.
+This competency framework operationalizes the end-to-end skills, workflows, and deliverable standards required to design, author, embed, maintain, and govern **production-grade Mermaid.js diagrams** in real-world documentation systems. It is used by every documentation contributor on this repository (OpenAPI contract authors, backend architecture writers, feature specifiers, QA) and is enforced by the pre-commit diagram validation pipeline in `(removed) `.
 
 The framework defines **six core skill areas**, each partitioned into three proficiency bands (Beginner / Intermediate / Advanced) with concrete, demonstrable outcomes for each. A diagram author must demonstrate all the Intermediate outcomes **before** adding diagrams to any architecture, feature, or backend design document in this repository. The Advanced band reflects the level required for public-facing customer documentation, training material, and diagrams embedded in customer-delivered slides / HTML portals.
 
@@ -37,9 +37,9 @@ Goal: Author correct, readable, semantically-named diagrams for every documentat
   - Apply `classDef` style classes to consistently color code success/error/warning/migration paths and reuse across the whole diagram.
   - _Use case_: RBAC policy mutation flowchart in [features/rbac-with-casbin.md](../features/rbac-with-casbin.md) (validate policy → transactional Casbin upsert + readable mirror update → Watermill audit outbox emit → admin UI invalidate policy cache).
 - **Advanced — can author multi-page flowcharts with sub-graph drill-down, cross-diagram ER alignment, and CI-validated node IDs.**
-  - Use `%% @anchor node_id` comment anchors for tests that assert specific nodes exist; pair with `scripts/docs/validate_mermaid.cjs` to block PRs that accidentally rename contract nodes.
+  - Use `%% @anchor node_id` comment anchors for tests that assert specific nodes exist; pair with `(removed) validate_mermaid.cjs` to block PRs that accidentally rename contract nodes.
   - Use `flowchart-v2` directives (`%%{init: {"flowchart": {"useMaxWidth": true, "htmlLabels": false}} }%%`) to prevent SVG layout overflow on narrow viewports.
-  - Implement `%% @include ./fragment-login-flow.mmd` convention processed by `scripts/docs/bundle_mermaid.cjs` so large flowcharts are edited as composable fragments (e.g. password-reset, email-change, oauth-login sub-flows live in separate files, bundled only for render by MkDocs/Confluence export, stored as fragments in PRs).
+  - Implement `%% @include ./fragment-login-flow.mmd` convention processed by `(removed) bundle_mermaid.cjs` so large flowcharts are edited as composable fragments (e.g. password-reset, email-change, oauth-login sub-flows live in separate files, bundled only for render by MkDocs/Confluence export, stored as fragments in PRs).
   - _Use case_: post-publish end-to-end flow spanning media transcoding, SEO rendering, notification fanout, cache invalidation, analytics event streams, with each sub-flows editable by separate domain owners.
 
 ### 1.2 Sequence diagrams (`sequenceDiagram`)
@@ -68,7 +68,7 @@ Goal: Author correct, readable, semantically-named diagrams for every documentat
   - _Use case_: the canonical blog-api 8-domain ERD in [ERD.md](../backend/ERD.md) itself, 60+ entity/tables with append-only callouts and exact column types cross-referenced to backend/database.md field catalogue.
 - **Advanced — schema-version comparison diagrams, migration-safe ER diff views, CI-validated column names.**
   - Produce `ERD-v12-to-v13.md` erDiagram with 3-colour node `classDef`s: `ADDED rgb(22,163,74,0.12)`, `REMOVED rgb(220,38,38,0.12)`, `CHANGED rgb(245,158,11,0.12)`; pair with migration list in migrations/README.md.
-  - Run `scripts/docs/validate_mermaid_erd.py` against `migrations/*.sql` to confirm every column named inside the ERD actually exists in the most recent HEAD schema and every declared FK matches real `REFERENCES` clauses; CI fails on drift.
+  - Run `(removed) validate_mermaid_erd.py` against `migrations/*.sql` to confirm every column named inside the ERD actually exists in the most recent HEAD schema and every declared FK matches real `REFERENCES` clauses; CI fails on drift.
   - _Use case_: v12 → v13 migration ER delta introducing `newsletter_subscriptions` + double opt-in `subscriber_confirmations` with all added/changed/removed columns explicitly marked.
 
 ### 1.4 Gantt charts (`gantt`)
@@ -80,7 +80,7 @@ Goal: Author correct, readable, semantically-named diagrams for every documentat
   - Explicit `Milestone : milestone, m1, 2026-08-12, 1d` zero-width dots; `crit` only for ≤ 5% of bars (release gates, SLA deadlines, compliance freeze); 3 parallel sections Frontend / Backend / QA with `after` links crossing sections.
   - _Use case_: post-launch v1.0 GA 12-week rollout Gantt: Infra private IP + VPC peering → Database migrations + perf test → Backend SSE + comment moderation → Frontend SSR/ISR migration → A11y WCAG audit → GA flag-flip milestone.
 - **Advanced — effort-loaded Gantts with person-assignments, Slack-anniversary milestone tracking, capacity-capped rolling windows.**
-  - Encode per-task owner via `assignee` taskname prefix convention parsed by `scripts/docs/gantt_extract.py` to export iCal/Google Calendar invites; add `%% @capacity team_frontend 40h/week` capacity directives validated for over-allocation on merge.
+  - Encode per-task owner via `assignee` taskname prefix convention parsed by `(removed) gantt_extract.py` to export iCal/Google Calendar invites; add `%% @capacity team_frontend 40h/week` capacity directives validated for over-allocation on merge.
   - _Use case_: cross-team quarterly roadmap with capacity enforcement, weekly capacity roll-up, automatic CI rejection when any assignee exceeds 120% allocation for 3+ contiguous weeks.
 
 ### 1.5 Class diagrams (`classDiagram`)
@@ -92,7 +92,7 @@ Goal: Author correct, readable, semantically-named diagrams for every documentat
   - `<<interface>> Repository<T>`, `<<service>>`, `<<aggregate_root>>` stereotypes via `note for Post "aggregate_root\\nUUID v7 PK"`; templated `Repository~T~` generics.
   - _Use case_: hexagonal persistence ports & adapters diagram from [architecture.md](../architecture/architecture.md): `UserRepository` interface with `FindByEmail()`, `PostgresUserRepository` implements it, `MemoryUserRepository` test-double, `UserService` depends on interface only.
 - **Advanced — cross-package class diagrams with visibility & dependency-change validation in CI.**
-  - Encode package/group via `package blog_api.platform.auth { ... }` nested blocks; `scripts/docs/validate_class_diagram.py` cross-checks against `internal/` package layout and fails PRs when a `public +` method listed in the class diagram is absent in Go source, or vice-versa.
+  - Encode package/group via `package blog_api.platform.auth { ... }` nested blocks; `(removed) validate_class_diagram.py` cross-checks against `internal/` package layout and fails PRs when a `public +` method listed in the class diagram is absent in Go source, or vice-versa.
   - _Use case_: full hexagonal class diagram for auth, posts, media, notification modules with enforced interface/adapter separation, auto-sync with real Go interface signatures.
 
 ### 1.6 Architecture diagrams (`C4Context`, `C4Container`, `C4Component`, `flowchart` with L1..L3 box nesting; beta `architecture-beta`)
@@ -129,10 +129,10 @@ Goal: Author correct, readable, semantically-named diagrams for every documentat
   - Write a MkDocs Material `docs/architecture/architecture.md` file with inline Mermaid fences; confirm `mkdocs serve` local render matches GitHub preview.
 - **Intermediate — multi-platform portable source: same Mermaid source renders on GitHub, MkDocs, Confluence, GitLab.**
   - **Convention**: only use directives declared inside `%%{init: ... }%%` first-line of fence (never global `mermaid.initialize()`; per-page global init causes GitHub/GitLab/Notion drift); avoid `htmlLabels:true` for Confluence/Data Center compatibility; C4 diagrams use the official `C4Context/C4Container` Mermaid keywords — NOT external PlantUML imports.
-  - Script: `scripts/docs/mermaid_export.mjs` uses `@mermaid-js/mermaid-cli` (headless Puppeteer) to batch-export every ```` ```mermaid ```` block from `docs/**/*.md` into `docs-assets/diagrams/<file>-<seq>.svg` + `.png` for Confluence/Notion/Slide imports; keeps vector source authoritative, raster export an artifact.
+  - Script: `(removed) mermaid_export.mjs` uses `@mermaid-js/mermaid-cli` (headless Puppeteer) to batch-export every ```` ```mermaid ```` block from `docs/**/*.md` into `docs-assets/diagrams/<file>-<seq>.svg` + `.png` for Confluence/Notion/Slide imports; keeps vector source authoritative, raster export an artifact.
   - _Use case_: same ERD source renders on GitHub, MkDocs public docs site, Confluence architecture space, Notion launch doc — no drift, one source of truth.
 - **Advanced — versioned diagram lifecycle in CI, CDN-powered theme switching for docs portal, offline bundle support.**
-  - CI: `scripts/docs/validate_mermaid.cjs` parses every Mermaid block with `@mermaid-js/parser` (no browser) to assert syntax validity before merge; outputs block SHA-256 to `docs-assets/diagrams/_manifest.json` so downstream consumers (Confluence sync job, training slides) can detect when a diagram source has changed and re-export.
+  - CI: `(removed) validate_mermaid.cjs` parses every Mermaid block with `@mermaid-js/parser` (no browser) to assert syntax validity before merge; outputs block SHA-256 to `docs-assets/diagrams/_manifest.json` so downstream consumers (Confluence sync job, training slides) can detect when a diagram source has changed and re-export.
   - Docs portal: MkDocs Material override swaps the per-fence `init` theme based on `prefers-color-scheme` via `MutationObserver` watching `<body data-md-color-scheme>`; exports dark/light paired SVGs; brand palette sync with `docs/guides/branding-palette.md` tokens.
   - Offline: include `mermaid.min.js` self-hosted under `docs/assets/vendor/` with SRI hash; PDF export pipeline runs `mmdc -- puppeteerConfig offline-no-fonts.json` to produce WCAG-tagged accessible PDFs.
 
@@ -296,9 +296,9 @@ This repository already pins `@mermaid-js/mermaid-cli` as a docs-only devDepende
     "sharp":                  "^0.33.0"
   },
   "scripts": {
-    "docs:mermaid:validate":   "node scripts/docs/validate_mermaid.cjs docs/**/*.md",
-    "docs:mermaid:export":     "mmdc --input docs/backend/ERD.md --output docs-assets/diagrams/erd.svg --outputFormat svg   --puppeteerConfig scripts/docs/puppeteer-config.json --configFile docs/guides/mermaid-theme.json",
-    "docs:mermaid:export:png": "mmdc --input docs/backend/ERD.md --output docs-assets/diagrams/erd.png --outputFormat png  --puppeteerConfig scripts/docs/puppeteer-config.json --configFile docs/guides/mermaid-theme.json --width 2400"
+    "docs:mermaid:validate":   "node (removed) validate_mermaid.cjs docs/**/*.md",
+    "docs:mermaid:export":     "mmdc --input docs/backend/ERD.md --output docs-assets/diagrams/erd.svg --outputFormat svg   --puppeteerConfig (removed) puppeteer-config.json --configFile docs/guides/mermaid-theme.json",
+    "docs:mermaid:export:png": "mmdc --input docs/backend/ERD.md --output docs-assets/diagrams/erd.png --outputFormat png  --puppeteerConfig (removed) puppeteer-config.json --configFile docs/guides/mermaid-theme.json --width 2400"
   }
 }
 ```
@@ -422,17 +422,17 @@ Problem scale: 400+ Markdown docs, 1,200+ Mermaid blocks, 60k page-views/month d
 Required optimizations (Advanced band):
 - **Lazy-render diagrams below the fold** using IntersectionObserver; `mermaid.run({ querySelector: 'pre.mermaid.in-view' })` only when the `<pre>` enters the viewport.
 - **SSR the diagram SVGs at build time** using `mmdc -- puppeteer headless` in MkDocs/Docusaurus build hook so client browser never runs Mermaid JS; this cuts ~150 ms/block and removes CLS. HTML preview ships inline `<svg>` data; `mermaid.min.js` is loaded only for `click` tooltips.
-- **Shared SVG defs**: Post-process 30+ diagrams on a docs page to hoist duplicate `<marker end>` / `<style>` defs to a single page-level `<defs>` with `scripts/docs/svg-dedup.py`; cuts shipped SVG bytes by 25–35% on large pages.
+- **Shared SVG defs**: Post-process 30+ diagrams on a docs page to hoist duplicate `<marker end>` / `<style>` defs to a single page-level `<defs>` with `(removed) svg-dedup.py`; cuts shipped SVG bytes by 25–35% on large pages.
 - **CDN caching with etags**: Every build-exported `<file>-<seq>-<sha256prefix>.svg` filename embeds its source content hash, so Cloudflare caches diagrams for 1 year.
 - **Diagram split convention**: `%% @max-nodes 80` header comment on every block; pre-commit `mermaid-lint` auto-splits blocks > 140 nodes into 2 fragments with a shared `@id` so they can be composed visually.
 
 ### 4.3 Troubleshooting common rendering errors
 
-Troubleshooting guide for CI/doc-portal renders. Every error code below has an automated diagnostic in `scripts/docs/validate_mermaid.cjs`:
+Troubleshooting guide for CI/doc-portal renders. Every error code below has an automated diagnostic in `(removed) validate_mermaid.cjs`:
 
 | Error code / symptom | Root cause | Fix | Verification command |
 |---|---|---|---|
-| `Parse error on line 1: extraneous input '…' expecting {…}` | Typo in diagram declaration line (e.g. `flow chart` two words, `sequencediagram` lowercase d, `erdiagram` lowercase D). | First line must match regex: `^(flowchart|sequenceDiagram|erDiagram|gantt|classDiagram|stateDiagram-v2|mindmap|pie|journey|requirementDiagram|gitGraph|architecture-beta|C4Context|C4Container|C4Component|C4Code)[\s(].*$` | `node scripts/docs/validate_mermaid.cjs my-diag.md` |
+| `Parse error on line 1: extraneous input '…' expecting {…}` | Typo in diagram declaration line (e.g. `flow chart` two words, `sequencediagram` lowercase d, `erdiagram` lowercase D). | First line must match regex: `^(flowchart|sequenceDiagram|erDiagram|gantt|classDiagram|stateDiagram-v2|mindmap|pie|journey|requirementDiagram|gitGraph|architecture-beta|C4Context|C4Container|C4Component|C4Code)[\s(].*$` | `node (removed) validate_mermaid.cjs my-diag.md` |
 | GitHub renders blank box / "Sorry, we cannot display this diagram" | 1) Mermaid CLI version ahead of GitHub's server renderer 2) `securityLevel:loose` with inline SVG scripts 3) `init` directive with unknown keys 4) Node count > GitHub's renderer limit (~300 nodes) | 1) Pin features to GitHub Mermaid release notes 2) Always strict 3) Validate `init` against mermaid.schema.json 4) Split blocks < 140 nodes | `docker run -v $PWD:/docs minlag/mermaid-cli:10.9.0 mmdc -i /docs/x.md -o /tmp/x.svg 2>&1` |
 | `Maximum call stack size exceeded` during layout | Nested subgraphs > 8 deep OR flowchart cyclic dependency back-edges + `elk` renderer | Flatten nested subgraphs to ≤ 4; add `%%{init: {"flowchart": {"ranker": "longest-path","cycleRemoval": "greedy"}}}%%`; switch ERD back to default layout | Enable `mermaid.parseError` handler in browser console; stack mentions `layout`/`dagre` → too deep. |
 | Cut-off text on Safari / iOS / small screens | `htmlLabels: true` with long `foreignObject` text + overflow hidden | Always `htmlLabels:false` + wrap text with `\n` + 6 word/node rule (§3.2 rule 3). | mmdc iPhone 390px export + pixel inspection. |
@@ -442,7 +442,7 @@ Troubleshooting guide for CI/doc-portal renders. Every error code below has an a
 | PDF / print export clips diagram bottom edge | SVG overflow: hidden on the root `<svg>` + browser print A4 margin | Always `mmdc -- puppeteerConfig {"defaultViewport":{"height":0}}` + CSS `@page { margin: 1.5cm; size: A4; }`; split > 1 page diagrams. | `wkhtmltopdf /tmp/exported.html /tmp/exported.pdf && pdfinfo /tmp/exported.pdf`. |
 | Gantt bars overflow off the right edge | More than 30 bars + `dateFormat YYYY-MM-DD HH:mm` with 1-hour tasks | Split Gantt into weekly sub-views; set `excludes weekends`; `axisFormat %b %d` only, no HH:mm on monthly views. | mmdc export PNG at 2400px width. |
 | GitGraph merge commits rendered as straight lines `|` instead of `\\|/` branch crosses | Legacy `gitGraph` (v1) syntax; newlines inside message strings | Use `gitGraph` with explicit `branch dev` → `commit id:"msg"` → `merge main tag:"v1.0"`; keep message ≤ 40 chars. | `@mermaid-js/parser@10.9.0 parse` validation. |
-| Dark mode diagram contrast ratio < 4.5:1 (WCAG failure) | Light theme text `#0b1220` used unmodified on dark surfaces | Add `@media (prefers-color-scheme: dark) themeVariables {}` override with `primaryTextColor:"#e5ecfa"` and light stroke colors. | `axe-core` browser automation; `scripts/docs/a11y_contrast.mjs` batch-test every exported SVG. |
+| Dark mode diagram contrast ratio < 4.5:1 (WCAG failure) | Light theme text `#0b1220` used unmodified on dark surfaces | Add `@media (prefers-color-scheme: dark) themeVariables {}` override with `primaryTextColor:"#e5ecfa"` and light stroke colors. | `axe-core` browser automation; `(removed) a11y_contrast.mjs` batch-test every exported SVG. |
 
 ### 4.4 Skill proficiency bands
 
@@ -463,7 +463,7 @@ Three-stage gate, run on every PR that modifies `docs/**/*.md` via GitHub Action
 # Stage 1 — pure parse (no browser, ~150 ms/block)
 - name: Mermaid parse-level validation
   run: |
-    node scripts/docs/validate_mermaid.cjs "docs/**/*.md" \
+    node (removed) validate_mermaid.cjs "docs/**/*.md" \
       --enforce-first-line-type \
       --max-nodes 140 \
       --max-line-len 55 \
@@ -473,7 +473,7 @@ Three-stage gate, run on every PR that modifies `docs/**/*.md` via GitHub Action
 # Stage 2 — headless render (Puppeteer; ~1.5 s/block parallel)
 - name: Mermaid render-level validation + dark/light PNG export
   run: |
-    node scripts/docs/mermaid_export.mjs docs/**/*.md \
+    node (removed) mermaid_export.mjs docs/**/*.md \
       --out-dir docs-assets/diagrams/ \
       --formats svg,png \
       --themes light,dark \
@@ -481,8 +481,8 @@ Three-stage gate, run on every PR that modifies `docs/**/*.md` via GitHub Action
 # Stage 3 — accessibility + brand contrast
 - name: WCAG 2.1 AA contrast audit + alt text audit
   run: |
-    node scripts/docs/a11y_contrast.mjs docs-assets/diagrams/*.svg
-    node scripts/docs/a11y_alt_text.mjs    docs/**/*.md --enforce-non-empty
+    node (removed) a11y_contrast.mjs docs-assets/diagrams/*.svg
+    node (removed) a11y_alt_text.mjs    docs/**/*.md --enforce-non-empty
 ```
 
 Validation output must be actionable: when a diagram fails `--require-alt-paragraph`, the lint error points at the exact fence line number and includes the copy-pasteable 2-paragraph skeleton the author needs to add.
@@ -496,7 +496,7 @@ Diagram authors (≥ Intermediate band) MUST satisfy 7 WCAG criteria for every d
 | 1.1.1 Non-text Content (A) | Equivalent purpose-description for every non-text element. | Mandatory prose paragraph BEFORE the fence describing what the diagram shows and how to read it; add it to the `aria-labelledby` of the container via 3.1.1 accessibility script. |
 | 1.3.1 Info and Relationships (A) | Logical reading order conveyed in non-visual presentation. | Linearise flowcharts into plain-English step list in the callout paragraph after the diagram; for sequence diagrams, re-assert order in the autonumbered prose. |
 | 1.4.1 Use of Color (A) | Meaning cannot be conveyed by color alone. | Every `classDef`-colored node must also carry a text marker: `([OK] Publish happy path)`, `([WARN] Slow consumer dropped)`, `([ERR] Moderation required)`; color is a redundant cue only. |
-| 1.4.3 Contrast Minimum (AA) | 4.5:1 text-to-background; 3:1 non-text UI. | `scripts/docs/a11y_contrast.mjs` reads every SVG text element + its parent fill; warns < 4.5. Brand palette tokens pre-audited. |
+| 1.4.3 Contrast Minimum (AA) | 4.5:1 text-to-background; 3:1 non-text UI. | `(removed) a11y_contrast.mjs` reads every SVG text element + its parent fill; warns < 4.5. Brand palette tokens pre-audited. |
 | 1.4.10 Reflow (AA) | 320 CSS px wide viewport — no horizontal scroll for reading. | Responsive rules §3.2; mmdc 390px export validation; `useMaxWidth:true`. |
 | 1.4.11 Non-text Contrast (AA) | Graphical objects 3:1 contrast with adjacent background. | Stroke colors set to 700-level brand tokens; never 400-level thin lines on light gray. |
 | 2.4.7 Focus Visible (AA) | `click` interactive nodes get focus rings. | Mermaid 10.9 sets `tabindex:0` on clickable nodes; add CSS `pre.mermaid svg a:focus { outline: 2px solid var(--brand-primary-2); outline-offset: 2px; }`. |
@@ -521,9 +521,9 @@ When a diagram changes significantly (> 30% of nodes/edges modified in a single 
 #### 5.3.3 CI-enforced freshness checks (Advanced)
 
 For diagrams whose truth lives in code (ERD, class diagrams, architecture container inventories):
-- **ERD drift check** (§1.3 Advanced): `scripts/docs/validate_mermaid_erd.py` diffs erDiagram columns + FKs against latest `migrations/*.sql` schema.
-- **Container inventory drift check**: `scripts/docs/validate_architecture_inventory.py` asserts every C4Container declared in deployment.md has a matching Terraform resource + runbook link.
-- **Sequence diagram SLO anchors**: `scripts/docs/validate_slo_annotations.py` confirms every `rect rgb(...)` block in a sequence diagram maps to a declared SLO in [architecture/observability.md](../architecture/observability.md) — ensures the diagram doesn't silently drop a required SLO box.
+- **ERD drift check** (§1.3 Advanced): `(removed) validate_mermaid_erd.py` diffs erDiagram columns + FKs against latest `migrations/*.sql` schema.
+- **Container inventory drift check**: `(removed) validate_architecture_inventory.py` asserts every C4Container declared in deployment.md has a matching Terraform resource + runbook link.
+- **Sequence diagram SLO anchors**: `(removed) validate_slo_annotations.py` confirms every `rect rgb(...)` block in a sequence diagram maps to a declared SLO in [architecture/observability.md](../architecture/observability.md) — ensures the diagram doesn't silently drop a required SLO box.
 
 ### 5.4 Skill proficiency bands
 

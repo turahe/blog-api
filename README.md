@@ -17,7 +17,7 @@ authentication, RBAC, media, analytics, impersonation, and audit tooling.**
 ![Changelog](https://img.shields.io/badge/Changelog-keepachangelog-10B981.svg)
 
 **[Docs](#documentation)** ·
-**[Contract Reference](https://redocly.github.io/redoc/?url=https://raw.githubusercontent.com/turahe/blog-api/main/contracts/openapi.yaml)** ·
+**[OpenAPI](./contracts/openapi.yaml)** ·
 **[Architecture](./docs/architecture/architecture.md)**
 
 
@@ -190,7 +190,7 @@ dependency checks reachable via `app doctor`.
 ## 3. Technology Stack
 
 Every version below is the **minimum supported version**. Pin exact versions
-in `package-lock.json`, `go.sum`, and container images.
+in `go.sum` and container images.
 
 ### Backend Runtime
 
@@ -234,7 +234,8 @@ in `package-lock.json`, `go.sum`, and container images.
 | Tool        | Version | Purpose                                                                               |
 | ----------- | ------- | ------------------------------------------------------------------------------------- |
 | OpenAPI     | 3.1.0   | HTTP contract: [contracts/openapi.yaml](./contracts/openapi.yaml) (split under `paths/` + `components/`). |
-| Redocly CLI | 2.41.x  | Linting, bundling, deref, build-docs. See [package.json](./package.json).             |
+| Go routes  | —       | `make routes-check` exercises `routes.Register*` smoke tests.                         |
+| Swagger UI  | —       | Embedded from `contracts/swagger/` when `APP_SWAGGER_ENABLED=true`.                   |
 
 
 
@@ -261,7 +262,6 @@ Not part of this repo today, but pinned for planning purposes:
 | ----------------------------- | ------- | ---------------------------------------------------------------- |
 | Docker                        | 29+     | Container build + runtime.                                       |
 | Docker Compose                | v5      | Local multi-service orchestration (PostgreSQL / Redis / RustFS). |
-| Node.js                       | 26.19+  | Redocly toolchain. See [package.json](./package.json).           |
 | GitHub Actions / GitHub Pages | latest  | CI/CD pipeline (lint → test → migrate → deploy).                 |
 
 
@@ -293,8 +293,6 @@ Install the following on your host machine:
 | Tool           | Min version               | Install check            |
 | -------------- | ------------------------- | ------------------------ |
 | Go             | 1.26                      | `go version`             |
-| Node.js        | 26                        | `node -v`                |
-| npm            | 11.x (ships with Node 26) | `npm -v`                 |
 | Docker         | 24                        | `docker version`         |
 | Docker Compose | v2                        | `docker compose version` |
 
@@ -315,15 +313,11 @@ cd blog-api
 ```bash
 # Go module dependencies + go.sum
 go mod tidy
-
-# Optional: local Node Redocly (prefer Docker via `make contracts`)
-# npm install --no-audit --no-fund
 ```
 
 Expected on first run:
 
 - `go.sum` is generated or updated.
-- Docker can pull `redocly/cli` for contract builds.
 
 
 
@@ -403,8 +397,8 @@ docker compose ps        # confirm all three are "healthy"
 
 ```bash
 # Load .env and run migrations + seeding
-go run ./cmd migrate up
-go run ./cmd seed
+go run . migrate up
+go run . seed
 ```
 
 
@@ -412,18 +406,17 @@ go run ./cmd seed
 ### 4.7 Validate Contracts & Run Tests
 
 ```bash
-# Contract lint + bundle (Docker Redocly → contracts/openapi.bundle*.yaml)
-make contracts
+# Go route registration smoke tests
+make routes-check
 
 # Go unit + integration tests (hermetic, uses SQLite in memory)
-go test -count=1 ./...
+make test
 ```
 
 Expected results:
 
-- Redocly reports contracts valid (or shows actionable `nullable: true`
-schema warnings which are tracked separately).
-- `go test` exits **0** for all packages.
+- `make routes-check` exits **0**.
+- `make test` exits **0** for all packages.
 
 
 
@@ -431,7 +424,7 @@ schema warnings which are tracked separately).
 
 ```bash
 # Runs `app serve` on APP_ADDR (default 0.0.0.0:8080)
-go run ./cmd serve
+go run . serve
 ```
 
 Sanity-check the running service:
@@ -518,7 +511,21 @@ curl -sS 'http://127.0.0.1:8080/api/v1/me/activity?page=1&per_page=25&category[]
       "user_agent_bucket": "Firefox 128 · Linux x86_64"
     }
   ],
-  "meta": { "page": 1, "per_page": 25, "total": 42 }
+  "links": {
+    "first": "http://127.0.0.1:8080/api/v1/me/activity?page=1&per_page=25",
+    "last": "http://127.0.0.1:8080/api/v1/me/activity?page=2&per_page=25",
+    "prev": null,
+    "next": "http://127.0.0.1:8080/api/v1/me/activity?page=2&per_page=25"
+  },
+  "meta": {
+    "current_page": 1,
+    "from": 1,
+    "last_page": 2,
+    "path": "http://127.0.0.1:8080/api/v1/me/activity",
+    "per_page": 25,
+    "to": 25,
+    "total": 42
+  }
 }
 ```
 
@@ -632,7 +639,7 @@ WORKDIR /src
 COPY go.mod go.sum ./
 RUN go mod download
 COPY . .
-RUN CGO_ENABLED=0 GOOS=linux go build -trimpath -ldflags='-s -w' -o /out/app ./cmd
+RUN CGO_ENABLED=0 GOOS=linux go build -trimpath -ldflags='-s -w' -o /out/app .
 
 FROM gcr.io/distroless/static-debian12:nonroot
 COPY --from=build /out/app /bin/app
@@ -656,7 +663,7 @@ This is the documented release checklist from
 
 1. **Build** the tagged container and a `migrate` binary.
 2. **Validate contracts** locally or in CI:
-  - OpenAPI: `make contracts`
+  - OpenAPI: committed OpenAPI bundles under `contracts/`
   - AsyncAPI: `npx @asyncapi/cli validate contracts/asyncapi.yaml`
 3. **Run automated tests**: `go test -count=1 ./...`
 4. **Apply DB migrations** *before* enabling new traffic:
@@ -686,7 +693,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
-      - run: make contracts
+      - run: committed OpenAPI bundles
   go-test:
     runs-on: ubuntu-latest
     steps:
@@ -761,7 +768,7 @@ them for a team-wide release cadence.
 
 | Check                                                         | Command                          | Required          |
 | ------------------------------------------------------------- | -------------------------------- | ----------------- |
-| OpenAPI / event contracts                                     | `make contracts`                 | Always            |
+| OpenAPI / event contracts                                     | committed OpenAPI bundles under `contracts/`                 | Always            |
 | Go formatting                                                 | `gofmt -l .` (or `go fmt ./...`) | Always            |
 | Go vet                                                        | `go vet ./...`                   | Always            |
 | Staticcheck (recommended)                                     | `staticcheck ./...`              | All new Go code   |

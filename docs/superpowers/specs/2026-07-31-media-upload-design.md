@@ -92,7 +92,7 @@ Indexes: unique `storage_key`; partial unique not required; btree on `uploaded_b
 
 ## API contract
 
-Update `paths/media.yaml` and `components/schemas/Media.yaml`, then `make contracts` + `make routes`.
+Update `paths/media.yaml` and `components/schemas/Media.yaml`, then committed OpenAPI bundles under `contracts/` + `make routes`.
 
 ### `admin.media.create` — `POST /api/v1/admin/media`
 
@@ -192,7 +192,7 @@ Complete:
 
 ## Success criteria
 
-1. `make contracts` + `make routes` succeed after OpenAPI updates.
+1. committed OpenAPI bundles under `contracts/` + `make routes` succeed after OpenAPI updates.
 2. Against local MinIO: client can presign → PUT → complete and receive `status=ready` asset.
 3. Core remains free of AWS SDK / Gin / GORM imports.
 4. Docs: config guide, media backend notes, phase-2 backlog boxes for create/presign path updated.

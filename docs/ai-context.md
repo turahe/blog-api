@@ -27,6 +27,7 @@ Use a hexagonal modular monolith with clear domain boundaries, where core busine
 The package layout aligns with hexagonal (ports-and-adapters) principles, isolating domain logic from external dependencies:
 
 ```text
+/main.go
 /cmd
 /internal/bootstrap
 /internal/core

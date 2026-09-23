@@ -37,7 +37,7 @@
 | `paths/tags.yaml` (new) or extend `paths/categories.yaml` | Admin tag ops + keep public list |
 | `openapi.yaml` | Path `$ref`s |
 | `contracts/openapi.bundle.deref.yaml` | Regenerated |
-| `internal/adapters/inbound/http/v1/routes_gen.go` | Regenerated |
+| `internal/adapters/inbound/routes/api.go` | Regenerated |
 | `internal/adapters/inbound/http/handlers_tags.go` | Admin + public tag handlers |
 | `internal/adapters/inbound/http/handlers_content.go` | Post create/update tags; drop repo listTags |
 | `internal/adapters/inbound/http/handlers_tags_test.go` | HTTP tests |
@@ -293,7 +293,7 @@ Expected: PASS (persistence may have no tests)
 - Modify: `components/schemas/posts.yaml`
 - Create or modify: `paths/tags.yaml` (prefer new file; move `/api/v1/tags` from `categories.yaml` into it)
 - Modify: `openapi.yaml`
-- Regenerate: `contracts/openapi.bundle.deref.yaml`, `internal/adapters/inbound/http/v1/routes_gen.go`
+- Regenerate: `contracts/openapi.bundle.deref.yaml`, `internal/adapters/inbound/routes/api.go`
 
 **Interfaces:**
 - Produces operationIds: `admin.tags.create`, `admin.tags.update`, `admin.tags.merge`, `admin.tags.delete` (keep `public.tags.list`)
@@ -661,7 +661,7 @@ Expected: PASS
 - [ ] **Step 2: Validate relative links**
 
 ```bash
-node scripts/docs/validate_relative_links.cjs docs contracts paths README.md
+(relative-link check removed with scripts/)
 ```
 
 - [ ] **Step 3: Full test + build**

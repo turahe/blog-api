@@ -15,19 +15,10 @@
 !.env.example
 *.local
 
-# Node (contracts tooling only — not needed for Go image)
-node_modules/
-package.json
-package-lock.json
-.redocly-cache/
-redocly.yaml
-
-# OpenAPI / docs / scripts (not compiled into the binary)
-contracts/
+# Docs / source-only contract splits (bundles + swagger stay for go:embed)
 components/
 paths/
 docs/
-scripts/
 openapi.yaml
 AGENTS.md
 CLAUDE.md

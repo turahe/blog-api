@@ -6,7 +6,7 @@
 - [ ] `go vet ./...` and `gofmt` clean (`make lint`)
 - [ ] New behavior covered by unit or HTTP test
 - [ ] Negative paths assert envelope `error.code` (not only status)
-- [ ] If OpenAPI changed: `make contracts` + `make routes` + route-group tests green
+- [ ] If routes or OpenAPI changed: committed OpenAPI bundles under `contracts/` + `make routes-check` + route-group tests green
 - [ ] No real secrets in fixtures; use [.env.example](../../.env.example) shapes only
 
 ## Auth / RBAC changes
@@ -25,4 +25,4 @@
 
 - tests were deleted to “make CI green”
 - only happy-path coverage for a security-sensitive endpoint
-- generated `routes_gen.go` edited by hand
+- `internal/adapters/inbound/routes/api.go` and OpenAPI left out of sync (`make routes-check` fails)

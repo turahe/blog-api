@@ -146,6 +146,7 @@ func NewRuntime(ctx context.Context, cfg config.Config, logger *slog.Logger, ver
 		Media:          media,
 		Version:        version,
 		TrustedProxies: cfg.TrustedProxies,
+		SwaggerEnabled: cfg.SwaggerEnabled,
 	})
 	if err != nil {
 		_ = redisClient.Close()

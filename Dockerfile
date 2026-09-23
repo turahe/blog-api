@@ -8,8 +8,8 @@ ARG VERSION=dev
 ARG COMMIT=unknown
 ARG BUILD_TIME=unknown
 RUN CGO_ENABLED=0 GOOS=linux go build -trimpath \
-    -ldflags="-s -w -X main.version=${VERSION} -X main.commit=${COMMIT} -X main.buildTime=${BUILD_TIME}" \
-    -o /out/app ./cmd
+    -ldflags="-s -w -X github.com/turahe/blog-api/cmd.version=${VERSION} -X github.com/turahe/blog-api/cmd.commit=${COMMIT} -X github.com/turahe/blog-api/cmd.buildTime=${BUILD_TIME}" \
+    -o /out/app .
 
 FROM gcr.io/distroless/static-debian12:nonroot
 COPY --from=build /out/app /bin/app

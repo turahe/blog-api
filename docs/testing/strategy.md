@@ -7,7 +7,7 @@
 | Unit | `internal/core/**/service`, `domain` | Pure rules, no Gin/GORM/Redis |
 | Adapter unit | `internal/adapters/inbound/http` | Middleware, envelopes, route registration |
 | Integration | `*_integration_test.go` (when added) | Postgres, Redis, MinIO via Compose |
-| Contract | CI + `make contracts` | OpenAPI / AsyncAPI validity |
+| Contract | CI + committed OpenAPI bundles under `contracts/` | OpenAPI / AsyncAPI validity |
 | Smoke | post-deploy | Health, login, one admin + one public path |
 
 ## Package rules
@@ -31,7 +31,7 @@
 | Domain ports (repos, mailer, clock) | Yes in unit tests |
 | Gin engine | No — use `httptest` |
 | Postgres / Redis | Real in integration; fake ports in unit |
-| Generated `v1.Routes` | Never hand-edit; regenerate via `make routes` |
+| Hand-maintained `routes.Routes` | Edit `internal/adapters/inbound/routes/api.go`; keep OpenAPI aligned via `make routes-check` |
 
 ## Priority areas
 

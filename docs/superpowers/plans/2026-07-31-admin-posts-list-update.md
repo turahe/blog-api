@@ -32,7 +32,7 @@
 | `components/schemas/posts.yaml` | `PostUpdateRequest` |
 | `openapi.yaml` | `$ref` for `/api/v1/admin/posts/{id}` |
 | `contracts/openapi.bundle.deref.yaml` | Regenerated via redocly |
-| `internal/adapters/inbound/http/v1/routes_gen.go` | Regenerated |
+| `internal/adapters/inbound/routes/api.go` | Regenerated |
 | `internal/adapters/inbound/http/handlers_content.go` | List + update handlers |
 | `internal/adapters/inbound/http/handlers_posts_admin_test.go` | HTTP tests with fakes |
 | `internal/adapters/inbound/http/router.go` | Wire ops + permissions |
@@ -288,8 +288,8 @@ Place near other admin posts refs. Note: more specific paths like `.../publish` 
 npx redocly bundle openapi.yaml -o contracts/openapi.bundle.yaml --ext=yaml
 npx redocly bundle openapi.yaml --dereferenced -o contracts/openapi.bundle.deref.yaml --ext=yaml
 make routes
-rg -n 'admin\.posts\.(list|update)' internal/adapters/inbound/http/v1/routes_gen.go
-go test -count=1 ./internal/adapters/inbound/http/v1/
+rg -n 'admin\.posts\.(list|update)' internal/adapters/inbound/routes/api.go
+go test -count=1 ./routes/
 ```
 
 Expected: `admin.posts.update` present; route count +1.
@@ -385,7 +385,7 @@ Leave unpublish/archive/soft-delete/revisions unchecked.
 - [ ] **Step 2: Validate links**
 
 ```bash
-node scripts/docs/validate_relative_links.cjs docs contracts paths README.md CHANGELOG.md
+(relative-link check removed with scripts/) CHANGELOG.md
 ```
 
 Expected: 0 violations.
@@ -411,4 +411,4 @@ Expected: 0 violations.
 
 - No placeholders; CategoryID uses `OptionalCategoryID` (clearer than `**uuid.UUID`).
 - `openapi.yaml` must register `/api/v1/admin/posts/{id}` or PATCH will not appear in routes (same class of bug as media complete).
-- `make contracts` (redocly lint) may still fail on pre-existing `nullable` noise — use bundle + `make routes` as in media work.
+- committed OpenAPI bundles under `contracts/` (redocly lint) may still fail on pre-existing `nullable` noise — use bundle + `make routes` as in media work.

@@ -54,7 +54,7 @@
 
 - UUID generation library
 - structured logging with `log/slog`
-- validation package for request validation
+- validation package for request validation (`github.com/go-playground/validator/v10` via Gin `binding` tags; Laravel-style errors in [validation.md](../backend/validation.md))
 - OpenTelemetry-compatible instrumentation
 - testing with Go `testing` + `testify`
 - **Mermaid.js 10.x** for in-repo, version-controlled architecture, sequence, and ER diagrams. Diagrams in this repository are authored, validated, and governed under the [Mermaid Competency Framework](../guides/mermaid-competency-framework.md) — proficiency bands, platform integration, theming, responsive, accessibility (WCAG 2.1 AA), CI syntax validation, and maintenance guidelines are all enforced there. The canonical production-grade Mermaid document in this repository is the PostgreSQL source-of-truth ERD in [backend/ERD.md](../backend/ERD.md).

@@ -26,7 +26,7 @@ Each phase file says *what is left to build*; the goals below say *what each pha
 
 Snapshot of the tree these files were written against:
 
-- **HTTP surface** — 109 contract routes in `internal/adapters/inbound/http/v1/routes_gen.go`.
+- **HTTP surface** — hand-maintained routes in `internal/adapters/inbound/routes/api.go`.
   About 19 are wired to real handlers; the rest return `501` through `notImplementedHandler`.
 - **Wired operations** — `health.live`, `health.ready`, `health.version`, `auth.login`,
   `auth.refresh`, `auth.logout`, `auth.password.forgot`, `auth.password.reset`,

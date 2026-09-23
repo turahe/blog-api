@@ -107,7 +107,6 @@ linters:
       - third_party$
       - testutils$
       - examples$
-      - routes_gen\.go$
 
   settings:
     dupl:

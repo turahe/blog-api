@@ -12,7 +12,7 @@
 
 - Core (`internal/core/**`) must not import Gin, GORM, Redis, Watermill, or AWS SDK.
 - Follow [2026-07-31-media-upload-design.md](../specs/2026-07-31-media-upload-design.md) exactly; no list/delete/transform/malware/outbox in this plan.
-- OpenAPI is source of truth: update `paths/` + `components/` before handlers; then `make contracts` and `make routes`. Never hand-edit `routes_gen.go`.
+- OpenAPI is source of truth: update `paths/` + `components/` before handlers; then committed OpenAPI bundles under `contracts/` and `make routes`. Never hand-edit `routes_gen.go`.
 - Envelope responses: `{ ok, data, meta, error }` with stable `error.code`.
 - Relative Markdown links only.
 - `make test` / `go test` stay scoped to `./cmd/... ./internal/...` (avoid `data/` volume scan).
@@ -465,7 +465,7 @@ Run: `go test -count=1 ./internal/adapters/outbound/persistence/ ./internal/core
 **Files:**
 - Modify: `paths/media.yaml`
 - Modify: `components/schemas/Media.yaml`
-- Regenerate: `internal/adapters/inbound/http/v1/routes_gen.go` via `make routes`
+- Regenerate: `internal/adapters/inbound/routes/api.go` via `make routes`
 
 **Interfaces:**
 - Produces operation IDs: `admin.media.create` (presign JSON), `admin.media.complete`
@@ -542,9 +542,9 @@ Ensure `contracts/openapi.yaml` already `$ref`s `paths/media.yaml` (it should).
 - [ ] **Step 4: Validate and generate**
 
 ```bash
-make contracts
+committed OpenAPI bundles
 make routes
-go test -count=1 ./internal/adapters/inbound/http/v1/
+go test -count=1 ./routes/
 ```
 
 Expected: `admin.media.complete` appears in `routes_gen.go` with `GroupAdmin`, `AuthRequired`.
@@ -620,7 +620,7 @@ make lint
 - [ ] **Step 2: Validate links**
 
 ```bash
-node scripts/docs/validate_relative_links.cjs docs contracts paths README.md CHANGELOG.md
+(relative-link check removed with scripts/) CHANGELOG.md
 ```
 
 - [ ] **Step 3: Manual smoke (optional, local)**

@@ -357,24 +357,13 @@ EnvelopeNewsletterSubscriberResponse:
 
 EnvelopeNewsletterSubscriberList:
   allOf:
-  - $ref: './Common.yaml#/Envelope'
+  - $ref: './Common.yaml#/PaginatedEnvelope'
   - type: object
     properties:
       data:
-        type: object
-        required:
-        - items
-        - total
-        - page
-        - per_page
-        properties:
-          items:
-            type: array
-            items:
-              $ref: '#/NewsletterSubscriber'
-          total: { type: integer, minimum: 0 }
-          page: { type: integer, minimum: 1 }
-          per_page: { type: integer, minimum: 1, maximum: 200 }
+        type: array
+        items:
+          $ref: '#/NewsletterSubscriber'
 
 EnvelopeNewsletterIssueResponse:
   allOf:
@@ -386,24 +375,13 @@ EnvelopeNewsletterIssueResponse:
 
 EnvelopeNewsletterIssueList:
   allOf:
-  - $ref: './Common.yaml#/Envelope'
+  - $ref: './Common.yaml#/PaginatedEnvelope'
   - type: object
     properties:
       data:
-        type: object
-        required:
-        - items
-        - total
-        - page
-        - per_page
-        properties:
-          items:
-            type: array
-            items:
-              $ref: '#/NewsletterSendIssue'
-          total: { type: integer, minimum: 0 }
-          page: { type: integer, minimum: 1 }
-          per_page: { type: integer, minimum: 1, maximum: 200 }
+        type: array
+        items:
+          $ref: '#/NewsletterSendIssue'
 
 EnvelopeNewsletterProviderConfig:
   allOf:

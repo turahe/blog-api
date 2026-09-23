@@ -1,4 +1,4 @@
-package main
+package cmd
 
 import (
 	"fmt"
@@ -12,10 +12,11 @@ import (
 	"github.com/turahe/blog-api/internal/platform/messaging"
 )
 
-func newWorkerCommand() *cobra.Command {
+func newWorkerCmd() *cobra.Command {
 	return &cobra.Command{
 		Use:   "worker",
 		Short: "Run asynchronous event consumers",
+		Args:  cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			ctx, stop := signal.NotifyContext(cmd.Context(), os.Interrupt, syscall.SIGTERM)
 			defer stop()

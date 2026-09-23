@@ -17,35 +17,31 @@ Cover at least:
 
 ## Route groups
 
-Every generated route must resolve to a known `Group` and `AuthMode`. Tests in
-`internal/adapters/inbound/http/v1` assert:
+Every hand-maintained route in `internal/adapters/inbound/routes/` must resolve to a known `Group` and `AuthMode`.
+Tests in `routes` assert auth runs before handlers and stubs return 501.
 
-- registry completeness
-- auth chain runs before group chain
-- missing group/auth registration fails at `Register` time
-
-After changing [generate_go_routes.py](../../scripts/contracts/generate_go_routes.py):
+After editing Go routes or OpenAPI:
 
 ```bash
-make routes
+make routes-check   # routes.Register* smoke tests
 go test ./internal/adapters/inbound/http/...
 ```
 
 ## Contract workflow
 
-1. Update `contracts/openapi.yaml` / `paths/*.yaml` first
-2. `make contracts` (Docker Redocly lint + bundle)
-3. `make routes` to refresh `routes_gen.go`
-4. Add or update HTTP tests for the new `operationId`
-5. Implement handler; remove stub only when behavior matches contract
+1. Add or change the route in [routes/](../../internal/adapters/inbound/routes/) (and handler wiring)
+2. Update `contracts/openapi.yaml` / `paths/*.yaml` to match (schemas, security, status codes)
+3. Refresh committed bundles (`openapi.bundle.yaml`, `openapi.bundle.deref.yaml`)
+4. `make routes-check` + HTTP tests for the new `operationId`
+5. Implement handler; remove stub only when behavior matches the contract
 
-Never invent paths that are absent from OpenAPI. See
-[api-contracts.md](../architecture/api-contracts.md).
+OpenAPI is the published contract standard for clients; the Gin table is what the server mounts.
+See [api-contracts.md](../architecture/api-contracts.md).
 
 ## File-scoped runs
 
 ```bash
 go test ./internal/adapters/inbound/http/ -count=1
-go test ./internal/adapters/inbound/http/v1/ -run TestEveryGenerated -count=1
+go test ./internal/adapters/inbound/routes/ -run TestEveryRoute -count=1
 go test -run TestHealthLive ./internal/adapters/inbound/http/
 ```

@@ -1,37 +1,23 @@
-.PHONY: build test lint contracts contracts-docs routes run infra-up infra-down infra-up-messaging infra-down-messaging migrate-up
+.PHONY: build test lint routes-check run infra-up infra-down infra-up-messaging infra-down-messaging migrate-up
 
-REDOCLY_IMAGE ?= redocly/cli:2.54.2
+MODULE := github.com/turahe/blog-api
 
 build:
-	go build -o app ./cmd
+	go build -o app .
 
 test:
-	go test -count=1 ./cmd/... ./internal/...
+	go test -count=1 ./cmd/... ./internal/... ./contracts/...
 
 lint:
-	go vet ./cmd/... ./internal/...
-	test -z "$$(gofmt -l ./cmd ./internal)"
+	go vet . ./cmd/... ./internal/... ./contracts/...
+	test -z "$$(gofmt -l main.go cmd internal contracts)"
 
-# Lint + bundle OpenAPI with the official Redocly Docker image (no local Node required).
-contracts:
-	docker run --rm -v "$(CURDIR):/spec" -w /spec $(REDOCLY_IMAGE) lint contracts/openapi.yaml
-	docker run --rm -v "$(CURDIR):/spec" -w /spec $(REDOCLY_IMAGE) bundle contracts/openapi.yaml -o contracts/openapi.bundle.yaml
-	docker run --rm -v "$(CURDIR):/spec" -w /spec $(REDOCLY_IMAGE) bundle contracts/openapi.yaml --dereferenced -o contracts/openapi.bundle.deref.yaml
-
-contracts-docs:
-	mkdir -p dist
-	docker run --rm -v "$(CURDIR):/spec" -w /spec $(REDOCLY_IMAGE) build-docs contracts/openapi.yaml -o dist/openapi.html
-
-# Optional: reproducible image build that exports bundles via BuildKit --output.
-contracts-image:
-	DOCKER_BUILDKIT=1 docker build -f contracts/Dockerfile --ignorefile contracts/.dockerignore --target bundle -o contracts/ .
-
-routes:
-	python scripts/contracts/generate_go_routes.py
-	gofmt -w internal/adapters/inbound/http/v1/routes_gen.go
+# Compile + smoke-test the Gin route registration (no YAML reads).
+routes-check:
+	go test -count=1 ./internal/adapters/inbound/routes/...
 
 run:
-	go run ./cmd serve
+	go run . serve
 
 infra-up:
 	docker compose up -d postgres redis rustfs
@@ -47,4 +33,4 @@ infra-down-messaging:
 	docker compose rm -f kafka rabbitmq
 
 migrate-up:
-	go run ./cmd migrate up
+	go run . migrate up

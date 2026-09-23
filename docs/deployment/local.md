@@ -13,19 +13,16 @@
 cp .env.example .env
 # edit APP_SESSION_KEY, APP_CSRF_KEY, APP_PEPPER to random values (≥32 chars for session key)
 # JWT RS256: .env.example already points at configs/dev/*.pem; replace with your own keys for anything beyond local
-set -a
-. ./.env
-set +a
 
 make infra-up          # postgres, redis, rustfs
-make migrate-up        # go run ./cmd migrate up
-go run ./cmd seed      # roles + admin@example.com / ChangeMeNow!123
-make run               # go run ./cmd serve
+make migrate-up        # go run . migrate up
+go run . seed          # roles + admin@example.com / ChangeMeNow!123
+make run               # go run . serve → http://localhost:8080 (Swagger UI: /swagger when local)
 ```
 
-The Go process does not load `.env` automatically; source it as shown above. See
-[config.md](./config.md) for all variables and the distinction between application and
-Compose-only settings.
+The Cobra CLI auto-loads `.env` from the working directory when present (`--env-file`
+overrides; `--env-file=-` disables). See [config.md](./config.md) for all variables and the
+distinction between application and Compose-only settings.
 
 Auth smoke:
 
@@ -38,8 +35,8 @@ curl -sS -X POST localhost:8080/api/v1/auth/login \
 Optional:
 
 ```bash
-make contracts
-make routes
+committed OpenAPI bundles
+make routes-check      # Go route table ↔ OpenAPI parity
 make test
 ```
 
@@ -85,7 +82,7 @@ Set in `.env`:
 Run worker:
 
 ```bash
-go run ./cmd worker
+go run . worker
 ```
 
 Google Cloud Pub/Sub uses a real GCP project (`MESSAGE_BROKER=googlepubsub`); no Compose emulator.

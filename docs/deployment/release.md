@@ -7,14 +7,14 @@ Workflow: [.github/workflows/go.yml](../../.github/workflows/go.yml)
 1. `go mod download`
 2. `go test -count=1 ./...`
 3. `go vet ./...`
-4. `go build -o app ./cmd`
+4. `go build -o app .`
 
 Also run locally before release:
 
 ```bash
 make lint
-make contracts   # when contracts/paths changed
-make routes      # ensure routes_gen.go matches contract
+committed OpenAPI bundles   # when contracts/paths changed
+make routes-check # Go routes ↔ OpenAPI parity
 ```
 
 ## Recommended deploy order

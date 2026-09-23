@@ -2,41 +2,44 @@
 
 ## Canonical Contract
 
-The authoritative REST API contract lives at:
+The published REST API contract lives at:
 
 - [contracts/openapi.yaml](../../contracts/openapi.yaml) (OpenAPI 3.1)
 
-Use `docs/backend/api.md` as a human-readable summary, but `contracts/openapi.yaml` is the source of truth for path definitions, schema, security, and status codes. Validation and code generation should reference the contract file.
+The **runtime source of truth** for what the server mounts is the Laravel-style
+`routes.Register*` functions under [routes/](../../internal/adapters/inbound/routes/).
+OpenAPI documents schemas, status codes, and security for clients; keep it aligned with Go.
+
+Use `docs/backend/api.md` as a human-readable summary of areas and conventions.
 
 ## Conventions
 
 - version routes under `/api/v1`
 - use JSON request and response bodies
-- use pagination for list endpoints
+- use pagination for list endpoints — see [data-wrapping-and-pagination.md](data-wrapping-and-pagination.md)
 - return a consistent error envelope
+- include packed numeric `code` on every envelope — see [response-codes.md](response-codes.md)
 
 ## Route Grouping
 
-Every contract operation belongs to exactly one **route group**. The group is the `operationId`
-namespace prefix, and the auth mode is the operation's `security` block resolved against the
-document-level `security: [bearerAuth]` default. Both are generated into
-[routes_gen.go](../../internal/adapters/inbound/http/v1/routes_gen.go) by
-[generate_go_routes.py](../../scripts/contracts/generate_go_routes.py), so the router never carries a
-hand-maintained routing or auth table.
+Every mounted operation belongs to exactly one **route group** and **auth mode**, declared when
+the route is bound in [routes/](../../internal/adapters/inbound/routes/).
+OpenAPI tags/`security` should mirror those choices for the published contract. Auth is applied
+via Gin `RouterGroup.Use` (required / optional) around the relevant `Register*` helpers; a few
+prefixes intentionally mix modes (see below).
 
 | Group | Path prefixes | Ops | Auth modes | Chain responsibilities |
 | --- | --- | --- | --- | --- |
 | `health` | `/health/live`, `/health/ready`, `/health/version` | 3 | none | no auth, no CSRF, no rate limit; stays cheap enough for probes |
 | `auth` | `/api/v1/auth` | 8 | 6 none, 2 required | strict per-IP and per-identity rate limits, timing-safe responses, no user enumeration |
-| `me` | `/api/v1/me` | 18 | required | bearer or session auth, CSRF for browser clients, step-up re-verify on high-risk actions |
-| `self` | `/api/v1/me/comments`, `/api/v1/comments/:id` | 4 | required | same as `me`, plus per-resource ownership check |
+| `self-service` | `/api/v1/me`, `/api/v1/comments/:id` (mutations) | 22 | required | bearer or session auth, CSRF for browser clients, step-up re-verify on high-risk actions, ownership checks on owned resources |
 | `public` | `/api/v1/posts`, `/api/v1/categories`, `/api/v1/tags`, `/api/v1/media`, `/api/v1/users`, `/api/v1/comments`, `/api/v1/newsletter` | 19 | 17 none, 2 optional | anonymous-safe, cache-friendly, privacy filtering, spam and captcha checks on writes |
-| `admin` | `/api/v1/admin` | 55 | 54 required, 1 none | bearer auth, RBAC permission check, CSRF, audit logging |
+| `admin` | `/api/v1/admin` | 60 | 59 required, 1 none | bearer auth, RBAC permission check, CSRF, audit logging |
 | `analytics` | `/api/v1/analytics` | 8 | none | consent gating, bot filtering, high-volume ingest rate limits |
 
 ### Auth modes
 
-| Mode | Contract form | Enforcement |
+| Mode | Contract form (OpenAPI) | Enforcement |
 | --- | --- | --- |
 | `required` | inherits the document-level `security: [bearerAuth]` | `401` when there is no valid bearer token or session |
 | `none` | `security: []` | credentials are never read for authorization |
@@ -44,23 +47,21 @@ hand-maintained routing or auth table.
 
 ### Grouping rules
 
-- group membership comes from the `operationId` namespace, never from the URL prefix
-- auth is enforced per operation from the contract, never attached to a shared path prefix
-- middleware order per route is auth-mode chain, then group chain, then handler, so a caller is authenticated before any group-level authorization runs
-- every group and auth mode must have a chain registered in [router.go](../../internal/adapters/inbound/http/router.go); an unregistered one fails at startup rather than serving unprotected traffic
-- a new `operationId` namespace is a new group and must be added deliberately in both the generator and the chain registry
-- `GET /api/v1/health` is a convenience alias for `/health/live` and is intentionally the only route absent from the contract
+- add or change routes in Go first (`internal/adapters/inbound/routes/` + handlers), then update OpenAPI
+- middleware order is group auth chain (when used), then handler; route metadata is set via `routes.Bind`
+- a new group must be added deliberately in the Go `Group` constants and this table
+- `GET /api/v1/health` is a convenience alias for `/health/live` and is intentionally absent from OpenAPI as a duplicate alias
 
 ### Prefixes that must not carry prefix-level auth
 
-Four prefixes host more than one group or auth mode. Attaching auth to the shared prefix would
-either lock out anonymous callers or expose authenticated-only operations.
+Several prefixes host more than one auth mode (or mix public reads with self-service writes). Attaching
+auth to the shared prefix would either lock out anonymous callers or expose authenticated-only
+operations.
 
 | Prefix | Conflict |
 | --- | --- |
-| `/api/v1/comments/:id` | `GET` is anonymous (`public.comments.get`); `PATCH` and `DELETE` require auth (`self.comments.*`) |
+| `/api/v1/comments/:id` | `GET` is anonymous (`public.comments.get`); `PATCH` and `DELETE` require auth (`self.comments.*`, group `self-service`) |
 | `/api/v1/posts/:id/comments` | `GET` is anonymous; `POST` is optional auth (anonymous commenting with name and email) |
-| `/api/v1/me` | hosts both the `me` group (identity and profile) and the `self` group (owned comments) |
 | `/api/v1/admin` | `POST /api/v1/admin/auth/login` is the single anonymous operation under the admin prefix |
 
 ## Main API Areas
@@ -321,14 +322,18 @@ Full wire format, client integration, security, and scaling guidance is in the f
 
 ```json
 {
-  "data": null,
+  "ok": false,
   "meta": {
     "request_id": "..."
   },
   "error": {
     "code": "validation_error",
-    "message": "title is required",
-    "details": {}
+    "message": "The given data was invalid.",
+    "details": {
+      "title": ["The title field is required."]
+    }
   }
 }
 ```
+
+Transport validation uses `go-playground/validator` via `bindJSON` — see [validation.md](./validation.md).

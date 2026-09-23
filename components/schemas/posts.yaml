@@ -83,18 +83,13 @@ EnvelopePostResponse:
         $ref: posts.yaml#/Post
 EnvelopePostList:
   allOf:
-  - $ref: Common.yaml#/Envelope
+  - $ref: Common.yaml#/PaginatedEnvelope
   - type: object
     properties:
       data:
-        type: object
-        required:
-        - items
-        properties:
-          items:
-            type: array
-            items:
-              $ref: posts.yaml#/Post
+        type: array
+        items:
+          $ref: posts.yaml#/Post
 PostCreateRequest:
   type: object
   required:
@@ -382,18 +377,13 @@ PostRevision:
       format: date-time
 EnvelopePostRevisionList:
   allOf:
-  - $ref: Common.yaml#/Envelope
+  - $ref: Common.yaml#/PaginatedEnvelope
   - type: object
     properties:
       data:
-        type: object
-        required:
-        - items
-        properties:
-          items:
-            type: array
-            items:
-              $ref: posts.yaml#/PostRevision
+        type: array
+        items:
+          $ref: posts.yaml#/PostRevision
 EnvelopePostRevisionResponse:
   allOf:
   - $ref: Common.yaml#/Envelope

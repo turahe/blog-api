@@ -55,7 +55,7 @@ Each phase file contains, in order:
 
 Derived from the current tree (not aspirational):
 
-- **HTTP surface:** 109 contract routes in `internal/adapters/inbound/http/v1/routes_gen.go`; 19 wired, the rest return 501 via `notImplementedHandler`.
+- **HTTP surface:** 109 contract routes in `internal/adapters/inbound/routes/api.go`; 19 wired, the rest return 501 via `notImplementedHandler`.
 - **Implemented operations:** `health.live/ready/version`, `auth.login/refresh/logout`, `auth.password.forgot/reset/reset_token_validity`, `me.get`, `me.password.update`, `admin.users.list`, `admin.posts.create/publish`, `public.posts.list/get`, `public.categories.list/get`, `public.tags.list`.
 - **Migrations:** `00001`–`00004` create users, roles, permissions, user_roles, role_permissions, posts, categories, tags, post_tags, comments, audit_logs, outbox_events, refresh_sessions, password_reset_tokens, casbin_rules.
 - **Platform:** multi-dialect DB (`postgres`/`mysql`/`sqlserver`) + Cloud SQL connector; Redis; JWT; Casbin enforcer; multi-broker Watermill messaging with `app worker` scaffold and Compose `messaging` profile.
@@ -76,7 +76,7 @@ Derived from the current tree (not aspirational):
 2. Statuses match the current tree, including 501-stub reality
 3. Every phase links to its authoritative specs with working relative links
 4. Root README and the agent docs map cross-reference the backlog; no separate `docs/product/roadmap.md`
-5. `node scripts/docs/validate_relative_links.cjs docs contracts paths README.md` passes
+5. `(relative-link check removed with scripts/)` passes
 
 ## Outcome
 

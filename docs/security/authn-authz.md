@@ -17,8 +17,7 @@ Do not attach auth middleware to a shared URL prefix when the prefix hosts mixed
 | Group | Expectation |
 | --- | --- |
 | `auth` | Timing-safe responses; strict rate limits; no user enumeration |
-| `me` | Effective user = JWT `sub` (or impersonation target); CSRF on mutations |
-| `self` | Same as `me` plus resource ownership |
+| `self-service` | Effective user = JWT `sub` (or impersonation target); CSRF on mutations; ownership on owned resources |
 | `admin` | Bearer + RBAC + CSRF + audit; login is the lone anonymous admin op |
 | `public` | Anonymous-safe; privacy filtering; spam/captcha on writes |
 | `analytics` | Consent-gated ingest; no privileged data |

@@ -68,4 +68,3 @@ type PostMediaItem struct {
 	SortOrder    int
 	Media        *MediaAsset
 }
-

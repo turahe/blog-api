@@ -22,10 +22,10 @@ jobs:
           go-version: "1.26.5"
 
       - name: Run go vet
-        run: go vet ./cmd/... ./internal/...
+        run: go vet . ./cmd/... ./internal/...
 
       - name: Check gofmt
-        run: test -z "$(gofmt -l ./cmd ./internal)"
+        run: test -z "$(gofmt -l main.go cmd internal)"
 
       - name: golangci-lint
         uses: golangci/golangci-lint-action@v9

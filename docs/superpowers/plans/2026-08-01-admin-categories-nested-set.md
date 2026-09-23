@@ -35,7 +35,7 @@
 | `paths/categories.yaml` | Public + admin paths |
 | `openapi.yaml` | Path `$ref`s for admin routes |
 | `contracts/openapi.bundle.deref.yaml` | Regenerated |
-| `internal/adapters/inbound/http/v1/routes_gen.go` | Regenerated |
+| `internal/adapters/inbound/routes/api.go` | Regenerated |
 | `internal/adapters/inbound/http/handlers_categories.go` | Admin + public category handlers |
 | `internal/adapters/inbound/http/handlers_categories_test.go` | HTTP tests |
 | `internal/adapters/inbound/http/handlers_content.go` | Remove old category handlers / leave posts |
@@ -431,7 +431,7 @@ Expected: PASS (persistence may have no tests)
 - Modify: `components/schemas/Categories.yaml`
 - Modify: `paths/categories.yaml`
 - Modify: `openapi.yaml`
-- Regenerate: `contracts/openapi.bundle.deref.yaml`, `internal/adapters/inbound/http/v1/routes_gen.go`
+- Regenerate: `contracts/openapi.bundle.deref.yaml`, `internal/adapters/inbound/routes/api.go`
 
 **Interfaces:**
 - Produces operationIds: `admin.categories.list`, `admin.categories.create`, `admin.categories.update`, `admin.categories.delete`, `admin.categories.move` (keep public list/get)
@@ -787,7 +787,7 @@ CHANGELOG: dated entry for admin categories + migration `00007`.
 - [ ] **Step 2: Validate relative links**
 
 ```bash
-node scripts/docs/validate_relative_links.cjs docs contracts paths README.md
+(relative-link check removed with scripts/)
 ```
 
 Expected: exit 0

@@ -7,18 +7,13 @@ EnvelopeUserResponse:
         $ref: User.yaml#/User
 EnvelopeUserList:
   allOf:
-  - $ref: Common.yaml#/Envelope
+  - $ref: Common.yaml#/PaginatedEnvelope
   - type: object
     properties:
       data:
-        type: object
-        required:
-        - items
-        properties:
-          items:
-            type: array
-            items:
-              $ref: User.yaml#/User
+        type: array
+        items:
+          $ref: User.yaml#/User
 Setting:
   type: object
   required:
@@ -140,18 +135,13 @@ SettingsHistoryItem:
       format: date-time
 EnvelopeSettingsHistoryList:
   allOf:
-  - $ref: Common.yaml#/Envelope
+  - $ref: Common.yaml#/PaginatedEnvelope
   - type: object
     properties:
       data:
-        type: object
-        required:
-        - items
-        properties:
-          items:
-            type: array
-            items:
-              $ref: Admin.yaml#/SettingsHistoryItem
+        type: array
+        items:
+          $ref: Admin.yaml#/SettingsHistoryItem
 ImpersonationStartRequest:
   type: object
   required:

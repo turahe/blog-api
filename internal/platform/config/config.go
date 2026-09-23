@@ -70,6 +70,7 @@ type Config struct {
 	MediaAllowedMIMETypes         []string
 	MediaMaxUploadBytes           int64
 	MediaPresignTTL               time.Duration
+	SwaggerEnabled                bool
 }
 
 // UsesCloudSQL reports whether Cloud SQL connector settings are active.
@@ -355,6 +356,7 @@ func Load() (Config, error) {
 		MediaMaxUploadBytes:           int64(integer("MEDIA_MAX_UPLOAD_BYTES", 10<<20)),
 		MediaPresignTTL:               duration("MEDIA_PRESIGN_TTL", 15*time.Minute),
 	}
+	cfg.SwaggerEnabled = boolEnv("APP_SWAGGER_ENABLED", cfg.Environment == "local")
 
 	privateKey, err := pemFromEnvOrFile("APP_JWT_PRIVATE_KEY", "APP_JWT_PRIVATE_KEY_PATH")
 	if err != nil {

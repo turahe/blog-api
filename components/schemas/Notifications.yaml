@@ -22,15 +22,10 @@ Notification:
       format: date-time
 EnvelopeNotificationList:
   allOf:
-  - $ref: Common.yaml#/Envelope
+  - $ref: Common.yaml#/PaginatedEnvelope
   - type: object
     properties:
       data:
-        type: object
-        required:
-        - items
-        properties:
-          items:
-            type: array
-            items:
-              $ref: Notifications.yaml#/Notification
+        type: array
+        items:
+          $ref: Notifications.yaml#/Notification

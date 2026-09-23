@@ -15,7 +15,7 @@ login, session administration, and the real mailer are still open.
 ## Epic: project bootstrap and configuration
 
 - [x] Hexagonal layout under `internal/core`, `internal/adapters`, `internal/platform`
-- [x] `cmd` Cobra CLI with `serve`, `migrate`, `seed`, `doctor`, `worker`
+- [x] `cmd` Cobra CLI (`main.go` at repo root → `cmd.Execute()`; subcommands under `cmd/`)
 - [x] `internal/platform/config` loads and validates environment configuration
 - [x] `.env.example` documents every supported variable
 - [x] `Makefile` targets for build, test, lint, contracts, routes, infra, migrate, run
@@ -57,6 +57,7 @@ login, session administration, and the real mailer are still open.
 - [x] Argon2id password hashing in `internal/platform/security/password`
 - [x] JWT issue and verify in `internal/platform/security/jwt`
 - [x] Bearer auth middleware in `internal/adapters/inbound/http/auth_middleware.go`
+- [x] Transport request validation with `github.com/go-playground/validator/v10` (Laravel-style field errors via `bindJSON`)
 - [ ] `admin.auth.login` — `POST /api/v1/admin/auth/login`
 - [ ] `auth.2fa.challenge` — `POST /api/v1/auth/2fa/challenge`
 - [ ] `auth.oauth.callback` — `POST /api/v1/auth/oauth/{provider}/callback`

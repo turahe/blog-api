@@ -7,28 +7,32 @@ variable substitution for [compose.yaml](../../compose.yaml).
 
 ## Loading configuration
 
-The application does **not** load `.env` files itself. Export the variables before running
-the CLI:
+The Cobra root command loads an optional dotenv file in `PersistentPreRunE` before any
+subcommand runs `config.Load()`:
+
+- default: load `.env` from the working directory when the file exists
+- `--env-file path` — load a specific file (must exist)
+- `--env-file=-` — disable file loading (process env only)
+
+Existing process environment variables always win over file values (so Docker/K8s/shell
+exports are never overridden). Staging and production should inject variables through the
+deployment platform; do not bake `.env` into the image.
 
 ```bash
 cp .env.example .env
 # Edit secrets and the selected database/message-broker settings.
-set -a
-. ./.env
-set +a
 
-go run ./cmd doctor
-go run ./cmd serve
+go run . doctor
+go run . serve
+# equivalent: go run . --env-file .env serve
 ```
 
-Docker accepts the same file explicitly:
+Docker accepts the same file explicitly (container env; the in-process dotenv loader is
+usually unnecessary):
 
 ```bash
 docker run --rm --env-file .env -p 8080:8080 blog-api:local serve
 ```
-
-In staging and production, inject variables through the deployment platform's secret and
-configuration facilities. Do not copy `.env` into the image.
 
 ## Value formats
 
@@ -37,7 +41,7 @@ configuration facilities. Do not copy `.env` into the image.
 - Lists are comma-separated; surrounding whitespace and empty entries are removed.
 - Empty strings use the documented fallback unless a variable is read as a list.
 - Invalid duration, boolean, or integer values currently fall back silently. Validate the
-  effective configuration with `go run ./cmd doctor` before deployment.
+  effective configuration with `go run . doctor` before deployment.
 - Only the exact value `APP_ENV=production` activates production-only validation.
 
 ## Application and HTTP server
@@ -46,6 +50,7 @@ configuration facilities. Do not copy `.env` into the image.
 | --- | --- | --- | --- |
 | `APP_ENV` | `local` | No | Runtime environment. Use `production` to enable production safety checks. |
 | `APP_ADDR` | `0.0.0.0:8080` | Non-empty | HTTP listen address for `app serve`. |
+| `APP_SWAGGER_ENABLED` | `true` when `APP_ENV=local`, else `false` | No | Serve Swagger UI at `/swagger` and the OpenAPI document at `/openapi.yaml`. |
 | `APP_TRUSTED_PROXIES` | empty | No | Comma-separated proxies trusted by Gin. Leave empty unless the proxy addresses are known. |
 | `APP_SHUTDOWN_TIMEOUT` | `15s` | No | Graceful shutdown deadline. |
 | `APP_READ_TIMEOUT` | `15s` | No | Maximum request body read time. |
@@ -266,7 +271,7 @@ empty, and the size/TTL values must be positive.
 Before deploying:
 
 ```bash
-go run ./cmd doctor
+go run . doctor
 ```
 
 Then follow [checklist.md](./checklist.md).

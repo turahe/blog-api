@@ -21,28 +21,115 @@ EnvelopeError:
 Envelope:
   type: object
   required:
+  - ok
+  - code
   - meta
   properties:
+    ok:
+      type: boolean
+    code:
+      type: integer
+      description: >
+        Packed response code = HTTP (3 digits) + service (2 digits) + case (2 digits).
+        Example 2010301 = HTTP 201 + Comments (03) + Success (01).
+        See docs/backend/response-codes.md.
+      example: 2000001
     data: {}
+    links:
+      nullable: true
+      allOf:
+      - $ref: Common.yaml#/PaginationLinks
     meta:
-      $ref: Common.yaml#/Meta
+      oneOf:
+      - $ref: Common.yaml#/Meta
+      - $ref: Common.yaml#/PaginationMeta
     error:
       nullable: true
       allOf:
       - $ref: Common.yaml#/Error
+# Meta is request correlation for non-list responses.
 Meta:
   type: object
   properties:
     request_id:
       type: string
-    page:
-      type: integer
-    per_page:
-      type: integer
-    total:
-      type: integer
     window:
       type: string
+# PaginationLinks mirrors Laravel length-aware paginator links.
+PaginationLinks:
+  type: object
+  required:
+  - first
+  - last
+  - prev
+  - next
+  properties:
+    first:
+      type: string
+      format: uri
+      nullable: true
+    last:
+      type: string
+      format: uri
+      nullable: true
+    prev:
+      type: string
+      format: uri
+      nullable: true
+    next:
+      type: string
+      format: uri
+      nullable: true
+# PaginationMeta mirrors Laravel length-aware paginator meta.
+PaginationMeta:
+  type: object
+  required:
+  - current_page
+  - last_page
+  - path
+  - per_page
+  - total
+  properties:
+    request_id:
+      type: string
+    current_page:
+      type: integer
+      minimum: 1
+    from:
+      type: integer
+      nullable: true
+    last_page:
+      type: integer
+      minimum: 1
+    path:
+      type: string
+      format: uri
+    per_page:
+      type: integer
+      minimum: 1
+    to:
+      type: integer
+      nullable: true
+    total:
+      type: integer
+      minimum: 0
+# PaginatedEnvelope is the shared shape for list endpoints:
+# { ok, data: [...], links, meta: PaginationMeta }.
+PaginatedEnvelope:
+  allOf:
+  - $ref: Common.yaml#/Envelope
+  - type: object
+    required:
+    - data
+    - links
+    - meta
+    properties:
+      data:
+        type: array
+      links:
+        $ref: Common.yaml#/PaginationLinks
+      meta:
+        $ref: Common.yaml#/PaginationMeta
 Error:
   type: object
   required:
@@ -109,30 +196,13 @@ EnvelopeVersion:
             type: string
 EnvelopeUserActivityList:
   allOf:
-  - $ref: Common.yaml#/Envelope
+  - $ref: Common.yaml#/PaginatedEnvelope
   - type: object
     properties:
       data:
-        type: object
-        required:
-        - items
-        - page
-        - per_page
-        - total
-        - total_pages
-        properties:
-          items:
-            type: array
-            items:
-              $ref: User.yaml#/UserActivityItem
-          page:
-            type: integer
-          per_page:
-            type: integer
-          total:
-            type: integer
-          total_pages:
-            type: integer
+        type: array
+        items:
+          $ref: User.yaml#/UserActivityItem
 EnvelopeActivityExportAccepted:
   allOf:
   - $ref: Common.yaml#/Envelope

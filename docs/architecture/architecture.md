@@ -46,10 +46,13 @@ All SSE endpoints:
 
 ```text
 project/
-├── cmd/                  # package main — Cobra entrypoint and subcommands
-│   ├── main.go
-│   ├── command.go        # serve / migrate / seed / doctor / version
-│   └── worker.go         # app worker
+├── main.go               # package main — calls cmd.Execute()
+├── cmd/                  # Cobra command tree (package cmd)
+│   ├── root.go           # Execute, groups, --env-file
+│   ├── serve.go          # app serve
+│   ├── worker.go         # app worker
+│   ├── migrate.go / seed.go / doctor.go / version.go
+│   └── …
 │
 ├── internal/
 │   ├── bootstrap/        # DI and lifecycle wiring
@@ -105,7 +108,7 @@ project/
 │
 ├── configs/
 ├── migrations/
-├── scripts/
+├── contracts/        # OpenAPI / AsyncAPI + embedded Swagger UI
 ├── docs/
 └── Makefile
 ```

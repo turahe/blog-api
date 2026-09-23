@@ -14,7 +14,7 @@ import (
 var _ categoryports.Repository = (*CategoryRepository)(nil)
 
 type CategoryModel struct {
-	ID          uuid.UUID  `gorm:"type:uuid;primaryKey"`
+	ID          uuid.UUID `gorm:"type:uuid;primaryKey"`
 	Name        string
 	Slug        string
 	Description *string

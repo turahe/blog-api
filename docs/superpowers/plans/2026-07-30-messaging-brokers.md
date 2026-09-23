@@ -889,7 +889,7 @@ Google Cloud Pub/Sub uses a real GCP project (`MESSAGE_BROKER=googlepubsub`); no
 
 - [ ] **Step 4: Relative link check**
 
-Run: `node scripts/docs/validate_relative_links.cjs docs contracts paths README.md`
+Run: `(relative-link check removed with scripts/)`
 Expected: exit 0 (or fix broken links introduced)
 
 - [ ] **Step 5: Final verification**

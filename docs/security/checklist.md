@@ -5,7 +5,7 @@ Use before merging any auth, RBAC, media, settings, impersonation, or privacy ch
 ## Contract
 
 - [ ] OpenAPI `security` matches intended auth mode (`required` / `none` / `optional`)
-- [ ] `operationId` namespace maps to the correct route group
+- [ ] OpenAPI tag base name maps to the correct route group
 - [ ] Error codes documented; no user enumeration on auth endpoints
 
 ## Enforcement

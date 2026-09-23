@@ -2,9 +2,32 @@
 
 ## Validation Layers
 
-- transport validation for request shape
+- **transport validation** for request shape — Gin `binding` tags + `github.com/go-playground/validator/v10` via `bindJSON` (Laravel-style field error bag)
 - domain validation for business rules
 - persistence constraints for data integrity
+
+## Transport validation (Laravel-style)
+
+Handlers call `bindJSON(c, &req)` instead of raw `ShouldBindJSON`. Failures return HTTP `400` with:
+
+```json
+{
+  "ok": false,
+  "meta": { "request_id": "..." },
+  "error": {
+    "code": "validation_error",
+    "message": "The given data was invalid.",
+    "details": {
+      "email": ["The email field is required."],
+      "password": ["The password field is required."]
+    }
+  }
+}
+```
+
+`details` is a map of JSON field name → message list (same shape as Laravel's `errors` bag).
+Malformed JSON uses the `_form` key. Struct tags use Gin `binding:"required,email,min=12,..."`;
+JSON names come from `json` tags registered on the shared validator engine.
 
 ## Rules
 
