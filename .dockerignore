@@ -1,0 +1,58 @@
+# VCS / CI / editor
+.git/
+.github/
+.cursor/
+.trae/
+.idea/
+.vscode/
+*.swp
+*.swo
+.DS_Store
+
+# Secrets & local env
+.env
+.env.*
+!.env.example
+*.local
+
+# Node (contracts tooling only — not needed for Go image)
+node_modules/
+package.json
+package-lock.json
+.redocly-cache/
+redocly.yaml
+
+# OpenAPI / docs / scripts (not compiled into the binary)
+contracts/
+components/
+paths/
+docs/
+scripts/
+openapi.yaml
+AGENTS.md
+CLAUDE.md
+README.md
+CHANGELOG.md
+AUTHORS
+LICENSE
+Makefile
+
+# Tests & coverage
+tests/
+**/testdata/
+coverage.out
+reports/
+
+# Graphify / local data / build artefacts
+graphify-out/
+.data/
+data/
+dist/
+/app
+compose.yaml
+Dockerfile
+.dockerignore
+.graphifyignore
+.gitignore
+*.md
+*.log

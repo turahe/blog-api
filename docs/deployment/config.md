@@ -229,7 +229,7 @@ delivery semantics are in [events.md](../backend/events.md).
 
 | Variable | Default | Required | Purpose |
 | --- | --- | --- | --- |
-| `S3_ENDPOINT` | `http://127.0.0.1:9000` | No | S3-compatible API endpoint. MinIO uses the local compose service. |
+| `S3_ENDPOINT` | `http://127.0.0.1:9000` | No | S3-compatible API endpoint. Local compose uses RustFS. |
 | `S3_REGION` | `auto` | No | S3 region hint for the SDK. |
 | `S3_BUCKET` | empty | To enable media | Bucket name for uploads and object reads. |
 | `S3_ACCESS_KEY` | empty | To enable media | Storage access key. |

@@ -21,7 +21,7 @@ run:
 	go run ./cmd serve
 
 infra-up:
-	docker compose up -d postgres redis minio
+	docker compose up -d postgres redis rustfs
 
 infra-down:
 	docker compose down

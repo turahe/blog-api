@@ -1,0 +1,37 @@
+# Agent / IDE instruction files (not product knowledge)
+AGENTS.md
+CLAUDE.md
+.cursor/
+.trae/
+.github/
+
+# Graphify output (also auto-skipped; listed for clarity)
+graphify-out/
+
+# Deps / caches / generated tooling artefacts
+node_modules/
+.redocly-cache/
+dist/
+coverage.out
+reports/
+__pycache__/
+*.py[cod]
+
+# Lockfiles & env noise
+package-lock.json
+.env
+.env.*
+*.local
+
+# Local runtime / infra data
+.data/
+data/
+/app
+
+# Prompt / agent-meta docs (optional product knowledge lives under docs/)
+docs/prompts/
+docs/superpowers/
+docs/tasks/
+
+# Contract bundle artefact (source paths/components stay indexed)
+contracts/openapi.bundle.yaml

@@ -17,7 +17,7 @@ set -a
 . ./.env
 set +a
 
-make infra-up          # postgres, redis, minio
+make infra-up          # postgres, redis, rustfs
 make migrate-up        # go run ./cmd migrate up
 go run ./cmd seed      # roles + admin@example.com / ChangeMeNow!123
 make run               # go run ./cmd serve
@@ -49,7 +49,7 @@ make test
 | --- | --- | --- |
 | postgres | 5432 | primary DB (`blog`/`blog`/`blog`) |
 | redis | 6379 | cache / ephemeral |
-| minio | 9000 / 9001 | S3-compatible media + console |
+| rustfs | 9000 / 9001 | S3-compatible media + console |
 
 Compose file: [compose.yaml](../../compose.yaml). Data dirs under `./data/` (gitignored).
 
