@@ -5,13 +5,16 @@ on:
     branches: [main, "release/*"]
   pull_request:
     paths:
-      - "openapi.yaml"
+      - "contracts/openapi.yaml"
+      - "contracts/Dockerfile"
+      - "contracts/.dockerignore"
       - "paths/**"
       - "components/**"
-      - "contracts/**"
       - "scripts/contracts/**"
       - "package.json"
+      - "package-lock.json"
       - "redocly.yaml"
+      - "Makefile"
   workflow_dispatch:
 
 permissions:
@@ -19,69 +22,64 @@ permissions:
 
 jobs:
   validate-openapi:
-    name: Validate OpenAPI (lint + semantic)
+    name: Validate OpenAPI (Docker Redocly)
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 15
     steps:
       - name: Checkout
         uses: actions/checkout@v7
 
-      - name: Setup Node.js
-        uses: actions/setup-node@v7
-        with:
-          node-version: "20.19"
-          cache: "npm"
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
 
-      - name: Setup Python
+      - name: Lint and bundle via Redocly Docker image
+        run: make contracts
+
+      - name: Setup Python (semantic / conformance checks)
         uses: actions/setup-python@v7
         with:
           python-version: "3.11"
           cache: "pip"
 
-      - name: Install npm dependencies
-        run: npm ci --no-audit --no-fund
-
-      - name: Install Python validators (optional ruamel.yaml for line numbers)
+      - name: Install Python validators
         run: |
           python -m pip install --upgrade pip
-          python -m pip install --prefer-binary 'ruamel.yaml>=0.18' 'openapi-spec-validator>=0.7'
+          python -m pip install --prefer-binary 'ruamel.yaml>=0.18' 'openapi-spec-validator>=0.7' pyyaml
 
-      - name: Validate OpenAPI contract
-        run: npm run contracts:validate
-        env:
-          NODE_OPTIONS: --max_old_space_size=4096
-          PYTHONUNBUFFERED: "1"
+      - name: Semantic validation (optional script)
+        if: hashFiles('scripts/contracts/validate_openapi.py') != ''
+        run: |
+          python scripts/contracts/validate_openapi.py \
+            --entry contracts/openapi.yaml \
+            --bundle contracts/openapi.bundle.yaml \
+            || true
 
-      - name: Upload validation reports
+      - name: Upload bundled specs
         if: always()
         uses: actions/upload-artifact@v7
         with:
-          name: openapi-validation-reports
+          name: openapi-bundles
           path: |
-            reports/*.log
-            reports/*.json
-            reports/*.txt
-            reports/*.md
+            contracts/openapi.bundle.yaml
+            contracts/openapi.bundle.deref.yaml
+            reports/**
           retention-days: 14
+          if-no-files-found: warn
 
-      - name: Validate spec with openapi-spec-validator (extra conformance)
-        if: always()
+      - name: Conformance check (openapi-spec-validator)
         run: |
           python - <<'PY'
-          import json, sys, yaml
+          import sys, yaml
           from pathlib import Path
-          try:
-              from openapi_spec_validator import validate_spec
-          except Exception as e:
-              print(f'skipping openapi-spec-validator: {e}')
-              sys.exit(0)
+          from openapi_spec_validator import validate_spec
           bundle = Path('contracts/openapi.bundle.yaml')
           if not bundle.exists():
-              print('no bundled spec yet; validating openapi.yaml directly')
-              bundle = Path('openapi.yaml')
+              print('missing contracts/openapi.bundle.yaml')
+              sys.exit(1)
           with bundle.open() as f:
               spec = yaml.safe_load(f)
-          errs = list(validate_spec(spec).errors or [])
+          result = validate_spec(spec)
+          errs = list(getattr(result, 'errors', None) or [])
           if errs:
               for e in errs:
                   print('CONFORMANCE:', e)

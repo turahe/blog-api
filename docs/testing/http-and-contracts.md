@@ -34,7 +34,7 @@ go test ./internal/adapters/inbound/http/...
 ## Contract workflow
 
 1. Update `contracts/openapi.yaml` / `paths/*.yaml` first
-2. `make contracts` (or `npm run contracts:validate`)
+2. `make contracts` (Docker Redocly lint + bundle)
 3. `make routes` to refresh `routes_gen.go`
 4. Add or update HTTP tests for the new `operationId`
 5. Implement handler; remove stub only when behavior matches contract

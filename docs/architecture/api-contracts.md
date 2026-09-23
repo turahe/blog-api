@@ -24,7 +24,10 @@ You can render the OpenAPI file using Swagger UI, Redoc, or equivalent.
 Example with Redocly CLI:
 
 ```bash
-npx @redocly/cli preview-docs contracts/openapi.yaml
+make contracts          # Docker: redocly lint + bundle → contracts/openapi.bundle*.yaml
+make contracts-docs     # Docker: redocly build-docs → dist/openapi.html
+# or locally with Node:
+npx @redocly/cli preview contracts/openapi.yaml
 ```
 
 Example with Swagger UI CLI:

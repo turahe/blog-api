@@ -1,0 +1,10 @@
+# Ignorefile used only by `docker build -f contracts/Dockerfile --ignorefile …`
+# Keep the OpenAPI source tree; drop everything else from the build context.
+*
+!redocly.yaml
+!contracts/
+!contracts/openapi.yaml
+!paths/
+!paths/**
+!components/
+!components/**

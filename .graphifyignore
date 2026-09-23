@@ -33,5 +33,6 @@ docs/prompts/
 docs/superpowers/
 docs/tasks/
 
-# Contract bundle artefact (source paths/components stay indexed)
+# Contract bundle artefacts (built via `make contracts`)
 contracts/openapi.bundle.yaml
+contracts/openapi.bundle.deref.yaml

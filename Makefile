@@ -1,4 +1,6 @@
-.PHONY: build test lint contracts routes run infra-up infra-down infra-up-messaging infra-down-messaging migrate-up
+.PHONY: build test lint contracts contracts-docs routes run infra-up infra-down infra-up-messaging infra-down-messaging migrate-up
+
+REDOCLY_IMAGE ?= redocly/cli:2.54.2
 
 build:
 	go build -o app ./cmd
@@ -10,8 +12,19 @@ lint:
 	go vet ./cmd/... ./internal/...
 	test -z "$$(gofmt -l ./cmd ./internal)"
 
+# Lint + bundle OpenAPI with the official Redocly Docker image (no local Node required).
 contracts:
-	npm run contracts:validate
+	docker run --rm -v "$(CURDIR):/spec" -w /spec $(REDOCLY_IMAGE) lint contracts/openapi.yaml
+	docker run --rm -v "$(CURDIR):/spec" -w /spec $(REDOCLY_IMAGE) bundle contracts/openapi.yaml -o contracts/openapi.bundle.yaml
+	docker run --rm -v "$(CURDIR):/spec" -w /spec $(REDOCLY_IMAGE) bundle contracts/openapi.yaml --dereferenced -o contracts/openapi.bundle.deref.yaml
+
+contracts-docs:
+	mkdir -p dist
+	docker run --rm -v "$(CURDIR):/spec" -w /spec $(REDOCLY_IMAGE) build-docs contracts/openapi.yaml -o dist/openapi.html
+
+# Optional: reproducible image build that exports bundles via BuildKit --output.
+contracts-image:
+	DOCKER_BUILDKIT=1 docker build -f contracts/Dockerfile --ignorefile contracts/.dockerignore --target bundle -o contracts/ .
 
 routes:
 	python scripts/contracts/generate_go_routes.py

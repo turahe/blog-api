@@ -12,7 +12,7 @@
 | Test package | `go test -count=1 ./internal/adapters/inbound/http/` |
 | Lint | `make lint` |
 | Build | `make build` |
-| Contracts | `make contracts` |
+| Contracts | `make contracts` (Docker Redocly) |
 | Regenerate routes | `make routes` |
 | Infra up/down | `make infra-up` / `make infra-down` |
 | Migrate | `make migrate-up` |

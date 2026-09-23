@@ -17,7 +17,7 @@ authentication, RBAC, media, analytics, impersonation, and audit tooling.**
 ![Changelog](https://img.shields.io/badge/Changelog-keepachangelog-10B981.svg)
 
 **[Docs](#documentation)** ·
-**[Contract Reference](https://redocly.github.io/redoc/?url=https://raw.githubusercontent.com/turahe/blog-api/main/openapi.yaml)** ·
+**[Contract Reference](https://redocly.github.io/redoc/?url=https://raw.githubusercontent.com/turahe/blog-api/main/contracts/openapi.yaml)** ·
 **[Architecture](./docs/architecture/architecture.md)**
 
 
@@ -50,7 +50,7 @@ authentication, RBAC, media, analytics, impersonation, and audit tooling.**
 
 `blog-api` is a **contracts-first backend API** for a modern blog platform.
 Every public HTTP endpoint and every domain event is defined as machine-readable
-specifications ([OpenAPI 3.1](./openapi.yaml), [AsyncAPI 2.6](./contracts/asyncapi.yaml))
+specifications ([OpenAPI 3.1](./contracts/openapi.yaml), [AsyncAPI 2.6](./contracts/asyncapi.yaml))
 *before* implementation code is written. This lets teams share a single source
 of truth across frontend, backend, QA, and documentation workstreams.
 
@@ -233,7 +233,7 @@ in `package-lock.json`, `go.sum`, and container images.
 
 | Tool        | Version | Purpose                                                                               |
 | ----------- | ------- | ------------------------------------------------------------------------------------- |
-| OpenAPI     | 3.1.0   | HTTP contract: [openapi.yaml](./openapi.yaml) (split under `paths/` + `components/`). |
+| OpenAPI     | 3.1.0   | HTTP contract: [contracts/openapi.yaml](./contracts/openapi.yaml) (split under `paths/` + `components/`). |
 | Redocly CLI | 2.41.x  | Linting, bundling, deref, build-docs. See [package.json](./package.json).             |
 
 
@@ -313,17 +313,17 @@ cd blog-api
 ### 4.3 Install Toolchain Dependencies
 
 ```bash
-# OpenAPI / AsyncAPI contract tooling (Redocly CLI)
-npm install --no-audit --no-fund
-
 # Go module dependencies + go.sum
 go mod tidy
+
+# Optional: local Node Redocly (prefer Docker via `make contracts`)
+# npm install --no-audit --no-fund
 ```
 
 Expected on first run:
 
-- `node_modules/@redocly/cli/` appears.
 - `go.sum` is generated or updated.
+- Docker can pull `redocly/cli` for contract builds.
 
 
 
@@ -412,8 +412,8 @@ go run ./cmd seed
 ### 4.7 Validate Contracts & Run Tests
 
 ```bash
-# Contract lint + bundle
-npm run contracts:validate
+# Contract lint + bundle (Docker Redocly → contracts/openapi.bundle*.yaml)
+make contracts
 
 # Go unit + integration tests (hermetic, uses SQLite in memory)
 go test -count=1 ./...
@@ -450,7 +450,7 @@ curl -sS http://127.0.0.1:8080/api/v1/health | jq .
 
 ## 5. Usage & API Examples
 
-The **full reference** is always the [openapi.yaml](./openapi.yaml) spec plus
+The **full reference** is always the [contracts/openapi.yaml](./contracts/openapi.yaml) spec plus
 the split files under [paths/](./paths) and [components/schemas/](./components/schemas).
 The examples below illustrate the common call patterns a developer will need.
 
@@ -656,7 +656,7 @@ This is the documented release checklist from
 
 1. **Build** the tagged container and a `migrate` binary.
 2. **Validate contracts** locally or in CI:
-  - OpenAPI: `npm run contracts:validate`
+  - OpenAPI: `make contracts`
   - AsyncAPI: `npx @asyncapi/cli validate contracts/asyncapi.yaml`
 3. **Run automated tests**: `go test -count=1 ./...`
 4. **Apply DB migrations** *before* enabling new traffic:
@@ -685,16 +685,14 @@ jobs:
   contract-lint:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
-        with: { node-version: "20.19" }
-      - run: npm ci && npm run contracts:validate
+      - uses: actions/checkout@v7
+      - run: make contracts
   go-test:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-go@v5
-        with: { go-version: "1.22" }
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v7
+        with: { go-version: "1.26.5" }
       - run: go mod tidy && go test -count=1 ./...
   build-and-push:
     needs: [contract-lint, go-test]
@@ -763,7 +761,7 @@ them for a team-wide release cadence.
 
 | Check                                                         | Command                          | Required          |
 | ------------------------------------------------------------- | -------------------------------- | ----------------- |
-| OpenAPI / event contracts                                     | `npm run contracts:validate`     | Always            |
+| OpenAPI / event contracts                                     | `make contracts`                 | Always            |
 | Go formatting                                                 | `gofmt -l .` (or `go fmt ./...`) | Always            |
 | Go vet                                                        | `go vet ./...`                   | Always            |
 | Staticcheck (recommended)                                     | `staticcheck ./...`              | All new Go code   |
@@ -786,7 +784,7 @@ Hexagonal coding rules are enforced in review:
 
 - **Security, impersonation, RBAC, audit/activity, secrets handling** —
 require **two reviews**, one of whom must be a repo admin.
-- **Contract changes (**`openapi.yaml`**,** `paths/`**,** `components/`**)** — a reviewer
+- **Contract changes (**`contracts/openapi.yaml`**,** `paths/`**,** `components/`**)** — a reviewer
 from the frontend-integration guild must approve if the endpoint is
 consumer-facing.
 - Everything else: one approving review from any active maintainer.

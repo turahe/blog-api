@@ -1,12 +1,16 @@
 # Redocly CLI configuration
+# https://redocly.com/docs/cli/configuration/
 apis:
   main:
-    root: ./openapi.yaml
+    root: ./contracts/openapi.yaml
 
 extends:
   - recommended
 
 rules:
+  # OpenAPI 3.1 rejects OAS 3.0 `nullable: true` (use type: [T, "null"]).
+  # Existing schemas still use nullable; track as warnings until migrated.
+  struct: warn
   no-unused-components: warn
   no-unresolved-refs: error
   operation-2xx-response: warn
@@ -15,10 +19,9 @@ rules:
   path-parameters-defined: error
   security-defined: warn
 
-theme:
-  openapi:
-    generateCodeSamples:
-      languages:
-        - lang: curl
-        - lang: Node.js
-        - lang: Python
+openapi:
+  codeSamples:
+    languages:
+      - lang: curl
+      - lang: Node.js
+      - lang: Python

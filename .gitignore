@@ -2,6 +2,7 @@ node_modules/
 dist/
 .redocly-cache/
 contracts/openapi.bundle.yaml
+contracts/openapi.bundle.deref.yaml
 .DS_Store
 reports/
 .env

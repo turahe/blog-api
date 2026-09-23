@@ -4442,6 +4442,7 @@ paths:
     patch:
       tags:
         - Admin
+      summary: Update category
       operationId: admin.categories.update
       security:
         - bearerAuth: []
@@ -4494,6 +4495,7 @@ paths:
     delete:
       tags:
         - Admin
+      summary: Delete category
       operationId: admin.categories.delete
       security:
         - bearerAuth: []
@@ -4519,6 +4521,7 @@ paths:
     post:
       tags:
         - Admin
+      summary: Move category in nested set
       operationId: admin.categories.move
       security:
         - bearerAuth: []
