@@ -10,6 +10,7 @@ import (
 	"github.com/turahe/blog-api/internal/adapters/inbound/http/swagger"
 	"github.com/turahe/blog-api/internal/adapters/inbound/routes"
 	authports "github.com/turahe/blog-api/internal/core/auth/ports"
+	authservice "github.com/turahe/blog-api/internal/core/auth/service"
 	categoryservice "github.com/turahe/blog-api/internal/core/category/service"
 	commentservice "github.com/turahe/blog-api/internal/core/comment/service"
 	healthports "github.com/turahe/blog-api/internal/core/health/ports"
@@ -26,6 +27,7 @@ type Dependencies struct {
 	Health         healthports.Service
 	Auth           authports.Service
 	Users          *userservice.UserService
+	AdminUsers     *authservice.AuthService
 	Profiles       *userservice.ProfileService
 	EmailChange    authports.EmailChanger
 	AvatarMaxBytes int64 // > 0 enables avatar routes
@@ -101,6 +103,10 @@ func NewRouter(deps Dependencies) (*gin.Engine, error) {
 	}
 	if deps.Profiles != nil { // keep a nil service a nil interface
 		controllerDeps.Profiles = deps.Profiles
+	}
+
+	if deps.AdminUsers != nil {
+		controllerDeps.AdminUsers = deps.AdminUsers
 	}
 
 	return routes.NewRouter(routes.Dependencies{

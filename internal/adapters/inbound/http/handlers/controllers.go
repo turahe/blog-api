@@ -24,6 +24,7 @@ type Deps struct {
 	Health      healthports.Service
 	Auth        authports.Service
 	Users       *userservice.UserService
+	AdminUsers  adminUserAPI
 	Profiles    profileAPI
 	EmailChange authports.EmailChanger
 	// AvatarMaxBytes > 0 enables avatar upload and removal (requires media storage).
@@ -95,6 +96,12 @@ func NewControllers(deps Deps) routes.Controllers {
 	if deps.Users != nil {
 		c.Users.MeGet = meGetHandler(deps.Users)
 		c.Users.AdminUsersList = gate(deps, "user.read", editorRoles, adminUsersListHandler(deps.Users))
+	}
+
+	if deps.AdminUsers != nil {
+		canManageRoles := func(c *gin.Context) bool { return holds(c, deps, permRoleManage, adminRoles) }
+		c.Users.AdminCreate = gate(deps, "user.create", adminRoles, adminCreateUserHandler(deps.AdminUsers, canManageRoles))
+		c.Users.AdminPasswordReset = gate(deps, "user.password.admin_reset", adminRoles, adminResetPasswordHandler(deps.AdminUsers))
 	}
 
 	wireProfiles(&c.Users, deps)

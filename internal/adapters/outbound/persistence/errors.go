@@ -10,6 +10,19 @@ const pgUniqueViolation = "23505"
 
 // isUniqueViolation reports whether err is a PostgreSQL unique-constraint violation.
 func isUniqueViolation(err error) bool {
+	return uniqueConstraint(err) != ""
+}
+
+// uniqueConstraint returns the violated unique constraint or index name, or "".
+func uniqueConstraint(err error) string {
 	pgErr, ok := errors.AsType[*pgconn.PgError](err)
-	return ok && pgErr.Code == pgUniqueViolation
+	if !ok || pgErr.Code != pgUniqueViolation {
+		return ""
+	}
+
+	if pgErr.ConstraintName == "" {
+		return "unknown"
+	}
+
+	return pgErr.ConstraintName
 }

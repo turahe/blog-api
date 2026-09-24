@@ -1,5 +1,20 @@
 # Changelog
 
+## 2026-09-25 — Admin user create and admin password reset
+
+### Added
+
+- `POST /api/v1/admin/users` (`user.create`) creates an active account; sending `roles` also
+  requires `role.manage`, and unknown roles are rejected before the account is created
+- `POST /api/v1/admin/users/{id}/password/admin-reset` (`user.password.admin_reset`) emails a
+  fresh reset link, invalidates earlier links, and revokes sessions unless `revoke_sessions` is false
+- Seeded the admin role with `user.password.admin_reset`, `role.read`, and `role.manage`
+
+### Changed
+
+- The Casbin enforcer is now a `SyncedEnforcer`, safe for concurrent policy writes
+- A duplicate username on insert maps to `409 user.username.taken`
+
 ## 2026-09-25 — Prometheus metrics
 
 ### Added

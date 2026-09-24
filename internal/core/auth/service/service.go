@@ -12,6 +12,8 @@ import (
 	"github.com/google/uuid"
 	authdomain "github.com/turahe/blog-api/internal/core/auth/domain"
 	"github.com/turahe/blog-api/internal/core/auth/ports"
+	rbacdomain "github.com/turahe/blog-api/internal/core/rbac/domain"
+	rbacports "github.com/turahe/blog-api/internal/core/rbac/ports"
 	"github.com/turahe/blog-api/internal/core/readcache"
 	userdomain "github.com/turahe/blog-api/internal/core/user/domain"
 )
@@ -36,6 +38,7 @@ type AuthService struct {
 	sink     ports.ResetTokenSink
 	notifier ports.EmailChangeNotifier
 	attempts ports.LoginAttempts
+	roles    rbacports.RoleAssigner
 	cache    readcache.Cache
 	cfg      Config
 }
@@ -284,9 +287,16 @@ func (s *AuthService) ForgotPassword(ctx context.Context, emailOrUsername string
 		return nil
 	}
 
+	_, err = s.issuePasswordReset(ctx, user)
+
+	return err
+}
+
+// issuePasswordReset stores a new reset token for user and delivers it.
+func (s *AuthService) issuePasswordReset(ctx context.Context, user userdomain.User) (time.Time, error) {
 	raw, hash, jti, err := s.tokens.IssueResetToken()
 	if err != nil {
-		return err
+		return time.Time{}, err
 	}
 
 	now := s.clock.Now()
@@ -296,7 +306,7 @@ func (s *AuthService) ForgotPassword(ctx context.Context, emailOrUsername string
 		Purpose: authdomain.PurposePasswordReset, ExpiresAt: now.Add(s.cfg.ResetTokenTTL), CreatedAt: now,
 	}
 	if err := s.resets.Create(ctx, token); err != nil {
-		return err
+		return time.Time{}, err
 	}
 
 	if s.sink != nil {
@@ -307,7 +317,7 @@ func (s *AuthService) ForgotPassword(ctx context.Context, emailOrUsername string
 		s.notifier.PasswordReset(ctx, user, raw, token.ExpiresAt)
 	}
 
-	return nil
+	return token.ExpiresAt, nil
 }
 
 // CheckResetToken reports whether a reset token can still be used.
@@ -552,6 +562,14 @@ func MapError(err error) (code, message string, status int) {
 		return "password.confirm_mismatch", "Password confirmation does not match", 422
 	case errors.Is(err, authdomain.ErrEmailTaken):
 		return "auth.email.taken", "Email address is already in use", 409
+	case errors.Is(err, userdomain.ErrUsernameTaken):
+		return "user.username.taken", "Username is already in use", 409
+	case errors.Is(err, userdomain.ErrNotFound):
+		return "user.not_found", "User not found", 404
+	case errors.Is(err, authdomain.ErrTargetInactive):
+		return "user.inactive", "User account is not active", 409
+	case errors.Is(err, rbacdomain.ErrRoleNotFound):
+		return "rbac.role.not_found", err.Error(), 422
 	case errors.Is(err, authdomain.ErrPasswordStrength):
 		return "password.strength", "Password does not meet strength requirements", 422
 	case errors.Is(err, authdomain.ErrTokenUsed):

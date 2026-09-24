@@ -15,6 +15,8 @@ func registerAdmin(v1 *gin.RouterGroup, auth AuthMiddleware, c Controllers) {
 	admin.Use(auth.Required...)
 
 	get(admin, "/users", "admin.users.list", g, AuthRequired, c, c.Users.AdminUsersList)
+	post(admin, "/users", "admin.users.create", g, AuthRequired, c, c.Users.AdminCreate)
+	post(admin, "/users/:param1/password/admin-reset", "admin.users.password.admin_reset", g, AuthRequired, c, c.Users.AdminPasswordReset)
 	get(admin, "/users/:param1/profile", "admin.users.profile.get", g, AuthRequired, c, c.Users.AdminProfileGet)
 	patch(admin, "/users/:param1/profile", "admin.users.profile.patch", g, AuthRequired, c, c.Users.AdminProfilePatch)
 

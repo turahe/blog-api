@@ -16,6 +16,15 @@
 - role and permission changes must be audited
 - permission checks must be enforced server-side
 
+## Implemented Endpoints
+
+- `GET /api/v1/admin/users` — list users (`user.read`)
+- `POST /api/v1/admin/users` — create an active user (`user.create`; assigning roles also needs `role.manage`)
+- `POST /api/v1/admin/users/{id}/password/admin-reset` — email a fresh reset link and, by default,
+  revoke sessions (`user.password.admin_reset`)
+
+Contracts: [api.md](../backend/api.md).
+
 ## Key Entities
 
 - users

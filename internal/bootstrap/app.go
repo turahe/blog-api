@@ -46,18 +46,18 @@ import (
 
 // Runtime holds the opened infrastructure, core services, and HTTP server.
 type Runtime struct {
-	Config     config.Config
-	Database   *database.Database
-	Redis      *redis.Client
-	Cache      *cache.Redis // nil when CACHE_ENABLED=false
-	Server     *nethttp.Server
+	Config   config.Config
+	Database *database.Database
+	Redis    *redis.Client
+	Cache    *cache.Redis // nil when CACHE_ENABLED=false
+	Server   *nethttp.Server
 	// MetricsServer serves Prometheus /metrics; nil when METRICS_ADDR is empty.
 	MetricsServer *nethttp.Server
 	Auth          *authservice.AuthService
-	Users      *userservice.UserService
-	Posts      *postservice.PostService
-	Categories *categoryservice.CategoryService
-	Media      mediaports.Service
+	Users         *userservice.UserService
+	Posts         *postservice.PostService
+	Categories    *categoryservice.CategoryService
+	Media         mediaports.Service
 }
 
 type checker struct {
@@ -152,6 +152,8 @@ func NewRuntime(ctx context.Context, cfg config.Config, logger *slog.Logger, ver
 		return nil, fmt.Errorf("create rbac enforcer: %w", err)
 	}
 
+	auth.WithRoles(outboundrbac.NewRoleStore(db.GORM, enforcer))
+
 	var (
 		appMetrics    *metrics.Metrics
 		metricsServer *nethttp.Server
@@ -170,6 +172,7 @@ func NewRuntime(ctx context.Context, cfg config.Config, logger *slog.Logger, ver
 		Auth:           auth,
 		AvatarMaxBytes: avatarMaxBytes,
 		Users:          userSvc,
+		AdminUsers:     auth,
 		Profiles:       profiles,
 		EmailChange:    auth,
 		Roles:          users,

@@ -99,6 +99,18 @@ the wired Phase 2 surface and where it deliberately differs from the target.
 | `public.users.profile` | `GET /api/v1/users/{username_or_id}` | optional | — |
 | `admin.users.profile.get` | `GET /api/v1/admin/users/{id}/profile` | `user.profile.read` | — |
 | `admin.users.profile.patch` | `PATCH /api/v1/admin/users/{id}/profile` | `user.profile.edit` | — |
+| `admin.users.create` | `POST /api/v1/admin/users` | `user.create` (+ `role.manage` to send `roles`) | — |
+| `admin.users.password.admin_reset` | `POST /api/v1/admin/users/{id}/password/admin-reset` | `user.password.admin_reset` | — |
+
+- **Admin create:** body `email`, `username` (3–32 of `A-Z a-z 0-9 . _ -`), `full_name`,
+  `password` (password policy), optional `roles` (role names). The account is created active
+  → `201` with the user. Taken email → `409 auth.email.taken`; taken username →
+  `409 user.username.taken`; unknown role → `422 rbac.role.not_found`; `roles` without
+  `role.manage` → `403 rbac.forbidden`.
+- **Admin password reset:** emails a fresh reset link and invalidates earlier links. Optional
+  body `{"revoke_sessions": false}` keeps sessions (default revokes them) → `202` with
+  `reset_link_expires_at` and `sessions_revoked`. Unknown user → `404 user.not_found`;
+  inactive user → `409 user.inactive`.
 
 Differences from the target rules below:
 

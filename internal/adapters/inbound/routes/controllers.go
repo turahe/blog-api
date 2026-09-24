@@ -50,6 +50,8 @@ type Users struct {
 	MeEmailConfirmChange gin.HandlerFunc
 	PublicProfile        gin.HandlerFunc
 	AdminUsersList       gin.HandlerFunc
+	AdminCreate          gin.HandlerFunc
+	AdminPasswordReset   gin.HandlerFunc
 	AdminProfileGet      gin.HandlerFunc
 	AdminProfilePatch    gin.HandlerFunc
 }

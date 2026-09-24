@@ -84,8 +84,8 @@ Spec: [authentication.md](../features/authentication.md)
 - [x] `requirePermission` middleware wired to the Casbin enforcer
 - [x] `me.get` — `GET /api/v1/me`
 - [x] `admin.users.list` — `GET /api/v1/admin/users`
-- [ ] `admin.users.create` — `POST /api/v1/admin/users`
-- [ ] `admin.users.password.admin_reset` — `POST /api/v1/admin/users/{id}/password/admin-reset`
+- [x] `admin.users.create` — `POST /api/v1/admin/users` (`user.create`; roles also need `role.manage`)
+- [x] `admin.users.password.admin_reset` — `POST /api/v1/admin/users/{id}/password/admin-reset`
 - [ ] `admin.users.activity.list` — `GET /api/v1/admin/users/{id}/activity`
 - [ ] Role and permission administration endpoints, or a documented decision to seed-only
 - [ ] Policy reload without restart when `casbin_rules` changes

@@ -1,5 +1,39 @@
 basePath: /
 definitions:
+  requests.AdminCreateUser:
+    properties:
+      email:
+        maxLength: 254
+        type: string
+      full_name:
+        maxLength: 120
+        type: string
+      password:
+        maxLength: 128
+        minLength: 12
+        type: string
+      roles:
+        items:
+          type: string
+        maxItems: 20
+        type: array
+      username:
+        maxLength: 32
+        minLength: 3
+        type: string
+    required:
+    - email
+    - full_name
+    - password
+    - roles
+    - username
+    type: object
+  requests.AdminResetPassword:
+    properties:
+      revoke_sessions:
+        description: RevokeSessions defaults to true.
+        type: boolean
+    type: object
   requests.BulkModerateComments:
     properties:
       action:
@@ -1344,6 +1378,90 @@ paths:
       security:
       - Bearer: []
       summary: List users
+      tags:
+      - admin
+    post:
+      consumes:
+      - application/json
+      description: Creates an active account. Assigning roles also requires role.manage.
+      parameters:
+      - description: new account
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/requests.AdminCreateUser'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            $ref: '#/definitions/responses.Envelope'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/responses.Envelope'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/responses.Envelope'
+        "409":
+          description: Conflict
+          schema:
+            $ref: '#/definitions/responses.Envelope'
+        "422":
+          description: Unprocessable Entity
+          schema:
+            $ref: '#/definitions/responses.Envelope'
+      security:
+      - Bearer: []
+      summary: Create a user
+      tags:
+      - admin
+  /api/v1/admin/users/{param1}/password/admin-reset:
+    post:
+      consumes:
+      - application/json
+      description: Emails the user a new reset link, invalidating earlier links. Sessions
+        are revoked unless revoke_sessions is false.
+      parameters:
+      - description: user UUID
+        in: path
+        name: param1
+        required: true
+        type: string
+      - description: options
+        in: body
+        name: body
+        schema:
+          $ref: '#/definitions/requests.AdminResetPassword'
+      produces:
+      - application/json
+      responses:
+        "202":
+          description: Accepted
+          schema:
+            $ref: '#/definitions/responses.Envelope'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/responses.Envelope'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/responses.Envelope'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/responses.Envelope'
+        "409":
+          description: Conflict
+          schema:
+            $ref: '#/definitions/responses.Envelope'
+      security:
+      - Bearer: []
+      summary: Reset a user's password
       tags:
       - admin
   /api/v1/admin/users/{param1}/profile:

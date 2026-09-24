@@ -11,6 +11,9 @@ import (
 // ErrNotFound is returned by user lookups that match no account.
 var ErrNotFound = errors.New("user not found")
 
+// ErrUsernameTaken reports a username already used by a live account.
+var ErrUsernameTaken = errors.New("username already in use")
+
 // Status is a user account state.
 type Status string
 

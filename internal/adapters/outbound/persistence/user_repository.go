@@ -81,6 +81,13 @@ func (r *UserRepository) Create(ctx context.Context, user userdomain.User) (user
 	}
 
 	if err := r.db.WithContext(ctx).Create(&model).Error; err != nil {
+		switch uniqueConstraint(err) {
+		case "users_email_unique":
+			return userdomain.User{}, authdomain.ErrEmailTaken
+		case "users_username_unique":
+			return userdomain.User{}, userdomain.ErrUsernameTaken
+		}
+
 		return userdomain.User{}, err
 	}
 

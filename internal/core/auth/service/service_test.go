@@ -46,6 +46,12 @@ func (m *memUsers) FindByID(_ context.Context, id uuid.UUID) (userdomain.User, e
 }
 
 func (m *memUsers) FindByUsernameOrEmail(ctx context.Context, identity string) (userdomain.User, error) {
+	for _, u := range m.byID {
+		if u.Username == identity {
+			return u, nil
+		}
+	}
+
 	return m.FindByEmail(ctx, identity)
 }
 

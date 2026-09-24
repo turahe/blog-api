@@ -22,6 +22,7 @@ var (
 	ErrCurrentPassword    = errors.New("current password mismatch")
 	ErrEmailTaken         = errors.New("email already in use")
 	ErrAccountLocked      = errors.New("account temporarily locked")
+	ErrTargetInactive     = errors.New("target account inactive")
 )
 
 // LockedError is ErrAccountLocked with the time left until login is allowed again.
@@ -50,6 +51,21 @@ type PasswordResetToken struct {
 	ExpiresAt time.Time
 	UsedAt    *time.Time
 	CreatedAt time.Time
+}
+
+// NewUser is an administrator-created account.
+type NewUser struct {
+	Email    string
+	Username string
+	FullName string
+	Password string
+	Roles    []string
+}
+
+// AdminReset is the result of an administrator-initiated password reset.
+type AdminReset struct {
+	ExpiresAt       time.Time
+	SessionsRevoked bool
 }
 
 // EmailChangeRequest is a pending email change awaiting confirmation.

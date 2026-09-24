@@ -137,9 +137,10 @@ func policyRow(ptype string, rule []string) *ruleRow {
 	return row
 }
 
-// Enforcer implements rbacports.Enforcer on a Casbin RBAC model.
+// Enforcer implements rbacports.Enforcer on a Casbin RBAC model. The synced
+// enforcer makes runtime policy writes and reloads safe alongside Enforce.
 type Enforcer struct {
-	e *casbin.Enforcer
+	e *casbin.SyncedEnforcer
 }
 
 // NewEnforcer loads the model and the persisted policy from casbin_rules.
@@ -149,7 +150,7 @@ func NewEnforcer(db *gorm.DB) (*Enforcer, error) {
 		return nil, fmt.Errorf("casbin model: %w", err)
 	}
 
-	enforcer, err := casbin.NewEnforcer(m, &adapter{db: db})
+	enforcer, err := casbin.NewSyncedEnforcer(m, &adapter{db: db})
 	if err != nil {
 		return nil, fmt.Errorf("casbin enforcer: %w", err)
 	}
@@ -166,7 +167,8 @@ func (e *Enforcer) Enforce(_ context.Context, userID uuid.UUID, permission strin
 	return e.e.Enforce(userID.String(), permission)
 }
 
-// AddRoleForUser grants role to the user in the in-memory policy; call Save to persist.
+// AddRoleForUser grants role to the user. The adapter auto-saves the new rule;
+// Save rewrites the whole table from memory.
 func (e *Enforcer) AddRoleForUser(_ context.Context, userID uuid.UUID, role string) error {
 	_, err := e.e.AddGroupingPolicy(userID.String(), role)
 	return err

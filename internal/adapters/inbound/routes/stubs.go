@@ -76,6 +76,4 @@ func registerContractStubs(v1 *gin.RouterGroup, auth AuthMiddleware, c Controlle
 	put(admin, "/settings", "admin.settings.put", ag, ar, c, nil)
 
 	get(admin, "/users/:param1/activity", "admin.users.activity.list", ag, ar, c, nil)
-	post(admin, "/users", "admin.users.create", ag, ar, c, nil)
-	post(admin, "/users/:param1/password/admin-reset", "admin.users.password.admin_reset", ag, ar, c, nil)
 }
