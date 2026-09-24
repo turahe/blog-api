@@ -79,7 +79,7 @@ Compose file: [compose.yaml](../../compose.yaml). Data dirs under `./.data/` (gi
 ## Health checks
 
 - `GET /health/live`
-- `GET /health/ready`
+- `GET /health/ready` (database, Redis, and the broker when `MESSAGE_BROKER` is set)
 - `GET /health/version`
 - Convenience: `GET /api/v1/health` (alias of live; not in OpenAPI)
 

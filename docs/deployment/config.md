@@ -219,6 +219,11 @@ generations, invalidation) is in [services.md](../backend/services.md#public-rea
 Leave `MESSAGE_BROKER` empty to disable application messaging. `app worker` requires a
 broker; `app serve` can run without one.
 
+When `MESSAGE_BROKER` is set, `GET /health/ready` adds a `messaging` check that opens a TCP
+connection (2s timeout) to the broker: any entry in `KAFKA_BROKERS`, the `RABBITMQ_URL` host
+(default port 5672, or 5671 for `amqps`), or `pubsub.googleapis.com:443` (`PUBSUB_EMULATOR_HOST`
+when set). It proves reachability only; `app doctor` opens a real publisher and subscriber.
+
 | Variable | Default | Required | Purpose |
 | --- | --- | --- | --- |
 | `MESSAGE_BROKER` | empty | For worker/messaging | `kafka`, `rabbitmq`, or `googlepubsub`. Aliases `amqp`, `rabbit`, `gcp-pubsub`, and `pubsub` are accepted. |

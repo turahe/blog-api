@@ -35,6 +35,7 @@ import (
 	userservice "github.com/turahe/blog-api/internal/core/user/service"
 	"github.com/turahe/blog-api/internal/platform/config"
 	"github.com/turahe/blog-api/internal/platform/database"
+	"github.com/turahe/blog-api/internal/platform/messaging"
 	redisplatform "github.com/turahe/blog-api/internal/platform/redis"
 	jwttoken "github.com/turahe/blog-api/internal/platform/security/jwt"
 	"github.com/turahe/blog-api/internal/platform/security/password"
@@ -146,7 +147,7 @@ func NewRuntime(ctx context.Context, cfg config.Config, logger *slog.Logger, ver
 
 	router, err := httpadapter.NewRouter(httpadapter.Dependencies{
 		Logger:         logger,
-		Health:         healthservice.New(version, healthCheckers(db, redisClient)...),
+		Health:         healthservice.New(version, healthCheckers(cfg, db, redisClient)...),
 		Auth:           auth,
 		AvatarMaxBytes: avatarMaxBytes,
 		Users:          userSvc,
@@ -273,8 +274,8 @@ func newNotifier(cfg config.Config, logger *slog.Logger, templates *persistence.
 	return notificationservice.New(mailer, logger, cfg.AppPublicURL).WithTemplates(templates)
 }
 
-func healthCheckers(db *database.Database, redisClient *redis.Client) []healthports.Checker {
-	return []healthports.Checker{
+func healthCheckers(cfg config.Config, db *database.Database, redisClient *redis.Client) []healthports.Checker {
+	checkers := []healthports.Checker{
 		checker{name: "database", check: func(ctx context.Context) error {
 			checkCtx, cancel := context.WithTimeout(ctx, 2*time.Second)
 			defer cancel()
@@ -288,6 +289,17 @@ func healthCheckers(db *database.Database, redisClient *redis.Client) []healthpo
 			return redisClient.Ping(checkCtx).Err()
 		}},
 	}
+
+	if cfg.MessagingEnabled() {
+		checkers = append(checkers, checker{name: "messaging", check: func(ctx context.Context) error {
+			checkCtx, cancel := context.WithTimeout(ctx, 2*time.Second)
+			defer cancel()
+
+			return messaging.Probe(checkCtx, cfg)
+		}})
+	}
+
+	return checkers
 }
 
 // Close releases Redis and database connections.

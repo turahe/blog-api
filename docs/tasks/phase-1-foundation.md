@@ -47,7 +47,8 @@ real mailer are still open.
 - [x] `health.ready` — `GET /health/ready` with database and Redis checkers
 - [x] `health.version` — `GET /health/version`
 - [x] `app doctor` reports database driver, Redis, and messaging reachability
-- [ ] Add a messaging readiness checker to `health.ready` when `MESSAGE_BROKER` is set
+- [x] Add a messaging readiness checker to `health.ready` when `MESSAGE_BROKER` is set
+      (`messaging.Probe`, TCP reachability)
 - [ ] Expose Prometheus-style metrics or document the deliberate decision not to
 
 ## Epic: auth foundation

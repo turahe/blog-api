@@ -1,5 +1,11 @@
 # Changelog
 
+## 2026-09-25 — Messaging readiness check
+
+### Added
+
+- `GET /health/ready` includes a `messaging` check when `MESSAGE_BROKER` is set; `messaging.Probe` dials the Kafka brokers, the RabbitMQ host, or the Pub/Sub endpoint without opening a publisher
+
 ## 2026-09-25 — Request ID in context
 
 ### Added
