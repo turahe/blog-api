@@ -19,7 +19,7 @@ import (
 
 // Post service errors.
 var (
-	ErrValidation = errors.New("validation error")
+	ErrValidation = postdomain.ErrValidation
 	ErrConflict   = postdomain.ErrConflict
 	slugPattern   = regexp.MustCompile(`^[a-z0-9]+(?:-[a-z0-9]+)*$`)
 )

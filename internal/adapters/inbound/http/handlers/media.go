@@ -258,6 +258,7 @@ func mapMediaError(c *gin.Context, err error) bool {
 			Details: nil,
 		})
 	case errors.Is(err, mediaservice.ErrStorage):
+		responses.RecordError(c, err)
 		responses.FailureFor(c, nethttp.StatusBadGateway, responses.FailureOpts{
 			Service: responses.ServiceMedia,
 			Case:    responses.CaseInternalError,
@@ -266,6 +267,7 @@ func mapMediaError(c *gin.Context, err error) bool {
 			Details: nil,
 		})
 	default:
+		responses.RecordError(c, err)
 		responses.FailureFor(c, nethttp.StatusInternalServerError, responses.FailureOpts{
 			Service: responses.ServiceMedia,
 			Case:    responses.CaseInternalError,

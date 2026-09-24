@@ -114,20 +114,21 @@ func (db *Database) Close() error {
 		return nil
 	}
 
-	var first error
+	var errs []error
+
 	if db.SQL != nil {
-		if err := db.SQL.Close(); err != nil && first == nil {
-			first = err
+		if err := db.SQL.Close(); err != nil {
+			errs = append(errs, fmt.Errorf("close sql pool: %w", err))
 		}
 	}
 
 	if db.cleanup != nil {
-		if err := db.cleanup(); err != nil && first == nil {
-			first = err
+		if err := db.cleanup(); err != nil {
+			errs = append(errs, fmt.Errorf("close cloud sql dialer: %w", err))
 		}
 	}
 
-	return first
+	return errors.Join(errs...)
 }
 
 // NormalizeDriver maps aliases to canonical driver names.

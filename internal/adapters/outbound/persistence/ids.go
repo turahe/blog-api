@@ -16,7 +16,7 @@ var errUnknownReference = errors.New("unknown reference")
 func idByUUID(db *gorm.DB, table string, id uuid.UUID) (int64, error) {
 	var ids []int64
 	if err := db.Table(table).Where("uuid = ?", id).Limit(1).Pluck("id", &ids).Error; err != nil {
-		return 0, err
+		return 0, fmt.Errorf("resolve %s id: %w", table, err)
 	}
 
 	if len(ids) == 0 {
@@ -24,6 +24,16 @@ func idByUUID(db *gorm.DB, table string, id uuid.UUID) (int64, error) {
 	}
 
 	return ids[0], nil
+}
+
+// invalidReference reports an unknown client-supplied reference as the domain
+// validation error invalid, naming field; other errors pass through.
+func invalidReference(err, invalid error, field string) error {
+	if errors.Is(err, errUnknownReference) {
+		return fmt.Errorf("%w: %s not found", invalid, field)
+	}
+
+	return err
 }
 
 // optionalIDByUUID is idByUUID for nullable references; nil maps to nil.

@@ -8,6 +8,8 @@ type Dependency struct {
 	Name    string `json:"name"`
 	Healthy bool   `json:"healthy"`
 	Message string `json:"message,omitempty"`
+	// Err is the check failure; it is logged but never serialized to clients.
+	Err error `json:"-"`
 }
 
 // Status is a liveness or readiness report.

@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"context"
+	"fmt"
 	nethttp "net/http"
 	"strings"
 
@@ -32,7 +33,7 @@ func listTagsHandler(tags tagAPI) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		items, err := tags.List(c.Request.Context())
 		if err != nil {
-			responses.Failure(c, nethttp.StatusInternalServerError, responses.ErrorCodeInternal, "Failed to list tags")
+			responses.Internal(c, err, "Failed to list tags")
 			return
 		}
 
@@ -141,7 +142,7 @@ func adminMergeTagHandler(tags tagAPI) gin.HandlerFunc {
 
 		items, err := tags.List(c.Request.Context())
 		if err != nil {
-			responses.Failure(c, nethttp.StatusInternalServerError, responses.ErrorCodeInternal, "Failed to load merged tag")
+			responses.Internal(c, err, "Failed to load merged tag")
 			return
 		}
 
@@ -152,7 +153,7 @@ func adminMergeTagHandler(tags tagAPI) gin.HandlerFunc {
 			}
 		}
 
-		responses.Failure(c, nethttp.StatusInternalServerError, responses.ErrorCodeInternal, "Failed to load merged tag")
+		responses.Internal(c, fmt.Errorf("merged tag %s missing after merge", intoID), "Failed to load merged tag")
 	}
 }
 

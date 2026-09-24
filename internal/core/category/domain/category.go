@@ -10,9 +10,10 @@ import (
 
 // Category errors.
 var (
-	ErrNotFound = errors.New("category not found")
-	ErrConflict = errors.New("conflict")
-	ErrInUse    = errors.New("category in use")
+	ErrNotFound   = errors.New("category not found")
+	ErrValidation = errors.New("validation error")
+	ErrConflict   = errors.New("conflict")
+	ErrInUse      = errors.New("category in use")
 )
 
 // Category is a node of the nested-set category tree.

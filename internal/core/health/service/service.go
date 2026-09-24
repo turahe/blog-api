@@ -38,6 +38,7 @@ func (h *Health) Ready(ctx context.Context) domain.Status {
 		if err := checker.Check(ctx); err != nil {
 			dependency.Healthy = false
 			dependency.Message = "unavailable"
+			dependency.Err = err
 			status.Status = "degraded"
 		}
 

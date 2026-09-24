@@ -3,6 +3,7 @@ package persistence
 import (
 	"context"
 	"errors"
+	"fmt"
 	"strings"
 	"time"
 
@@ -22,52 +23,34 @@ func NewUserRepository(db *gorm.DB) *UserRepository {
 	return &UserRepository{db: db}
 }
 
-// FindByEmail returns the user with the email (case-insensitive).
+// FindByEmail returns the user with the email (case-insensitive) or userdomain.ErrNotFound.
 func (r *UserRepository) FindByEmail(ctx context.Context, email string) (userdomain.User, error) {
-	var model UserModel
-
-	err := r.db.WithContext(ctx).
-		Where("lower(email) = ?", strings.ToLower(email)).
-		First(&model).Error
-	if errors.Is(err, gorm.ErrRecordNotFound) {
-		return userdomain.User{}, err
-	}
-
-	if err != nil {
-		return userdomain.User{}, err
-	}
-
-	return mapUser(model), nil
+	return r.findOne(ctx, "find user by email", "lower(email) = ?", strings.ToLower(email))
 }
 
-// FindByID returns the user with the given UUID.
+// FindByID returns the user with the given UUID or userdomain.ErrNotFound.
 func (r *UserRepository) FindByID(ctx context.Context, id uuid.UUID) (userdomain.User, error) {
-	var model UserModel
-
-	err := r.db.WithContext(ctx).First(&model, "uuid = ?", id).Error
-	if err != nil {
-		return userdomain.User{}, err
-	}
-
-	return mapUser(model), nil
+	return r.findOne(ctx, "find user by id", "uuid = ?", id)
 }
 
 // FindByUsernameOrEmail matches identity against email or username (case-insensitive),
-// returning authdomain.ErrInvalidCredentials when no user matches.
+// returning userdomain.ErrNotFound when no user matches.
 func (r *UserRepository) FindByUsernameOrEmail(ctx context.Context, identity string) (userdomain.User, error) {
 	identity = strings.ToLower(strings.TrimSpace(identity))
 
+	return r.findOne(ctx, "find user by identity", "lower(email) = ? OR lower(username) = ?", identity, identity)
+}
+
+func (r *UserRepository) findOne(ctx context.Context, op, query string, args ...any) (userdomain.User, error) {
 	var model UserModel
 
-	err := r.db.WithContext(ctx).
-		Where("lower(email) = ? OR lower(username) = ?", identity, identity).
-		First(&model).Error
+	err := r.db.WithContext(ctx).Where(query, args...).First(&model).Error
 	if errors.Is(err, gorm.ErrRecordNotFound) {
-		return userdomain.User{}, authdomain.ErrInvalidCredentials
+		return userdomain.User{}, userdomain.ErrNotFound
 	}
 
 	if err != nil {
-		return userdomain.User{}, err
+		return userdomain.User{}, fmt.Errorf("%s: %w", op, err)
 	}
 
 	return mapUser(model), nil
@@ -236,7 +219,7 @@ func (r *SessionRepository) FindByTokenHash(ctx context.Context, hash string) (a
 	}
 
 	if err != nil {
-		return authdomain.RefreshSession{}, err
+		return authdomain.RefreshSession{}, fmt.Errorf("find session by token hash: %w", err)
 	}
 
 	return mapSession(model), nil

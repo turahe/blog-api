@@ -34,7 +34,7 @@ func requirePermission(enforcer permissionEnforcer, permission string) gin.Handl
 
 		allowed, err := enforcer.Enforce(c.Request.Context(), userID, permission)
 		if err != nil {
-			responses.Failure(c, nethttp.StatusInternalServerError, responses.ErrorCodeInternal, "Authorization check failed")
+			responses.Internal(c, err, "Authorization check failed")
 			return
 		}
 
@@ -60,7 +60,7 @@ func requireRoles(lookup RoleLookup, roles ...string) gin.HandlerFunc {
 
 		names, err := lookup.ListRoleNames(c.Request.Context(), userID)
 		if err != nil {
-			responses.Failure(c, nethttp.StatusInternalServerError, responses.ErrorCodeInternal, "Failed to resolve roles")
+			responses.Internal(c, err, "Failed to resolve roles")
 			return
 		}
 

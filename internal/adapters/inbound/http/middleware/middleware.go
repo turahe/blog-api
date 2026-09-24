@@ -1,6 +1,7 @@
 package middleware
 
 import (
+	"errors"
 	"log/slog"
 	nethttp "net/http"
 	"runtime/debug"
@@ -27,20 +28,30 @@ func RequestID() gin.HandlerFunc {
 	}
 }
 
-// AccessLog logs method, path, status, latency, and route metadata when present.
+// AccessLog logs method, route, status, latency, and route metadata when present.
+// Matched requests log the route template rather than the raw path, which can
+// carry secrets such as password reset tokens. 5xx responses log at Error level
+// with the errors recorded via responses.RecordError.
 func AccessLog(logger *slog.Logger) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		started := time.Now()
 
 		c.Next()
 
+		status := c.Writer.Status()
 		attrs := []any{
 			"request_id", responses.RequestID(c),
 			"method", c.Request.Method,
-			"path", c.Request.URL.Path,
-			"status", c.Writer.Status(),
+			"status", status,
 			"latency_ms", time.Since(started).Milliseconds(),
 		}
+
+		if route := c.FullPath(); route != "" {
+			attrs = append(attrs, "route", route)
+		} else {
+			attrs = append(attrs, "path", c.Request.URL.Path)
+		}
+
 		if route, ok := routes.RouteOf(c); ok {
 			attrs = append(attrs,
 				"operation_id", route.OperationID,
@@ -49,7 +60,21 @@ func AccessLog(logger *slog.Logger) gin.HandlerFunc {
 			)
 		}
 
-		logger.InfoContext(c.Request.Context(), "http request", attrs...)
+		if len(c.Errors) > 0 {
+			errs := make([]error, 0, len(c.Errors))
+			for _, e := range c.Errors {
+				errs = append(errs, e.Err)
+			}
+
+			attrs = append(attrs, "error", errors.Join(errs...))
+		}
+
+		level := slog.LevelInfo
+		if status >= nethttp.StatusInternalServerError {
+			level = slog.LevelError
+		}
+
+		logger.Log(c.Request.Context(), level, "http request", attrs...)
 	}
 }
 
@@ -57,14 +82,28 @@ func AccessLog(logger *slog.Logger) gin.HandlerFunc {
 func Recovery(logger *slog.Logger) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		defer func() {
-			if recovered := recover(); recovered != nil {
-				logger.ErrorContext(c.Request.Context(), "panic recovered",
-					"request_id", responses.RequestID(c),
-					"panic", recovered,
-					"stack", string(debug.Stack()),
-				)
-				responses.Failure(c, nethttp.StatusInternalServerError, responses.ErrorCodeInternal, "An unexpected error occurred")
+			recovered := recover()
+			if recovered == nil {
+				return
 			}
+
+			// http.ErrAbortHandler deliberately aborts the response; net/http handles it.
+			if err, ok := recovered.(error); ok && errors.Is(err, nethttp.ErrAbortHandler) {
+				panic(recovered)
+			}
+
+			logger.ErrorContext(c.Request.Context(), "panic recovered",
+				"request_id", responses.RequestID(c),
+				"panic", recovered,
+				"stack", string(debug.Stack()),
+			)
+
+			if c.Writer.Written() {
+				c.Abort()
+				return
+			}
+
+			responses.Failure(c, nethttp.StatusInternalServerError, responses.ErrorCodeInternal, "An unexpected error occurred")
 		}()
 
 		c.Next()

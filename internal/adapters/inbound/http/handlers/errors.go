@@ -44,6 +44,8 @@ func (r resourceErrors) write(c *gin.Context, err error) bool {
 	case errors.Is(err, r.inUse):
 		status, caseCode = nethttp.StatusConflict, responses.CaseConflict
 		code, message = r.inUseCode, r.name+" in use"
+	default:
+		responses.RecordError(c, err)
 	}
 
 	responses.FailureFor(c, status, responses.FailureOpts{

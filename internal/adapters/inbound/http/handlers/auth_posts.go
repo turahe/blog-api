@@ -2,6 +2,8 @@
 package handlers
 
 import (
+	"errors"
+	"io"
 	nethttp "net/http"
 	"strings"
 	"time"
@@ -13,6 +15,23 @@ import (
 	authports "github.com/turahe/blog-api/internal/core/auth/ports"
 	authservice "github.com/turahe/blog-api/internal/core/auth/service"
 )
+
+// writeAuthError writes the auth envelope chosen by mapErr, recording err for
+// the access log when it maps to a server error.
+func writeAuthError(c *gin.Context, err error, mapErr func(error) (code, message string, status int)) {
+	code, message, status := mapErr(err)
+	if status >= nethttp.StatusInternalServerError {
+		responses.RecordError(c, err)
+	}
+
+	responses.FailureFor(c, status, responses.FailureOpts{
+		Service: responses.ServiceAuth,
+		Case:    responses.CaseCodeForStatus(status),
+		Code:    code,
+		Message: message,
+		Details: nil,
+	})
+}
 
 // loginHandler godoc
 //
@@ -34,14 +53,7 @@ func loginHandler(auth authports.Service) gin.HandlerFunc {
 
 		pair, err := auth.Login(c.Request.Context(), req.Email, req.Password, c.Request.UserAgent(), c.ClientIP(), req.Remember)
 		if err != nil {
-			code, message, status := authservice.MapError(err)
-			responses.FailureFor(c, status, responses.FailureOpts{
-				Service: responses.ServiceAuth,
-				Case:    responses.CaseCodeForStatus(status),
-				Code:    code,
-				Message: message,
-				Details: nil,
-			})
+			writeAuthError(c, err, authservice.MapError)
 
 			return
 		}
@@ -69,14 +81,7 @@ func refreshHandler(auth authports.Service) gin.HandlerFunc {
 
 		pair, err := auth.Refresh(c.Request.Context(), req.RefreshToken, c.Request.UserAgent(), c.ClientIP())
 		if err != nil {
-			code, message, status := authservice.MapError(err)
-			responses.FailureFor(c, status, responses.FailureOpts{
-				Service: responses.ServiceAuth,
-				Case:    responses.CaseCodeForStatus(status),
-				Code:    code,
-				Message: message,
-				Details: nil,
-			})
+			writeAuthError(c, err, authservice.MapError)
 
 			return
 		}
@@ -112,17 +117,13 @@ func logoutHandler(auth authports.Service) gin.HandlerFunc {
 		}
 
 		var req requests.Logout
+		if err := c.ShouldBindJSON(&req); err != nil && !errors.Is(err, io.EOF) {
+			requests.FailValidation(c, err)
+			return
+		}
 
-		_ = c.ShouldBindJSON(&req) // body optional
 		if err := auth.Logout(c.Request.Context(), userID, req.RefreshToken); err != nil {
-			code, message, status := authservice.MapError(err)
-			responses.FailureFor(c, status, responses.FailureOpts{
-				Service: responses.ServiceAuth,
-				Case:    responses.CaseCodeForStatus(status),
-				Code:    code,
-				Message: message,
-				Details: nil,
-			})
+			writeAuthError(c, err, authservice.MapError)
 
 			return
 		}
@@ -149,14 +150,7 @@ func forgotPasswordHandler(auth authports.Service) gin.HandlerFunc {
 		}
 
 		if err := auth.ForgotPassword(c.Request.Context(), req.EmailOrUsername); err != nil {
-			code, message, status := authservice.MapError(err)
-			responses.FailureFor(c, status, responses.FailureOpts{
-				Service: responses.ServiceAuth,
-				Case:    responses.CaseCodeForStatus(status),
-				Code:    code,
-				Message: message,
-				Details: nil,
-			})
+			writeAuthError(c, err, authservice.MapError)
 
 			return
 		}
@@ -180,14 +174,7 @@ func resetTokenValidityHandler(auth authports.Service) gin.HandlerFunc {
 
 		validity, err := auth.CheckResetToken(c.Request.Context(), token)
 		if err != nil {
-			code, message, status := authservice.MapResetError(err)
-			responses.FailureFor(c, status, responses.FailureOpts{
-				Service: responses.ServiceAuth,
-				Case:    responses.CaseCodeForStatus(status),
-				Code:    code,
-				Message: message,
-				Details: nil,
-			})
+			writeAuthError(c, err, authservice.MapResetError)
 
 			return
 		}
@@ -217,14 +204,7 @@ func resetPasswordHandler(auth authports.Service) gin.HandlerFunc {
 		}
 
 		if err := auth.ResetPassword(c.Request.Context(), req.Token, req.NewPassword, req.ConfirmPassword); err != nil {
-			code, message, status := authservice.MapResetError(err)
-			responses.FailureFor(c, status, responses.FailureOpts{
-				Service: responses.ServiceAuth,
-				Case:    responses.CaseCodeForStatus(status),
-				Code:    code,
-				Message: message,
-				Details: nil,
-			})
+			writeAuthError(c, err, authservice.MapResetError)
 
 			return
 		}
@@ -274,14 +254,7 @@ func changePasswordHandler(auth authports.Service) gin.HandlerFunc {
 			c.Request.Context(), userID, req.CurrentPassword, req.NewPassword, req.ConfirmPassword, revokeAll,
 		)
 		if err != nil {
-			code, message, status := authservice.MapError(err)
-			responses.FailureFor(c, status, responses.FailureOpts{
-				Service: responses.ServiceAuth,
-				Case:    responses.CaseCodeForStatus(status),
-				Code:    code,
-				Message: message,
-				Details: nil,
-			})
+			writeAuthError(c, err, authservice.MapError)
 
 			return
 		}

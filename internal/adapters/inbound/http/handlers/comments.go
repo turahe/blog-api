@@ -110,7 +110,12 @@ func createPostCommentHandler(comments commentAPI) gin.HandlerFunc {
 			UserAgent:   c.Request.UserAgent(),
 		}
 		if req.ParentID != "" {
-			parentID := uuid.MustParse(req.ParentID)
+			parentID, err := uuid.Parse(req.ParentID)
+			if err != nil {
+				failCommentValidation(c, "Invalid parent_id")
+				return
+			}
+
 			in.ParentUUID = &parentID
 		}
 
@@ -421,6 +426,8 @@ func mapCommentError(c *gin.Context, err error) bool {
 		status, code, message = nethttp.StatusUnprocessableEntity, "comment.parent_invalid", "parent_id must be an approved comment on the same post"
 	case errors.Is(err, commentdomain.ErrDepthExceeded):
 		status, code, message = nethttp.StatusUnprocessableEntity, "comment.depth_exceeded", "Replies cannot be nested deeper than 5 levels"
+	default:
+		responses.RecordError(c, err)
 	}
 
 	responses.FailureFor(c, status, responses.FailureOpts{

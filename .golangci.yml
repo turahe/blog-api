@@ -107,6 +107,9 @@ linters:
       - third_party$
       - testutils$
       - examples$
+      # swag's "Code generated ... DO NOT EDIT" header lacks the trailing period
+      # golangci-lint needs to detect it as generated; `make swagger` owns it.
+      - docs/docs\.go$
     rules:
       # Test fixtures use throwaway DSNs such as amqp://guest:guest@localhost.
       - path: _test\.go

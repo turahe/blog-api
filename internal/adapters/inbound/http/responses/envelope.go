@@ -1,6 +1,7 @@
 package responses
 
 import (
+	nethttp "net/http"
 	"strconv"
 
 	"github.com/gin-gonic/gin"
@@ -207,6 +208,20 @@ func FailureWithDetails(c *gin.Context, status int, code, message string, detail
 		Message: message,
 		Details: details,
 	})
+}
+
+// RecordError attaches err to the request so the access log can report the
+// cause of a 5xx response; the error text is never sent to the client.
+func RecordError(c *gin.Context, err error) {
+	if err != nil {
+		_ = c.Error(err)
+	}
+}
+
+// Internal records err and writes a generic 500 platform envelope with message.
+func Internal(c *gin.Context, err error, message string) {
+	RecordError(c, err)
+	Failure(c, nethttp.StatusInternalServerError, ErrorCodeInternal, message)
 }
 
 // FailureFor writes an error envelope with an explicit service and case code.

@@ -144,12 +144,12 @@ func (r *PostRepository) Create(ctx context.Context, post postdomain.Post) (post
 
 	categoryID, err := optionalIDByUUID(db, "categories", post.CategoryUUID)
 	if err != nil {
-		return postdomain.Post{}, err
+		return postdomain.Post{}, invalidReference(err, postdomain.ErrValidation, "category_id")
 	}
 
 	coverID, err := optionalIDByUUID(db, "media_assets", post.CoverImageMediaUUID)
 	if err != nil {
-		return postdomain.Post{}, err
+		return postdomain.Post{}, invalidReference(err, postdomain.ErrValidation, "cover_image_media_id")
 	}
 
 	model := PostModel{
@@ -180,12 +180,12 @@ func (r *PostRepository) Update(ctx context.Context, post postdomain.Post) (post
 
 	categoryID, err := optionalIDByUUID(db, "categories", post.CategoryUUID)
 	if err != nil {
-		return postdomain.Post{}, err
+		return postdomain.Post{}, invalidReference(err, postdomain.ErrValidation, "category_id")
 	}
 
 	coverID, err := optionalIDByUUID(db, "media_assets", post.CoverImageMediaUUID)
 	if err != nil {
-		return postdomain.Post{}, err
+		return postdomain.Post{}, invalidReference(err, postdomain.ErrValidation, "cover_image_media_id")
 	}
 
 	updates := map[string]any{
@@ -240,7 +240,7 @@ func (r *PostRepository) SetCoverImage(ctx context.Context, postID uuid.UUID, me
 
 	coverID, err := optionalIDByUUID(db, "media_assets", mediaID)
 	if err != nil {
-		return err
+		return invalidReference(err, postdomain.ErrValidation, "cover_image_media_id")
 	}
 
 	res := db.Model(&PostModel{}).

@@ -2,10 +2,14 @@
 package domain
 
 import (
+	"errors"
 	"time"
 
 	"github.com/google/uuid"
 )
+
+// ErrNotFound is returned by user lookups that match no account.
+var ErrNotFound = errors.New("user not found")
 
 // Status is a user account state.
 type Status string

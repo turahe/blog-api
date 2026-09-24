@@ -2,6 +2,7 @@ package service_test
 
 import (
 	"context"
+	"errors"
 	"testing"
 	"time"
 
@@ -15,21 +16,30 @@ import (
 type memUsers struct {
 	byEmail map[string]userdomain.User
 	byID    map[uuid.UUID]userdomain.User
+	findErr error
 }
 
 func (m *memUsers) FindByEmail(_ context.Context, email string) (userdomain.User, error) {
+	if m.findErr != nil {
+		return userdomain.User{}, m.findErr
+	}
+
 	u, ok := m.byEmail[email]
 	if !ok {
-		return userdomain.User{}, authdomain.ErrInvalidCredentials
+		return userdomain.User{}, userdomain.ErrNotFound
 	}
 
 	return u, nil
 }
 
 func (m *memUsers) FindByID(_ context.Context, id uuid.UUID) (userdomain.User, error) {
+	if m.findErr != nil {
+		return userdomain.User{}, m.findErr
+	}
+
 	u, ok := m.byID[id]
 	if !ok {
-		return userdomain.User{}, authdomain.ErrInvalidCredentials
+		return userdomain.User{}, userdomain.ErrNotFound
 	}
 
 	return u, nil
@@ -67,8 +77,9 @@ func (m *memUsers) UpdatePassword(_ context.Context, id uuid.UUID, hash string, 
 }
 
 type memSessions struct {
-	byHash map[string]authdomain.RefreshSession
-	byID   map[uuid.UUID]authdomain.RefreshSession
+	byHash          map[string]authdomain.RefreshSession
+	byID            map[uuid.UUID]authdomain.RefreshSession
+	revokeFamilyErr error
 }
 
 func (m *memSessions) Create(_ context.Context, session authdomain.RefreshSession) (authdomain.RefreshSession, error) {
@@ -97,6 +108,10 @@ func (m *memSessions) Revoke(_ context.Context, id uuid.UUID, at time.Time) erro
 }
 
 func (m *memSessions) RevokeFamily(_ context.Context, userID, familyID uuid.UUID, at time.Time) error {
+	if m.revokeFamilyErr != nil {
+		return m.revokeFamilyErr
+	}
+
 	for id, s := range m.byID {
 		if s.UserUUID == userID && s.FamilyID == familyID {
 			s.RevokedAt = &at
@@ -291,4 +306,62 @@ func TestForgotAndResetPassword(t *testing.T) {
 	validity, err = svc.CheckResetToken(context.Background(), sink.raw)
 	require.NoError(t, err)
 	require.False(t, validity.Valid)
+}
+
+func newMemStores(users ...userdomain.User) (*memUsers, *memSessions, *memResets) {
+	mu := &memUsers{byEmail: map[string]userdomain.User{}, byID: map[uuid.UUID]userdomain.User{}}
+	for _, u := range users {
+		mu.byEmail[u.Email] = u
+		mu.byID[u.UUID] = u
+	}
+
+	return mu,
+		&memSessions{byHash: map[string]authdomain.RefreshSession{}, byID: map[uuid.UUID]authdomain.RefreshSession{}},
+		&memResets{byHash: map[string]authdomain.PasswordResetToken{}, byID: map[uuid.UUID]authdomain.PasswordResetToken{}}
+}
+
+func TestLoginPropagatesRepositoryFailure(t *testing.T) {
+	t.Parallel()
+
+	dbErr := errors.New("connection refused")
+	users, sessions, resets := newMemStores()
+	users.findErr = dbErr
+
+	_, err := newService(users, sessions, resets, nil).
+		Login(context.Background(), "a@example.com", "secret", "ua", "127.0.0.1", false)
+	require.ErrorIs(t, err, dbErr)
+	require.NotErrorIs(t, err, authdomain.ErrInvalidCredentials)
+
+	_, _, status := authservice.MapError(err)
+	require.Equal(t, 500, status)
+}
+
+func TestRefreshReuseReportsFamilyRevokeFailure(t *testing.T) {
+	t.Parallel()
+
+	user := userdomain.User{UUID: uuid.New(), Email: "a@example.com", Status: userdomain.StatusActive}
+	users, sessions, resets := newMemStores(user)
+	revokedAt := time.Now().UTC()
+	sessions.byHash["hash-stolen"] = authdomain.RefreshSession{
+		UUID: uuid.New(), UserUUID: user.UUID, FamilyID: uuid.New(), TokenHash: "hash-stolen",
+		ExpiresAt: revokedAt.Add(time.Hour), RevokedAt: &revokedAt,
+	}
+	sessions.revokeFamilyErr = errors.New("write failed")
+
+	_, err := newService(users, sessions, resets, nil).Refresh(context.Background(), "stolen", "ua", "127.0.0.1")
+	require.ErrorIs(t, err, sessions.revokeFamilyErr)
+	require.NotErrorIs(t, err, authdomain.ErrTokenRevoked)
+}
+
+func TestRefreshTreatsMissingUserAsInactive(t *testing.T) {
+	t.Parallel()
+
+	users, sessions, resets := newMemStores()
+	sessions.byHash["hash-orphan"] = authdomain.RefreshSession{
+		UUID: uuid.New(), UserUUID: uuid.New(), FamilyID: uuid.New(), TokenHash: "hash-orphan",
+		ExpiresAt: time.Now().UTC().Add(time.Hour),
+	}
+
+	_, err := newService(users, sessions, resets, nil).Refresh(context.Background(), "orphan", "ua", "127.0.0.1")
+	require.ErrorIs(t, err, authdomain.ErrUserInactive)
 }

@@ -12,6 +12,7 @@ import (
 	"github.com/google/uuid"
 	authdomain "github.com/turahe/blog-api/internal/core/auth/domain"
 	"github.com/turahe/blog-api/internal/core/auth/ports"
+	userdomain "github.com/turahe/blog-api/internal/core/user/domain"
 )
 
 // Config sets token lifetimes.
@@ -72,8 +73,12 @@ func (s *AuthService) Login(ctx context.Context, email, password, userAgent, ip 
 	}
 
 	user, err := s.users.FindByEmail(ctx, email)
-	if err != nil {
+	if errors.Is(err, userdomain.ErrNotFound) {
 		return authdomain.TokenPair{}, authdomain.ErrInvalidCredentials
+	}
+
+	if err != nil {
+		return authdomain.TokenPair{}, err
 	}
 
 	if !user.IsActive() {
@@ -108,12 +113,15 @@ func (s *AuthService) Refresh(ctx context.Context, refreshToken, userAgent, ip s
 
 	session, err := s.sessions.FindByTokenHash(ctx, hash)
 	if err != nil {
-		return authdomain.TokenPair{}, authdomain.ErrInvalidToken
+		return authdomain.TokenPair{}, err
 	}
 
 	now := s.clock.Now()
 	if session.RevokedAt != nil {
-		_ = s.sessions.RevokeFamily(ctx, session.UserUUID, session.FamilyID, now)
+		if err := s.sessions.RevokeFamily(ctx, session.UserUUID, session.FamilyID, now); err != nil {
+			return authdomain.TokenPair{}, fmt.Errorf("revoke reused token family: %w", err)
+		}
+
 		return authdomain.TokenPair{}, authdomain.ErrTokenRevoked
 	}
 
@@ -121,9 +129,9 @@ func (s *AuthService) Refresh(ctx context.Context, refreshToken, userAgent, ip s
 		return authdomain.TokenPair{}, authdomain.ErrTokenExpired
 	}
 
-	user, err := s.users.FindByID(ctx, session.UserUUID)
-	if err != nil || !user.IsActive() {
-		return authdomain.TokenPair{}, authdomain.ErrUserInactive
+	user, err := s.activeUser(ctx, session.UserUUID)
+	if err != nil {
+		return authdomain.TokenPair{}, err
 	}
 
 	raw, newHash, err := s.tokens.IssueRefresh()
@@ -207,7 +215,7 @@ func (s *AuthService) ForgotPassword(ctx context.Context, emailOrUsername string
 	}
 
 	user, err := s.users.FindByUsernameOrEmail(ctx, emailOrUsername)
-	if errors.Is(err, authdomain.ErrInvalidCredentials) {
+	if errors.Is(err, userdomain.ErrNotFound) {
 		return nil
 	}
 
@@ -282,7 +290,7 @@ func (s *AuthService) ResetPassword(ctx context.Context, rawToken, newPassword, 
 
 	token, err := s.resets.FindByHash(ctx, s.tokens.HashResetToken(strings.TrimSpace(rawToken)))
 	if err != nil {
-		return authdomain.ErrInvalidToken
+		return err
 	}
 
 	now := s.clock.Now()
@@ -323,6 +331,10 @@ func (s *AuthService) ChangePassword(ctx context.Context, userID uuid.UUID, curr
 	}
 
 	user, err := s.users.FindByID(ctx, userID)
+	if errors.Is(err, userdomain.ErrNotFound) {
+		return time.Time{}, false, authdomain.ErrUserInactive
+	}
+
 	if err != nil {
 		return time.Time{}, false, err
 	}
@@ -399,6 +411,24 @@ func (s *AuthService) issuePair(
 		TokenType:    "Bearer",
 		ExpiresIn:    int64(s.cfg.AccessTTL.Seconds()),
 	}, nil
+}
+
+// activeUser loads the user, reporting a missing or inactive account as ErrUserInactive.
+func (s *AuthService) activeUser(ctx context.Context, id uuid.UUID) (userdomain.User, error) {
+	user, err := s.users.FindByID(ctx, id)
+	if errors.Is(err, userdomain.ErrNotFound) {
+		return userdomain.User{}, authdomain.ErrUserInactive
+	}
+
+	if err != nil {
+		return userdomain.User{}, err
+	}
+
+	if !user.IsActive() {
+		return userdomain.User{}, authdomain.ErrUserInactive
+	}
+
+	return user, nil
 }
 
 func validatePasswordStrength(password string) error {

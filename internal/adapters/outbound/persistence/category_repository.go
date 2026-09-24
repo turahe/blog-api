@@ -104,12 +104,12 @@ func (r *CategoryRepository) Create(ctx context.Context, cat categorydomain.Cate
 
 	parentID, err := optionalIDByUUID(db, "categories", cat.ParentUUID)
 	if err != nil {
-		return categorydomain.Category{}, err
+		return categorydomain.Category{}, invalidReference(err, categorydomain.ErrValidation, "parent_id")
 	}
 
 	imageID, err := optionalIDByUUID(db, "media_assets", cat.ImageUUID)
 	if err != nil {
-		return categorydomain.Category{}, err
+		return categorydomain.Category{}, invalidReference(err, categorydomain.ErrValidation, "image_id")
 	}
 
 	model := categoryToModel(cat)
@@ -132,12 +132,12 @@ func (r *CategoryRepository) Update(ctx context.Context, cat categorydomain.Cate
 
 	parentID, err := optionalIDByUUID(db, "categories", cat.ParentUUID)
 	if err != nil {
-		return categorydomain.Category{}, err
+		return categorydomain.Category{}, invalidReference(err, categorydomain.ErrValidation, "parent_id")
 	}
 
 	imageID, err := optionalIDByUUID(db, "media_assets", cat.ImageUUID)
 	if err != nil {
-		return categorydomain.Category{}, err
+		return categorydomain.Category{}, invalidReference(err, categorydomain.ErrValidation, "image_id")
 	}
 
 	res := db.Model(&CategoryModel{}).Where("uuid = ?", cat.UUID).

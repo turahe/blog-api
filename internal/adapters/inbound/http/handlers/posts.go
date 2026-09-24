@@ -153,7 +153,7 @@ func adminListPostsHandlerWithDeps(posts postAdminAPI, roles RoleLookup) gin.Han
 
 		unrestricted, err := resolveUnrestrictedEditor(c.Request.Context(), roles, userID)
 		if err != nil {
-			responses.Failure(c, nethttp.StatusInternalServerError, responses.ErrorCodeInternal, "Failed to resolve roles")
+			responses.Internal(c, err, "Failed to resolve roles")
 			return
 		}
 
@@ -228,7 +228,7 @@ func adminUpdatePostHandlerWithDeps(posts postAdminAPI, roles RoleLookup) gin.Ha
 
 		unrestricted, err := resolveUnrestrictedEditor(c.Request.Context(), roles, userID)
 		if err != nil {
-			responses.Failure(c, nethttp.StatusInternalServerError, responses.ErrorCodeInternal, "Failed to resolve roles")
+			responses.Internal(c, err, "Failed to resolve roles")
 			return
 		}
 
@@ -317,7 +317,7 @@ func adminReplacePostMediaHandler(posts *postservice.PostService) gin.HandlerFun
 		}
 
 		if err != nil {
-			responses.Failure(c, nethttp.StatusInternalServerError, responses.ErrorCodeInternal, "Failed to replace post media")
+			responses.Internal(c, err, "Failed to replace post media")
 			return
 		}
 
@@ -451,6 +451,7 @@ func mapPostError(c *gin.Context, err error) bool {
 			Details: nil,
 		})
 	default:
+		responses.RecordError(c, err)
 		responses.FailureFor(c, nethttp.StatusInternalServerError, responses.FailureOpts{
 			Service: responses.ServicePosts,
 			Case:    responses.CaseInternalError,

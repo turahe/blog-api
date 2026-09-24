@@ -1,12 +1,14 @@
 package handlers
 
 import (
+	"errors"
 	nethttp "net/http"
 	"strconv"
 
 	"github.com/gin-gonic/gin"
 	"github.com/turahe/blog-api/internal/adapters/inbound/http/middleware"
 	"github.com/turahe/blog-api/internal/adapters/inbound/http/responses"
+	userdomain "github.com/turahe/blog-api/internal/core/user/domain"
 	userservice "github.com/turahe/blog-api/internal/core/user/service"
 )
 
@@ -28,8 +30,13 @@ func meGetHandler(users *userservice.UserService) gin.HandlerFunc {
 		}
 
 		user, err := users.GetByID(c.Request.Context(), userID)
-		if err != nil {
+		if errors.Is(err, userdomain.ErrNotFound) {
 			responses.Failure(c, nethttp.StatusUnauthorized, responses.ErrorCodeUnauthorized, "User not found")
+			return
+		}
+
+		if err != nil {
+			responses.Internal(c, err, "Failed to load user")
 			return
 		}
 
@@ -56,7 +63,7 @@ func adminUsersListHandler(users *userservice.UserService) gin.HandlerFunc {
 
 		items, total, err := users.List(c.Request.Context(), page, perPage)
 		if err != nil {
-			responses.Failure(c, nethttp.StatusInternalServerError, responses.ErrorCodeInternal, "Failed to list users")
+			responses.Internal(c, err, "Failed to list users")
 			return
 		}
 

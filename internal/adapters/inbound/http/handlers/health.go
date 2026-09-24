@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"fmt"
 	nethttp "net/http"
 
 	"github.com/gin-gonic/gin"
@@ -37,6 +38,12 @@ func ready(health healthports.Service) gin.HandlerFunc {
 		httpStatus := nethttp.StatusOK
 		if status.Status != "ok" {
 			httpStatus = nethttp.StatusServiceUnavailable
+		}
+
+		for _, dep := range status.Dependencies {
+			if dep.Err != nil {
+				responses.RecordError(c, fmt.Errorf("readiness check %s: %w", dep.Name, dep.Err))
+			}
 		}
 
 		responses.Success(c, httpStatus, status)

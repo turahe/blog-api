@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"os/signal"
+	"runtime/debug"
 	"syscall"
 
 	"github.com/ThreeDotsLabs/watermill/message"
@@ -41,9 +42,11 @@ func newWorkerCmd() *cobra.Command {
 
 			router, err := message.NewRouter(message.RouterConfig{}, bus.Logger)
 			if err != nil {
-				return err
+				return fmt.Errorf("create message router: %w", err)
 			}
-			defer func() { _ = router.Close() }()
+			defer func() { err = errors.Join(err, router.Close()) }()
+
+			router.AddMiddleware(recoverHandler)
 
 			topic := bus.Topic("worker.heartbeat")
 			router.AddConsumerHandler(
@@ -64,5 +67,19 @@ func newWorkerCmd() *cobra.Command {
 
 			return nil
 		},
+	}
+}
+
+// recoverHandler turns a message handler panic into an error so the router
+// nacks the message instead of crashing the worker process.
+func recoverHandler(h message.HandlerFunc) message.HandlerFunc {
+	return func(msg *message.Message) (msgs []*message.Message, err error) {
+		defer func() {
+			if recovered := recover(); recovered != nil {
+				err = fmt.Errorf("message handler panic: %v\n%s", recovered, debug.Stack())
+			}
+		}()
+
+		return h(msg)
 	}
 }

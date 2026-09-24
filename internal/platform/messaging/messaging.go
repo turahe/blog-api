@@ -102,24 +102,25 @@ func (b *Bus) Close() error {
 		return nil
 	}
 
-	var first error
+	var errs []error
+
 	if b.Publisher != nil {
-		if err := b.Publisher.Close(); err != nil && first == nil {
-			first = err
+		if err := b.Publisher.Close(); err != nil {
+			errs = append(errs, fmt.Errorf("close publisher: %w", err))
 		}
 	}
 
 	if b.Subscriber != nil {
-		if err := b.Subscriber.Close(); err != nil && first == nil {
-			first = err
+		if err := b.Subscriber.Close(); err != nil {
+			errs = append(errs, fmt.Errorf("close subscriber: %w", err))
 		}
 	}
 
 	for _, v := range slices.Backward(b.cleanup) {
-		if err := v(); err != nil && first == nil {
-			first = err
+		if err := v(); err != nil {
+			errs = append(errs, err)
 		}
 	}
 
-	return first
+	return errors.Join(errs...)
 }

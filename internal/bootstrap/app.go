@@ -3,6 +3,7 @@ package bootstrap
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log/slog"
 	nethttp "net/http"
@@ -216,17 +217,17 @@ func healthCheckers(db *database.Database, redisClient *redis.Client) []healthpo
 
 // Close releases Redis and database connections.
 func (r *Runtime) Close() error {
-	var first error
+	var errs []error
 
 	if r.Redis != nil {
 		if err := r.Redis.Close(); err != nil {
-			first = err
+			errs = append(errs, fmt.Errorf("close redis: %w", err))
 		}
 	}
 
-	if err := r.Database.Close(); err != nil && first == nil {
-		first = err
+	if err := r.Database.Close(); err != nil {
+		errs = append(errs, fmt.Errorf("close database: %w", err))
 	}
 
-	return first
+	return errors.Join(errs...)
 }

@@ -45,7 +45,7 @@ func listPublishedPostsHandler(posts *postservice.PostService) gin.HandlerFunc {
 			Page: page, PerPage: perPage, CategoryUUID: categoryID, TagUUID: tagID,
 		})
 		if err != nil {
-			responses.Failure(c, nethttp.StatusInternalServerError, responses.ErrorCodeInternal, "Failed to list posts")
+			responses.Internal(c, err, "Failed to list posts")
 			return
 		}
 
@@ -84,7 +84,7 @@ func getPublishedPostHandler(posts *postservice.PostService) gin.HandlerFunc {
 		}
 
 		if err != nil {
-			responses.Failure(c, nethttp.StatusInternalServerError, responses.ErrorCodeInternal, "Failed to load post")
+			responses.Internal(c, err, "Failed to load post")
 			return
 		}
 

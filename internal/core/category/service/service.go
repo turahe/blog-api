@@ -19,7 +19,7 @@ import (
 
 // ErrValidation wraps invalid category input.
 var (
-	ErrValidation = errors.New("validation error")
+	ErrValidation = categorydomain.ErrValidation
 	slugPattern   = regexp.MustCompile(`^[a-z0-9]+(?:-[a-z0-9]+)*$`)
 )
 

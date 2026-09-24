@@ -36,7 +36,7 @@ func listCategoriesHandler(cats categoryAPI) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		items, err := cats.List(c.Request.Context())
 		if err != nil {
-			responses.Failure(c, nethttp.StatusInternalServerError, responses.ErrorCodeInternal, "Failed to list categories")
+			responses.Internal(c, err, "Failed to list categories")
 			return
 		}
 
@@ -67,7 +67,7 @@ func getCategoryHandler(cats categoryAPI) gin.HandlerFunc {
 		}
 
 		if err != nil {
-			responses.Failure(c, nethttp.StatusInternalServerError, responses.ErrorCodeInternal, "Failed to load category")
+			responses.Internal(c, err, "Failed to load category")
 			return
 		}
 

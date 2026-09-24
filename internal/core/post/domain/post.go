@@ -12,6 +12,7 @@ import (
 // Post errors.
 var (
 	ErrNotFound     = errors.New("post not found")
+	ErrValidation   = errors.New("validation error")
 	ErrConflict     = errors.New("conflict")
 	ErrStaleVersion = fmt.Errorf("%w: stale version", ErrConflict)
 )

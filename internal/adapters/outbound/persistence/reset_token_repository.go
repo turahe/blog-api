@@ -3,6 +3,7 @@ package persistence
 import (
 	"context"
 	"errors"
+	"fmt"
 	"time"
 
 	"github.com/google/uuid"
@@ -62,7 +63,7 @@ func (r *ResetTokenRepository) FindByHash(ctx context.Context, hash string) (aut
 	}
 
 	if err != nil {
-		return authdomain.PasswordResetToken{}, err
+		return authdomain.PasswordResetToken{}, fmt.Errorf("find reset token by hash: %w", err)
 	}
 
 	return authdomain.PasswordResetToken{

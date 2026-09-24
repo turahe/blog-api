@@ -1,7 +1,7 @@
 package cmd
 
 import (
-	"fmt"
+	"errors"
 
 	"github.com/spf13/cobra"
 )
@@ -12,7 +12,7 @@ func newSchedulerCmd() *cobra.Command {
 		Short: "Run recurring background jobs",
 		Args:  cobra.NoArgs,
 		RunE: func(*cobra.Command, []string) error {
-			return fmt.Errorf("%q is scaffolded but not implemented", "scheduler")
+			return errors.New("scheduler is scaffolded but not implemented")
 		},
 	}
 }

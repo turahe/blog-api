@@ -134,7 +134,7 @@ func seedRBAC(ctx context.Context, db *gorm.DB) (*outboundrbac.Enforcer, error) 
 
 	enforcer, err := outboundrbac.NewEnforcer(db)
 	if err != nil {
-		return nil, fmt.Errorf("casbin: %w", err)
+		return nil, err
 	}
 
 	for role, perms := range rolePermissions {
@@ -156,7 +156,7 @@ func ensureAdmin(ctx context.Context, db *gorm.DB, opts Options) (userdomain.Use
 		return admin, nil
 	}
 
-	if !errors.Is(err, gorm.ErrRecordNotFound) {
+	if !errors.Is(err, userdomain.ErrNotFound) {
 		return userdomain.User{}, fmt.Errorf("lookup admin: %w", err)
 	}
 
