@@ -34,6 +34,44 @@ func TestLoggerRedactsSensitiveAttributes(t *testing.T) {
 	require.NotContains(t, buf.String(), "raw-refresh")
 }
 
+func TestLoggerAddsRequestIDFromContext(t *testing.T) {
+	t.Parallel()
+
+	var buf bytes.Buffer
+
+	ctx := WithRequestID(t.Context(), "req-ctx")
+	NewTo(&buf, "production").With("component", "cache").InfoContext(ctx, "lookup")
+
+	var entry map[string]any
+	require.NoError(t, json.Unmarshal(buf.Bytes(), &entry))
+	require.Equal(t, "req-ctx", entry["request_id"])
+	require.Equal(t, "cache", entry["component"])
+}
+
+func TestLoggerKeepsExplicitRequestID(t *testing.T) {
+	t.Parallel()
+
+	var buf bytes.Buffer
+
+	ctx := WithRequestID(t.Context(), "req-ctx")
+	NewTo(&buf, "production").InfoContext(ctx, "http request", "request_id", "req-explicit")
+
+	require.Equal(t, 1, bytes.Count(buf.Bytes(), []byte(`"request_id"`)))
+	require.Contains(t, buf.String(), "req-explicit")
+}
+
+func TestLoggerWithoutRequestID(t *testing.T) {
+	t.Parallel()
+
+	var buf bytes.Buffer
+
+	NewTo(&buf, "production").InfoContext(t.Context(), "startup")
+
+	require.NotContains(t, buf.String(), "request_id")
+	require.Empty(t, RequestID(t.Context()))
+	require.Equal(t, t.Context(), WithRequestID(t.Context(), ""))
+}
+
 func TestLoggerLevelByEnvironment(t *testing.T) {
 	t.Parallel()
 

@@ -23,7 +23,8 @@ real mailer are still open.
 - [x] Dockerfile and `compose.yaml` for local infrastructure
 - [x] GitHub Actions workflow at `.github/workflows/go.yml`
 - [x] Request correlation IDs (`middleware.RequestID`, `X-Request-ID`) logged by `middleware.AccessLog`
-- [ ] Propagate the request ID into `context.Context` so core services and outbound adapters log it
+- [x] Propagate the request ID into `context.Context` so core services and outbound adapters log it
+      (`logging.WithRequestID`; the logger adds `request_id` to every `*Context` call)
 - [x] Graceful-shutdown timeout driven by `APP_SHUTDOWN_TIMEOUT` (`cmd/serve.go`)
 
 ## Epic: persistence and cache

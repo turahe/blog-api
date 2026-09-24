@@ -1,5 +1,13 @@
 # Changelog
 
+## 2026-09-25 — Request ID in context
+
+### Added
+
+- `middleware.RequestID` stores the correlation id on the request `context.Context` (`logging.WithRequestID`)
+- The application logger adds `request_id` to any record logged with that context, so core services and outbound adapters are correlated without passing the id around
+- Redis read-cache warnings now log with the request context
+
 ## 2026-09-25 — Notification templates in the database
 
 ### Added

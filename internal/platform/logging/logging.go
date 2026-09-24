@@ -34,7 +34,7 @@ func NewTo(w io.Writer, environment string, extra ...slog.Handler) *slog.Logger 
 		handler = slog.NewMultiHandler(append([]slog.Handler{handler}, extra...)...)
 	}
 
-	return slog.New(handler)
+	return slog.New(requestIDHandler{inner: handler})
 }
 
 // Redact is a slog ReplaceAttr func that masks credential-bearing attributes
@@ -58,6 +58,69 @@ func isSensitiveKey(key string) bool {
 	return strings.Contains(key, "password") ||
 		strings.Contains(key, "secret") ||
 		strings.HasSuffix(key, "token")
+}
+
+const requestIDAttr = "request_id"
+
+type requestIDKey struct{}
+
+// WithRequestID returns ctx carrying the request correlation id. Records logged
+// through a *Context method with that ctx gain a request_id attribute.
+func WithRequestID(ctx context.Context, id string) context.Context {
+	if id == "" {
+		return ctx
+	}
+
+	return context.WithValue(ctx, requestIDKey{}, id)
+}
+
+// RequestID returns the correlation id stored by WithRequestID, or "".
+func RequestID(ctx context.Context) string {
+	if ctx == nil {
+		return ""
+	}
+
+	id, _ := ctx.Value(requestIDKey{}).(string)
+
+	return id
+}
+
+// requestIDHandler adds request_id from the record's context unless the call
+// site already passed one.
+type requestIDHandler struct {
+	inner slog.Handler
+}
+
+func (h requestIDHandler) Enabled(ctx context.Context, level slog.Level) bool {
+	return h.inner.Enabled(ctx, level)
+}
+
+func (h requestIDHandler) Handle(ctx context.Context, record slog.Record) error {
+	if id := RequestID(ctx); id != "" && !hasAttr(record, requestIDAttr) {
+		record = record.Clone()
+		record.AddAttrs(slog.String(requestIDAttr, id))
+	}
+
+	return h.inner.Handle(ctx, record)
+}
+
+func (h requestIDHandler) WithAttrs(attrs []slog.Attr) slog.Handler {
+	return requestIDHandler{inner: h.inner.WithAttrs(attrs)}
+}
+
+func (h requestIDHandler) WithGroup(name string) slog.Handler {
+	return requestIDHandler{inner: h.inner.WithGroup(name)}
+}
+
+func hasAttr(record slog.Record, key string) bool {
+	found := false
+
+	record.Attrs(func(a slog.Attr) bool {
+		found = a.Key == key
+		return !found
+	})
+
+	return found
 }
 
 type reportedKey struct{}

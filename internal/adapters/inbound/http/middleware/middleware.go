@@ -15,7 +15,8 @@ import (
 	"github.com/turahe/blog-api/internal/platform/logging"
 )
 
-// RequestID attaches a correlation id to the context and response headers.
+// RequestID attaches a correlation id to the Gin context, the request's
+// context.Context (see logging.WithRequestID), and the response headers.
 func RequestID() gin.HandlerFunc {
 	return func(c *gin.Context) {
 		id := c.GetHeader("X-Request-ID")
@@ -24,6 +25,7 @@ func RequestID() gin.HandlerFunc {
 		}
 
 		c.Set(responses.ContextRequestIDKey, id)
+		c.Request = c.Request.WithContext(logging.WithRequestID(c.Request.Context(), id))
 		c.Header("X-Request-ID", id)
 		c.Next()
 	}

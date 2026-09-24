@@ -47,7 +47,7 @@ func (r *Redis) Get(ctx context.Context, family readcache.Family, key string, ds
 
 	generation, err := r.generation(ctx, family)
 	if err != nil {
-		r.warn("cache generation lookup failed", family, err)
+		r.warn(ctx, "cache generation lookup failed", family, err)
 		return false, nil
 	}
 
@@ -60,21 +60,21 @@ func (r *Redis) Get(ctx context.Context, family readcache.Family, key string, ds
 			return true, nil
 		}
 
-		r.warn("cache entry decode failed", family, err)
+		r.warn(ctx, "cache entry decode failed", family, err)
 	case !errors.Is(err, goredis.Nil):
-		r.warn("cache lookup failed", family, err)
+		r.warn(ctx, "cache lookup failed", family, err)
 		return false, nil
 	}
 
 	return false, func(value any) {
 		encoded, err := json.Marshal(value)
 		if err != nil {
-			r.warn("cache entry encode failed", family, err)
+			r.warn(ctx, "cache entry encode failed", family, err)
 			return
 		}
 
 		if err := r.client.Set(ctx, entryKey, encoded, ttl).Err(); err != nil {
-			r.warn("cache fill failed", family, err)
+			r.warn(ctx, "cache fill failed", family, err)
 		}
 	}
 }
@@ -145,6 +145,6 @@ func (r *Redis) entryKey(family readcache.Family, generation int64, key string) 
 	return fmt.Sprintf("%s:v%d:%s:g%d:%s", keyPrefix, SchemaVersion, family, generation, key)
 }
 
-func (r *Redis) warn(msg string, family readcache.Family, err error) {
-	r.logger.Warn(msg, "family", family, "error", err)
+func (r *Redis) warn(ctx context.Context, msg string, family readcache.Family, err error) {
+	r.logger.WarnContext(ctx, msg, "family", family, "error", err)
 }
