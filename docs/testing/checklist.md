@@ -6,7 +6,7 @@
 - [ ] `go vet ./...` and `gofmt` clean (`make lint`)
 - [ ] New behavior covered by unit or HTTP test
 - [ ] Negative paths assert envelope `error.code` (not only status)
-- [ ] If routes or OpenAPI changed: committed OpenAPI bundles under `contracts/` + `make routes-check` + route-group tests green
+- [ ] If routes or swagger annotations changed: `make swagger` + commit `docs/` + `make routes-check` green
 - [ ] No real secrets in fixtures; use [.env.example](../../.env.example) shapes only
 
 ## Auth / RBAC changes

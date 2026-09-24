@@ -1,0 +1,1166 @@
+basePath: /
+definitions:
+  requests.ChangePassword:
+    properties:
+      confirm_password:
+        type: string
+      current_password:
+        type: string
+      new_password:
+        maxLength: 128
+        minLength: 12
+        type: string
+      revoke_all_sessions:
+        type: boolean
+    required:
+    - confirm_password
+    - current_password
+    - new_password
+    type: object
+  requests.CreateCategory:
+    properties:
+      before_id:
+        type: string
+      description:
+        maxLength: 2000
+        type: string
+      image_id:
+        type: string
+      name:
+        maxLength: 255
+        minLength: 1
+        type: string
+      parent_id:
+        type: string
+      slug:
+        maxLength: 255
+        minLength: 1
+        type: string
+    required:
+    - name
+    type: object
+  requests.CreatePost:
+    properties:
+      category_id:
+        type: string
+      content:
+        type: string
+      excerpt:
+        maxLength: 2000
+        type: string
+      slug:
+        maxLength: 255
+        minLength: 1
+        type: string
+      tags:
+        items:
+          type: string
+        type: array
+      title:
+        maxLength: 255
+        minLength: 1
+        type: string
+    required:
+    - content
+    - title
+    type: object
+  requests.CreateTag:
+    properties:
+      name:
+        maxLength: 100
+        minLength: 1
+        type: string
+      slug:
+        maxLength: 100
+        minLength: 1
+        type: string
+    required:
+    - name
+    type: object
+  requests.ForgotPassword:
+    properties:
+      email_or_username:
+        type: string
+    required:
+    - email_or_username
+    type: object
+  requests.Login:
+    properties:
+      email:
+        type: string
+      password:
+        minLength: 1
+        type: string
+      remember:
+        type: boolean
+    required:
+    - email
+    - password
+    type: object
+  requests.Logout:
+    properties:
+      refresh_token:
+        type: string
+    type: object
+  requests.MergeTag:
+    properties:
+      into_id:
+        type: string
+    required:
+    - into_id
+    type: object
+  requests.PatchMediaTags:
+    properties:
+      tags:
+        items:
+          type: string
+        type: array
+    required:
+    - tags
+    type: object
+  requests.PostMediaItem:
+    properties:
+      kind:
+        type: string
+      media_asset_id:
+        type: string
+      sort_order:
+        minimum: 0
+        type: integer
+    required:
+    - kind
+    - media_asset_id
+    type: object
+  requests.PresignMedia:
+    properties:
+      content_type:
+        type: string
+      original_filename:
+        maxLength: 255
+        minLength: 1
+        type: string
+      size_bytes:
+        type: integer
+      tags:
+        items:
+          type: string
+        type: array
+    required:
+    - content_type
+    - original_filename
+    - size_bytes
+    type: object
+  requests.Refresh:
+    properties:
+      refresh_token:
+        type: string
+    required:
+    - refresh_token
+    type: object
+  requests.ReplacePostMedia:
+    properties:
+      enforce_cover_consistency:
+        type: boolean
+      items:
+        items:
+          $ref: '#/definitions/requests.PostMediaItem'
+        type: array
+    required:
+    - items
+    type: object
+  requests.ResetPassword:
+    properties:
+      confirm_password:
+        type: string
+      new_password:
+        maxLength: 128
+        minLength: 12
+        type: string
+      token:
+        type: string
+    required:
+    - confirm_password
+    - new_password
+    - token
+    type: object
+  requests.UpdatePost:
+    properties:
+      category_id:
+        items:
+          type: integer
+        type: array
+      content:
+        type: string
+      excerpt:
+        type: string
+      slug:
+        type: string
+      tags:
+        items:
+          type: string
+        type: array
+      title:
+        type: string
+    type: object
+  requests.UpdateTag:
+    properties:
+      name:
+        maxLength: 100
+        minLength: 1
+        type: string
+      slug:
+        maxLength: 100
+        minLength: 1
+        type: string
+    type: object
+  responses.Envelope:
+    properties:
+      code:
+        type: integer
+      data:
+        type: object
+      error:
+        $ref: '#/definitions/responses.ErrorBody'
+      links:
+        $ref: '#/definitions/responses.PageLinks'
+      meta:
+        type: object
+      ok:
+        type: boolean
+    type: object
+  responses.ErrorBody:
+    properties:
+      code:
+        type: string
+      details:
+        type: object
+      message:
+        type: string
+    type: object
+  responses.PageLinks:
+    properties:
+      first:
+        type: string
+      last:
+        type: string
+      next:
+        type: string
+      prev:
+        type: string
+    type: object
+host: localhost:8080
+info:
+  contact:
+    name: API Support
+    url: https://github.com/turahe/blog-api
+  description: Hexagonal blog platform REST API. Envelope responses use { ok, code,
+    data, meta, error }.
+  license:
+    name: MIT
+    url: https://opensource.org/licenses/MIT
+  title: Blog API
+  version: "1.0"
+paths:
+  /api/v1/admin/categories:
+    post:
+      consumes:
+      - application/json
+      parameters:
+      - description: category
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/requests.CreateCategory'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            $ref: '#/definitions/responses.Envelope'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/responses.Envelope'
+      security:
+      - Bearer: []
+      summary: Create category
+      tags:
+      - admin
+  /api/v1/admin/categories/{param1}:
+    delete:
+      parameters:
+      - description: category UUID
+        in: path
+        name: param1
+        required: true
+        type: string
+      responses:
+        "204":
+          description: No content
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/responses.Envelope'
+      security:
+      - Bearer: []
+      summary: Delete category
+      tags:
+      - admin
+    patch:
+      consumes:
+      - application/json
+      parameters:
+      - description: category UUID
+        in: path
+        name: param1
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/responses.Envelope'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/responses.Envelope'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/responses.Envelope'
+      security:
+      - Bearer: []
+      summary: Update category
+      tags:
+      - admin
+  /api/v1/admin/categories/{param1}/move:
+    post:
+      consumes:
+      - application/json
+      parameters:
+      - description: category UUID
+        in: path
+        name: param1
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/responses.Envelope'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/responses.Envelope'
+      security:
+      - Bearer: []
+      summary: Move category in tree
+      tags:
+      - admin
+  /api/v1/admin/media:
+    get:
+      parameters:
+      - default: 1
+        description: page
+        in: query
+        name: page
+        type: integer
+      - default: 20
+        description: per page
+        in: query
+        name: per_page
+        type: integer
+      - description: search
+        in: query
+        name: q
+        type: string
+      - description: disk filter
+        in: query
+        name: disk
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/responses.Envelope'
+      security:
+      - Bearer: []
+      summary: List media assets
+      tags:
+      - admin
+    post:
+      consumes:
+      - application/json
+      parameters:
+      - description: upload metadata
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/requests.PresignMedia'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            $ref: '#/definitions/responses.Envelope'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/responses.Envelope'
+      security:
+      - Bearer: []
+      summary: Presign media upload
+      tags:
+      - admin
+  /api/v1/admin/media/{param1}:
+    delete:
+      parameters:
+      - description: media UUID
+        in: path
+        name: param1
+        required: true
+        type: string
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/responses.Envelope'
+      security:
+      - Bearer: []
+      summary: Delete media asset
+      tags:
+      - admin
+  /api/v1/admin/media/{param1}/complete:
+    post:
+      parameters:
+      - description: media UUID
+        in: path
+        name: param1
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/responses.Envelope'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/responses.Envelope'
+      security:
+      - Bearer: []
+      summary: Complete media upload
+      tags:
+      - admin
+  /api/v1/admin/media/{param1}/tags:
+    patch:
+      consumes:
+      - application/json
+      parameters:
+      - description: media UUID
+        in: path
+        name: param1
+        required: true
+        type: string
+      - description: tags
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/requests.PatchMediaTags'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/responses.Envelope'
+      security:
+      - Bearer: []
+      summary: Patch media tags
+      tags:
+      - admin
+  /api/v1/admin/posts:
+    get:
+      parameters:
+      - default: 1
+        description: page
+        in: query
+        name: page
+        type: integer
+      - default: 20
+        description: per page
+        in: query
+        name: per_page
+        type: integer
+      - description: status filter
+        in: query
+        name: status
+        type: string
+      - description: author UUID
+        in: query
+        name: author_id
+        type: string
+      - description: category UUID
+        in: query
+        name: category_id
+        type: string
+      - description: search
+        in: query
+        name: q
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/responses.Envelope'
+      security:
+      - Bearer: []
+      summary: List admin posts
+      tags:
+      - admin
+    post:
+      consumes:
+      - application/json
+      parameters:
+      - description: draft post
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/requests.CreatePost'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            $ref: '#/definitions/responses.Envelope'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/responses.Envelope'
+      security:
+      - Bearer: []
+      summary: Create draft post
+      tags:
+      - admin
+  /api/v1/admin/posts/{param1}:
+    patch:
+      consumes:
+      - application/json
+      parameters:
+      - description: post UUID
+        in: path
+        name: param1
+        required: true
+        type: string
+      - description: patch fields
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/requests.UpdatePost'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/responses.Envelope'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/responses.Envelope'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/responses.Envelope'
+      security:
+      - Bearer: []
+      summary: Update post
+      tags:
+      - admin
+  /api/v1/admin/posts/{param1}/media:
+    patch:
+      consumes:
+      - application/json
+      parameters:
+      - description: post UUID
+        in: path
+        name: param1
+        required: true
+        type: string
+      - description: media items
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/requests.ReplacePostMedia'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/responses.Envelope'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/responses.Envelope'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/responses.Envelope'
+      security:
+      - Bearer: []
+      summary: Replace post media
+      tags:
+      - admin
+  /api/v1/admin/posts/{param1}/publish:
+    post:
+      parameters:
+      - description: post UUID
+        in: path
+        name: param1
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/responses.Envelope'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/responses.Envelope'
+      security:
+      - Bearer: []
+      summary: Publish post
+      tags:
+      - admin
+  /api/v1/admin/tags:
+    post:
+      consumes:
+      - application/json
+      parameters:
+      - description: tag
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/requests.CreateTag'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            $ref: '#/definitions/responses.Envelope'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/responses.Envelope'
+      security:
+      - Bearer: []
+      summary: Create tag
+      tags:
+      - admin
+  /api/v1/admin/tags/{param1}:
+    delete:
+      parameters:
+      - description: tag UUID
+        in: path
+        name: param1
+        required: true
+        type: string
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/responses.Envelope'
+      security:
+      - Bearer: []
+      summary: Delete tag
+      tags:
+      - admin
+    patch:
+      consumes:
+      - application/json
+      parameters:
+      - description: tag UUID
+        in: path
+        name: param1
+        required: true
+        type: string
+      - description: patch fields
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/requests.UpdateTag'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/responses.Envelope'
+      security:
+      - Bearer: []
+      summary: Update tag
+      tags:
+      - admin
+  /api/v1/admin/tags/{param1}/merge:
+    post:
+      consumes:
+      - application/json
+      parameters:
+      - description: source tag UUID
+        in: path
+        name: param1
+        required: true
+        type: string
+      - description: target tag
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/requests.MergeTag'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/responses.Envelope'
+      security:
+      - Bearer: []
+      summary: Merge tag into another
+      tags:
+      - admin
+  /api/v1/admin/users:
+    get:
+      parameters:
+      - default: 1
+        description: page
+        in: query
+        name: page
+        type: integer
+      - default: 20
+        description: per page
+        in: query
+        name: per_page
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/responses.Envelope'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/responses.Envelope'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/responses.Envelope'
+      security:
+      - Bearer: []
+      summary: List users
+      tags:
+      - admin
+  /api/v1/auth/login:
+    post:
+      consumes:
+      - application/json
+      parameters:
+      - description: credentials
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/requests.Login'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/responses.Envelope'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/responses.Envelope'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/responses.Envelope'
+      summary: Login
+      tags:
+      - auth
+  /api/v1/auth/logout:
+    post:
+      consumes:
+      - application/json
+      parameters:
+      - description: optional refresh token
+        in: body
+        name: body
+        schema:
+          $ref: '#/definitions/requests.Logout'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/responses.Envelope'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/responses.Envelope'
+      security:
+      - Bearer: []
+      summary: Logout
+      tags:
+      - auth
+  /api/v1/auth/password/forgot:
+    post:
+      consumes:
+      - application/json
+      parameters:
+      - description: email or username
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/requests.ForgotPassword'
+      produces:
+      - application/json
+      responses:
+        "202":
+          description: Accepted
+          schema:
+            $ref: '#/definitions/responses.Envelope'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/responses.Envelope'
+      summary: Request password reset
+      tags:
+      - auth
+  /api/v1/auth/password/reset:
+    post:
+      consumes:
+      - application/json
+      parameters:
+      - description: reset payload
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/requests.ResetPassword'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/responses.Envelope'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/responses.Envelope'
+      summary: Reset password
+      tags:
+      - auth
+  /api/v1/auth/password/reset/{param1}:
+    get:
+      parameters:
+      - description: reset token
+        in: path
+        name: param1
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/responses.Envelope'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/responses.Envelope'
+      summary: Check password reset token
+      tags:
+      - auth
+  /api/v1/auth/refresh:
+    post:
+      consumes:
+      - application/json
+      parameters:
+      - description: refresh token
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/requests.Refresh'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/responses.Envelope'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/responses.Envelope'
+      summary: Refresh access token
+      tags:
+      - auth
+  /api/v1/categories:
+    get:
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/responses.Envelope'
+      summary: List categories
+      tags:
+      - public
+  /api/v1/categories/{param1}:
+    get:
+      parameters:
+      - description: category slug
+        in: path
+        name: param1
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/responses.Envelope'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/responses.Envelope'
+      summary: Get category by slug
+      tags:
+      - public
+  /api/v1/me:
+    get:
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/responses.Envelope'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/responses.Envelope'
+      security:
+      - Bearer: []
+      summary: Current user
+      tags:
+      - self-service
+  /api/v1/me/password:
+    put:
+      consumes:
+      - application/json
+      parameters:
+      - description: password change
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/requests.ChangePassword'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/responses.Envelope'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/responses.Envelope'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/responses.Envelope'
+      security:
+      - Bearer: []
+      summary: Change own password
+      tags:
+      - self-service
+  /api/v1/media/{param1}:
+    get:
+      parameters:
+      - description: media UUID
+        in: path
+        name: param1
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/responses.Envelope'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/responses.Envelope'
+      summary: Get ready media asset
+      tags:
+      - public
+  /api/v1/posts:
+    get:
+      parameters:
+      - default: 1
+        description: page
+        in: query
+        name: page
+        type: integer
+      - default: 20
+        description: per page
+        in: query
+        name: per_page
+        type: integer
+      - description: category UUID
+        in: query
+        name: category_id
+        type: string
+      - description: tag UUID
+        in: query
+        name: tag_id
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/responses.Envelope'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/responses.Envelope'
+      summary: List published posts
+      tags:
+      - public
+  /api/v1/posts/{param1}:
+    get:
+      parameters:
+      - description: post slug
+        in: path
+        name: param1
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/responses.Envelope'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/responses.Envelope'
+      summary: Get published post by slug
+      tags:
+      - public
+  /api/v1/tags:
+    get:
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/responses.Envelope'
+      summary: List tags
+      tags:
+      - public
+  /health/live:
+    get:
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/responses.Envelope'
+      summary: Liveness probe
+      tags:
+      - health
+  /health/ready:
+    get:
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/responses.Envelope'
+        "503":
+          description: Service Unavailable
+          schema:
+            $ref: '#/definitions/responses.Envelope'
+      summary: Readiness probe
+      tags:
+      - health
+  /health/version:
+    get:
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/responses.Envelope'
+      summary: Build version
+      tags:
+      - health
+schemes:
+- http
+- https
+securityDefinitions:
+  Bearer:
+    description: Type "Bearer" followed by a space and the JWT access token.
+    in: header
+    name: Authorization
+    type: apiKey
+swagger: "2.0"

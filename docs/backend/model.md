@@ -201,7 +201,7 @@ Readable mirrors in early migrations may appear as `roles`, `permissions`, `user
 2. Add a goose migration under `internal/platform/migrations/sql/`.
 3. Add domain type + ports in `internal/core/<module>/`.
 4. Add persistence struct + repository mapper (no GORM in core).
-5. Expose only via OpenAPI-backed HTTP DTOs; committed OpenAPI bundles under `contracts/` / `make routes` as needed.
+5. Expose only via OpenAPI-backed HTTP DTOs; committed swag docs under `docs/` (`make swagger`)  / `make routes-check` as needed.
 6. Cover mapping and lifecycle in tests ([testing strategy](../testing/strategy.md)).
 
 ## Related Docs

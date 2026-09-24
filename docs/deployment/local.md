@@ -2,22 +2,42 @@
 
 ## Prerequisites
 
-- Go `1.26.5` (see [go.mod](../../go.mod))
-- Docker + Compose
-- Node (for contract validation scripts)
-- Python 3 (route generation)
+- Docker + Compose (preferred full stack)
+- Go `1.26.5` (optional; only needed for host-side `make run` / tests — see [go.mod](../../go.mod))
 
-## Boot sequence
+## Boot sequence (Docker — recommended)
 
 ```bash
 cp .env.example .env
 # edit APP_SESSION_KEY, APP_CSRF_KEY, APP_PEPPER to random values (≥32 chars for session key)
-# JWT RS256: .env.example already points at configs/dev/*.pem; replace with your own keys for anything beyond local
+# JWT RS256: .env.example already points at configs/dev/*.pem
+
+make docker-up         # build + postgres/redis/rustfs + migrate + api
+make docker-seed       # roles + admin@example.com / ChangeMeNow!123
+# API: http://localhost:8080  (Swagger UI: /swagger/index.html when local)
+```
+
+Compose overrides `DB_HOST`/`REDIS_HOST`/`S3_ENDPOINT` to service DNS names so the same
+`.env` works for both Docker and host `make run` (host keeps `127.0.0.1`).
+
+Useful:
+
+```bash
+make docker-logs       # follow api logs
+make docker-migrate    # re-run migrations
+make docker-down       # stop the stack (volumes under ./.data/ keep data)
+```
+
+## Boot sequence (host API + Compose infra)
+
+```bash
+cp .env.example .env
+# edit secrets as above
 
 make infra-up          # postgres, redis, rustfs
 make migrate-up        # go run . migrate up
 go run . seed          # roles + admin@example.com / ChangeMeNow!123
-make run               # go run . serve → http://localhost:8080 (Swagger UI: /swagger when local)
+make run               # go run . serve → http://localhost:8080
 ```
 
 The Cobra CLI auto-loads `.env` from the working directory when present (`--env-file`
@@ -35,8 +55,7 @@ curl -sS -X POST localhost:8080/api/v1/auth/login \
 Optional:
 
 ```bash
-committed OpenAPI bundles
-make routes-check      # Go route table ↔ OpenAPI parity
+make routes-check      # Gin route registration smoke tests
 make test
 ```
 
@@ -44,11 +63,13 @@ make test
 
 | Service | Host port | Role |
 | --- | --- | --- |
+| api | 8080 | HTTP API (built from [Dockerfile](../../Dockerfile)) |
+| migrate | — | one-shot `migrate up` before api starts |
 | postgres | 5432 | primary DB (`blog`/`blog`/`blog`) |
 | redis | 6379 | cache / ephemeral |
 | rustfs | 9000 / 9001 | S3-compatible media + console |
 
-Compose file: [compose.yaml](../../compose.yaml). Data dirs under `./data/` (gitignored).
+Compose file: [compose.yaml](../../compose.yaml). Data dirs under `./.data/` (gitignored).
 
 ## Health checks
 
@@ -60,10 +81,10 @@ Compose file: [compose.yaml](../../compose.yaml). Data dirs under `./data/` (git
 ## Tear down
 
 ```bash
-make infra-down
+make docker-down   # or: make infra-down
 ```
 
-Volumes under `./data/` persist until removed manually.
+Volumes under `./.data/` persist until removed manually.
 
 ## Messaging (optional)
 
@@ -72,14 +93,12 @@ make infra-up-messaging   # kafka :9092, rabbitmq :5672 / management :15672
 make infra-down-messaging # stop/remove kafka and rabbitmq only
 ```
 
-Compose profile `messaging` starts Kafka (`apache/kafka:3.9.0`, KRaft single-node) and RabbitMQ (`rabbitmq:3.13-management-alpine`). Default `make infra-up` does not start brokers.
+Compose profile `messaging` starts Kafka (`apache/kafka:3.9.0`, KRaft single-node) and RabbitMQ (`rabbitmq:3.13-management-alpine`). Default `make docker-up` / `make infra-up` does not start brokers; the api service clears `MESSAGE_BROKER` so serve works without them.
 
-Set in `.env`:
+To run the worker against Compose brokers (host or a custom compose service), set in `.env`:
 
 - Kafka: `MESSAGE_BROKER=kafka`, `KAFKA_BROKERS=127.0.0.1:9092`
 - RabbitMQ: `MESSAGE_BROKER=rabbitmq`, `RABBITMQ_URL=amqp://blog:blog@127.0.0.1:5672/`
-
-Run worker:
 
 ```bash
 go run . worker

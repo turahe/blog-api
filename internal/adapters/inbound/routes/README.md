@@ -11,7 +11,7 @@ Laravel-style Gin registration for the HTTP API.
 | [controllers.go](controllers.go) | handler bags + `NotImplemented` stub |
 
 Wire services in `../http/router.go` (`http.NewRouter` → `routes.NewRouter`).
-OpenAPI under `contracts/` stays the published client contract.
+Published HTTP docs are swag-generated under [`docs/`](../../../../docs/) (`make swagger`).
 
 ```bash
 go test ./internal/adapters/inbound/routes/...

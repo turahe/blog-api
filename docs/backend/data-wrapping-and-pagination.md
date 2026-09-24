@@ -69,6 +69,6 @@ Numeric `code` packing is documented in [response-codes.md](response-codes.md).
 Handlers call `successPaginated` in
 [response.go](../../internal/adapters/inbound/http/response.go).
 OpenAPI schemas: `PaginationLinks`, `PaginationMeta`, and `PaginatedEnvelope` in
-[Common.yaml](../../components/schemas/Common.yaml).
+the envelope schemas documented in [api-contracts.md](../architecture/api-contracts.md).
 
 Errors still use `{ ok: false, meta, error }` with no `links`.

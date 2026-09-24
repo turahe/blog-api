@@ -4,8 +4,8 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
-// RegisterContractStubs mounts OpenAPI operations that are not yet implemented.
-func RegisterContractStubs(v1 *gin.RouterGroup, auth AuthMiddleware, c Controllers) {
+// registerContractStubs mounts OpenAPI operations that are not yet implemented.
+func registerContractStubs(v1 *gin.RouterGroup, auth AuthMiddleware, c Controllers) {
 	none := v1.Group("")
 	optional := v1.Group("")
 	optional.Use(auth.Optional...)

@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	nethttp "net/http"
 	"strings"
 
@@ -24,6 +25,13 @@ type categoryAPI interface {
 	Move(ctx context.Context, id uuid.UUID, parentID, beforeID *uuid.UUID) (categorydomain.Category, error)
 }
 
+// listCategoriesHandler godoc
+//
+//	@Summary	List categories
+//	@Tags		public
+//	@Produce	json
+//	@Success	200	{object}	responses.Envelope
+//	@Router		/api/v1/categories [get]
 func listCategoriesHandler(cats categoryAPI) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		items, err := cats.List(c.Request.Context())
@@ -39,6 +47,15 @@ func listCategoriesHandler(cats categoryAPI) gin.HandlerFunc {
 	}
 }
 
+// getCategoryHandler godoc
+//
+//	@Summary	Get category by slug
+//	@Tags		public
+//	@Produce	json
+//	@Param		param1	path		string	true	"category slug"
+//	@Success	200		{object}	responses.Envelope
+//	@Failure	404		{object}	responses.Envelope
+//	@Router		/api/v1/categories/{param1} [get]
 func getCategoryHandler(cats categoryAPI) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		item, err := cats.GetBySlug(c.Request.Context(), c.Param("param1"))
@@ -54,6 +71,17 @@ func getCategoryHandler(cats categoryAPI) gin.HandlerFunc {
 	}
 }
 
+// adminCreateCategoryHandler godoc
+//
+//	@Summary	Create category
+//	@Tags		admin
+//	@Accept		json
+//	@Produce	json
+//	@Param		body	body		requests.CreateCategory	true	"category"
+//	@Success	201		{object}	responses.Envelope
+//	@Failure	400		{object}	responses.Envelope
+//	@Security	Bearer
+//	@Router		/api/v1/admin/categories [post]
 func adminCreateCategoryHandler(cats categoryAPI) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		var req requests.CreateCategory
@@ -90,6 +118,18 @@ func adminCreateCategoryHandler(cats categoryAPI) gin.HandlerFunc {
 	}
 }
 
+// adminUpdateCategoryHandler godoc
+//
+//	@Summary	Update category
+//	@Tags		admin
+//	@Accept		json
+//	@Produce	json
+//	@Param		param1	path		string	true	"category UUID"
+//	@Success	200		{object}	responses.Envelope
+//	@Failure	400		{object}	responses.Envelope
+//	@Failure	404		{object}	responses.Envelope
+//	@Security	Bearer
+//	@Router		/api/v1/admin/categories/{param1} [patch]
 func adminUpdateCategoryHandler(cats categoryAPI) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		id, err := uuid.Parse(strings.TrimSpace(c.Param("param1")))
@@ -124,35 +164,24 @@ func adminUpdateCategoryHandler(cats categoryAPI) gin.HandlerFunc {
 			in.Slug = &slug
 		}
 		if v, ok := raw["description"]; ok {
-			if requests.IsJSONNull(v) {
+			desc, ok := parseNullableString(c, v, "description")
+			if !ok {
+				return
+			}
+			if desc == nil {
 				empty := ""
 				in.Description = &empty
 			} else {
-				var desc string
-				if err := json.Unmarshal(v, &desc); err != nil {
-					responses.Failure(c, nethttp.StatusBadRequest, "validation_error", "Invalid description")
-					return
-				}
-				in.Description = &desc
+				in.Description = desc
 			}
 		}
 		if v, ok := raw["image_id"]; ok {
 			in.ImageIDProvided = true
-			if requests.IsJSONNull(v) {
-				in.ImageID = nil
-			} else {
-				var s string
-				if err := json.Unmarshal(v, &s); err != nil {
-					responses.Failure(c, nethttp.StatusBadRequest, "validation_error", "Invalid image_id")
-					return
-				}
-				imageID, err := uuid.Parse(strings.TrimSpace(s))
-				if err != nil {
-					responses.Failure(c, nethttp.StatusBadRequest, "validation_error", "Invalid image_id")
-					return
-				}
-				in.ImageID = &imageID
+			imageID, ok := parseNullableUUIDField(c, v, "image_id")
+			if !ok {
+				return
 			}
+			in.ImageID = imageID
 		}
 		cat, err := cats.Update(c.Request.Context(), id, in)
 		if mapCategoryError(c, err) {
@@ -162,6 +191,15 @@ func adminUpdateCategoryHandler(cats categoryAPI) gin.HandlerFunc {
 	}
 }
 
+// adminDeleteCategoryHandler godoc
+//
+//	@Summary	Delete category
+//	@Tags		admin
+//	@Param		param1	path	string	true	"category UUID"
+//	@Success	204		"No content"
+//	@Failure	404		{object}	responses.Envelope
+//	@Security	Bearer
+//	@Router		/api/v1/admin/categories/{param1} [delete]
 func adminDeleteCategoryHandler(cats categoryAPI) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		id, err := uuid.Parse(strings.TrimSpace(c.Param("param1")))
@@ -176,6 +214,17 @@ func adminDeleteCategoryHandler(cats categoryAPI) gin.HandlerFunc {
 	}
 }
 
+// adminMoveCategoryHandler godoc
+//
+//	@Summary	Move category in tree
+//	@Tags		admin
+//	@Accept		json
+//	@Produce	json
+//	@Param		param1	path		string	true	"category UUID"
+//	@Success	200		{object}	responses.Envelope
+//	@Failure	400		{object}	responses.Envelope
+//	@Security	Bearer
+//	@Router		/api/v1/admin/categories/{param1}/move [post]
 func adminMoveCategoryHandler(cats categoryAPI) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		id, err := uuid.Parse(strings.TrimSpace(c.Param("param1")))
@@ -193,33 +242,16 @@ func adminMoveCategoryHandler(cats categoryAPI) gin.HandlerFunc {
 			responses.Failure(c, nethttp.StatusBadRequest, "validation_error", "parent_id required")
 			return
 		}
-		var parentID *uuid.UUID
-		if !requests.IsJSONNull(parentRaw) {
-			var s string
-			if err := json.Unmarshal(parentRaw, &s); err != nil {
-				responses.Failure(c, nethttp.StatusBadRequest, "validation_error", "Invalid parent_id")
-				return
-			}
-			pid, err := uuid.Parse(strings.TrimSpace(s))
-			if err != nil {
-				responses.Failure(c, nethttp.StatusBadRequest, "validation_error", "Invalid parent_id")
-				return
-			}
-			parentID = &pid
+		parentID, ok := parseNullableUUIDField(c, parentRaw, "parent_id")
+		if !ok {
+			return
 		}
 		var beforeID *uuid.UUID
-		if beforeRaw, ok := raw["before_id"]; ok && !requests.IsJSONNull(beforeRaw) {
-			var s string
-			if err := json.Unmarshal(beforeRaw, &s); err != nil {
-				responses.Failure(c, nethttp.StatusBadRequest, "validation_error", "Invalid before_id")
+		if beforeRaw, hasBefore := raw["before_id"]; hasBefore {
+			beforeID, ok = parseNullableUUIDField(c, beforeRaw, "before_id")
+			if !ok {
 				return
 			}
-			bid, err := uuid.Parse(strings.TrimSpace(s))
-			if err != nil {
-				responses.Failure(c, nethttp.StatusBadRequest, "validation_error", "Invalid before_id")
-				return
-			}
-			beforeID = &bid
 		}
 		cat, err := cats.Move(c.Request.Context(), id, parentID, beforeID)
 		if mapCategoryError(c, err) {
@@ -235,15 +267,45 @@ func mapCategoryError(c *gin.Context, err error) bool {
 	}
 	switch {
 	case errors.Is(err, categoryservice.ErrValidation):
-		responses.FailureFor(c, nethttp.StatusBadRequest, responses.ServiceCategories, responses.CaseValidation, "validation_error", err.Error(), nil)
+		responses.FailureFor(c, nethttp.StatusBadRequest, responses.FailureOpts{
+			Service: responses.ServiceCategories,
+			Case:    responses.CaseValidation,
+			Code:    "validation_error",
+			Message: err.Error(),
+			Details: nil,
+		})
 	case errors.Is(err, categorydomain.ErrNotFound):
-		responses.FailureFor(c, nethttp.StatusNotFound, responses.ServiceCategories, responses.CaseNotFound, "not_found", "Category not found", nil)
+		responses.FailureFor(c, nethttp.StatusNotFound, responses.FailureOpts{
+			Service: responses.ServiceCategories,
+			Case:    responses.CaseNotFound,
+			Code:    "not_found",
+			Message: "Category not found",
+			Details: nil,
+		})
 	case errors.Is(err, categorydomain.ErrConflict):
-		responses.FailureFor(c, nethttp.StatusConflict, responses.ServiceCategories, responses.CaseConflict, "conflict", "Category conflict", nil)
+		responses.FailureFor(c, nethttp.StatusConflict, responses.FailureOpts{
+			Service: responses.ServiceCategories,
+			Case:    responses.CaseConflict,
+			Code:    "conflict",
+			Message: "Category conflict",
+			Details: nil,
+		})
 	case errors.Is(err, categorydomain.ErrInUse):
-		responses.FailureFor(c, nethttp.StatusConflict, responses.ServiceCategories, responses.CaseConflict, "category_in_use", "Category in use", nil)
+		responses.FailureFor(c, nethttp.StatusConflict, responses.FailureOpts{
+			Service: responses.ServiceCategories,
+			Case:    responses.CaseConflict,
+			Code:    "category_in_use",
+			Message: "Category in use",
+			Details: nil,
+		})
 	default:
-		responses.FailureFor(c, nethttp.StatusInternalServerError, responses.ServiceCategories, responses.CaseInternalError, "internal_error", "Failed to process category", nil)
+		responses.FailureFor(c, nethttp.StatusInternalServerError, responses.FailureOpts{
+			Service: responses.ServiceCategories,
+			Case:    responses.CaseInternalError,
+			Code:    "internal_error",
+			Message: "Failed to process category",
+			Details: nil,
+		})
 	}
 	return true
 }
@@ -254,7 +316,36 @@ func parseOptionalUUIDString(raw *string, field string) (*uuid.UUID, error) {
 	}
 	id, err := uuid.Parse(strings.TrimSpace(*raw))
 	if err != nil {
-		return nil, errors.New("invalid " + field)
+		return nil, fmt.Errorf("invalid %q", field)
 	}
 	return &id, nil
+}
+
+func parseNullableString(c *gin.Context, raw json.RawMessage, field string) (*string, bool) {
+	if requests.IsJSONNull(raw) {
+		return nil, true
+	}
+	var s string
+	if err := json.Unmarshal(raw, &s); err != nil {
+		responses.Failure(c, nethttp.StatusBadRequest, "validation_error", "Invalid "+field)
+		return nil, false
+	}
+	return &s, true
+}
+
+func parseNullableUUIDField(c *gin.Context, raw json.RawMessage, field string) (*uuid.UUID, bool) {
+	if requests.IsJSONNull(raw) {
+		return nil, true
+	}
+	var s string
+	if err := json.Unmarshal(raw, &s); err != nil {
+		responses.Failure(c, nethttp.StatusBadRequest, "validation_error", "Invalid "+field)
+		return nil, false
+	}
+	id, err := uuid.Parse(strings.TrimSpace(s))
+	if err != nil {
+		responses.Failure(c, nethttp.StatusBadRequest, "validation_error", "Invalid "+field)
+		return nil, false
+	}
+	return &id, true
 }

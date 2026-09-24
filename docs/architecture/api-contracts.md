@@ -1,61 +1,35 @@
 # API Contracts
 
-This project uses two machine-readable contracts in `contracts/`:
+## HTTP (Swagger / OpenAPI 2 via swag)
 
-- `contracts/openapi.yaml` — synchronous REST API entry (OpenAPI 3.1, `$ref` split)
-- `contracts/openapi.bundle.yaml` — committed bundled OpenAPI (served by Swagger UI)
-- `contracts/openapi.bundle.deref.yaml` — fully dereferenced bundle (route parity checks)
-- `contracts/asyncapi.yaml` — asynchronous events, streams, jobs (AsyncAPI 2.6)
-- `contracts/swagger/index.html` — Swagger UI page embedded with the API
+The published HTTP contract is generated from handler annotations by [swag](https://github.com/swaggo/swag):
 
-These files are the published contract standard for HTTP and events. The Gin route table in
-`internal/adapters/inbound/routes/api.go` is the runtime source of truth for mounted
-paths — update Go first, then keep OpenAPI aligned (`make routes-check`).
+| Artifact | Role |
+| --- | --- |
+| Handler `// @…` comments | Source of truth for operations |
+| [docs/docs.go](../docs.go), [docs/swagger.json](../swagger.json), [docs/swagger.yaml](../swagger.yaml) | Generated OpenAPI (committed) |
+| `/swagger/*` | Swagger UI (when `APP_SWAGGER_ENABLED=true`, default on `APP_ENV=local`) |
 
-## Repository layout
-
-```text
-contracts/
-├── embed.go                 # go:embed OpenAPI bundle + Swagger UI
-├── openapi.yaml
-├── openapi.bundle.yaml
-├── openapi.bundle.deref.yaml
-├── asyncapi.yaml
-└── swagger/
-    └── index.html
-```
-
-## In-process Swagger UI (Go)
-
-When `APP_SWAGGER_ENABLED` is true (default for `APP_ENV=local`), `app serve` mounts:
-
-- [http://localhost:8080/swagger](http://localhost:8080/swagger) — Swagger UI
-- [http://localhost:8080/openapi.yaml](http://localhost:8080/openapi.yaml) — embedded `openapi.bundle.yaml`
-
-Disable in production with `APP_SWAGGER_ENABLED=false`.
-
-## Local validation
+Regenerate after annotation changes:
 
 ```bash
-make routes-check   # routes.Register* smoke tests
-
-python3 -m pip install --upgrade pyyaml openapi-spec-validator
-python3 - <<'PY'
-import yaml
-from openapi_spec_validator import validate_spec
-with open("contracts/openapi.bundle.yaml") as f:
-    validate_spec(yaml.safe_load(f))
-print("OpenAPI validation OK")
-PY
+make swagger   # swag fmt + swag init -g main.go -o docs --parseDependency --parseInternal
 ```
 
-### AsyncAPI
+CI ([.github/workflows/swagger.yml](../../.github/workflows/swagger.yml)) regenerates and fails if `docs/` is stale.
 
-Validate `contracts/asyncapi.yaml` with any AsyncAPI 2.6–compatible tool when you change event contracts.
+Envelope shape and pagination: [data-wrapping-and-pagination.md](../backend/data-wrapping-and-pagination.md).
+Packed `code`: [response-codes.md](../backend/response-codes.md).
+Route groups / auth modes: [api.md](../backend/api.md).
 
-## Change workflow
+## Async (AsyncAPI)
 
-1. Edit Go routes in `internal/adapters/inbound/routes/api.go` (+ handlers).
-2. Align `paths/` / `components/` / `contracts/openapi.yaml`.
-3. Refresh committed bundles (`openapi.bundle.yaml`, `openapi.bundle.deref.yaml`).
-4. Run `make routes-check` and `make test`.
+Event / stream / job contracts live in [asyncapi.yaml](./asyncapi.yaml) (AsyncAPI 2.6).
+Validate with any AsyncAPI 2.6–compatible tool when you change event contracts.
+
+## Workflow
+
+1. Implement or change Gin routes in `internal/adapters/inbound/routes/`.
+2. Annotate the corresponding handler factories (`// @Summary`, `@Router`, `@Security`, …).
+3. Run `make swagger` and commit `docs/`.
+4. Run `make routes-check` / `make test`.

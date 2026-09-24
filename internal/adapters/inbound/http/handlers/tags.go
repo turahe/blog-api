@@ -22,6 +22,13 @@ type tagAPI interface {
 	Delete(ctx context.Context, id uuid.UUID) error
 }
 
+// listTagsHandler godoc
+//
+//	@Summary	List tags
+//	@Tags		public
+//	@Produce	json
+//	@Success	200	{object}	responses.Envelope
+//	@Router		/api/v1/tags [get]
 func listTagsHandler(tags tagAPI) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		items, err := tags.List(c.Request.Context())
@@ -37,6 +44,17 @@ func listTagsHandler(tags tagAPI) gin.HandlerFunc {
 	}
 }
 
+// adminCreateTagHandler godoc
+//
+//	@Summary	Create tag
+//	@Tags		admin
+//	@Accept		json
+//	@Produce	json
+//	@Param		body	body		requests.CreateTag	true	"tag"
+//	@Success	201		{object}	responses.Envelope
+//	@Failure	400		{object}	responses.Envelope
+//	@Security	Bearer
+//	@Router		/api/v1/admin/tags [post]
 func adminCreateTagHandler(tags tagAPI) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		var req requests.CreateTag
@@ -51,6 +69,17 @@ func adminCreateTagHandler(tags tagAPI) gin.HandlerFunc {
 	}
 }
 
+// adminUpdateTagHandler godoc
+//
+//	@Summary	Update tag
+//	@Tags		admin
+//	@Accept		json
+//	@Produce	json
+//	@Param		param1	path		string				true	"tag UUID"
+//	@Param		body	body		requests.UpdateTag	true	"patch fields"
+//	@Success	200		{object}	responses.Envelope
+//	@Security	Bearer
+//	@Router		/api/v1/admin/tags/{param1} [patch]
 func adminUpdateTagHandler(tags tagAPI) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		id, err := uuid.Parse(strings.TrimSpace(c.Param("param1")))
@@ -70,6 +99,17 @@ func adminUpdateTagHandler(tags tagAPI) gin.HandlerFunc {
 	}
 }
 
+// adminMergeTagHandler godoc
+//
+//	@Summary	Merge tag into another
+//	@Tags		admin
+//	@Accept		json
+//	@Produce	json
+//	@Param		param1	path		string				true	"source tag UUID"
+//	@Param		body	body		requests.MergeTag	true	"target tag"
+//	@Success	200		{object}	responses.Envelope
+//	@Security	Bearer
+//	@Router		/api/v1/admin/tags/{param1}/merge [post]
 func adminMergeTagHandler(tags tagAPI) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		sourceID, err := uuid.Parse(strings.TrimSpace(c.Param("param1")))
@@ -104,6 +144,14 @@ func adminMergeTagHandler(tags tagAPI) gin.HandlerFunc {
 	}
 }
 
+// adminDeleteTagHandler godoc
+//
+//	@Summary	Delete tag
+//	@Tags		admin
+//	@Param		param1	path		string	true	"tag UUID"
+//	@Success	200		{object}	responses.Envelope
+//	@Security	Bearer
+//	@Router		/api/v1/admin/tags/{param1} [delete]
 func adminDeleteTagHandler(tags tagAPI) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		id, err := uuid.Parse(strings.TrimSpace(c.Param("param1")))
@@ -124,15 +172,45 @@ func mapTagError(c *gin.Context, err error) bool {
 	}
 	switch {
 	case errors.Is(err, tagservice.ErrValidation):
-		responses.FailureFor(c, nethttp.StatusBadRequest, responses.ServiceTags, responses.CaseValidation, "validation_error", err.Error(), nil)
+		responses.FailureFor(c, nethttp.StatusBadRequest, responses.FailureOpts{
+			Service: responses.ServiceTags,
+			Case:    responses.CaseValidation,
+			Code:    "validation_error",
+			Message: err.Error(),
+			Details: nil,
+		})
 	case errors.Is(err, tagdomain.ErrNotFound):
-		responses.FailureFor(c, nethttp.StatusNotFound, responses.ServiceTags, responses.CaseNotFound, "not_found", "Tag not found", nil)
+		responses.FailureFor(c, nethttp.StatusNotFound, responses.FailureOpts{
+			Service: responses.ServiceTags,
+			Case:    responses.CaseNotFound,
+			Code:    "not_found",
+			Message: "Tag not found",
+			Details: nil,
+		})
 	case errors.Is(err, tagdomain.ErrConflict):
-		responses.FailureFor(c, nethttp.StatusConflict, responses.ServiceTags, responses.CaseConflict, "conflict", "Tag conflict", nil)
+		responses.FailureFor(c, nethttp.StatusConflict, responses.FailureOpts{
+			Service: responses.ServiceTags,
+			Case:    responses.CaseConflict,
+			Code:    "conflict",
+			Message: "Tag conflict",
+			Details: nil,
+		})
 	case errors.Is(err, tagdomain.ErrInUse):
-		responses.FailureFor(c, nethttp.StatusConflict, responses.ServiceTags, responses.CaseConflict, "tag_in_use", "Tag in use", nil)
+		responses.FailureFor(c, nethttp.StatusConflict, responses.FailureOpts{
+			Service: responses.ServiceTags,
+			Case:    responses.CaseConflict,
+			Code:    "tag_in_use",
+			Message: "Tag in use",
+			Details: nil,
+		})
 	default:
-		responses.FailureFor(c, nethttp.StatusInternalServerError, responses.ServiceTags, responses.CaseInternalError, "internal_error", "Failed to process tag", nil)
+		responses.FailureFor(c, nethttp.StatusInternalServerError, responses.FailureOpts{
+			Service: responses.ServiceTags,
+			Case:    responses.CaseInternalError,
+			Code:    "internal_error",
+			Message: "Failed to process tag",
+			Details: nil,
+		})
 	}
 	return true
 }

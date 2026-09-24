@@ -4,7 +4,7 @@
 
 Job topics and command messages are defined in the AsyncAPI contract:
 
-- [contracts/asyncapi.yaml](../../contracts/asyncapi.yaml)
+- [asyncapi.yaml](../architecture/asyncapi.yaml)
 
 ## Purpose
 

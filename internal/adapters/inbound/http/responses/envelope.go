@@ -15,9 +15,9 @@ const ContextRequestIDKey = "request_id"
 type Envelope struct {
 	OK    bool       `json:"ok"`
 	Code  int        `json:"code"`
-	Data  any        `json:"data,omitempty"`
+	Data  any        `json:"data,omitempty" swaggertype:"object"`
 	Links *PageLinks `json:"links,omitempty"`
-	Meta  any        `json:"meta,omitempty"`
+	Meta  any        `json:"meta,omitempty" swaggertype:"object"`
 	Error *ErrorBody `json:"error,omitempty"`
 }
 
@@ -50,7 +50,7 @@ type PaginationMeta struct {
 type ErrorBody struct {
 	Code    string `json:"code"`
 	Message string `json:"message"`
-	Details any    `json:"details,omitempty"`
+	Details any    `json:"details,omitempty" swaggertype:"object"`
 }
 
 // RequestID returns the request correlation id from context (empty if unset).
@@ -75,13 +75,29 @@ func SuccessFor(c *gin.Context, status, service, caseCode int, data any) {
 	})
 }
 
-// SuccessPaginated writes a Laravel-style paginated envelope for the platform service.
-func SuccessPaginated(c *gin.Context, status int, data any, page, perPage int, total int64) {
-	SuccessPaginatedFor(c, status, ServicePlatform, data, page, perPage, total)
+// PageOpts configures a paginated success envelope.
+type PageOpts struct {
+	Service int
+	Data    any
+	Page    int
+	PerPage int
+	Total   int64
 }
 
-// SuccessPaginatedFor is SuccessPaginated with an explicit service code (case = Success).
-func SuccessPaginatedFor(c *gin.Context, status, service int, data any, page, perPage int, total int64) {
+// SuccessPaginated writes a Laravel-style paginated envelope for the platform service.
+func SuccessPaginated(c *gin.Context, status int, data any, page, perPage int, total int64) {
+	SuccessPaginatedFor(c, status, PageOpts{
+		Service: ServicePlatform,
+		Data:    data,
+		Page:    page,
+		PerPage: perPage,
+		Total:   total,
+	})
+}
+
+// SuccessPaginatedFor writes a paginated success envelope with an explicit service code.
+func SuccessPaginatedFor(c *gin.Context, status int, opts PageOpts) {
+	page, perPage, total := opts.Page, opts.PerPage, opts.Total
 	if page < 1 {
 		page = 1
 	}
@@ -119,10 +135,15 @@ func SuccessPaginatedFor(c *gin.Context, status, service int, data any, page, pe
 		next = &u
 	}
 
+	service := opts.Service
+	if service == 0 {
+		service = ServicePlatform
+	}
+
 	c.JSON(status, Envelope{
 		OK:   true,
 		Code: BuildResponseCode(status, service, CaseSuccess),
-		Data: data,
+		Data: opts.Data,
 		Links: &PageLinks{
 			First: &first,
 			Last:  &last,
@@ -142,38 +163,51 @@ func SuccessPaginatedFor(c *gin.Context, status, service int, data any, page, pe
 	})
 }
 
-// SuccessWithMeta is retained for rare non-pagination meta; prefer Success or SuccessPaginated.
-func SuccessWithMeta(c *gin.Context, status int, data any, meta *Meta) {
-	if meta == nil {
-		meta = &Meta{RequestID: RequestID(c)}
-	} else if meta.RequestID == "" {
-		meta.RequestID = RequestID(c)
-	}
-	c.JSON(status, Envelope{
-		OK:   true,
-		Code: BuildResponseCode(status, ServicePlatform, CaseSuccess),
-		Data: data,
-		Meta: meta,
-	})
+// FailureOpts configures an error envelope.
+type FailureOpts struct {
+	Service int
+	Case    int
+	Code    string
+	Message string
+	Details any
 }
 
 // Failure writes a platform error envelope.
 func Failure(c *gin.Context, status int, code, message string) {
-	FailureFor(c, status, ServicePlatform, CaseCodeForStatus(status), code, message, nil)
+	FailureFor(c, status, FailureOpts{
+		Service: ServicePlatform,
+		Case:    CaseCodeForStatus(status),
+		Code:    code,
+		Message: message,
+	})
 }
 
 // FailureWithDetails writes a platform error envelope with details.
 func FailureWithDetails(c *gin.Context, status int, code, message string, details any) {
-	FailureFor(c, status, ServicePlatform, CaseCodeForStatus(status), code, message, details)
+	FailureFor(c, status, FailureOpts{
+		Service: ServicePlatform,
+		Case:    CaseCodeForStatus(status),
+		Code:    code,
+		Message: message,
+		Details: details,
+	})
 }
 
 // FailureFor writes an error envelope with an explicit service and case code.
-func FailureFor(c *gin.Context, status, service, caseCode int, code, message string, details any) {
+func FailureFor(c *gin.Context, status int, opts FailureOpts) {
+	service := opts.Service
+	if service == 0 {
+		service = ServicePlatform
+	}
+	caseCode := opts.Case
+	if caseCode == 0 {
+		caseCode = CaseCodeForStatus(status)
+	}
 	c.AbortWithStatusJSON(status, Envelope{
 		OK:    false,
 		Code:  BuildResponseCode(status, service, caseCode),
 		Meta:  &Meta{RequestID: RequestID(c)},
-		Error: &ErrorBody{Code: code, Message: message, Details: details},
+		Error: &ErrorBody{Code: opts.Code, Message: opts.Message, Details: opts.Details},
 	})
 }
 

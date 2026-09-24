@@ -13,7 +13,7 @@ Also run locally before release:
 
 ```bash
 make lint
-committed OpenAPI bundles   # when contracts/paths changed
+make swagger                 # when handler annotations changed
 make routes-check # Go routes ↔ OpenAPI parity
 ```
 

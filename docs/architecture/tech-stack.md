@@ -73,7 +73,7 @@ and security requirements.
 - Styling: Tailwind CSS with a design-token theme and responsive breakpoints aligned to the
   design system in `docs/frontend/design-system.md`.
 - HTTP client: typed fetch wrappers generated from the OpenAPI contract in
-  `contracts/openapi.yaml` for end-to-end type safety with the Go/Gin backend.
+  `docs/swagger.json` (swag) for end-to-end type safety with the Go/Gin backend.
 - Runtime: Node.js server process colocated with or proxied in front of the Go API; SSR requests
   are authenticated via the same http-only session cookies issued by the backend so no tokens
   are exposed to client JavaScript for the critical reading path.

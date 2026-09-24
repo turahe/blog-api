@@ -48,14 +48,14 @@ func FailValidation(c *gin.Context, err error) {
 		400,
 		"validation_error",
 		"The given data was invalid.",
-		ValidationErrorDetails(err),
+		validationErrorDetails(err),
 	)
 }
 
-// ValidationErrorDetails builds a Laravel-like errors bag:
+// validationErrorDetails builds a Laravel-like errors bag:
 //
 //	{ "email": ["The email field is required."], ... }
-func ValidationErrorDetails(err error) map[string][]string {
+func validationErrorDetails(err error) map[string][]string {
 	var verrs validator.ValidationErrors
 	if errors.As(err, &verrs) {
 		bag := make(map[string][]string, len(verrs))

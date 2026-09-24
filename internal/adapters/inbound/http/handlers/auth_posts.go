@@ -1,9 +1,7 @@
 package handlers
 
 import (
-	"errors"
 	nethttp "net/http"
-	"strconv"
 	"strings"
 	"time"
 
@@ -13,10 +11,19 @@ import (
 	"github.com/turahe/blog-api/internal/adapters/inbound/http/responses"
 	authports "github.com/turahe/blog-api/internal/core/auth/ports"
 	authservice "github.com/turahe/blog-api/internal/core/auth/service"
-	postdomain "github.com/turahe/blog-api/internal/core/post/domain"
-	postservice "github.com/turahe/blog-api/internal/core/post/service"
 )
 
+// loginHandler godoc
+//
+//	@Summary	Login
+//	@Tags		auth
+//	@Accept		json
+//	@Produce	json
+//	@Param		body	body		requests.Login	true	"credentials"
+//	@Success	200		{object}	responses.Envelope
+//	@Failure	400		{object}	responses.Envelope
+//	@Failure	401		{object}	responses.Envelope
+//	@Router		/api/v1/auth/login [post]
 func loginHandler(auth authports.Service) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		var req requests.Login
@@ -26,13 +33,29 @@ func loginHandler(auth authports.Service) gin.HandlerFunc {
 		pair, err := auth.Login(c.Request.Context(), req.Email, req.Password, c.Request.UserAgent(), c.ClientIP(), req.Remember)
 		if err != nil {
 			code, message, status := authservice.MapError(err)
-			responses.FailureFor(c, status, responses.ServiceAuth, responses.CaseCodeForStatus(status), code, message, nil)
+			responses.FailureFor(c, status, responses.FailureOpts{
+				Service: responses.ServiceAuth,
+				Case:    responses.CaseCodeForStatus(status),
+				Code:    code,
+				Message: message,
+				Details: nil,
+			})
 			return
 		}
 		responses.SuccessFor(c, nethttp.StatusOK, responses.ServiceAuth, responses.CaseSuccess, responses.TokenPair(pair))
 	}
 }
 
+// refreshHandler godoc
+//
+//	@Summary	Refresh access token
+//	@Tags		auth
+//	@Accept		json
+//	@Produce	json
+//	@Param		body	body		requests.Refresh	true	"refresh token"
+//	@Success	200		{object}	responses.Envelope
+//	@Failure	401		{object}	responses.Envelope
+//	@Router		/api/v1/auth/refresh [post]
 func refreshHandler(auth authports.Service) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		var req requests.Refresh
@@ -42,31 +65,70 @@ func refreshHandler(auth authports.Service) gin.HandlerFunc {
 		pair, err := auth.Refresh(c.Request.Context(), req.RefreshToken, c.Request.UserAgent(), c.ClientIP())
 		if err != nil {
 			code, message, status := authservice.MapError(err)
-			responses.FailureFor(c, status, responses.ServiceAuth, responses.CaseCodeForStatus(status), code, message, nil)
+			responses.FailureFor(c, status, responses.FailureOpts{
+				Service: responses.ServiceAuth,
+				Case:    responses.CaseCodeForStatus(status),
+				Code:    code,
+				Message: message,
+				Details: nil,
+			})
 			return
 		}
 		responses.SuccessFor(c, nethttp.StatusOK, responses.ServiceAuth, responses.CaseSuccess, responses.TokenPair(pair))
 	}
 }
 
+// logoutHandler godoc
+//
+//	@Summary	Logout
+//	@Tags		auth
+//	@Accept		json
+//	@Produce	json
+//	@Param		body	body		requests.Logout	false	"optional refresh token"
+//	@Success	200		{object}	responses.Envelope
+//	@Failure	401		{object}	responses.Envelope
+//	@Security	Bearer
+//	@Router		/api/v1/auth/logout [post]
 func logoutHandler(auth authports.Service) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		userID, ok := middleware.CurrentUserID(c)
 		if !ok {
-			responses.FailureFor(c, nethttp.StatusUnauthorized, responses.ServiceAuth, responses.CaseUnauthorized, "unauthorized", "Authentication required", nil)
+			responses.FailureFor(c, nethttp.StatusUnauthorized, responses.FailureOpts{
+				Service: responses.ServiceAuth,
+				Case:    responses.CaseUnauthorized,
+				Code:    "unauthorized",
+				Message: "Authentication required",
+				Details: nil,
+			})
 			return
 		}
 		var req requests.Logout
 		_ = c.ShouldBindJSON(&req) // body optional
 		if err := auth.Logout(c.Request.Context(), userID, req.RefreshToken); err != nil {
 			code, message, status := authservice.MapError(err)
-			responses.FailureFor(c, status, responses.ServiceAuth, responses.CaseCodeForStatus(status), code, message, nil)
+			responses.FailureFor(c, status, responses.FailureOpts{
+				Service: responses.ServiceAuth,
+				Case:    responses.CaseCodeForStatus(status),
+				Code:    code,
+				Message: message,
+				Details: nil,
+			})
 			return
 		}
 		responses.SuccessFor(c, nethttp.StatusOK, responses.ServiceAuth, responses.CaseSuccess, gin.H{})
 	}
 }
 
+// forgotPasswordHandler godoc
+//
+//	@Summary	Request password reset
+//	@Tags		auth
+//	@Accept		json
+//	@Produce	json
+//	@Param		body	body		requests.ForgotPassword	true	"email or username"
+//	@Success	202		{object}	responses.Envelope
+//	@Failure	400		{object}	responses.Envelope
+//	@Router		/api/v1/auth/password/forgot [post]
 func forgotPasswordHandler(auth authports.Service) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		var req requests.ForgotPassword
@@ -75,20 +137,41 @@ func forgotPasswordHandler(auth authports.Service) gin.HandlerFunc {
 		}
 		if err := auth.ForgotPassword(c.Request.Context(), req.EmailOrUsername); err != nil {
 			code, message, status := authservice.MapError(err)
-			responses.FailureFor(c, status, responses.ServiceAuth, responses.CaseCodeForStatus(status), code, message, nil)
+			responses.FailureFor(c, status, responses.FailureOpts{
+				Service: responses.ServiceAuth,
+				Case:    responses.CaseCodeForStatus(status),
+				Code:    code,
+				Message: message,
+				Details: nil,
+			})
 			return
 		}
 		responses.SuccessFor(c, nethttp.StatusAccepted, responses.ServiceAuth, responses.CaseAccepted, gin.H{})
 	}
 }
 
+// resetTokenValidityHandler godoc
+//
+//	@Summary	Check password reset token
+//	@Tags		auth
+//	@Produce	json
+//	@Param		param1	path		string	true	"reset token"
+//	@Success	200		{object}	responses.Envelope
+//	@Failure	400		{object}	responses.Envelope
+//	@Router		/api/v1/auth/password/reset/{param1} [get]
 func resetTokenValidityHandler(auth authports.Service) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		token := strings.TrimSpace(c.Param("param1"))
 		validity, err := auth.CheckResetToken(c.Request.Context(), token)
 		if err != nil {
 			code, message, status := authservice.MapResetError(err)
-			responses.FailureFor(c, status, responses.ServiceAuth, responses.CaseCodeForStatus(status), code, message, nil)
+			responses.FailureFor(c, status, responses.FailureOpts{
+				Service: responses.ServiceAuth,
+				Case:    responses.CaseCodeForStatus(status),
+				Code:    code,
+				Message: message,
+				Details: nil,
+			})
 			return
 		}
 		responses.SuccessFor(c, nethttp.StatusOK, responses.ServiceAuth, responses.CaseSuccess, gin.H{
@@ -98,6 +181,16 @@ func resetTokenValidityHandler(auth authports.Service) gin.HandlerFunc {
 	}
 }
 
+// resetPasswordHandler godoc
+//
+//	@Summary	Reset password
+//	@Tags		auth
+//	@Accept		json
+//	@Produce	json
+//	@Param		body	body		requests.ResetPassword	true	"reset payload"
+//	@Success	200		{object}	responses.Envelope
+//	@Failure	400		{object}	responses.Envelope
+//	@Router		/api/v1/auth/password/reset [post]
 func resetPasswordHandler(auth authports.Service) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		var req requests.ResetPassword
@@ -106,18 +199,42 @@ func resetPasswordHandler(auth authports.Service) gin.HandlerFunc {
 		}
 		if err := auth.ResetPassword(c.Request.Context(), req.Token, req.NewPassword, req.ConfirmPassword); err != nil {
 			code, message, status := authservice.MapResetError(err)
-			responses.FailureFor(c, status, responses.ServiceAuth, responses.CaseCodeForStatus(status), code, message, nil)
+			responses.FailureFor(c, status, responses.FailureOpts{
+				Service: responses.ServiceAuth,
+				Case:    responses.CaseCodeForStatus(status),
+				Code:    code,
+				Message: message,
+				Details: nil,
+			})
 			return
 		}
 		responses.SuccessFor(c, nethttp.StatusOK, responses.ServiceAuth, responses.CaseSuccess, gin.H{})
 	}
 }
 
+// changePasswordHandler godoc
+//
+//	@Summary	Change own password
+//	@Tags		self-service
+//	@Accept		json
+//	@Produce	json
+//	@Param		body	body		requests.ChangePassword	true	"password change"
+//	@Success	200		{object}	responses.Envelope
+//	@Failure	400		{object}	responses.Envelope
+//	@Failure	401		{object}	responses.Envelope
+//	@Security	Bearer
+//	@Router		/api/v1/me/password [put]
 func changePasswordHandler(auth authports.Service) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		userID, ok := middleware.CurrentUserID(c)
 		if !ok {
-			responses.FailureFor(c, nethttp.StatusUnauthorized, responses.ServiceAuth, responses.CaseUnauthorized, "unauthorized", "Authentication required", nil)
+			responses.FailureFor(c, nethttp.StatusUnauthorized, responses.FailureOpts{
+				Service: responses.ServiceAuth,
+				Case:    responses.CaseUnauthorized,
+				Code:    "unauthorized",
+				Message: "Authentication required",
+				Details: nil,
+			})
 			return
 		}
 		var req requests.ChangePassword
@@ -133,57 +250,18 @@ func changePasswordHandler(auth authports.Service) gin.HandlerFunc {
 		)
 		if err != nil {
 			code, message, status := authservice.MapError(err)
-			responses.FailureFor(c, status, responses.ServiceAuth, responses.CaseCodeForStatus(status), code, message, nil)
+			responses.FailureFor(c, status, responses.FailureOpts{
+				Service: responses.ServiceAuth,
+				Case:    responses.CaseCodeForStatus(status),
+				Code:    code,
+				Message: message,
+				Details: nil,
+			})
 			return
 		}
 		responses.SuccessFor(c, nethttp.StatusOK, responses.ServiceAuth, responses.CaseSuccess, gin.H{
 			"password_changed_at":  changedAt.UTC().Format(time.RFC3339),
 			"sessions_invalidated": invalidated,
 		})
-	}
-}
-
-func listPublishedPostsHandler(posts *postservice.PostService) gin.HandlerFunc {
-	return func(c *gin.Context) {
-		page, _ := strconv.Atoi(c.DefaultQuery("page", "1"))
-		perPage, _ := strconv.Atoi(c.DefaultQuery("per_page", "20"))
-		categoryID, err := postservice.ParseOptionalUUID(c.Query("category_id"))
-		if err != nil {
-			responses.Failure(c, nethttp.StatusBadRequest, "validation_error", "Invalid category_id")
-			return
-		}
-		tagID, err := postservice.ParseOptionalUUID(c.Query("tag_id"))
-		if err != nil {
-			responses.Failure(c, nethttp.StatusBadRequest, "validation_error", "Invalid tag_id")
-			return
-		}
-		result, err := posts.ListPublished(c.Request.Context(), postdomain.ListFilter{
-			Page: page, PerPage: perPage, CategoryID: categoryID, TagID: tagID,
-		})
-		if err != nil {
-			responses.Failure(c, nethttp.StatusInternalServerError, "internal_error", "Failed to list posts")
-			return
-		}
-		items := make([]gin.H, 0, len(result.Items))
-		for _, post := range result.Items {
-			items = append(items, responses.Post(post))
-		}
-		responses.SuccessPaginatedFor(c, nethttp.StatusOK, responses.ServicePosts, items, result.Page, result.PerPage, result.Total)
-	}
-}
-
-func getPublishedPostHandler(posts *postservice.PostService) gin.HandlerFunc {
-	return func(c *gin.Context) {
-		slug := strings.TrimSpace(c.Param("param1"))
-		post, err := posts.GetPublishedBySlug(c.Request.Context(), slug)
-		if errors.Is(err, postdomain.ErrNotFound) {
-			responses.Failure(c, nethttp.StatusNotFound, "not_found", "Post not found")
-			return
-		}
-		if err != nil {
-			responses.Failure(c, nethttp.StatusInternalServerError, "internal_error", "Failed to load post")
-			return
-		}
-		responses.Success(c, nethttp.StatusOK, responses.Post(post))
 	}
 }

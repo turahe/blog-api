@@ -1,0 +1,45 @@
+name: Swagger Docs
+
+on:
+  push:
+    branches: [main, "release/*"]
+  pull_request:
+    paths:
+      - "main.go"
+      - "docs/**"
+      - "internal/adapters/inbound/**"
+      - "Makefile"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  swagger:
+    name: Generate + route smoke
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Setup Go
+        uses: actions/setup-go@v6
+        with:
+          go-version-file: go.mod
+
+      - name: Install swag
+        run: go install github.com/swaggo/swag/cmd/swag@v1.16.6
+
+      - name: Regenerate docs
+        run: make swagger
+
+      - name: Ensure docs committed
+        run: |
+          git diff --exit-code -- docs/ || {
+            echo "docs/ is stale — run 'make swagger' and commit"
+            exit 1
+          }
+
+      - name: Route registration smoke tests
+        run: make routes-check

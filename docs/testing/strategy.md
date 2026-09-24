@@ -7,7 +7,7 @@
 | Unit | `internal/core/**/service`, `domain` | Pure rules, no Gin/GORM/Redis |
 | Adapter unit | `internal/adapters/inbound/http` | Middleware, envelopes, route registration |
 | Integration | `*_integration_test.go` (when added) | Postgres, Redis, MinIO via Compose |
-| Contract | CI + committed OpenAPI bundles under `contracts/` | OpenAPI / AsyncAPI validity |
+| Contract | CI + committed `docs/` (swag) | Swagger / AsyncAPI validity |
 | Smoke | post-deploy | Health, login, one admin + one public path |
 
 ## Package rules

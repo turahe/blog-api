@@ -4,8 +4,8 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
-// RegisterAdmin binds /admin routes (login is anonymous; the rest require auth).
-func RegisterAdmin(v1 *gin.RouterGroup, auth AuthMiddleware, c Controllers) {
+// registerAdmin binds /admin routes (login is anonymous; the rest require auth).
+func registerAdmin(v1 *gin.RouterGroup, auth AuthMiddleware, c Controllers) {
 	g := GroupAdmin
 
 	none := v1.Group("")

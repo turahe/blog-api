@@ -4,8 +4,8 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
-// RegisterPublic binds anonymous-safe content routes under /api/v1.
-func RegisterPublic(router gin.IRoutes, c Controllers) {
+// registerPublic binds anonymous-safe content routes under /api/v1.
+func registerPublic(router gin.IRoutes, c Controllers) {
 	g := GroupPublic
 	n := AuthNone
 

@@ -4,8 +4,8 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
-// RegisterAnalytics binds analytics ingest/consent routes (stubs until implemented).
-func RegisterAnalytics(v1 gin.IRoutes, c Controllers) {
+// registerAnalytics binds analytics ingest/consent routes (stubs until implemented).
+func registerAnalytics(v1 gin.IRoutes, c Controllers) {
 	g := GroupAnalytics
 	n := AuthNone
 	get(v1, "/analytics/consent", "analytics.consent.get", g, n, c, nil)

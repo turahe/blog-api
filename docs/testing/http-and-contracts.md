@@ -30,7 +30,7 @@ go test ./internal/adapters/inbound/http/...
 ## Contract workflow
 
 1. Add or change the route in [routes/](../../internal/adapters/inbound/routes/) (and handler wiring)
-2. Update `contracts/openapi.yaml` / `paths/*.yaml` to match (schemas, security, status codes)
+2. Update swag annotations on handlers and run `make swagger`
 3. Refresh committed bundles (`openapi.bundle.yaml`, `openapi.bundle.deref.yaml`)
 4. `make routes-check` + HTTP tests for the new `operationId`
 5. Implement handler; remove stub only when behavior matches the contract

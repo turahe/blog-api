@@ -8,12 +8,10 @@ The main goal is to keep business logic independent from frameworks and infrastr
 
 ## API and Event Contracts
 
-The canonical contracts are kept under `contracts/` and serve as the source of truth for synchronous APIs and asynchronous event/stream interfaces.
+HTTP docs are generated from swag annotations into `docs/swagger.json` (Swagger UI at `/swagger`).
+Async event/stream contracts live in `docs/architecture/asyncapi.yaml` (AsyncAPI 2.6).
 
-- `contracts/openapi.yaml` — OpenAPI 3.1 REST specification
-- `contracts/asyncapi.yaml` — AsyncAPI 2.6 event/stream/job specification
-
-Use these files for documentation generation, validation in CI, code generation for clients or mock servers, and contract-based testing. See `docs/architecture/api-contracts.md` for usage and validation commands.
+See `docs/architecture/api-contracts.md` for generation and CI.
 
 ### Realtime (SSE) Stream Contracts
 
@@ -108,7 +106,7 @@ project/
 │
 ├── configs/
 ├── migrations/
-├── contracts/        # OpenAPI / AsyncAPI + embedded Swagger UI
+├── docs/             # swag-generated OpenAPI + architecture docs
 ├── docs/
 └── Makefile
 ```

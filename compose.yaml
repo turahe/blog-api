@@ -1,4 +1,46 @@
 services:
+  migrate:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    env_file: [.env]
+    environment: &app-env
+      DB_HOST: postgres
+      REDIS_HOST: redis
+      S3_ENDPOINT: http://rustfs:9000
+      S3_PUBLIC_BASE_URL: http://127.0.0.1:9000/blog-media
+      # Brokers are optional (profile messaging); disable bus unless that profile is up.
+      MESSAGE_BROKER: ""
+      APP_JWT_PRIVATE_KEY_PATH: /configs/dev/jwt-rsa-private.pem
+      APP_JWT_PUBLIC_KEY_PATH: /configs/dev/jwt-rsa-public.pem
+    volumes:
+      - ./configs/dev:/configs/dev:ro
+    command: ["migrate", "up"]
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: "no"
+
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    env_file: [.env]
+    environment:
+      <<: *app-env
+      APP_ADDR: 0.0.0.0:8080
+    volumes:
+      - ./configs/dev:/configs/dev:ro
+    ports:
+      - "8080:8080"
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+      redis:
+        condition: service_healthy
+      rustfs:
+        condition: service_healthy
+
   postgres:
     image: postgres:16-alpine
     environment:

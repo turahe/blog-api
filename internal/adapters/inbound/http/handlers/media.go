@@ -3,6 +3,7 @@ package handlers
 import (
 	"errors"
 	nethttp "net/http"
+	"strconv"
 	"strings"
 
 	"github.com/gin-gonic/gin"
@@ -15,6 +16,17 @@ import (
 	mediaservice "github.com/turahe/blog-api/internal/core/media/service"
 )
 
+// adminPresignMediaHandler godoc
+//
+//	@Summary	Presign media upload
+//	@Tags		admin
+//	@Accept		json
+//	@Produce	json
+//	@Param		body	body		requests.PresignMedia	true	"upload metadata"
+//	@Success	201		{object}	responses.Envelope
+//	@Failure	400		{object}	responses.Envelope
+//	@Security	Bearer
+//	@Router		/api/v1/admin/media [post]
 func adminPresignMediaHandler(media mediaports.Service) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		userID, ok := middleware.CurrentUserID(c)
@@ -45,6 +57,16 @@ func adminPresignMediaHandler(media mediaports.Service) gin.HandlerFunc {
 	}
 }
 
+// adminCompleteMediaHandler godoc
+//
+//	@Summary	Complete media upload
+//	@Tags		admin
+//	@Produce	json
+//	@Param		param1	path		string	true	"media UUID"
+//	@Success	200		{object}	responses.Envelope
+//	@Failure	404		{object}	responses.Envelope
+//	@Security	Bearer
+//	@Router		/api/v1/admin/media/{param1}/complete [post]
 func adminCompleteMediaHandler(media mediaports.Service) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		id, err := uuid.Parse(strings.TrimSpace(c.Param("param1")))
@@ -62,6 +84,18 @@ func adminCompleteMediaHandler(media mediaports.Service) gin.HandlerFunc {
 	}
 }
 
+// adminListMediaHandler godoc
+//
+//	@Summary	List media assets
+//	@Tags		admin
+//	@Produce	json
+//	@Param		page		query		int		false	"page"		default(1)
+//	@Param		per_page	query		int		false	"per page"	default(20)
+//	@Param		q			query		string	false	"search"
+//	@Param		disk		query		string	false	"disk filter"
+//	@Success	200			{object}	responses.Envelope
+//	@Security	Bearer
+//	@Router		/api/v1/admin/media [get]
 func adminListMediaHandler(media mediaports.Service) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		page := parsePositiveInt(c.Query("page"), 1)
@@ -79,10 +113,24 @@ func adminListMediaHandler(media mediaports.Service) gin.HandlerFunc {
 		for _, asset := range result.Items {
 			items = append(items, responses.MediaAsset(asset))
 		}
-		responses.SuccessPaginatedFor(c, nethttp.StatusOK, responses.ServiceMedia, items, result.Page, result.PerPage, result.Total)
+		responses.SuccessPaginatedFor(c, nethttp.StatusOK, responses.PageOpts{
+			Service: responses.ServiceMedia,
+			Data:    items,
+			Page:    result.Page,
+			PerPage: result.PerPage,
+			Total:   result.Total,
+		})
 	}
 }
 
+// adminDeleteMediaHandler godoc
+//
+//	@Summary	Delete media asset
+//	@Tags		admin
+//	@Param		param1	path		string	true	"media UUID"
+//	@Success	200		{object}	responses.Envelope
+//	@Security	Bearer
+//	@Router		/api/v1/admin/media/{param1} [delete]
 func adminDeleteMediaHandler(media mediaports.Service) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		id, err := uuid.Parse(strings.TrimSpace(c.Param("param1")))
@@ -97,6 +145,17 @@ func adminDeleteMediaHandler(media mediaports.Service) gin.HandlerFunc {
 	}
 }
 
+// adminPatchMediaTagsHandler godoc
+//
+//	@Summary	Patch media tags
+//	@Tags		admin
+//	@Accept		json
+//	@Produce	json
+//	@Param		param1	path		string					true	"media UUID"
+//	@Param		body	body		requests.PatchMediaTags	true	"tags"
+//	@Success	200		{object}	responses.Envelope
+//	@Security	Bearer
+//	@Router		/api/v1/admin/media/{param1}/tags [patch]
 func adminPatchMediaTagsHandler(media mediaports.Service) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		id, err := uuid.Parse(strings.TrimSpace(c.Param("param1")))
@@ -116,6 +175,15 @@ func adminPatchMediaTagsHandler(media mediaports.Service) gin.HandlerFunc {
 	}
 }
 
+// publicGetMediaHandler godoc
+//
+//	@Summary	Get ready media asset
+//	@Tags		public
+//	@Produce	json
+//	@Param		param1	path		string	true	"media UUID"
+//	@Success	200		{object}	responses.Envelope
+//	@Failure	404		{object}	responses.Envelope
+//	@Router		/api/v1/media/{param1} [get]
 func publicGetMediaHandler(media mediaports.Service) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		id, err := uuid.Parse(strings.TrimSpace(c.Param("param1")))
@@ -132,18 +200,8 @@ func publicGetMediaHandler(media mediaports.Service) gin.HandlerFunc {
 }
 
 func parsePositiveInt(raw string, fallback int) int {
-	raw = strings.TrimSpace(raw)
-	if raw == "" {
-		return fallback
-	}
-	var n int
-	for _, ch := range raw {
-		if ch < '0' || ch > '9' {
-			return fallback
-		}
-		n = n*10 + int(ch-'0')
-	}
-	if n < 1 {
+	n, err := strconv.Atoi(strings.TrimSpace(raw))
+	if err != nil || n < 1 {
 		return fallback
 	}
 	return n
@@ -155,17 +213,53 @@ func mapMediaError(c *gin.Context, err error) bool {
 	}
 	switch {
 	case errors.Is(err, mediaservice.ErrValidation):
-		responses.FailureFor(c, nethttp.StatusBadRequest, responses.ServiceMedia, responses.CaseValidation, "validation_error", err.Error(), nil)
+		responses.FailureFor(c, nethttp.StatusBadRequest, responses.FailureOpts{
+			Service: responses.ServiceMedia,
+			Case:    responses.CaseValidation,
+			Code:    "validation_error",
+			Message: err.Error(),
+			Details: nil,
+		})
 	case errors.Is(err, mediaservice.ErrNotFound):
-		responses.FailureFor(c, nethttp.StatusNotFound, responses.ServiceMedia, responses.CaseNotFound, "not_found", "Media not found", nil)
+		responses.FailureFor(c, nethttp.StatusNotFound, responses.FailureOpts{
+			Service: responses.ServiceMedia,
+			Case:    responses.CaseNotFound,
+			Code:    "not_found",
+			Message: "Media not found",
+			Details: nil,
+		})
 	case errors.Is(err, mediaservice.ErrUploadIncomplete):
-		responses.FailureFor(c, nethttp.StatusConflict, responses.ServiceMedia, responses.CaseConflict, "media.upload_incomplete", "Upload incomplete", nil)
+		responses.FailureFor(c, nethttp.StatusConflict, responses.FailureOpts{
+			Service: responses.ServiceMedia,
+			Case:    responses.CaseConflict,
+			Code:    "media.upload_incomplete",
+			Message: "Upload incomplete",
+			Details: nil,
+		})
 	case errors.Is(err, mediaservice.ErrUploadExpired):
-		responses.FailureFor(c, nethttp.StatusConflict, responses.ServiceMedia, responses.CaseConflict, "media.upload_expired", "Upload expired", nil)
+		responses.FailureFor(c, nethttp.StatusConflict, responses.FailureOpts{
+			Service: responses.ServiceMedia,
+			Case:    responses.CaseConflict,
+			Code:    "media.upload_expired",
+			Message: "Upload expired",
+			Details: nil,
+		})
 	case errors.Is(err, mediaservice.ErrStorage):
-		responses.FailureFor(c, nethttp.StatusBadGateway, responses.ServiceMedia, responses.CaseInternalError, "storage_unavailable", "Storage unavailable", nil)
+		responses.FailureFor(c, nethttp.StatusBadGateway, responses.FailureOpts{
+			Service: responses.ServiceMedia,
+			Case:    responses.CaseInternalError,
+			Code:    "storage_unavailable",
+			Message: "Storage unavailable",
+			Details: nil,
+		})
 	default:
-		responses.FailureFor(c, nethttp.StatusBadGateway, responses.ServiceMedia, responses.CaseInternalError, "storage_unavailable", "Storage unavailable", nil)
+		responses.FailureFor(c, nethttp.StatusBadGateway, responses.FailureOpts{
+			Service: responses.ServiceMedia,
+			Case:    responses.CaseInternalError,
+			Code:    "storage_unavailable",
+			Message: "Storage unavailable",
+			Details: nil,
+		})
 	}
 	return true
 }

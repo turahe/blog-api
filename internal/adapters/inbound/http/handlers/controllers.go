@@ -33,8 +33,8 @@ func NewControllers(deps Deps) routes.Controllers {
 	if deps.Health != nil {
 		c.Health = routes.Health{
 			Live:    Live(deps.Health),
-			Ready:   Ready(deps.Health),
-			Version: Version(deps.Version),
+			Ready:   ready(deps.Health),
+			Version: version(deps.Version),
 		}
 	}
 	if deps.Auth != nil {

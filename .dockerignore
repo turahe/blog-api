@@ -15,11 +15,7 @@
 !.env.example
 *.local
 
-# Docs / source-only contract splits (bundles + swagger stay for go:embed)
-components/
-paths/
-docs/
-openapi.yaml
+# Docs / markdown (keep docs/ Go package for swag embed)
 AGENTS.md
 CLAUDE.md
 README.md

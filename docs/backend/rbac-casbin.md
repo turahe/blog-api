@@ -104,7 +104,7 @@ Custom matchers registered via `enforcer.AddFunction("scopeMatch", ScopeMatchFun
 
 ## Endpoints Catalog
 
-Full HTTP definitions → [api.md](./api.md) + [openapi.yaml](../../contracts/openapi.yaml). Summary:
+Full HTTP definitions → [api.md](./api.md) + [openapi.yaml](../swagger.json). Summary:
 
 ### Admin RBAC
 | Method | Path                                               | Permission                  | Description                                                     |
@@ -229,5 +229,5 @@ Cache hit rate SLO: ≥99.9%. Metric `rbac_enforce_cache_hit_ratio` exported to 
 - [services.md](./services.md) — Core services list including `RBACService`, `CasbinEnforcerFactory`, etc.
 - [events.md](./events.md) — Full event catalog + consumers
 - [security.md](../architecture/security.md) — RBAC hardening rules, impersonation inheritance strictness
-- [openapi.yaml](../../contracts/openapi.yaml) — Contract (paths/schemas/security)
-- [asyncapi.yaml](../../contracts/asyncapi.yaml) — Event channels & messages
+- [openapi.yaml](../swagger.json) — Contract (paths/schemas/security)
+- [asyncapi.yaml](../architecture/asyncapi.yaml) — Event channels & messages

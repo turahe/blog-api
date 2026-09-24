@@ -4,7 +4,7 @@
 
 The authoritative events and streaming contract lives at:
 
-- [contracts/asyncapi.yaml](../../contracts/asyncapi.yaml) (AsyncAPI 2.6)
+- [asyncapi.yaml](../architecture/asyncapi.yaml) (AsyncAPI 2.6)
 
 Use `docs/backend/events.md` as a human overview; the AsyncAPI contract is the source of truth for channel names, message payloads, security requirements, SSE bindings, and job topics.
 
@@ -114,7 +114,7 @@ Platform factory: `internal/platform/messaging`. Core domain code must not impor
 
 In addition to the point-to-point Watermill channels listed above, the backend exposes
 parameterised streaming channels that are consumed by inbound SSE adapters. The authoritative
-binding for these channels lives in [contracts/asyncapi.yaml](../../contracts/asyncapi.yaml)
+binding for these channels lives in [asyncapi.yaml](../architecture/asyncapi.yaml)
 (server `sse-local` and `sse-prod`), but the human-facing catalogue is:
 
 | Channel | SSE endpoint | Consumer identity | Purpose |

@@ -1,63 +1,34 @@
-// Package swagger serves Swagger UI backed by the published OpenAPI contract in contracts/.
+// Package swagger mounts Swagger UI from swag-generated docs (github.com/swaggo/gin-swagger).
 package swagger
 
 import (
-	nethttp "net/http"
 	"strings"
 
 	"github.com/gin-gonic/gin"
-	"github.com/turahe/blog-api/contracts"
+	swaggerFiles "github.com/swaggo/files"
+	ginSwagger "github.com/swaggo/gin-swagger"
+
+	_ "github.com/turahe/blog-api/docs" // register swag-generated OpenAPI
 )
 
-const (
-	specPath    = "/openapi.yaml"
-	uiPath      = "/swagger"
-	uiIndex     = "/swagger/index.html"
-	contentYAML = "application/yaml; charset=utf-8"
-)
+const uiPath = "/swagger"
 
-// CSP allows Swagger UI assets from unpkg while keeping the rest of the API locked down.
+// ContentSecurityPolicy allows the embedded Swagger UI assets on /swagger/*.
 const ContentSecurityPolicy = "default-src 'self'; " +
-	"style-src 'self' 'unsafe-inline' https://unpkg.com; " +
-	"script-src 'self' 'unsafe-inline' https://unpkg.com; " +
-	"img-src 'self' data: https://unpkg.com; " +
-	"font-src 'self' https://unpkg.com data:; " +
+	"style-src 'self' 'unsafe-inline'; " +
+	"script-src 'self' 'unsafe-inline'; " +
+	"img-src 'self' data:; " +
+	"font-src 'self' data:; " +
 	"connect-src 'self'; " +
 	"frame-ancestors 'none'"
 
-// IsDocsPath reports whether the request is for Swagger UI or the OpenAPI document.
+// IsDocsPath reports whether the request is for Swagger UI or its generated spec.
 func IsDocsPath(path string) bool {
-	return path == specPath || path == uiPath || path == uiIndex || strings.HasPrefix(path, uiPath+"/")
+	return path == uiPath || strings.HasPrefix(path, uiPath+"/")
 }
 
-// Mount registers OpenAPI YAML and Swagger UI routes on the engine.
+// Mount registers Swagger UI at /swagger/*any.
 func Mount(router gin.IRoutes) error {
-	spec := contracts.OpenAPIBundle
-	index := contracts.SwaggerIndex
-	if len(spec) == 0 {
-		return errMissing("openapi.bundle.yaml")
-	}
-	if len(index) == 0 {
-		return errMissing("swagger/index.html")
-	}
-
-	router.GET(specPath, func(c *gin.Context) {
-		c.Data(nethttp.StatusOK, contentYAML, spec)
-	})
-	router.GET(uiPath, func(c *gin.Context) {
-		c.Redirect(nethttp.StatusFound, uiIndex)
-	})
-	router.GET(uiPath+"/", func(c *gin.Context) {
-		c.Redirect(nethttp.StatusFound, uiIndex)
-	})
-	router.GET(uiIndex, func(c *gin.Context) {
-		c.Data(nethttp.StatusOK, "text/html; charset=utf-8", index)
-	})
+	router.GET(uiPath+"/*any", ginSwagger.WrapHandler(swaggerFiles.Handler))
 	return nil
 }
-
-type missingAssetError string
-
-func (e missingAssetError) Error() string { return "contracts: missing embedded asset " + string(e) }
-
-func errMissing(name string) error { return missingAssetError(name) }

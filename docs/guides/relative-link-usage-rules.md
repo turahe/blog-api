@@ -37,14 +37,14 @@ Prefer `./sibling.md` over bare `sibling.md` for same-directory links.
 ### Rule 0 — Absolute links are forbidden
 
 **Scope**: every Markdown file in the repository (`README.md`, `docs/`,
-`contracts/`, `paths/`, `tests/`, and repo root).
+`docs/`, `tests/`, and repo root).
 
 | Bad | Good |
 |---|---|
 <!-- relative-links nolint-begin -->
 | `[x](file:///…/docs/backend/database.md)` | Depends on source — use a relative path |
 | `[x](/docs/backend/database.md)` | From `docs/backend/api.md`: `[database.md](./database.md)` |
-| `[x](/contracts/openapi.yaml)` | From `docs/features/x.md`: `[openapi.yaml](../../contracts/openapi.yaml)` |
+| `[x](/docs/swagger.json)` | From `docs/features/x.md`: `[swagger.json](../swagger.json)` |
 | `[x](C:\repo\docs\backend\database.md)` | Relative path only |
 <!-- relative-links nolint-end -->
 
@@ -76,7 +76,7 @@ Do not resolve above the repository root.
 | Source (dir) | Target | Correct relative link |
 |---|---|---|
 | `docs/architecture/` | `docs/backend/database.md` | `[database.md](../backend/database.md)` |
-| `docs/features/` | `contracts/openapi.yaml` | `[openapi.yaml](../../contracts/openapi.yaml)` |
+| `docs/features/` | `docs/swagger.json` | `[swagger.json](../swagger.json)` |
 | `docs/guides/` | `README.md` | `[README.md](../../README.md)` |
 <!-- relative-links nolint-end -->
 
@@ -121,7 +121,7 @@ In PRs that touch Markdown, reviewers should confirm:
 | `[database.md §Notes](./database.md#L579-L641)` | `[here](./database.md)` (generic display text) |
 <!-- relative-links nolint-end -->
 
-### Cross-directory — from `docs/features/` to `paths/`
+### Cross-directory — from `docs/features/` to sibling docs
 
 <!-- relative-links nolint-begin -->
 | Correct | Incorrect |

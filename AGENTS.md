@@ -10,7 +10,8 @@
 | Test package | `go test -count=1 ./internal/adapters/inbound/http/` |
 | Lint | `make lint` |
 | Build | `make build` |
-| Route↔contract check | `make routes-check` |
+| Swagger docs | `make swagger` |
+| Route smoke | `make routes-check` |
 | Infra up/down | `make infra-up` / `make infra-down` |
 | Migrate | `make migrate-up` |
 | Serve | `make run` |
@@ -23,8 +24,8 @@ Co-Authored-By: <agent model name> <noreply@example.com>
 
 ## Key Conventions
 - Hexagonal modular monolith — core must not import Gin/GORM/Redis/Watermill
-- Gin `routes.Register*` is source of truth — edit `internal/adapters/inbound/routes/`, then align OpenAPI
-- OpenAPI (`contracts/` + `paths/`) is the published contract — keep bundles committed; `make routes-check`
+- Gin `routes.Register*` is runtime source of truth — edit `internal/adapters/inbound/routes/`, then annotate handlers and `make swagger`
+- Published HTTP contract is swag-generated under `docs/` (`docs/swagger.json`) — keep committed; `make swagger` + `make routes-check`
 - Route groups/auth modes are declared in each `Register*` bind — see `docs/backend/api.md`
 - Relative links only in Markdown — see `docs/guides/relative-link-usage-rules.md`
 - Envelope responses: `{ ok, code, data, meta, error }` (lists add Laravel-style `links` + pagination `meta` — see `docs/backend/data-wrapping-and-pagination.md`; packed `code` — see `docs/backend/response-codes.md`)

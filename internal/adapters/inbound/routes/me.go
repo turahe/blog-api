@@ -4,8 +4,8 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
-// RegisterMe binds authenticated self-service routes under /api/v1.
-func RegisterMe(v1 *gin.RouterGroup, auth AuthMiddleware, c Controllers) {
+// registerMe binds authenticated self-service routes under /api/v1.
+func registerMe(v1 *gin.RouterGroup, auth AuthMiddleware, c Controllers) {
 	g := GroupSelfService
 	me := v1.Group("")
 	me.Use(auth.Required...)

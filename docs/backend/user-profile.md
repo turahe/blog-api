@@ -107,7 +107,7 @@ Per-user per-day aggregates: date, user_id, counts per activity_type, unique_day
 
 ## Endpoints
 
-Follow the canonical contract at `contracts/openapi.yaml`.
+Follow the canonical contract at `docs/swagger.json`.
 
 ### Self-Service `/api/v1/me` family
 
@@ -318,6 +318,6 @@ For every mutation endpoint:
 
 - Avatar flow and media validation follow `docs/backend/media.md` and `docs/backend/media-relations.md`.
 - Password rules, session behavior, 2FA step-up, audit expectations: `docs/architecture/security.md`.
-- Event names and outbox pattern: `docs/backend/events.md` + AsyncAPI contract `contracts/asyncapi.yaml`.
-- HTTP envelope format + path versioning: `docs/backend/error-handling.md`, `docs/backend/api.md`, and `contracts/openapi.yaml`.
+- Event names and outbox pattern: `docs/backend/events.md` + AsyncAPI contract `docs/architecture/asyncapi.yaml`.
+- HTTP envelope format + path versioning: `docs/backend/error-handling.md`, `docs/backend/api.md`, and `docs/swagger.json`.
 - RBAC permission catalog appends: `docs/features/user-management.md`.

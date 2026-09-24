@@ -49,8 +49,8 @@ Use environment variables for:
 
 - build application artifact
 - validate API and event contracts locally
-  - OpenAPI: `python3 -m pip install pyyaml openapi-spec-validator && python3 -c 'import yaml, openapi_spec_validator; openapi_spec_validator.validate_spec(yaml.safe_load(open("contracts/openapi.yaml")))'`
-  - AsyncAPI: `npx @asyncapi/cli validate contracts/asyncapi.yaml`
+  - Swagger: `make swagger` and commit `docs/`
+  - AsyncAPI: `npx @asyncapi/cli validate docs/architecture/asyncapi.yaml`
 - run automated tests
 - apply database migrations with `app migrate up`
 - deploy API (`app serve`)

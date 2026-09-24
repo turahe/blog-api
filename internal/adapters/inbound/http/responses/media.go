@@ -29,6 +29,10 @@ func MediaAsset(asset mediadomain.MediaAsset) gin.H {
 	if asset.UploadedBy != nil {
 		uploadedBy = asset.UploadedBy.String()
 	}
+	tags := asset.Tags
+	if tags == nil {
+		tags = []string{}
+	}
 	return gin.H{
 		"id":                asset.ID.String(),
 		"storage_key":       asset.StorageKey,
@@ -40,7 +44,7 @@ func MediaAsset(asset mediadomain.MediaAsset) gin.H {
 		"checksum_sha256":   asset.ChecksumSHA256,
 		"disk":              asset.Disk,
 		"status":            asset.Status,
-		"tags":              asset.Tags,
+		"tags":              tags,
 		"uploaded_by":       uploadedBy,
 		"created_at":        asset.CreatedAt.UTC().Format(time.RFC3339),
 		"updated_at":        asset.UpdatedAt.UTC().Format(time.RFC3339),

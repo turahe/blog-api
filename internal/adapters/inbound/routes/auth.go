@@ -4,8 +4,8 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
-// RegisterAuth binds /auth routes (mixed auth modes).
-func RegisterAuth(v1 *gin.RouterGroup, auth AuthMiddleware, c Controllers) {
+// registerAuth binds /auth routes (mixed auth modes).
+func registerAuth(v1 *gin.RouterGroup, auth AuthMiddleware, c Controllers) {
 	g := GroupAuth
 
 	none := v1.Group("")

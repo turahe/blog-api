@@ -1,4 +1,3 @@
-// Package routes mounts the versioned HTTP API with Laravel-style Register* functions.
 package routes
 
 import (
@@ -13,32 +12,41 @@ type AuthMiddleware struct {
 	Required gin.HandlersChain
 }
 
-// Register mounts health probes and /api/v1
+// Register mounts health probes and /api/v1 routes.
 func Register(router gin.IRouter, c Controllers, auth AuthMiddleware) {
 	if c.Stub == nil {
 		c.Stub = NotImplemented
 	}
 
-	RegisterHealth(router, c)
+	registerHealth(router, c)
 
 	v1 := router.Group("/api/v1")
-	RegisterPublic(v1, c)
-	RegisterAuth(v1, auth, c)
-	RegisterMe(v1, auth, c)
-	RegisterAdmin(v1, auth, c)
-	RegisterAnalytics(v1, c)
-	RegisterContractStubs(v1, auth, c)
+	registerPublic(v1, c)
+	registerAuth(v1, auth, c)
+	registerMe(v1, auth, c)
+	registerAdmin(v1, auth, c)
+	registerAnalytics(v1, c)
+	registerContractStubs(v1, auth, c)
 }
 
-func bind(r gin.IRoutes, method, path, opID string, group Group, mode AuthMode, c Controllers, h gin.HandlerFunc) {
+type routeSpec struct {
+	method string
+	path   string
+	opID   string
+	group  Group
+	mode   AuthMode
+	h      gin.HandlerFunc
+}
+
+func mount(r gin.IRoutes, c Controllers, spec routeSpec) {
 	meta := Route{
-		Method:      method,
-		Path:        fullPath(r, path),
-		OperationID: opID,
-		Group:       group,
-		Auth:        mode,
+		Method:      spec.method,
+		Path:        fullPath(r, spec.path),
+		OperationID: spec.opID,
+		Group:       spec.group,
+		Auth:        spec.mode,
 	}
-	Bind(r, method, path, meta, OrStub(c.Stub, meta, h))
+	bindMeta(r, spec.path, meta, orStub(c.Stub, meta, spec.h))
 }
 
 func fullPath(r gin.IRoutes, path string) string {
@@ -56,21 +64,21 @@ func fullPath(r gin.IRoutes, path string) string {
 }
 
 func get(r gin.IRoutes, path, opID string, group Group, mode AuthMode, c Controllers, h gin.HandlerFunc) {
-	bind(r, http.MethodGet, path, opID, group, mode, c, h)
+	mount(r, c, routeSpec{method: http.MethodGet, path: path, opID: opID, group: group, mode: mode, h: h})
 }
 
 func post(r gin.IRoutes, path, opID string, group Group, mode AuthMode, c Controllers, h gin.HandlerFunc) {
-	bind(r, http.MethodPost, path, opID, group, mode, c, h)
+	mount(r, c, routeSpec{method: http.MethodPost, path: path, opID: opID, group: group, mode: mode, h: h})
 }
 
 func put(r gin.IRoutes, path, opID string, group Group, mode AuthMode, c Controllers, h gin.HandlerFunc) {
-	bind(r, http.MethodPut, path, opID, group, mode, c, h)
+	mount(r, c, routeSpec{method: http.MethodPut, path: path, opID: opID, group: group, mode: mode, h: h})
 }
 
 func patch(r gin.IRoutes, path, opID string, group Group, mode AuthMode, c Controllers, h gin.HandlerFunc) {
-	bind(r, http.MethodPatch, path, opID, group, mode, c, h)
+	mount(r, c, routeSpec{method: http.MethodPatch, path: path, opID: opID, group: group, mode: mode, h: h})
 }
 
 func del(r gin.IRoutes, path, opID string, group Group, mode AuthMode, c Controllers, h gin.HandlerFunc) {
-	bind(r, http.MethodDelete, path, opID, group, mode, c, h)
+	mount(r, c, routeSpec{method: http.MethodDelete, path: path, opID: opID, group: group, mode: mode, h: h})
 }

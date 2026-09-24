@@ -4,12 +4,13 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	"github.com/turahe/blog-api/internal/adapters/inbound/http/middleware"
-	"github.com/turahe/blog-api/internal/adapters/inbound/http/requests"
-	"github.com/turahe/blog-api/internal/adapters/inbound/http/responses"
 	nethttp "net/http"
 	"strconv"
 	"strings"
+
+	"github.com/turahe/blog-api/internal/adapters/inbound/http/middleware"
+	"github.com/turahe/blog-api/internal/adapters/inbound/http/requests"
+	"github.com/turahe/blog-api/internal/adapters/inbound/http/responses"
 
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
@@ -26,6 +27,17 @@ type postAdminAPI interface {
 	Update(ctx context.Context, id, actorID uuid.UUID, unrestricted bool, in postdomain.UpdateInput) (postdomain.Post, []tagdomain.Tag, error)
 }
 
+// adminCreatePostHandler godoc
+//
+//	@Summary	Create draft post
+//	@Tags		admin
+//	@Accept		json
+//	@Produce	json
+//	@Param		body	body		requests.CreatePost	true	"draft post"
+//	@Success	201		{object}	responses.Envelope
+//	@Failure	400		{object}	responses.Envelope
+//	@Security	Bearer
+//	@Router		/api/v1/admin/posts [post]
 func adminCreatePostHandler(posts postAdminAPI) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		userID, ok := middleware.CurrentUserID(c)
@@ -46,18 +58,33 @@ func adminCreatePostHandler(posts postAdminAPI) gin.HandlerFunc {
 			}
 			categoryID = &id
 		}
-		post, tags, err := posts.CreateDraft(c.Request.Context(), userID, req.Title, req.Slug, req.Excerpt, req.Content, categoryID, req.Tags)
+		post, tags, err := posts.CreateDraft(
+			c.Request.Context(),
+			userID,
+			req.Title,
+			req.Slug,
+			req.Excerpt,
+			req.Content,
+			categoryID,
+			req.Tags,
+		)
 		if mapPostError(c, err) {
-			return
-		}
-		if err != nil {
-			responses.Failure(c, nethttp.StatusInternalServerError, "internal_error", "Failed to create post")
 			return
 		}
 		responses.Success(c, nethttp.StatusCreated, responses.PostWithTags(post, tags))
 	}
 }
 
+// adminPublishPostHandler godoc
+//
+//	@Summary	Publish post
+//	@Tags		admin
+//	@Produce	json
+//	@Param		param1	path		string	true	"post UUID"
+//	@Success	200		{object}	responses.Envelope
+//	@Failure	404		{object}	responses.Envelope
+//	@Security	Bearer
+//	@Router		/api/v1/admin/posts/{param1}/publish [post]
 func adminPublishPostHandler(posts *postservice.PostService) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		id, err := uuid.Parse(strings.TrimSpace(c.Param("param1")))
@@ -78,6 +105,20 @@ func adminPublishPostHandler(posts *postservice.PostService) gin.HandlerFunc {
 	}
 }
 
+// adminListPostsHandler godoc
+//
+//	@Summary	List admin posts
+//	@Tags		admin
+//	@Produce	json
+//	@Param		page		query		int		false	"page"		default(1)
+//	@Param		per_page	query		int		false	"per page"	default(20)
+//	@Param		status		query		string	false	"status filter"
+//	@Param		author_id	query		string	false	"author UUID"
+//	@Param		category_id	query		string	false	"category UUID"
+//	@Param		q			query		string	false	"search"
+//	@Success	200			{object}	responses.Envelope
+//	@Security	Bearer
+//	@Router		/api/v1/admin/posts [get]
 func adminListPostsHandler(posts *postservice.PostService, roles RoleLookup) gin.HandlerFunc {
 	return adminListPostsHandlerWithDeps(posts, roles)
 }
@@ -130,10 +171,29 @@ func adminListPostsHandlerWithDeps(posts postAdminAPI, roles RoleLookup) gin.Han
 		for _, post := range result.Items {
 			items = append(items, responses.Post(post))
 		}
-		responses.SuccessPaginatedFor(c, nethttp.StatusOK, responses.ServicePosts, items, result.Page, result.PerPage, result.Total)
+		responses.SuccessPaginatedFor(c, nethttp.StatusOK, responses.PageOpts{
+			Service: responses.ServicePosts,
+			Data:    items,
+			Page:    result.Page,
+			PerPage: result.PerPage,
+			Total:   result.Total,
+		})
 	}
 }
 
+// adminUpdatePostHandler godoc
+//
+//	@Summary	Update post
+//	@Tags		admin
+//	@Accept		json
+//	@Produce	json
+//	@Param		param1	path		string				true	"post UUID"
+//	@Param		body	body		requests.UpdatePost	true	"patch fields"
+//	@Success	200		{object}	responses.Envelope
+//	@Failure	400		{object}	responses.Envelope
+//	@Failure	404		{object}	responses.Envelope
+//	@Security	Bearer
+//	@Router		/api/v1/admin/posts/{param1} [patch]
 func adminUpdatePostHandler(posts *postservice.PostService, roles RoleLookup) gin.HandlerFunc {
 	return adminUpdatePostHandlerWithDeps(posts, roles)
 }
@@ -172,21 +232,11 @@ func adminUpdatePostHandlerWithDeps(posts postAdminAPI, roles RoleLookup) gin.Ha
 		}
 		if req.CategoryID != nil {
 			in.CategoryID.Present = true
-			if requests.IsJSONNull(*req.CategoryID) {
-				in.CategoryID.Value = nil
-			} else {
-				var raw string
-				if err := json.Unmarshal(*req.CategoryID, &raw); err != nil {
-					responses.Failure(c, nethttp.StatusBadRequest, "validation_error", "Invalid category_id")
-					return
-				}
-				categoryID, err := uuid.Parse(strings.TrimSpace(raw))
-				if err != nil {
-					responses.Failure(c, nethttp.StatusBadRequest, "validation_error", "Invalid category_id")
-					return
-				}
-				in.CategoryID.Value = &categoryID
+			categoryID, ok := parseNullableUUID(c, *req.CategoryID, "category_id")
+			if !ok {
+				return
 			}
+			in.CategoryID.Value = categoryID
 		}
 
 		post, tags, err := posts.Update(c.Request.Context(), postID, userID, unrestricted, in)
@@ -198,6 +248,19 @@ func adminUpdatePostHandlerWithDeps(posts postAdminAPI, roles RoleLookup) gin.Ha
 	}
 }
 
+// adminReplacePostMediaHandler godoc
+//
+//	@Summary	Replace post media
+//	@Tags		admin
+//	@Accept		json
+//	@Produce	json
+//	@Param		param1	path		string						true	"post UUID"
+//	@Param		body	body		requests.ReplacePostMedia	true	"media items"
+//	@Success	200		{object}	responses.Envelope
+//	@Failure	400		{object}	responses.Envelope
+//	@Failure	404		{object}	responses.Envelope
+//	@Security	Bearer
+//	@Router		/api/v1/admin/posts/{param1}/media [patch]
 func adminReplacePostMediaHandler(posts *postservice.PostService) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		postID, err := uuid.Parse(strings.TrimSpace(c.Param("param1")))
@@ -258,6 +321,25 @@ func adminReplacePostMediaHandler(posts *postservice.PostService) gin.HandlerFun
 	}
 }
 
+// parseNullableUUID returns (nil, true) for JSON null, (id, true) for a UUID string,
+// or (nil, false) after writing a validation failure.
+func parseNullableUUID(c *gin.Context, raw json.RawMessage, field string) (*uuid.UUID, bool) {
+	if requests.IsJSONNull(raw) {
+		return nil, true
+	}
+	var s string
+	if err := json.Unmarshal(raw, &s); err != nil {
+		responses.Failure(c, nethttp.StatusBadRequest, "validation_error", "Invalid "+field)
+		return nil, false
+	}
+	id, err := uuid.Parse(strings.TrimSpace(s))
+	if err != nil {
+		responses.Failure(c, nethttp.StatusBadRequest, "validation_error", "Invalid "+field)
+		return nil, false
+	}
+	return &id, true
+}
+
 func isUnrestrictedEditor(roles []string) bool {
 	for _, role := range roles {
 		switch strings.TrimSpace(strings.ToLower(role)) {
@@ -285,19 +367,61 @@ func mapPostError(c *gin.Context, err error) bool {
 	}
 	switch {
 	case errors.Is(err, postservice.ErrValidation):
-		responses.FailureFor(c, nethttp.StatusBadRequest, responses.ServicePosts, responses.CaseValidation, "validation_error", err.Error(), nil)
+		responses.FailureFor(c, nethttp.StatusBadRequest, responses.FailureOpts{
+			Service: responses.ServicePosts,
+			Case:    responses.CaseValidation,
+			Code:    "validation_error",
+			Message: err.Error(),
+			Details: nil,
+		})
 	case errors.Is(err, tagservice.ErrValidation):
-		responses.FailureFor(c, nethttp.StatusBadRequest, responses.ServiceTags, responses.CaseValidation, "validation_error", err.Error(), nil)
+		responses.FailureFor(c, nethttp.StatusBadRequest, responses.FailureOpts{
+			Service: responses.ServiceTags,
+			Case:    responses.CaseValidation,
+			Code:    "validation_error",
+			Message: err.Error(),
+			Details: nil,
+		})
 	case errors.Is(err, postdomain.ErrNotFound):
-		responses.FailureFor(c, nethttp.StatusNotFound, responses.ServicePosts, responses.CaseNotFound, "not_found", "Post not found", nil)
+		responses.FailureFor(c, nethttp.StatusNotFound, responses.FailureOpts{
+			Service: responses.ServicePosts,
+			Case:    responses.CaseNotFound,
+			Code:    "not_found",
+			Message: "Post not found",
+			Details: nil,
+		})
 	case errors.Is(err, tagdomain.ErrNotFound):
-		responses.FailureFor(c, nethttp.StatusNotFound, responses.ServiceTags, responses.CaseNotFound, "not_found", "Tag not found", nil)
+		responses.FailureFor(c, nethttp.StatusNotFound, responses.FailureOpts{
+			Service: responses.ServiceTags,
+			Case:    responses.CaseNotFound,
+			Code:    "not_found",
+			Message: "Tag not found",
+			Details: nil,
+		})
 	case errors.Is(err, postservice.ErrConflict):
-		responses.FailureFor(c, nethttp.StatusConflict, responses.ServicePosts, responses.CaseConflict, "conflict", "Post conflict", nil)
+		responses.FailureFor(c, nethttp.StatusConflict, responses.FailureOpts{
+			Service: responses.ServicePosts,
+			Case:    responses.CaseConflict,
+			Code:    "conflict",
+			Message: "Post conflict",
+			Details: nil,
+		})
 	case errors.Is(err, tagdomain.ErrConflict):
-		responses.FailureFor(c, nethttp.StatusConflict, responses.ServiceTags, responses.CaseConflict, "conflict", "Tag conflict", nil)
+		responses.FailureFor(c, nethttp.StatusConflict, responses.FailureOpts{
+			Service: responses.ServiceTags,
+			Case:    responses.CaseConflict,
+			Code:    "conflict",
+			Message: "Tag conflict",
+			Details: nil,
+		})
 	default:
-		responses.FailureFor(c, nethttp.StatusInternalServerError, responses.ServicePosts, responses.CaseInternalError, "internal_error", "Failed to process post", nil)
+		responses.FailureFor(c, nethttp.StatusInternalServerError, responses.FailureOpts{
+			Service: responses.ServicePosts,
+			Case:    responses.CaseInternalError,
+			Code:    "internal_error",
+			Message: "Failed to process post",
+			Details: nil,
+		})
 	}
 	return true
 }

@@ -8,15 +8,29 @@ import (
 	healthports "github.com/turahe/blog-api/internal/core/health/ports"
 )
 
-// Live returns the liveness probe handler.
+// Live returns the liveness probe handler (also used as /api/v1/health alias).
+// Live godoc
+//
+//	@Summary	Liveness probe
+//	@Tags		health
+//	@Produce	json
+//	@Success	200	{object}	responses.Envelope
+//	@Router		/health/live [get]
 func Live(health healthports.Service) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		responses.Success(c, nethttp.StatusOK, health.Live())
 	}
 }
 
-// Ready returns the readiness probe handler.
-func Ready(health healthports.Service) gin.HandlerFunc {
+// ready godoc
+//
+//	@Summary	Readiness probe
+//	@Tags		health
+//	@Produce	json
+//	@Success	200	{object}	responses.Envelope
+//	@Failure	503	{object}	responses.Envelope
+//	@Router		/health/ready [get]
+func ready(health healthports.Service) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		status := health.Ready(c.Request.Context())
 		httpStatus := nethttp.StatusOK
@@ -27,9 +41,15 @@ func Ready(health healthports.Service) gin.HandlerFunc {
 	}
 }
 
-// Version returns the build version handler.
-func Version(version string) gin.HandlerFunc {
+// version godoc
+//
+//	@Summary	Build version
+//	@Tags		health
+//	@Produce	json
+//	@Success	200	{object}	responses.Envelope
+//	@Router		/health/version [get]
+func version(buildVersion string) gin.HandlerFunc {
 	return func(c *gin.Context) {
-		responses.Success(c, nethttp.StatusOK, gin.H{"version": version})
+		responses.Success(c, nethttp.StatusOK, gin.H{"version": buildVersion})
 	}
 }
