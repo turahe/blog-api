@@ -265,6 +265,21 @@ Rate limits are Redis fixed windows keyed by the authenticated user, or by clien
 guests (see `APP_TRUSTED_PROXIES`). If Redis is unreachable, requests are let through and a
 warning is logged.
 
+## Error tracking (Sentry)
+
+| Variable | Default | Required | Purpose |
+| --- | --- | --- | --- |
+| `SENTRY_DSN` | empty | No | Enables Sentry for `serve`, `worker`, and `doctor`. Empty disables it entirely. |
+| `SENTRY_ENVIRONMENT` | `APP_ENV` | No | Environment tag on events and transactions. |
+| `SENTRY_TRACES_SAMPLE_RATE` | `0.1` | No | Fraction (`0`–`1`) of requests and consumed messages recorded as performance transactions. |
+
+Every Error-level log record becomes a Sentry event: recovered panics, 5xx responses, and
+worker handler failures. Attributes go through the same redaction as the JSON logs, and a
+panic is reported once (not again by the resulting 500 access log). HTTP transactions are
+named after the route template (e.g. `GET /api/v1/posts/:slug`), never the raw path. The
+release is the build version. Default PII collection is off, and the query string,
+cookies, request body, and credential-bearing headers are stripped before sending.
+
 ## Production validation
 
 `config.Load` fails startup when:
@@ -281,7 +296,8 @@ warning is logged.
 - the Redis driver, host, port, or database number is invalid;
 - a selected message broker is unsupported or lacks its required variables.
 - media storage is enabled but `S3_DISK` is unsupported, the MIME allowlist is empty, or
-  `MEDIA_MAX_UPLOAD_BYTES` / `MEDIA_PRESIGN_TTL` are not positive.
+  `MEDIA_MAX_UPLOAD_BYTES` / `MEDIA_PRESIGN_TTL` are not positive;
+- `SENTRY_TRACES_SAMPLE_RATE` is outside `0`–`1`.
 
 Before deploying:
 

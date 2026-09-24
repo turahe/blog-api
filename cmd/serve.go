@@ -12,7 +12,6 @@ import (
 	"github.com/spf13/cobra"
 	"github.com/turahe/blog-api/internal/bootstrap"
 	"github.com/turahe/blog-api/internal/platform/config"
-	"github.com/turahe/blog-api/internal/platform/logging"
 )
 
 func newServeCmd() *cobra.Command {
@@ -29,7 +28,11 @@ func newServeCmd() *cobra.Command {
 				return err
 			}
 
-			logger := logging.New(cfg.Environment)
+			logger, flush, err := bootstrap.NewLogger(cfg, version)
+			if err != nil {
+				return err
+			}
+			defer flush()
 
 			app, err := bootstrap.NewRuntime(ctx, cfg, logger, version)
 			if err != nil {

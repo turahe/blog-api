@@ -63,6 +63,7 @@ func NewRouter(deps Dependencies) (*gin.Engine, error) {
 		TrustedProxies: deps.TrustedProxies,
 		GlobalMiddleware: gin.HandlersChain{
 			middleware.RequestID(),
+			middleware.Tracing(),
 			middleware.SecurityHeaders(),
 			middleware.AccessLog(deps.Logger),
 			middleware.Recovery(deps.Logger),

@@ -9,8 +9,8 @@ import (
 
 	"github.com/ThreeDotsLabs/watermill/message"
 	"github.com/spf13/cobra"
+	"github.com/turahe/blog-api/internal/bootstrap"
 	"github.com/turahe/blog-api/internal/platform/config"
-	"github.com/turahe/blog-api/internal/platform/logging"
 	"github.com/turahe/blog-api/internal/platform/messaging"
 )
 
@@ -32,7 +32,11 @@ func newWorkerCmd() *cobra.Command {
 				return errors.New("MESSAGE_BROKER must be set to run the worker")
 			}
 
-			logger := logging.New(cfg.Environment)
+			logger, flush, err := bootstrap.NewLogger(cfg, version)
+			if err != nil {
+				return err
+			}
+			defer flush()
 
 			bus, err := messaging.Open(ctx, cfg, logger)
 			if err != nil {
@@ -46,7 +50,7 @@ func newWorkerCmd() *cobra.Command {
 			}
 			defer func() { err = errors.Join(err, router.Close()) }()
 
-			router.AddMiddleware(messaging.Recoverer)
+			router.AddMiddleware(messaging.Tracing, messaging.Recoverer)
 
 			topic := bus.Topic("worker.heartbeat")
 			router.AddConsumerHandler(

@@ -86,6 +86,23 @@ type Config struct {
 	CommentsCreatePerMinute       int
 	CommentsActionsPerMinute      int
 	SwaggerEnabled                bool
+	SentryDSN                     string
+	SentryEnvironment             string
+	SentryTracesSampleRate        float64
+}
+
+// SentryEnabled reports whether SENTRY_DSN is set.
+func (c Config) SentryEnabled() bool {
+	return strings.TrimSpace(c.SentryDSN) != ""
+}
+
+// ValidateSentry checks the traces sample rate is a fraction.
+func (c Config) ValidateSentry() error {
+	if c.SentryTracesSampleRate < 0 || c.SentryTracesSampleRate > 1 {
+		return fmt.Errorf("SENTRY_TRACES_SAMPLE_RATE must be between 0 and 1, got %v", c.SentryTracesSampleRate)
+	}
+
+	return nil
 }
 
 // UsesCloudSQL reports whether Cloud SQL connector settings are active.
@@ -409,8 +426,11 @@ func Load() (Config, error) {
 		CommentsFlagThreshold:         integer("COMMENTS_FLAG_THRESHOLD", 3),
 		CommentsCreatePerMinute:       integer("COMMENTS_CREATE_PER_MINUTE", 6),
 		CommentsActionsPerMinute:      integer("COMMENTS_ACTIONS_PER_MINUTE", 30),
+		SentryDSN:                     env("SENTRY_DSN", ""),
+		SentryTracesSampleRate:        float("SENTRY_TRACES_SAMPLE_RATE", 0.1),
 	}
 	cfg.SwaggerEnabled = boolEnv("APP_SWAGGER_ENABLED", cfg.Environment == "local")
+	cfg.SentryEnvironment = env("SENTRY_ENVIRONMENT", cfg.Environment)
 
 	if err := cfg.loadJWTKeys(); err != nil {
 		return Config{}, err
@@ -459,7 +479,7 @@ func (c *Config) validate() error {
 		return fmt.Errorf("invalid database pool limits: idle=%d open=%d", c.DBMaxIdle, c.DBMaxOpen)
 	}
 
-	for _, check := range []func() error{c.ValidateRedis, c.ValidateMessaging, c.ValidateMedia} {
+	for _, check := range []func() error{c.ValidateRedis, c.ValidateMessaging, c.ValidateMedia, c.ValidateSentry} {
 		if err := check(); err != nil {
 			return err
 		}
@@ -544,6 +564,20 @@ func integer(key string, fallback int) int {
 	}
 
 	parsed, err := strconv.Atoi(value)
+	if err != nil {
+		return fallback
+	}
+
+	return parsed
+}
+
+func float(key string, fallback float64) float64 {
+	value := strings.TrimSpace(os.Getenv(key))
+	if value == "" {
+		return fallback
+	}
+
+	parsed, err := strconv.ParseFloat(value, 64)
 	if err != nil {
 		return fallback
 	}
