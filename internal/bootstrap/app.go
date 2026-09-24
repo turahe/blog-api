@@ -7,17 +7,20 @@ import (
 	"fmt"
 	"log/slog"
 	nethttp "net/http"
+	"strings"
 	"time"
 
 	"github.com/redis/go-redis/v9"
 	httpadapter "github.com/turahe/blog-api/internal/adapters/inbound/http"
 	"github.com/turahe/blog-api/internal/adapters/inbound/http/handlers"
 	"github.com/turahe/blog-api/internal/adapters/outbound/cache"
+	"github.com/turahe/blog-api/internal/adapters/outbound/mail"
 	"github.com/turahe/blog-api/internal/adapters/outbound/notify"
 	"github.com/turahe/blog-api/internal/adapters/outbound/persistence"
 	"github.com/turahe/blog-api/internal/adapters/outbound/ratelimit"
 	outboundrbac "github.com/turahe/blog-api/internal/adapters/outbound/rbac"
 	"github.com/turahe/blog-api/internal/adapters/outbound/storage"
+	authports "github.com/turahe/blog-api/internal/core/auth/ports"
 	authservice "github.com/turahe/blog-api/internal/core/auth/service"
 	categoryservice "github.com/turahe/blog-api/internal/core/category/service"
 	commentservice "github.com/turahe/blog-api/internal/core/comment/service"
@@ -25,6 +28,7 @@ import (
 	healthservice "github.com/turahe/blog-api/internal/core/health/service"
 	mediaports "github.com/turahe/blog-api/internal/core/media/ports"
 	mediaservice "github.com/turahe/blog-api/internal/core/media/service"
+	notificationservice "github.com/turahe/blog-api/internal/core/notification/service"
 	postservice "github.com/turahe/blog-api/internal/core/post/service"
 	"github.com/turahe/blog-api/internal/core/readcache"
 	tagservice "github.com/turahe/blog-api/internal/core/tag/service"
@@ -104,7 +108,7 @@ func NewRuntime(ctx context.Context, cfg config.Config, logger *slog.Logger, ver
 	auth := authservice.New(users, sessions, resets, hasher, tokenService, clock, ids, authservice.Config{
 		AccessTTL:  cfg.AccessTokenTTL,
 		RefreshTTL: cfg.RefreshTokenTTL,
-	}, nil).WithEmailChange(notify.NewLog(logger), cacheOrNil)
+	}, nil).WithEmailChange(newNotifier(cfg, logger), cacheOrNil)
 
 	posts := postservice.New(postsRepo, ids, clock).WithCache(cacheOrNil)
 	userSvc := userservice.New(users)
@@ -250,6 +254,23 @@ func CacheTTLs(cfg config.Config) map[readcache.Family]time.Duration {
 		readcache.Tags:       cfg.CacheTTLTags,
 		readcache.Users:      cfg.CacheTTLUsers,
 	}
+}
+
+func newNotifier(cfg config.Config, logger *slog.Logger) authports.EmailChangeNotifier {
+	if strings.TrimSpace(cfg.SMTPHost) == "" {
+		return notify.NewLog(logger)
+	}
+
+	mailer, err := mail.NewSMTP(cfg.SMTPHost, cfg.SMTPPort, cfg.SMTPUsername, cfg.SMTPPassword, cfg.SMTPFrom)
+	if err != nil {
+		logger.Error("smtp notifier disabled", "error", err)
+
+		return notify.NewLog(logger)
+	}
+
+	logger.Info("email notifications via smtp", "host", cfg.SMTPHost, "port", cfg.SMTPPort)
+
+	return notificationservice.New(mailer, logger, cfg.AppPublicURL)
 }
 
 func healthCheckers(db *database.Database, redisClient *redis.Client) []healthports.Checker {

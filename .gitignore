@@ -1,5 +1,7 @@
 node_modules/
 dist/
+tmp/
+.idea/
 .DS_Store
 reports/
 .env
@@ -10,3 +12,7 @@ __pycache__/
 *.py[cod]
 data/
 coverage.html
+.vscode/
+.cursor/
+.trae/
+.data/

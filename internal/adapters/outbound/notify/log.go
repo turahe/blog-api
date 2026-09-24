@@ -1,5 +1,4 @@
-// Package notify delivers account notifications. Only a structured-log delivery exists
-// until a mail provider is wired.
+// Package notify delivers account notifications. Log is the fallback when SMTP is unset.
 package notify
 
 import (
@@ -42,6 +41,23 @@ func (l *Log) EmailChanged(ctx context.Context, user userdomain.User, oldEmail, 
 		"user_id", user.UUID,
 		"old", MaskEmail(oldEmail),
 		"new", MaskEmail(newEmail),
+	)
+}
+
+// PasswordReset logs that a reset message would be sent. The token is never logged.
+func (l *Log) PasswordReset(ctx context.Context, user userdomain.User, _ string, expiresAt time.Time) {
+	l.logger.InfoContext(ctx, "notify: password reset",
+		"user_id", user.UUID,
+		"to", MaskEmail(user.Email),
+		"expires_at", expiresAt,
+	)
+}
+
+// PasswordChanged logs the password-change notice.
+func (l *Log) PasswordChanged(ctx context.Context, user userdomain.User) {
+	l.logger.InfoContext(ctx, "notify: password changed",
+		"user_id", user.UUID,
+		"to", MaskEmail(user.Email),
 	)
 }
 

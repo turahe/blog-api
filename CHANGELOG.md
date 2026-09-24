@@ -1,5 +1,18 @@
 # Changelog
 
+## 2026-09-25 — Mailpit and email notifications
+
+### Added
+
+- Mailpit in Compose (`1025` SMTP, `8025` web UI) for local email
+- `NotificationService` sends password-reset, password-change, and email-change messages over SMTP
+- `SMTP_HOST`, `SMTP_PORT`, `SMTP_USERNAME`, `SMTP_PASSWORD`, `SMTP_FROM`, and `APP_PUBLIC_URL`
+
+### Notes
+
+- Leave `SMTP_HOST` empty to keep notices in the log
+- Compose overrides `SMTP_HOST` to `mailpit`; the Mailpit UI is http://127.0.0.1:8025
+
 ## 2026-09-25 — ES256 access tokens and Argon2id passwords
 
 ### Changed

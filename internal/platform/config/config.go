@@ -96,6 +96,12 @@ type Config struct {
 	SentryDSN                     string
 	SentryEnvironment             string
 	SentryTracesSampleRate        float64
+	SMTPHost                      string
+	SMTPPort                      int
+	SMTPUsername                  string
+	SMTPPassword                  string
+	SMTPFrom                      string
+	AppPublicURL                  string
 }
 
 // SentryEnabled reports whether SENTRY_DSN is set.
@@ -462,6 +468,12 @@ func Load() (Config, error) {
 		AvatarMaxBytes:                int64(integer("AVATAR_MAX_BYTES", 5<<20)),
 		SentryDSN:                     env("SENTRY_DSN", ""),
 		SentryTracesSampleRate:        float("SENTRY_TRACES_SAMPLE_RATE", 0.1),
+		SMTPHost:                      env("SMTP_HOST", ""),
+		SMTPPort:                      integer("SMTP_PORT", 1025),
+		SMTPUsername:                  env("SMTP_USERNAME", ""),
+		SMTPPassword:                  env("SMTP_PASSWORD", ""),
+		SMTPFrom:                      env("SMTP_FROM", "Blog <blog@localhost>"),
+		AppPublicURL:                  env("APP_PUBLIC_URL", "http://127.0.0.1:8080"),
 	}
 	cfg.SwaggerEnabled = boolEnv("APP_SWAGGER_ENABLED", cfg.Environment == "local")
 	cfg.SentryEnvironment = env("SENTRY_ENVIRONMENT", cfg.Environment)

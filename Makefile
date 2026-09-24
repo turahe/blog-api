@@ -99,7 +99,7 @@ docker-seed: dev-keys
 
 # Infra only: postgres, redis, rustfs (for running the API from an IDE or debugger).
 infra-up:
-	docker compose up -d postgres redis rustfs
+	docker compose up -d postgres redis rustfs mailpit
 
 infra-down:
 	docker compose down

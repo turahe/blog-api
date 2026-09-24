@@ -254,6 +254,10 @@ func (s *AuthService) ForgotPassword(ctx context.Context, emailOrUsername string
 		s.sink.Capture(raw)
 	}
 
+	if s.notifier != nil {
+		s.notifier.PasswordReset(ctx, user, raw, token.ExpiresAt)
+	}
+
 	return nil
 }
 
@@ -383,6 +387,10 @@ func (s *AuthService) ChangePassword(ctx context.Context, userID uuid.UUID, curr
 		}
 
 		invalidated = true
+	}
+
+	if s.notifier != nil {
+		s.notifier.PasswordChanged(ctx, user)
 	}
 
 	return now, invalidated, nil

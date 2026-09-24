@@ -28,6 +28,10 @@ func (n *capturingNotifier) EmailChanged(_ context.Context, _ userdomain.User, o
 	n.changed = append(n.changed, [2]string{oldEmail, newEmail})
 }
 
+func (n *capturingNotifier) PasswordReset(context.Context, userdomain.User, string, time.Time) {}
+
+func (n *capturingNotifier) PasswordChanged(context.Context, userdomain.User) {}
+
 type emailChangeFixture struct {
 	svc      *authservice.AuthService
 	users    *memUsers

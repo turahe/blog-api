@@ -79,6 +79,18 @@ private key invalidates existing access tokens; rotating `APP_SESSION_KEY` inval
 refresh/reset tokens. Additional handling rules are in
 [secrets-and-headers.md](../security/secrets-and-headers.md).
 
+## Email (SMTP)
+
+| Variable | Default | Required | Purpose |
+| --- | --- | --- | --- |
+| `SMTP_HOST` | empty | No | SMTP host. Empty keeps account notices in the log. Compose sets this to `mailpit`. |
+| `SMTP_PORT` | `1025` | No | SMTP port. Mailpit listens on 1025. |
+| `SMTP_USERNAME` / `SMTP_PASSWORD` | empty | No | Optional SMTP auth. Mailpit accepts mail without it. |
+| `SMTP_FROM` | `Blog <blog@localhost>` | No | From address on outbound mail. |
+| `APP_PUBLIC_URL` | `http://127.0.0.1:8080` | No | Origin printed in password-reset and email-change messages. |
+
+Local Mailpit UI is [http://127.0.0.1:8025](http://127.0.0.1:8025). Messages cover password reset, password change, and email change. The raw token is only in the message body.
+
 ## Database
 
 The connection mode is selected by `DB_INSTANCE_CONNECTION_NAME`:

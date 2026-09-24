@@ -13,6 +13,8 @@ services:
       MESSAGE_BROKER: ""
       APP_JWT_PRIVATE_KEY_PATH: /configs/dev/jwt-es256-private.pem
       APP_JWT_PUBLIC_KEY_PATH: /configs/dev/jwt-es256-public.pem
+      SMTP_HOST: mailpit
+      SMTP_PORT: "1025"
     volumes:
       - ./configs/dev:/configs/dev:ro
     command: ["migrate", "up"]
@@ -39,6 +41,8 @@ services:
       redis:
         condition: service_healthy
       rustfs:
+        condition: service_healthy
+      mailpit:
         condition: service_healthy
 
   postgres:
@@ -102,6 +106,19 @@ services:
       timeout: 5s
       retries: 20
       start_period: 15s
+
+  mailpit:
+    image: axllent/mailpit:v1.27
+    ports:
+      - "1025:1025"
+      - "8025:8025"
+    environment:
+      MP_MAX_MESSAGES: "500"
+    healthcheck:
+      test: ["CMD", "/mailpit", "readyz"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
 
   kafka:
     profiles: ["messaging"]

@@ -41,13 +41,17 @@ type ResetTokenRepository interface {
 	RevokePending(ctx context.Context, userID uuid.UUID, purpose string, at time.Time) error
 }
 
-// EmailChangeNotifier delivers email change messages. Implementations must not fail
+// EmailChangeNotifier delivers account emails. Implementations must not fail
 // the request; delivery problems are theirs to log or retry.
 type EmailChangeNotifier interface {
 	// EmailChangeRequested sends the confirmation token to the new address and a notice to the current one.
 	EmailChangeRequested(ctx context.Context, user userdomain.User, newEmail, rawToken string, expiresAt time.Time)
 	// EmailChanged tells both addresses that the change completed.
 	EmailChanged(ctx context.Context, user userdomain.User, oldEmail, newEmail string)
+	// PasswordReset sends the reset token to the account address.
+	PasswordReset(ctx context.Context, user userdomain.User, rawToken string, expiresAt time.Time)
+	// PasswordChanged tells the account that its password was updated.
+	PasswordChanged(ctx context.Context, user userdomain.User)
 }
 
 // EmailChanger is the email change use-case API consumed by HTTP handlers.

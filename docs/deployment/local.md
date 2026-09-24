@@ -16,6 +16,7 @@ make dev-keys          # generate configs/dev/*.pem if missing; chmod 644 (conta
 make docker-up         # build + postgres/redis/rustfs + migrate + api
 make docker-seed       # roles + admin@example.com / ChangeMeNow!123
 # API: http://localhost:8080  (Swagger UI: /swagger/index.html when local)
+# Mailpit: http://localhost:8025  (SMTP catcher for password and email-change mail)
 ```
 
 Compose overrides `DB_HOST`/`REDIS_HOST`/`S3_ENDPOINT` to service DNS names so the same
