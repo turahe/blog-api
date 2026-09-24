@@ -54,6 +54,7 @@ type Auth struct {
 	PasswordReset         gin.HandlerFunc
 	MePasswordUpdate      gin.HandlerFunc
 
+	AdminLogin             gin.HandlerFunc
 	TwoFactorChallenge     gin.HandlerFunc
 	MeTwoFactorGet         gin.HandlerFunc
 	MeTwoFactorSetup       gin.HandlerFunc

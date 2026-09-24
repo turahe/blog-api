@@ -23,6 +23,12 @@
 - hash backup codes
 - rate limit login and challenge endpoints
 
+## Implemented: admin login
+
+`POST /api/v1/admin/auth/login` is the regular login, restricted to accounts holding
+`admin.access` (seeded for admin, editor, author, moderator). Any other account gets the
+same 401 as a wrong password. 2FA stays optional; enrolled staff get the usual challenge.
+
 ## Implemented: TOTP 2FA
 
 - RFC 6238 TOTP (SHA-1, 6 digits, 30 s, ±1 step), enrolled at `/api/v1/me/2fa/*`.

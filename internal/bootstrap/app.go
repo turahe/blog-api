@@ -146,7 +146,7 @@ func NewRuntime(ctx context.Context, cfg config.Config, logger *slog.Logger, ver
 
 	policySync := outboundrbac.NewPolicySync(enforcer, redisClient, cfg.RBACPolicyReloadInterval, logger)
 	roleStore := outboundrbac.NewRoleStore(db.GORM, enforcer).WithNotifier(policySync)
-	auth.WithRoles(roleStore)
+	auth.WithRoles(roleStore).WithAccessCheck(enforcer)
 
 	metricsServer, recorder := newMetrics(cfg, db, version)
 
@@ -159,6 +159,7 @@ func NewRuntime(ctx context.Context, cfg config.Config, logger *slog.Logger, ver
 		Users:          userSvc,
 		AdminUsers:     auth,
 		TwoFactor:      auth,
+		AdminLogin:     auth,
 		RoleAdmin:      rbacservice.NewRoleService(roleStore),
 		Profiles:       profiles,
 		EmailChange:    auth,

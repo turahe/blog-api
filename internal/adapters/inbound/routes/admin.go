@@ -9,7 +9,7 @@ func registerAdmin(v1 *gin.RouterGroup, auth AuthMiddleware, c Controllers) {
 	g := GroupAdmin
 
 	none := v1.Group("")
-	post(none, "/admin/auth/login", "admin.auth.login", g, AuthNone, c, nil)
+	post(none, "/admin/auth/login", "admin.auth.login", g, AuthNone, c, c.Auth.AdminLogin)
 
 	admin := v1.Group("/admin")
 	admin.Use(auth.Required...)

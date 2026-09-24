@@ -2,6 +2,7 @@
 package handlers
 
 import (
+	"context"
 	"errors"
 	"io"
 	"math"
@@ -59,13 +60,44 @@ func setLockedRetryAfter(c *gin.Context, err error) {
 //	@Failure		503		{object}	responses.Envelope	"two-factor account but 2FA is not configured"
 //	@Router			/api/v1/auth/login [post]
 func loginHandler(auth authports.Service) gin.HandlerFunc {
+	return loginWith(auth.Login)
+}
+
+// adminLoginAPI is the staff sign-in consumed by adminLoginHandler.
+type adminLoginAPI interface {
+	AdminLogin(ctx context.Context, email, password, userAgent, ip string, remember bool) (authdomain.LoginResult, error)
+}
+
+// adminLoginHandler godoc
+//
+//	@Summary		Admin login
+//	@Description	Same request, responses, lockout and two-factor challenge as POST /api/v1/auth/login,
+//	@Description	but only accounts holding the `admin.access` permission may sign in. Any other
+//	@Description	account gets the same 401 as a wrong password.
+//	@Tags			admin
+//	@Accept			json
+//	@Produce		json
+//	@Param			body	body		requests.Login	true	"credentials"
+//	@Success		200		{object}	responses.Envelope
+//	@Failure		400		{object}	responses.Envelope
+//	@Failure		401		{object}	responses.Envelope
+//	@Failure		429		{object}	responses.Envelope	"rate limited or account locked; see Retry-After"
+//	@Failure		503		{object}	responses.Envelope	"two-factor account but 2FA is not configured"
+//	@Router			/api/v1/admin/auth/login [post]
+func adminLoginHandler(auth adminLoginAPI) gin.HandlerFunc {
+	return loginWith(auth.AdminLogin)
+}
+
+type loginFunc func(ctx context.Context, email, password, userAgent, ip string, remember bool) (authdomain.LoginResult, error)
+
+func loginWith(login loginFunc) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		var req requests.Login
 		if !requests.BindJSON(c, &req) {
 			return
 		}
 
-		result, err := auth.Login(c.Request.Context(), req.Email, req.Password, c.Request.UserAgent(), c.ClientIP(), req.Remember)
+		result, err := login(c.Request.Context(), req.Email, req.Password, c.Request.UserAgent(), c.ClientIP(), req.Remember)
 		if err != nil {
 			setLockedRetryAfter(c, err)
 			writeAuthError(c, err, authservice.MapError)

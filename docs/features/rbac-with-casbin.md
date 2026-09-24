@@ -67,6 +67,7 @@ Permissions are **registered** in code as a typed registry (seeded into `rbac_pe
 | `rbac.audit:read`                      | rbac.audit       | read        | all              | admin, superadmin           |
 | `role.manage`                          | role             | manage      | all              | admin, superadmin (legacy alias for rbac.role:manage) |
 | `role.read`                            | role             | read        | all              | editor+                      |
+| `admin.access`                         | admin            | access      | all              | admin, editor, author, moderator (sign-in at `POST /api/v1/admin/auth/login`) |
 | `user.read`                            | user             | read        | all              | editor+                      |
 | `user.create`                          | user             | create      | all              | admin+                       |
 | `user.update`                          | user             | update      | all              | admin+                       |

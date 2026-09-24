@@ -66,7 +66,8 @@ management, second-factor and OAuth login, and session administration are still 
 - [x] JWT issue and verify in `internal/platform/security/jwt`
 - [x] Bearer auth middleware in `internal/adapters/inbound/http/middleware`
 - [x] Transport request validation with `github.com/go-playground/validator/v10` (Laravel-style field errors via `bindJSON`)
-- [ ] `admin.auth.login` — `POST /api/v1/admin/auth/login`
+- [x] `admin.auth.login` — `POST /api/v1/admin/auth/login` (regular login gated by the seeded
+      `admin.access` permission)
 - [x] `auth.2fa.challenge` — `POST /api/v1/auth/2fa/challenge` (TOTP + backup codes; enrollment at
       `/api/v1/me/2fa/*`; secrets encrypted under `APP_ENCRYPTION_KEY`)
 - [ ] `auth.oauth.callback` — `POST /api/v1/auth/oauth/{provider}/callback`

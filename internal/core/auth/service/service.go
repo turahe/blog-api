@@ -39,6 +39,7 @@ type AuthService struct {
 	notifier ports.EmailChangeNotifier
 	attempts ports.LoginAttempts
 	roles    rbacports.RoleAssigner
+	access   rbacports.Enforcer
 	cache    readcache.Cache
 	cfg      Config
 	mfa      twoFactorDeps
@@ -88,30 +89,58 @@ func New(
 // Login verifies credentials and issues a token pair; remember extends the refresh
 // lifetime. Accounts with two-factor enabled get a challenge instead of tokens.
 func (s *AuthService) Login(ctx context.Context, email, password, userAgent, ip string, remember bool) (authdomain.LoginResult, error) {
+	return s.login(ctx, email, password, userAgent, ip, remember, nil)
+}
+
+// AdminAccessPermission is required to sign in at the admin login.
+const AdminAccessPermission = "admin.access"
+
+// WithAccessCheck sets the RBAC check used by AdminLogin. Without it AdminLogin
+// refuses everyone.
+func (s *AuthService) WithAccessCheck(access rbacports.Enforcer) *AuthService {
+	s.access = access
+	return s
+}
+
+// AdminLogin is Login restricted to accounts holding AdminAccessPermission.
+// Other accounts get ErrInvalidCredentials, exactly like a wrong password.
+func (s *AuthService) AdminLogin(ctx context.Context, email, password, userAgent, ip string, remember bool) (authdomain.LoginResult, error) {
+	return s.login(ctx, email, password, userAgent, ip, remember, s.requireAdminAccess)
+}
+
+func (s *AuthService) requireAdminAccess(ctx context.Context, user userdomain.User) error {
+	if s.access == nil {
+		return authdomain.ErrInvalidCredentials
+	}
+
+	allowed, err := s.access.Enforce(ctx, user.UUID, AdminAccessPermission)
+	if err != nil {
+		return fmt.Errorf("check admin access: %w", err)
+	}
+
+	if !allowed {
+		return authdomain.ErrInvalidCredentials
+	}
+
+	return nil
+}
+
+// login verifies the password, then gate (when set), then starts two-factor or issues tokens.
+func (s *AuthService) login(
+	ctx context.Context, email, password, userAgent, ip string, remember bool,
+	gate func(context.Context, userdomain.User) error,
+) (authdomain.LoginResult, error) {
 	email = strings.TrimSpace(strings.ToLower(email))
-	if email == "" || password == "" {
-		return authdomain.LoginResult{}, fmt.Errorf("%w: email and password required", authdomain.ErrValidation)
-	}
 
-	if err := s.checkLocked(ctx, email); err != nil {
-		return authdomain.LoginResult{}, err
-	}
-
-	user, err := s.users.FindByEmail(ctx, email)
-	if errors.Is(err, userdomain.ErrNotFound) {
-		return authdomain.LoginResult{}, s.loginFailed(ctx, email)
-	}
-
+	user, err := s.authenticate(ctx, email, password)
 	if err != nil {
 		return authdomain.LoginResult{}, err
 	}
 
-	if !user.IsActive() {
-		return authdomain.LoginResult{}, authdomain.ErrUserInactive
-	}
-
-	if user.PasswordHash == "" || !s.hasher.Compare(user.PasswordHash, password) {
-		return authdomain.LoginResult{}, s.loginFailed(ctx, email)
+	if gate != nil {
+		if err := gate(ctx, user); err != nil {
+			return authdomain.LoginResult{}, err
+		}
 	}
 
 	if s.attempts != nil {
@@ -128,6 +157,36 @@ func (s *AuthService) Login(ctx context.Context, email, password, userAgent, ip 
 	pair, err := s.completeLogin(ctx, user, userAgent, ip, remember)
 
 	return authdomain.LoginResult{Tokens: pair}, err
+}
+
+// authenticate checks the lockout, the account, and the password for a normalized email.
+func (s *AuthService) authenticate(ctx context.Context, email, password string) (userdomain.User, error) {
+	if email == "" || password == "" {
+		return userdomain.User{}, fmt.Errorf("%w: email and password required", authdomain.ErrValidation)
+	}
+
+	if err := s.checkLocked(ctx, email); err != nil {
+		return userdomain.User{}, err
+	}
+
+	user, err := s.users.FindByEmail(ctx, email)
+	if errors.Is(err, userdomain.ErrNotFound) {
+		return userdomain.User{}, s.loginFailed(ctx, email)
+	}
+
+	if err != nil {
+		return userdomain.User{}, err
+	}
+
+	if !user.IsActive() {
+		return userdomain.User{}, authdomain.ErrUserInactive
+	}
+
+	if user.PasswordHash == "" || !s.hasher.Compare(user.PasswordHash, password) {
+		return userdomain.User{}, s.loginFailed(ctx, email)
+	}
+
+	return user, nil
 }
 
 // completeLogin records the login and issues the session for a fully authenticated user.

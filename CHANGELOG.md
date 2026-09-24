@@ -1,5 +1,14 @@
 # Changelog
 
+## 2026-09-25 — Admin login
+
+### Added
+
+- `POST /api/v1/admin/auth/login`: the regular login (lockout, rate limit, two-factor
+  challenge) restricted to accounts holding the new `admin.access` permission. The seeder
+  grants it to `admin`, `editor`, `author` and `moderator`; re-run `app seed` on existing
+  databases. Any other account gets the same `401` as a wrong password
+
 ## 2026-09-25 — TOTP two-factor authentication
 
 ### Added

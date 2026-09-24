@@ -26,6 +26,7 @@ type Deps struct {
 	Users       *userservice.UserService
 	AdminUsers  adminUserAPI
 	TwoFactor   twoFactorAPI
+	AdminLogin  adminLoginAPI
 	RoleAdmin   roleAPI
 	Profiles    profileAPI
 	EmailChange authports.EmailChanger
@@ -252,6 +253,12 @@ func authControllers(deps Deps) routes.Auth {
 			PasswordReset:         resetPasswordHandler(deps.Auth),
 			MePasswordUpdate:      changePasswordHandler(deps.Auth),
 		}
+	}
+
+	if deps.AdminLogin != nil {
+		a.AdminLogin = chain(
+			middleware.RateLimit(deps.RateLimiter, deps.Logger, "admin.auth.login", deps.LoginPerMinute, time.Minute),
+			adminLoginHandler(deps.AdminLogin))
 	}
 
 	if mfa := deps.TwoFactor; mfa != nil {

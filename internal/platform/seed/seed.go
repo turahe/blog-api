@@ -33,6 +33,9 @@ const (
 	roleModerator = "moderator"
 	permPostRead  = "post.read"
 
+	// permAdminAccess gates POST /api/v1/admin/auth/login.
+	permAdminAccess = "admin.access"
+
 	permCommentModerate = "comment.moderate"
 	permCommentDelete   = "comment.delete"
 )
@@ -46,6 +49,7 @@ var roleDescriptions = map[string]string{
 
 var rolePermissions = map[string][]string{
 	roleAdmin: {
+		permAdminAccess,
 		"user.read", "user.create", "user.update", "user.profile.read", "user.profile.edit",
 		"user.password.admin_reset", "role.read", "role.manage",
 		permPostRead, "post.create", "post.update", "post.publish", "post.delete",
@@ -57,6 +61,7 @@ var rolePermissions = map[string][]string{
 		"*",
 	},
 	roleEditor: {
+		permAdminAccess,
 		"user.read",
 		permPostRead, "post.create", "post.update", "post.publish", "post.delete",
 		"category.read", "category.create", "category.update", "category.delete",
@@ -65,10 +70,12 @@ var rolePermissions = map[string][]string{
 		permCommentModerate,
 	},
 	roleAuthor: {
+		permAdminAccess,
 		permPostRead, "post.create", "post.update",
 		"media.create",
 	},
 	roleModerator: {
+		permAdminAccess,
 		permPostRead,
 		permCommentModerate, permCommentDelete,
 	},

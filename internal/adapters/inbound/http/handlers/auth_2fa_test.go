@@ -168,3 +168,33 @@ func TestMeTwoFactorEndpoints(t *testing.T) {
 	require.Equal(t, nethttp.StatusConflict, w.Code)
 	require.Equal(t, "auth.2fa.already_enabled", errorCode(body))
 }
+
+type fakeAdminLogin struct {
+	email string
+	err   error
+}
+
+func (f *fakeAdminLogin) AdminLogin(_ context.Context, email, _, _, _ string, _ bool) (authdomain.LoginResult, error) {
+	f.email = email
+	return authdomain.LoginResult{Tokens: authdomain.TokenPair{AccessToken: "staff-token"}}, f.err
+}
+
+func TestAdminLoginHandler(t *testing.T) {
+	t.Parallel()
+
+	admin := &fakeAdminLogin{}
+	w, body := runProfile(t, adminLoginHandler(admin), profileRequest{
+		method: nethttp.MethodPost, target: "/api/v1/admin/auth/login", contentType: "application/json",
+		body: `{"email":"staff@example.com","password":"x"}`,
+	})
+	require.Equal(t, nethttp.StatusOK, w.Code, w.Body.String())
+	require.Equal(t, "staff-token", dataOf(body)["access_token"])
+	require.Equal(t, "staff@example.com", admin.email)
+
+	w, body = runProfile(t, adminLoginHandler(&fakeAdminLogin{err: authdomain.ErrInvalidCredentials}), profileRequest{
+		method: nethttp.MethodPost, target: "/api/v1/admin/auth/login", contentType: "application/json",
+		body: `{"email":"reader@example.com","password":"x"}`,
+	})
+	require.Equal(t, nethttp.StatusUnauthorized, w.Code)
+	require.Equal(t, "unauthorized", errorCode(body))
+}

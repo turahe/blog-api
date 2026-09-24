@@ -118,6 +118,18 @@ the wired Phase 2 surface and where it deliberately differs from the target.
 - Every write updates `roles`/`role_permissions`/`user_roles` and `casbin_rules` in one
   transaction, then reloads this instance's enforcer, so the change applies without a restart.
 
+### Admin login
+
+`POST /api/v1/admin/auth/login` (`admin.auth.login`, anonymous, rate limit bucket
+`admin.auth.login` = `AUTH_LOGIN_PER_MINUTE` per IP) takes the same body and returns the
+same responses as `POST /api/v1/auth/login`, including lockout and the two-factor challenge.
+It differs in one way: the account must hold `admin.access`, which the seeder grants to
+`admin`, `editor`, `author` and `moderator`. The permission is checked only after the
+password is verified. An account without it gets the same `401 unauthorized` as a wrong
+password, and the attempt does not count toward lockout. The tokens are ordinary access
+and refresh tokens; each admin route still checks its own permission. Existing
+deployments must re-run `app seed` to grant `admin.access`.
+
 ### Two-factor authentication (TOTP)
 
 | Operation | Route | Auth | Rate limit |
