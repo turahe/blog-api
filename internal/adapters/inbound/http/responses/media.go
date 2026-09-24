@@ -13,6 +13,7 @@ func MediaPresign(result mediadomain.PresignResult) gin.H {
 	if headers == nil {
 		headers = map[string]string{}
 	}
+
 	return gin.H{
 		"media_id":         result.Asset.UUID.String(),
 		"storage_key":      result.Asset.StorageKey,
@@ -29,10 +30,12 @@ func MediaAsset(asset mediadomain.MediaAsset) gin.H {
 	if asset.UploadedByUUID != nil {
 		uploadedBy = asset.UploadedByUUID.String()
 	}
+
 	tags := asset.Tags
 	if tags == nil {
 		tags = []string{}
 	}
+
 	return gin.H{
 		"id":                asset.UUID.String(),
 		"storage_key":       asset.StorageKey,

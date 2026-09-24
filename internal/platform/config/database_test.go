@@ -4,6 +4,7 @@ import "testing"
 
 func TestDatabaseDSNPostgres(t *testing.T) {
 	t.Parallel()
+
 	cfg := Config{
 		DBDriver:   "postgres",
 		DBHost:     "db.example.com",
@@ -13,10 +14,12 @@ func TestDatabaseDSNPostgres(t *testing.T) {
 		DBName:     "blog",
 		DBSSLMode:  "require",
 	}
+
 	got, err := cfg.DatabaseDSN()
 	if err != nil {
 		t.Fatal(err)
 	}
+
 	want := "postgres://blog:p%40ss%20word@db.example.com:5432/blog?sslmode=require"
 	if got != want {
 		t.Fatalf("DatabaseDSN()=%q want %q", got, want)
@@ -25,6 +28,7 @@ func TestDatabaseDSNPostgres(t *testing.T) {
 
 func TestDatabaseDSNMySQL(t *testing.T) {
 	t.Parallel()
+
 	cfg := Config{
 		DBDriver:   "mysql",
 		DBHost:     "db.example.com",
@@ -33,10 +37,12 @@ func TestDatabaseDSNMySQL(t *testing.T) {
 		DBPassword: "secret",
 		DBName:     "blog",
 	}
+
 	got, err := cfg.DatabaseDSN()
 	if err != nil {
 		t.Fatal(err)
 	}
+
 	want := "blog:secret@tcp(db.example.com:3306)/blog?parseTime=true"
 	if got != want {
 		t.Fatalf("DatabaseDSN()=%q want %q", got, want)
@@ -45,6 +51,7 @@ func TestDatabaseDSNMySQL(t *testing.T) {
 
 func TestDatabaseDSNSQLServer(t *testing.T) {
 	t.Parallel()
+
 	cfg := Config{
 		DBDriver:   "sqlserver",
 		DBHost:     "db.example.com",
@@ -53,10 +60,12 @@ func TestDatabaseDSNSQLServer(t *testing.T) {
 		DBPassword: "secret",
 		DBName:     "blog",
 	}
+
 	got, err := cfg.DatabaseDSN()
 	if err != nil {
 		t.Fatal(err)
 	}
+
 	want := "sqlserver://blog:secret@db.example.com:1433?database=blog"
 	if got != want {
 		t.Fatalf("DatabaseDSN()=%q want %q", got, want)
@@ -77,6 +86,7 @@ func TestLoadDatabaseFromSplitEnvironment(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+
 	if cfg.DBHost != "db.internal" || cfg.DBPort != 5433 || cfg.DBSSLMode != "require" {
 		t.Fatalf("cfg=%+v", cfg)
 	}
@@ -100,6 +110,7 @@ func TestLoadRejectsProductionPostgresWithoutTLS(t *testing.T) {
 
 func TestValidateDatabaseRequiresHostForDirect(t *testing.T) {
 	t.Parallel()
+
 	cfg := Config{DBDriver: "postgres", DBUser: "blog", DBName: "blog", DBPort: 5432, DBSSLMode: "disable"}
 	if err := cfg.ValidateDatabase(); err == nil {
 		t.Fatal("expected host error")
@@ -108,6 +119,7 @@ func TestValidateDatabaseRequiresHostForDirect(t *testing.T) {
 
 func TestValidateDatabaseSkippedForCloudSQL(t *testing.T) {
 	t.Parallel()
+
 	cfg := Config{
 		DBInstanceConnectionName: "proj:region:inst",
 		DBUser:                   "blog",

@@ -4,11 +4,12 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
-	"github.com/turahe/blog-api/internal/adapters/inbound/http/responses"
 	nethttp "net/http"
 	"net/http/httptest"
 	"testing"
 	"time"
+
+	"github.com/turahe/blog-api/internal/adapters/inbound/http/responses"
 
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
@@ -29,7 +30,7 @@ func (f *fakeCategoryService) List(ctx context.Context) ([]categorydomain.Catego
 	return f.listFn(ctx)
 }
 
-func (f *fakeCategoryService) GetBySlug(ctx context.Context, slug string) (categorydomain.Category, error) {
+func (f *fakeCategoryService) GetBySlug(context.Context, string) (categorydomain.Category, error) {
 	return categorydomain.Category{}, categorydomain.ErrNotFound
 }
 
@@ -67,11 +68,12 @@ func TestListCategoriesHandlerReturnsItemsEnvelope(t *testing.T) {
 
 	w := httptest.NewRecorder()
 	c, _ := gin.CreateTestContext(w)
-	c.Request = httptest.NewRequest(nethttp.MethodGet, "/api/v1/categories", nil)
+	c.Request = httptest.NewRequestWithContext(t.Context(), nethttp.MethodGet, "/api/v1/categories", nil)
 
 	listCategoriesHandler(svc)(c)
 
 	require.Equal(t, nethttp.StatusOK, w.Code)
+
 	var envelope responses.Envelope
 	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &envelope))
 	require.True(t, envelope.OK)
@@ -82,8 +84,8 @@ func TestListCategoriesHandlerReturnsItemsEnvelope(t *testing.T) {
 	require.Len(t, items, 1)
 	item, ok := items[0].(map[string]any)
 	require.True(t, ok)
-	require.Equal(t, float64(1), item["lft"])
-	require.Equal(t, float64(2), item["rgt"])
+	require.InDelta(t, 1, item["lft"], 0)
+	require.InDelta(t, 2, item["rgt"], 0)
 }
 
 func TestAdminCreateCategoryHandlerCreatesCategory(t *testing.T) {
@@ -96,6 +98,7 @@ func TestAdminCreateCategoryHandlerCreatesCategory(t *testing.T) {
 		createFn: func(_ context.Context, in categoryservice.CreateInput) (categorydomain.Category, error) {
 			require.Equal(t, "Technology", in.Name)
 			require.Equal(t, "technology", in.Slug)
+
 			return categorydomain.Category{
 				UUID: catID, Name: in.Name, Slug: in.Slug,
 				Lft: 1, Rgt: 2, Depth: 0, SortOrder: 0, CreatedAt: now, UpdatedAt: now,
@@ -105,13 +108,14 @@ func TestAdminCreateCategoryHandlerCreatesCategory(t *testing.T) {
 
 	w := httptest.NewRecorder()
 	c, _ := gin.CreateTestContext(w)
-	c.Request = httptest.NewRequest(nethttp.MethodPost, "/api/v1/admin/categories",
+	c.Request = httptest.NewRequestWithContext(t.Context(), nethttp.MethodPost, "/api/v1/admin/categories",
 		bytes.NewBufferString(`{"name":"Technology","slug":"technology"}`))
 	c.Request.Header.Set("Content-Type", "application/json")
 
 	adminCreateCategoryHandler(svc)(c)
 
 	require.Equal(t, nethttp.StatusCreated, w.Code)
+
 	var envelope responses.Envelope
 	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &envelope))
 	require.True(t, envelope.OK)
@@ -135,11 +139,12 @@ func TestAdminDeleteCategoryHandlerMapsInUse(t *testing.T) {
 	w := httptest.NewRecorder()
 	c, _ := gin.CreateTestContext(w)
 	c.Params = gin.Params{{Key: "param1", Value: catID.String()}}
-	c.Request = httptest.NewRequest(nethttp.MethodDelete, "/api/v1/admin/categories/"+catID.String(), nil)
+	c.Request = httptest.NewRequestWithContext(t.Context(), nethttp.MethodDelete, "/api/v1/admin/categories/"+catID.String(), nil)
 
 	adminDeleteCategoryHandler(svc)(c)
 
 	require.Equal(t, nethttp.StatusConflict, w.Code)
+
 	var envelope responses.Envelope
 	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &envelope))
 	require.False(t, envelope.OK)
@@ -158,7 +163,7 @@ func TestAdminDeleteCategoryHandlerReturns204(t *testing.T) {
 	w := httptest.NewRecorder()
 	c, _ := gin.CreateTestContext(w)
 	c.Params = gin.Params{{Key: "param1", Value: catID.String()}}
-	c.Request = httptest.NewRequest(nethttp.MethodDelete, "/api/v1/admin/categories/"+catID.String(), nil)
+	c.Request = httptest.NewRequestWithContext(t.Context(), nethttp.MethodDelete, "/api/v1/admin/categories/"+catID.String(), nil)
 
 	adminDeleteCategoryHandler(svc)(c)
 
@@ -181,13 +186,14 @@ func TestAdminMoveCategoryHandlerRejectsCycle(t *testing.T) {
 	w := httptest.NewRecorder()
 	c, _ := gin.CreateTestContext(w)
 	c.Params = gin.Params{{Key: "param1", Value: catID.String()}}
-	c.Request = httptest.NewRequest(nethttp.MethodPost, "/api/v1/admin/categories/"+catID.String()+"/move",
+	c.Request = httptest.NewRequestWithContext(t.Context(), nethttp.MethodPost, "/api/v1/admin/categories/"+catID.String()+"/move",
 		bytes.NewBufferString(`{"parent_id":"`+childID.String()+`"}`))
 	c.Request.Header.Set("Content-Type", "application/json")
 
 	adminMoveCategoryHandler(svc)(c)
 
 	require.Equal(t, nethttp.StatusBadRequest, w.Code)
+
 	var envelope responses.Envelope
 	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &envelope))
 	require.False(t, envelope.OK)
@@ -209,7 +215,7 @@ func TestAdminMoveCategoryHandlerRequiresParentID(t *testing.T) {
 	w := httptest.NewRecorder()
 	c, _ := gin.CreateTestContext(w)
 	c.Params = gin.Params{{Key: "param1", Value: catID.String()}}
-	c.Request = httptest.NewRequest(nethttp.MethodPost, "/api/v1/admin/categories/"+catID.String()+"/move",
+	c.Request = httptest.NewRequestWithContext(t.Context(), nethttp.MethodPost, "/api/v1/admin/categories/"+catID.String()+"/move",
 		bytes.NewBufferString(`{"before_id":null}`))
 	c.Request.Header.Set("Content-Type", "application/json")
 

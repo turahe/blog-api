@@ -1,3 +1,4 @@
+// Package domain holds authentication entities: sessions, reset tokens, and access claims.
 package domain
 
 import (
@@ -7,6 +8,7 @@ import (
 	"github.com/google/uuid"
 )
 
+// Authentication errors; handlers map them via service.MapError.
 var (
 	ErrInvalidCredentials = errors.New("invalid credentials")
 	ErrUserInactive       = errors.New("user inactive")
@@ -20,6 +22,7 @@ var (
 	ErrCurrentPassword    = errors.New("current password mismatch")
 )
 
+// PasswordResetToken is a hashed single-use password reset token.
 type PasswordResetToken struct {
 	ID        int64
 	UUID      uuid.UUID
@@ -32,15 +35,18 @@ type PasswordResetToken struct {
 	CreatedAt time.Time
 }
 
+// Active reports whether the token is unused and unexpired at now.
 func (t PasswordResetToken) Active(now time.Time) bool {
 	return t.UsedAt == nil && t.ExpiresAt.After(now)
 }
 
+// ResetTokenValidity is the result of checking a reset token without consuming it.
 type ResetTokenValidity struct {
 	Valid     bool
 	ExpiresAt time.Time
 }
 
+// TokenPair is the access/refresh token response of login and refresh.
 type TokenPair struct {
 	AccessToken  string
 	RefreshToken string
@@ -48,6 +54,7 @@ type TokenPair struct {
 	ExpiresIn    int64
 }
 
+// RefreshSession is a stored refresh token; rotation links sessions in a family.
 type RefreshSession struct {
 	ID             int64
 	UUID           uuid.UUID
@@ -62,10 +69,12 @@ type RefreshSession struct {
 	CreatedAt      time.Time
 }
 
+// Active reports whether the session is unrevoked and unexpired at now.
 func (s RefreshSession) Active(now time.Time) bool {
 	return s.RevokedAt == nil && s.ExpiresAt.After(now)
 }
 
+// AccessClaims are the verified claims of an access token.
 type AccessClaims struct {
 	Subject   uuid.UUID
 	Email     string

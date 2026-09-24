@@ -46,6 +46,17 @@ type PaginationMeta struct {
 	Total       int64  `json:"total"`
 }
 
+// Shared machine-readable ErrorBody.Code values; service-specific codes are
+// namespaced (for example "comment.not_editable") and declared by their handlers.
+const (
+	ErrorCodeValidation   = "validation_error"
+	ErrorCodeUnauthorized = "unauthorized"
+	ErrorCodeForbidden    = "forbidden"
+	ErrorCodeNotFound     = "not_found"
+	ErrorCodeConflict     = "conflict"
+	ErrorCodeInternal     = "internal_error"
+)
+
 // ErrorBody is the machine-readable error payload.
 type ErrorBody struct {
 	Code    string `json:"code"`
@@ -57,6 +68,7 @@ type ErrorBody struct {
 func RequestID(c *gin.Context) string {
 	value, _ := c.Get(ContextRequestIDKey)
 	id, _ := value.(string)
+
 	return id
 }
 
@@ -101,22 +113,23 @@ func SuccessPaginatedFor(c *gin.Context, status int, opts PageOpts) {
 	if page < 1 {
 		page = 1
 	}
+
 	if perPage < 1 {
 		perPage = 15
 	}
 
-	lastPage := int((total + int64(perPage) - 1) / int64(perPage))
-	if lastPage < 1 {
-		lastPage = 1
-	}
+	lastPage := max(int((total+int64(perPage)-1)/int64(perPage)), 1)
 
 	var from, to *int
+
 	if total > 0 && page <= lastPage {
 		f := (page-1)*perPage + 1
+
 		t := page * perPage
 		if int64(t) > total {
 			t = int(total)
 		}
+
 		if f <= int(total) {
 			from, to = &f, &t
 		}
@@ -125,11 +138,14 @@ func SuccessPaginatedFor(c *gin.Context, status int, opts PageOpts) {
 	path := absolutePath(c)
 	first := absolutePageURL(c, 1)
 	last := absolutePageURL(c, lastPage)
+
 	var prev, next *string
+
 	if page > 1 {
 		u := absolutePageURL(c, page-1)
 		prev = &u
 	}
+
 	if page < lastPage {
 		u := absolutePageURL(c, page+1)
 		next = &u
@@ -199,10 +215,12 @@ func FailureFor(c *gin.Context, status int, opts FailureOpts) {
 	if service == 0 {
 		service = ServicePlatform
 	}
+
 	caseCode := opts.Case
 	if caseCode == 0 {
 		caseCode = CaseCodeForStatus(status)
 	}
+
 	c.AbortWithStatusJSON(status, Envelope{
 		OK:    false,
 		Code:  BuildResponseCode(status, service, caseCode),
@@ -218,6 +236,7 @@ func absolutePath(c *gin.Context) string {
 func absolutePageURL(c *gin.Context, page int) string {
 	q := c.Request.URL.Query()
 	q.Set("page", strconv.Itoa(page))
+
 	return absolutePath(c) + "?" + q.Encode()
 }
 
@@ -225,9 +244,11 @@ func requestScheme(c *gin.Context) string {
 	if proto := c.GetHeader("X-Forwarded-Proto"); proto == "https" || proto == "http" {
 		return proto
 	}
+
 	if c.Request.TLS != nil {
 		return "https"
 	}
+
 	return "http"
 }
 
@@ -235,8 +256,10 @@ func requestHost(c *gin.Context) string {
 	if host := c.GetHeader("X-Forwarded-Host"); host != "" {
 		return host
 	}
+
 	if c.Request.Host != "" {
 		return c.Request.Host
 	}
+
 	return "localhost"
 }

@@ -12,13 +12,14 @@ import (
 type Controllers struct {
 	Stub func(Route) gin.HandlerFunc
 
-	Health Health
-	Auth   Auth
-	Users  Users
-	Posts  Posts
-	Cats   Categories
-	Tags   Tags
-	Media  Media
+	Health   Health
+	Auth     Auth
+	Users    Users
+	Posts    Posts
+	Cats     Categories
+	Tags     Tags
+	Media    Media
+	Comments Comments
 }
 
 // Health probe handlers.
@@ -84,6 +85,18 @@ type Media struct {
 	AdminList      gin.HandlerFunc
 	AdminTagsPatch gin.HandlerFunc
 	AdminDelete    gin.HandlerFunc
+}
+
+// Comments public and self-service handlers.
+type Comments struct {
+	PostList   gin.HandlerFunc
+	PostCreate gin.HandlerFunc
+	Get        gin.HandlerFunc
+	Flag       gin.HandlerFunc
+	MeList     gin.HandlerFunc
+	Patch      gin.HandlerFunc
+	Delete     gin.HandlerFunc
+	Upvote     gin.HandlerFunc
 }
 
 // NotImplemented is the fallback for registered but unwired operations.

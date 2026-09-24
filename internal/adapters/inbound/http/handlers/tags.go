@@ -2,7 +2,6 @@ package handlers
 
 import (
 	"context"
-	"errors"
 	nethttp "net/http"
 	"strings"
 
@@ -33,13 +32,15 @@ func listTagsHandler(tags tagAPI) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		items, err := tags.List(c.Request.Context())
 		if err != nil {
-			responses.Failure(c, nethttp.StatusInternalServerError, "internal_error", "Failed to list tags")
+			responses.Failure(c, nethttp.StatusInternalServerError, responses.ErrorCodeInternal, "Failed to list tags")
 			return
 		}
+
 		out := make([]gin.H, 0, len(items))
 		for _, tag := range items {
 			out = append(out, responses.Tag(tag))
 		}
+
 		responses.Success(c, nethttp.StatusOK, out)
 	}
 }
@@ -61,10 +62,12 @@ func adminCreateTagHandler(tags tagAPI) gin.HandlerFunc {
 		if !requests.BindJSON(c, &req) {
 			return
 		}
+
 		tag, err := tags.Create(c.Request.Context(), req.Name, req.Slug)
 		if mapTagError(c, err) {
 			return
 		}
+
 		responses.Success(c, nethttp.StatusCreated, responses.Tag(tag))
 	}
 }
@@ -84,17 +87,20 @@ func adminUpdateTagHandler(tags tagAPI) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		id, err := uuid.Parse(strings.TrimSpace(c.Param("param1")))
 		if err != nil {
-			responses.Failure(c, nethttp.StatusBadRequest, "validation_error", "Invalid tag id")
+			responses.Failure(c, nethttp.StatusBadRequest, responses.ErrorCodeValidation, "Invalid tag id")
 			return
 		}
+
 		var req requests.UpdateTag
 		if !requests.BindJSON(c, &req) {
 			return
 		}
+
 		tag, err := tags.Update(c.Request.Context(), id, req.Name, req.Slug)
 		if mapTagError(c, err) {
 			return
 		}
+
 		responses.Success(c, nethttp.StatusOK, responses.Tag(tag))
 	}
 }
@@ -114,33 +120,39 @@ func adminMergeTagHandler(tags tagAPI) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		sourceID, err := uuid.Parse(strings.TrimSpace(c.Param("param1")))
 		if err != nil {
-			responses.Failure(c, nethttp.StatusBadRequest, "validation_error", "Invalid tag id")
+			responses.Failure(c, nethttp.StatusBadRequest, responses.ErrorCodeValidation, "Invalid tag id")
 			return
 		}
+
 		var req requests.MergeTag
 		if !requests.BindJSON(c, &req) {
 			return
 		}
+
 		intoID, err := uuid.Parse(strings.TrimSpace(req.IntoID))
 		if err != nil {
-			responses.Failure(c, nethttp.StatusBadRequest, "validation_error", "Invalid into_id")
+			responses.Failure(c, nethttp.StatusBadRequest, responses.ErrorCodeValidation, "Invalid into_id")
 			return
 		}
+
 		if err := tags.Merge(c.Request.Context(), sourceID, intoID); mapTagError(c, err) {
 			return
 		}
+
 		items, err := tags.List(c.Request.Context())
 		if err != nil {
-			responses.Failure(c, nethttp.StatusInternalServerError, "internal_error", "Failed to load merged tag")
+			responses.Failure(c, nethttp.StatusInternalServerError, responses.ErrorCodeInternal, "Failed to load merged tag")
 			return
 		}
+
 		for _, tag := range items {
 			if tag.UUID == intoID {
 				responses.Success(c, nethttp.StatusOK, responses.Tag(tag))
 				return
 			}
 		}
-		responses.Failure(c, nethttp.StatusInternalServerError, "internal_error", "Failed to load merged tag")
+
+		responses.Failure(c, nethttp.StatusInternalServerError, responses.ErrorCodeInternal, "Failed to load merged tag")
 	}
 }
 
@@ -156,61 +168,28 @@ func adminDeleteTagHandler(tags tagAPI) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		id, err := uuid.Parse(strings.TrimSpace(c.Param("param1")))
 		if err != nil {
-			responses.Failure(c, nethttp.StatusBadRequest, "validation_error", "Invalid tag id")
+			responses.Failure(c, nethttp.StatusBadRequest, responses.ErrorCodeValidation, "Invalid tag id")
 			return
 		}
+
 		if err := tags.Delete(c.Request.Context(), id); mapTagError(c, err) {
 			return
 		}
+
 		responses.Success(c, nethttp.StatusOK, nil)
 	}
 }
 
+var tagErrors = resourceErrors{
+	service:    responses.ServiceTags,
+	name:       "Tag",
+	inUseCode:  "tag_in_use",
+	validation: tagservice.ErrValidation,
+	notFound:   tagdomain.ErrNotFound,
+	conflict:   tagdomain.ErrConflict,
+	inUse:      tagdomain.ErrInUse,
+}
+
 func mapTagError(c *gin.Context, err error) bool {
-	if err == nil {
-		return false
-	}
-	switch {
-	case errors.Is(err, tagservice.ErrValidation):
-		responses.FailureFor(c, nethttp.StatusBadRequest, responses.FailureOpts{
-			Service: responses.ServiceTags,
-			Case:    responses.CaseValidation,
-			Code:    "validation_error",
-			Message: err.Error(),
-			Details: nil,
-		})
-	case errors.Is(err, tagdomain.ErrNotFound):
-		responses.FailureFor(c, nethttp.StatusNotFound, responses.FailureOpts{
-			Service: responses.ServiceTags,
-			Case:    responses.CaseNotFound,
-			Code:    "not_found",
-			Message: "Tag not found",
-			Details: nil,
-		})
-	case errors.Is(err, tagdomain.ErrConflict):
-		responses.FailureFor(c, nethttp.StatusConflict, responses.FailureOpts{
-			Service: responses.ServiceTags,
-			Case:    responses.CaseConflict,
-			Code:    "conflict",
-			Message: "Tag conflict",
-			Details: nil,
-		})
-	case errors.Is(err, tagdomain.ErrInUse):
-		responses.FailureFor(c, nethttp.StatusConflict, responses.FailureOpts{
-			Service: responses.ServiceTags,
-			Case:    responses.CaseConflict,
-			Code:    "tag_in_use",
-			Message: "Tag in use",
-			Details: nil,
-		})
-	default:
-		responses.FailureFor(c, nethttp.StatusInternalServerError, responses.FailureOpts{
-			Service: responses.ServiceTags,
-			Case:    responses.CaseInternalError,
-			Code:    "internal_error",
-			Message: "Failed to process tag",
-			Details: nil,
-		})
-	}
-	return true
+	return tagErrors.write(c, err)
 }

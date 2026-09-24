@@ -37,13 +37,16 @@ func newRootCmd() *cobra.Command {
 			case "help", "completion":
 				return nil
 			}
+
 			path, err := resolveEnvFile(envFile)
 			if err != nil {
 				return err
 			}
+
 			if path == "" {
 				return nil
 			}
+
 			return loadEnvFile(path)
 		},
 	}
@@ -85,5 +88,6 @@ func newRootCmd() *cobra.Command {
 		doctorCmd,
 		versionCmd,
 	)
+
 	return cmd
 }

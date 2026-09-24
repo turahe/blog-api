@@ -33,10 +33,12 @@ func Live(health healthports.Service) gin.HandlerFunc {
 func ready(health healthports.Service) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		status := health.Ready(c.Request.Context())
+
 		httpStatus := nethttp.StatusOK
 		if status.Status != "ok" {
 			httpStatus = nethttp.StatusServiceUnavailable
 		}
+
 		responses.Success(c, httpStatus, status)
 	}
 }

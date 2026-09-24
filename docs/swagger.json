@@ -1170,6 +1170,279 @@
                 }
             }
         },
+        "/api/v1/comments/{param1}": {
+            "get": {
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "public"
+                ],
+                "summary": "Get a comment with its first replies",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "comment UUID",
+                        "name": "param1",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/responses.Envelope"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/responses.Envelope"
+                        }
+                    }
+                }
+            },
+            "delete": {
+                "security": [
+                    {
+                        "Bearer": []
+                    }
+                ],
+                "description": "Soft delete: the comment stays in the thread as a placeholder without content or author.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "self-service"
+                ],
+                "summary": "Delete my comment",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "comment UUID",
+                        "name": "param1",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/responses.Envelope"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/responses.Envelope"
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden",
+                        "schema": {
+                            "$ref": "#/definitions/responses.Envelope"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/responses.Envelope"
+                        }
+                    }
+                }
+            },
+            "patch": {
+                "security": [
+                    {
+                        "Bearer": []
+                    }
+                ],
+                "description": "Authors may edit their own comment within the edit window after posting.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "self-service"
+                ],
+                "summary": "Edit my comment",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "comment UUID",
+                        "name": "param1",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "new content",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/requests.UpdateComment"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/responses.Envelope"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/responses.Envelope"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/responses.Envelope"
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden",
+                        "schema": {
+                            "$ref": "#/definitions/responses.Envelope"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/responses.Envelope"
+                        }
+                    },
+                    "409": {
+                        "description": "Conflict",
+                        "schema": {
+                            "$ref": "#/definitions/responses.Envelope"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/comments/{param1}/flag": {
+            "post": {
+                "security": [
+                    {
+                        "Bearer": []
+                    }
+                ],
+                "description": "Repeat flags from the same user (or guest IP and user agent) are accepted but counted once.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "public"
+                ],
+                "summary": "Flag a comment for moderation",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "comment UUID",
+                        "name": "param1",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "flag",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/requests.FlagComment"
+                        }
+                    }
+                ],
+                "responses": {
+                    "202": {
+                        "description": "Accepted",
+                        "schema": {
+                            "$ref": "#/definitions/responses.Envelope"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/responses.Envelope"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/responses.Envelope"
+                        }
+                    },
+                    "429": {
+                        "description": "Too Many Requests",
+                        "schema": {
+                            "$ref": "#/definitions/responses.Envelope"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/comments/{param1}/upvote": {
+            "post": {
+                "security": [
+                    {
+                        "Bearer": []
+                    }
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "self-service"
+                ],
+                "summary": "Toggle my upvote on a comment",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "comment UUID",
+                        "name": "param1",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/responses.Envelope"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/responses.Envelope"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/responses.Envelope"
+                        }
+                    },
+                    "429": {
+                        "description": "Too Many Requests",
+                        "schema": {
+                            "$ref": "#/definitions/responses.Envelope"
+                        }
+                    }
+                }
+            }
+        },
         "/api/v1/me": {
             "get": {
                 "security": [
@@ -1184,6 +1457,53 @@
                     "self-service"
                 ],
                 "summary": "Current user",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/responses.Envelope"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/responses.Envelope"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/me/comments": {
+            "get": {
+                "security": [
+                    {
+                        "Bearer": []
+                    }
+                ],
+                "description": "All of the caller's comments except deleted ones, newest first, including pending and rejected.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "self-service"
+                ],
+                "summary": "List my comments",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "default": 1,
+                        "description": "page",
+                        "name": "page",
+                        "in": "query"
+                    },
+                    {
+                        "type": "integer",
+                        "default": 20,
+                        "description": "per page",
+                        "name": "per_page",
+                        "in": "query"
+                    }
+                ],
                 "responses": {
                     "200": {
                         "description": "OK",
@@ -1371,6 +1691,141 @@
                 }
             }
         },
+        "/api/v1/posts/{param1}/comments": {
+            "get": {
+                "description": "Top-level comments by default; pass parent_id to list the direct replies of a comment.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "public"
+                ],
+                "summary": "List comments on a post",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "post UUID",
+                        "name": "param1",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "parent comment UUID",
+                        "name": "parent_id",
+                        "in": "query"
+                    },
+                    {
+                        "type": "integer",
+                        "default": 1,
+                        "description": "page",
+                        "name": "page",
+                        "in": "query"
+                    },
+                    {
+                        "type": "integer",
+                        "default": 20,
+                        "description": "per page",
+                        "name": "per_page",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/responses.Envelope"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/responses.Envelope"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/responses.Envelope"
+                        }
+                    }
+                }
+            },
+            "post": {
+                "security": [
+                    {
+                        "Bearer": []
+                    }
+                ],
+                "description": "Signed-in users comment as themselves. Guests send author_name and author_email when guest comments are enabled; guest comments await moderation.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "public"
+                ],
+                "summary": "Comment on a post",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "post UUID",
+                        "name": "param1",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "comment",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/requests.CreateComment"
+                        }
+                    }
+                ],
+                "responses": {
+                    "201": {
+                        "description": "Created",
+                        "schema": {
+                            "$ref": "#/definitions/responses.Envelope"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/responses.Envelope"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/responses.Envelope"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/responses.Envelope"
+                        }
+                    },
+                    "422": {
+                        "description": "Unprocessable Entity",
+                        "schema": {
+                            "$ref": "#/definitions/responses.Envelope"
+                        }
+                    },
+                    "429": {
+                        "description": "Too Many Requests",
+                        "schema": {
+                            "$ref": "#/definitions/responses.Envelope"
+                        }
+                    }
+                }
+            }
+        },
         "/api/v1/tags": {
             "get": {
                 "produces": [
@@ -1510,6 +1965,37 @@
                 }
             }
         },
+        "requests.CreateComment": {
+            "type": "object",
+            "required": [
+                "content"
+            ],
+            "properties": {
+                "author_email": {
+                    "type": "string",
+                    "maxLength": 254
+                },
+                "author_name": {
+                    "description": "Guest commenters only; ignored when a bearer token is sent.",
+                    "type": "string",
+                    "maxLength": 100
+                },
+                "content": {
+                    "description": "Plain text or markdown; HTML is not rendered.",
+                    "type": "string",
+                    "maxLength": 10000
+                },
+                "honeypot": {
+                    "description": "Leave empty. Anti-spam trap for bots; must stay hidden in forms.",
+                    "type": "string",
+                    "maxLength": 500
+                },
+                "parent_id": {
+                    "type": "string",
+                    "format": "uuid"
+                }
+            }
+        },
         "requests.CreatePost": {
             "type": "object",
             "required": [
@@ -1560,6 +2046,33 @@
                     "type": "string",
                     "maxLength": 100,
                     "minLength": 1
+                }
+            }
+        },
+        "requests.FlagComment": {
+            "type": "object",
+            "required": [
+                "reason_code"
+            ],
+            "properties": {
+                "details": {
+                    "type": "string",
+                    "maxLength": 2000
+                },
+                "reason_code": {
+                    "type": "string",
+                    "enum": [
+                        "spam",
+                        "abuse",
+                        "hate",
+                        "harassment",
+                        "doxx",
+                        "self_harm",
+                        "copyright",
+                        "impersonation",
+                        "illegal",
+                        "other"
+                    ]
                 }
             }
         },
@@ -1718,6 +2231,18 @@
                 },
                 "token": {
                     "type": "string"
+                }
+            }
+        },
+        "requests.UpdateComment": {
+            "type": "object",
+            "required": [
+                "content"
+            ],
+            "properties": {
+                "content": {
+                    "type": "string",
+                    "maxLength": 10000
                 }
             }
         },

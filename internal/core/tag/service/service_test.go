@@ -36,11 +36,13 @@ type fakeRepo struct {
 
 func newFakeRepo(tags ...tagdomain.Tag) *fakeRepo {
 	byID := make(map[uuid.UUID]tagdomain.Tag, len(tags))
+
 	bySlug := make(map[string]tagdomain.Tag, len(tags))
 	for _, tag := range tags {
 		byID[tag.UUID] = tag
 		bySlug[tag.Slug] = tag
 	}
+
 	return &fakeRepo{
 		byID:   byID,
 		bySlug: bySlug,
@@ -53,6 +55,7 @@ func (f *fakeRepo) List(_ context.Context) ([]tagdomain.Tag, error) {
 	for _, tag := range f.byID {
 		out = append(out, tag)
 	}
+
 	return out, nil
 }
 
@@ -61,6 +64,7 @@ func (f *fakeRepo) GetByID(_ context.Context, id uuid.UUID) (tagdomain.Tag, erro
 	if !ok {
 		return tagdomain.Tag{}, tagdomain.ErrNotFound
 	}
+
 	return tag, nil
 }
 
@@ -69,12 +73,14 @@ func (f *fakeRepo) GetBySlug(_ context.Context, slug string) (tagdomain.Tag, err
 	if !ok {
 		return tagdomain.Tag{}, tagdomain.ErrNotFound
 	}
+
 	return tag, nil
 }
 
 func (f *fakeRepo) Create(_ context.Context, tag tagdomain.Tag) (tagdomain.Tag, error) {
 	f.byID[tag.UUID] = tag
 	f.bySlug[tag.Slug] = tag
+
 	return tag, nil
 }
 
@@ -83,8 +89,10 @@ func (f *fakeRepo) Update(_ context.Context, tag tagdomain.Tag) (tagdomain.Tag, 
 	if ok && old.Slug != tag.Slug {
 		delete(f.bySlug, old.Slug)
 	}
+
 	f.byID[tag.UUID] = tag
 	f.bySlug[tag.Slug] = tag
+
 	return tag, nil
 }
 
@@ -93,6 +101,7 @@ func (f *fakeRepo) SlugTaken(_ context.Context, slug string, excludeID uuid.UUID
 	if !ok {
 		return false, nil
 	}
+
 	return tag.UUID != excludeID, nil
 }
 
@@ -102,11 +111,13 @@ func (f *fakeRepo) CountPosts(_ context.Context, tagID uuid.UUID) (int64, error)
 
 func (f *fakeRepo) MergeInto(_ context.Context, sourceID, targetID uuid.UUID) error {
 	f.merged = append(f.merged, [2]uuid.UUID{sourceID, targetID})
+
 	source, ok := f.byID[sourceID]
 	if ok {
 		delete(f.bySlug, source.Slug)
 		delete(f.byID, sourceID)
 	}
+
 	return nil
 }
 
@@ -115,9 +126,11 @@ func (f *fakeRepo) Delete(_ context.Context, id uuid.UUID) error {
 	if !ok {
 		return tagdomain.ErrNotFound
 	}
+
 	delete(f.bySlug, tag.Slug)
 	delete(f.byID, id)
 	f.deleted = append(f.deleted, id)
+
 	return nil
 }
 

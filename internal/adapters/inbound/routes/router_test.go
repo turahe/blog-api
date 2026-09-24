@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
-	"io"
 	"log/slog"
 	nethttp "net/http"
 	"net/http/httptest"
@@ -61,15 +60,17 @@ func (f fakeRoleLookup) ListRoleNames(context.Context, uuid.UUID) ([]string, err
 }
 
 func TestHealthLive(t *testing.T) {
+	t.Parallel()
+
 	router, err := httpadapter.NewRouter(httpadapter.Dependencies{
-		Logger:  slog.New(slog.NewTextHandler(io.Discard, nil)),
+		Logger:  slog.New(slog.DiscardHandler),
 		Health:  healthservice.New("test"),
 		Version: "test",
 	})
 	require.NoError(t, err)
 
 	recorder := httptest.NewRecorder()
-	request := httptest.NewRequest(nethttp.MethodGet, "/health/live", nil)
+	request := httptest.NewRequestWithContext(t.Context(), nethttp.MethodGet, "/health/live", nil)
 	router.ServeHTTP(recorder, request)
 
 	require.Equal(t, nethttp.StatusOK, recorder.Code)
@@ -82,15 +83,17 @@ func TestHealthLive(t *testing.T) {
 }
 
 func TestContractOperationIsRegistered(t *testing.T) {
+	t.Parallel()
+
 	router, err := httpadapter.NewRouter(httpadapter.Dependencies{
-		Logger:  slog.New(slog.NewTextHandler(io.Discard, nil)),
+		Logger:  slog.New(slog.DiscardHandler),
 		Health:  healthservice.New("test"),
 		Version: "test",
 	})
 	require.NoError(t, err)
 
 	recorder := httptest.NewRecorder()
-	request := httptest.NewRequest(nethttp.MethodPost, "/api/v1/auth/oauth/google/callback", nil)
+	request := httptest.NewRequestWithContext(t.Context(), nethttp.MethodPost, "/api/v1/auth/oauth/google/callback", nil)
 	router.ServeHTTP(recorder, request)
 
 	require.Equal(t, nethttp.StatusNotImplemented, recorder.Code)
@@ -106,23 +109,28 @@ func TestContractOperationIsRegistered(t *testing.T) {
 }
 
 func TestLoginValidationWithoutAuthService(t *testing.T) {
+	t.Parallel()
+
 	// Without Auth wired, login stays a contract stub.
 	router, err := httpadapter.NewRouter(httpadapter.Dependencies{
-		Logger:  slog.New(slog.NewTextHandler(io.Discard, nil)),
+		Logger:  slog.New(slog.DiscardHandler),
 		Health:  healthservice.New("test"),
 		Version: "test",
 	})
 	require.NoError(t, err)
 
 	recorder := httptest.NewRecorder()
-	request := httptest.NewRequest(nethttp.MethodPost, "/api/v1/auth/login", bytes.NewBufferString(`{}`))
+	request := httptest.NewRequestWithContext(t.Context(), nethttp.MethodPost, "/api/v1/auth/login", bytes.NewBufferString(`{}`))
 	request.Header.Set("Content-Type", "application/json")
 	router.ServeHTTP(recorder, request)
 	require.Equal(t, nethttp.StatusNotImplemented, recorder.Code)
 }
 
 func TestAccessLogCarriesRouteGroup(t *testing.T) {
+	t.Parallel()
+
 	var logs bytes.Buffer
+
 	router, err := httpadapter.NewRouter(httpadapter.Dependencies{
 		Logger:  slog.New(slog.NewJSONHandler(&logs, nil)),
 		Health:  healthservice.New("test"),
@@ -132,7 +140,7 @@ func TestAccessLogCarriesRouteGroup(t *testing.T) {
 
 	router.ServeHTTP(
 		httptest.NewRecorder(),
-		httptest.NewRequest(nethttp.MethodGet, "/api/v1/admin/users", nil),
+		httptest.NewRequestWithContext(t.Context(), nethttp.MethodGet, "/api/v1/admin/users", nil),
 	)
 
 	var entry map[string]any
@@ -142,64 +150,49 @@ func TestAccessLogCarriesRouteGroup(t *testing.T) {
 	require.Equal(t, "required", entry["auth_mode"])
 }
 
-func TestAdminCategoriesRouteRequiresAdminOrEditorRole(t *testing.T) {
+func TestAdminContentRoutesRequireAdminOrEditorRole(t *testing.T) {
+	t.Parallel()
 	gin.SetMode(gin.TestMode)
-	userID := uuid.MustParse("88888888-8888-8888-8888-888888888888")
-	router, err := httpadapter.NewRouter(httpadapter.Dependencies{
-		Logger: slog.New(slog.NewTextHandler(io.Discard, nil)),
-		Health: healthservice.New("test"),
-		Auth: fakeAuthService{
-			parseAccessFn: func(token string) (authdomain.AccessClaims, error) {
-				require.Equal(t, "test", token)
-				return authdomain.AccessClaims{Subject: userID}, nil
-			},
-		},
-		Categories: &categoryservice.CategoryService{},
-		Roles:      fakeRoleLookup{names: []string{"author"}},
-	})
-	require.NoError(t, err)
 
-	recorder := httptest.NewRecorder()
-	request := httptest.NewRequest(nethttp.MethodPost, "/api/v1/admin/categories", bytes.NewBufferString(`{"name":"Tech"}`))
-	request.Header.Set("Content-Type", "application/json")
-	request.Header.Set("Authorization", "Bearer test")
-	router.ServeHTTP(recorder, request)
+	cases := map[string]struct {
+		deps httpadapter.Dependencies
+		path string
+		body string
+	}{
+		"categories": {httpadapter.Dependencies{Categories: &categoryservice.CategoryService{}}, "/api/v1/admin/categories", `{"name":"Tech"}`},
+		"tags":       {httpadapter.Dependencies{Tags: &tagservice.Service{}}, "/api/v1/admin/tags", `{"name":"Go"}`},
+	}
+	for name, tc := range cases {
+		t.Run(name, func(t *testing.T) {
+			t.Parallel()
 
-	require.Equal(t, nethttp.StatusForbidden, recorder.Code)
+			userID := uuid.New()
+			deps := tc.deps
+			deps.Logger = slog.New(slog.DiscardHandler)
+			deps.Health = healthservice.New("test")
+			deps.Roles = fakeRoleLookup{names: []string{"author"}}
+			deps.Auth = fakeAuthService{
+				parseAccessFn: func(token string) (authdomain.AccessClaims, error) {
+					require.Equal(t, "test", token)
+					return authdomain.AccessClaims{Subject: userID}, nil
+				},
+			}
 
-	var envelope responses.Envelope
-	require.NoError(t, json.Unmarshal(recorder.Body.Bytes(), &envelope))
-	require.False(t, envelope.OK)
-	require.Equal(t, "forbidden", envelope.Error.Code)
-}
+			router, err := httpadapter.NewRouter(deps)
+			require.NoError(t, err)
 
-func TestAdminTagsRouteRequiresAdminOrEditorRole(t *testing.T) {
-	gin.SetMode(gin.TestMode)
-	userID := uuid.MustParse("77777777-7777-7777-7777-777777777777")
-	router, err := httpadapter.NewRouter(httpadapter.Dependencies{
-		Logger: slog.New(slog.NewTextHandler(io.Discard, nil)),
-		Health: healthservice.New("test"),
-		Auth: fakeAuthService{
-			parseAccessFn: func(token string) (authdomain.AccessClaims, error) {
-				require.Equal(t, "test", token)
-				return authdomain.AccessClaims{Subject: userID}, nil
-			},
-		},
-		Tags:  &tagservice.Service{},
-		Roles: fakeRoleLookup{names: []string{"author"}},
-	})
-	require.NoError(t, err)
+			recorder := httptest.NewRecorder()
+			request := httptest.NewRequestWithContext(t.Context(), nethttp.MethodPost, tc.path, bytes.NewBufferString(tc.body))
+			request.Header.Set("Content-Type", "application/json")
+			request.Header.Set("Authorization", "Bearer test")
+			router.ServeHTTP(recorder, request)
 
-	recorder := httptest.NewRecorder()
-	request := httptest.NewRequest(nethttp.MethodPost, "/api/v1/admin/tags", bytes.NewBufferString(`{"name":"Go"}`))
-	request.Header.Set("Content-Type", "application/json")
-	request.Header.Set("Authorization", "Bearer test")
-	router.ServeHTTP(recorder, request)
+			require.Equal(t, nethttp.StatusForbidden, recorder.Code)
 
-	require.Equal(t, nethttp.StatusForbidden, recorder.Code)
-
-	var envelope responses.Envelope
-	require.NoError(t, json.Unmarshal(recorder.Body.Bytes(), &envelope))
-	require.False(t, envelope.OK)
-	require.Equal(t, "forbidden", envelope.Error.Code)
+			var envelope responses.Envelope
+			require.NoError(t, json.Unmarshal(recorder.Body.Bytes(), &envelope))
+			require.False(t, envelope.OK)
+			require.Equal(t, "forbidden", envelope.Error.Code)
+		})
+	}
 }

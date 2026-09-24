@@ -1,3 +1,4 @@
+// Package seed idempotently creates default roles, permissions, and the initial administrator.
 package seed
 
 import (
@@ -15,6 +16,7 @@ import (
 	"gorm.io/gorm"
 )
 
+// Options sets the initial administrator; empty fields use development defaults.
 type Options struct {
 	AdminEmail    string
 	AdminUsername string
@@ -22,10 +24,25 @@ type Options struct {
 	AdminName     string
 }
 
+const (
+	roleAdmin     = "admin"
+	roleEditor    = "editor"
+	roleAuthor    = "author"
+	roleModerator = "moderator"
+	permPostRead  = "post.read"
+)
+
+var roleDescriptions = map[string]string{
+	roleAdmin:     "Full platform administrator",
+	roleEditor:    "Content editor",
+	roleAuthor:    "Content author",
+	roleModerator: "Comment moderator",
+}
+
 var rolePermissions = map[string][]string{
-	"admin": {
+	roleAdmin: {
 		"user.read", "user.create", "user.update",
-		"post.read", "post.create", "post.update", "post.publish",
+		permPostRead, "post.create", "post.update", "post.publish",
 		"category.read", "category.create", "category.update", "category.delete",
 		"tag.create", "tag.update", "tag.delete",
 		"settings.read", "settings.update",
@@ -33,47 +50,73 @@ var rolePermissions = map[string][]string{
 		"comments.moderate",
 		"*",
 	},
-	"editor": {
+	roleEditor: {
 		"user.read",
-		"post.read", "post.create", "post.update", "post.publish",
+		permPostRead, "post.create", "post.update", "post.publish",
 		"category.read", "category.create", "category.update", "category.delete",
 		"tag.create", "tag.update", "tag.delete",
 		"media.create", "media.delete",
 		"comments.moderate",
 	},
-	"author": {
-		"post.read", "post.create", "post.update",
+	roleAuthor: {
+		permPostRead, "post.create", "post.update",
 		"media.create",
 	},
-	"moderator": {
-		"post.read",
+	roleModerator: {
+		permPostRead,
 		"comments.moderate",
 	},
 }
 
+// Run idempotently seeds roles, permissions, Casbin policies, and the initial administrator.
 func Run(ctx context.Context, db *gorm.DB, opts Options) error {
-	if opts.AdminEmail == "" {
-		opts.AdminEmail = "admin@example.com"
-	}
-	if opts.AdminUsername == "" {
-		opts.AdminUsername = "admin"
-	}
-	if opts.AdminPassword == "" {
-		opts.AdminPassword = "ChangeMeNow!123"
-	}
-	if opts.AdminName == "" {
-		opts.AdminName = "Administrator"
+	opts = opts.withDefaults()
+
+	enforcer, err := seedRBAC(ctx, db)
+	if err != nil {
+		return err
 	}
 
-	hasher := password.New(0)
-	users := persistence.NewUserRepository(db)
+	admin, err := ensureAdmin(ctx, db, opts)
+	if err != nil {
+		return err
+	}
 
-	for role, desc := range map[string]string{
-		"admin": "Full platform administrator", "editor": "Content editor",
-		"author": "Content author", "moderator": "Comment moderator",
-	} {
+	if err := assignRole(ctx, db, admin.ID, roleAdmin); err != nil {
+		return err
+	}
+
+	if err := enforcer.AddRoleForUser(ctx, admin.UUID, roleAdmin); err != nil {
+		return err
+	}
+
+	return enforcer.Save()
+}
+
+func (o Options) withDefaults() Options {
+	if o.AdminEmail == "" {
+		o.AdminEmail = "admin@example.com"
+	}
+
+	if o.AdminUsername == "" {
+		o.AdminUsername = "admin"
+	}
+
+	if o.AdminPassword == "" {
+		o.AdminPassword = "ChangeMeNow!123"
+	}
+
+	if o.AdminName == "" {
+		o.AdminName = "Administrator"
+	}
+
+	return o
+}
+
+func seedRBAC(ctx context.Context, db *gorm.DB) (*outboundrbac.Enforcer, error) {
+	for role, desc := range roleDescriptions {
 		if err := ensureRole(ctx, db, role, desc); err != nil {
-			return err
+			return nil, err
 		}
 	}
 
@@ -82,69 +125,87 @@ func Run(ctx context.Context, db *gorm.DB, opts Options) error {
 			if key == "*" {
 				continue
 			}
+
 			if err := ensurePermission(ctx, db, key); err != nil {
-				return err
+				return nil, err
 			}
 		}
 	}
 
 	enforcer, err := outboundrbac.NewEnforcer(db)
 	if err != nil {
-		return fmt.Errorf("casbin: %w", err)
+		return nil, fmt.Errorf("casbin: %w", err)
 	}
+
 	for role, perms := range rolePermissions {
 		for _, perm := range perms {
 			if err := enforcer.AddPermissionForRole(ctx, role, perm); err != nil {
-				return err
+				return nil, err
 			}
 		}
 	}
 
+	return enforcer, nil
+}
+
+func ensureAdmin(ctx context.Context, db *gorm.DB, opts Options) (userdomain.User, error) {
+	users := persistence.NewUserRepository(db)
+
 	admin, err := users.FindByEmail(ctx, opts.AdminEmail)
-	if errors.Is(err, gorm.ErrRecordNotFound) {
-		hash, hashErr := hasher.Hash(opts.AdminPassword)
-		if hashErr != nil {
-			return hashErr
-		}
-		now := time.Now().UTC()
-		admin, err = users.Create(ctx, userdomain.User{
-			UUID: uuid.New(), Email: strings.ToLower(opts.AdminEmail), Username: opts.AdminUsername,
-			FullName: opts.AdminName, PasswordHash: hash, Status: userdomain.StatusActive,
-			CreatedAt: now, UpdatedAt: now,
-		})
-		if err != nil {
-			return fmt.Errorf("create admin: %w", err)
-		}
-	} else if err != nil {
-		return fmt.Errorf("lookup admin: %w", err)
+	if err == nil {
+		return admin, nil
 	}
 
+	if !errors.Is(err, gorm.ErrRecordNotFound) {
+		return userdomain.User{}, fmt.Errorf("lookup admin: %w", err)
+	}
+
+	hash, err := password.New(0).Hash(opts.AdminPassword)
+	if err != nil {
+		return userdomain.User{}, err
+	}
+
+	now := time.Now().UTC()
+
+	admin, err = users.Create(ctx, userdomain.User{
+		UUID: uuid.New(), Email: strings.ToLower(opts.AdminEmail), Username: opts.AdminUsername,
+		FullName: opts.AdminName, PasswordHash: hash, Status: userdomain.StatusActive,
+		CreatedAt: now, UpdatedAt: now,
+	})
+	if err != nil {
+		return userdomain.User{}, fmt.Errorf("create admin: %w", err)
+	}
+
+	return admin, nil
+}
+
+func assignRole(ctx context.Context, db *gorm.DB, userID int64, roleName string) error {
 	var role persistence.RoleModel
-	if err := db.WithContext(ctx).Where("name = ?", "admin").First(&role).Error; err != nil {
+	if err := db.WithContext(ctx).Where("name = ?", roleName).First(&role).Error; err != nil {
 		return err
 	}
-	assignment := persistence.UserRoleModel{UserID: admin.ID, RoleID: role.ID, CreatedAt: time.Now().UTC()}
-	if err := db.WithContext(ctx).Where("user_id = ? AND role_id = ?", admin.ID, role.ID).
-		FirstOrCreate(&assignment).Error; err != nil {
-		return err
-	}
-	if err := enforcer.AddRoleForUser(ctx, admin.UUID, "admin"); err != nil {
-		return err
-	}
-	return enforcer.Save()
+
+	assignment := persistence.UserRoleModel{UserID: userID, RoleID: role.ID, CreatedAt: time.Now().UTC()}
+
+	return db.WithContext(ctx).Where("user_id = ? AND role_id = ?", userID, role.ID).
+		FirstOrCreate(&assignment).Error
 }
 
 func ensureRole(ctx context.Context, db *gorm.DB, name, description string) error {
 	var role persistence.RoleModel
+
 	err := db.WithContext(ctx).Where("name = ?", name).First(&role).Error
 	if err == nil {
 		return nil
 	}
-	if err != gorm.ErrRecordNotFound {
+
+	if !errors.Is(err, gorm.ErrRecordNotFound) {
 		return err
 	}
+
 	now := time.Now().UTC()
 	desc := description
+
 	return db.WithContext(ctx).Create(&persistence.RoleModel{
 		UUID: uuid.New(), Name: name, Description: &desc, CreatedAt: now, UpdatedAt: now,
 	}).Error
@@ -152,13 +213,16 @@ func ensureRole(ctx context.Context, db *gorm.DB, name, description string) erro
 
 func ensurePermission(ctx context.Context, db *gorm.DB, key string) error {
 	var perm persistence.PermissionModel
+
 	err := db.WithContext(ctx).Where("key = ?", key).First(&perm).Error
 	if err == nil {
 		return nil
 	}
-	if err != gorm.ErrRecordNotFound {
+
+	if !errors.Is(err, gorm.ErrRecordNotFound) {
 		return err
 	}
+
 	return db.WithContext(ctx).Create(&persistence.PermissionModel{
 		UUID: uuid.New(), Key: key, CreatedAt: time.Now().UTC(),
 	}).Error

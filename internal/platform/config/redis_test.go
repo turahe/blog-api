@@ -34,6 +34,7 @@ func TestValidateRedisAcceptsDrivers(t *testing.T) {
 
 func TestValidateRedisRejectsRedissDriver(t *testing.T) {
 	t.Parallel()
+
 	cfg := Config{RedisDriver: "rediss", RedisHost: "127.0.0.1", RedisPort: 6379}
 	if err := cfg.ValidateRedis(); err == nil {
 		t.Fatal("expected error for REDIS_DRIVER=rediss")
@@ -52,18 +53,23 @@ func TestLoadRedisFromSplitEnvironment(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+
 	if cfg.RedisDriver != "valkey" {
 		t.Fatalf("RedisDriver=%q", cfg.RedisDriver)
 	}
+
 	if cfg.RedisHost != "redis.internal" {
 		t.Fatalf("RedisHost=%q", cfg.RedisHost)
 	}
+
 	if cfg.RedisPort != 6381 {
 		t.Fatalf("RedisPort=%d", cfg.RedisPort)
 	}
+
 	if cfg.RedisPassword != "secret" {
 		t.Fatalf("RedisPassword=%q", cfg.RedisPassword)
 	}
+
 	if cfg.RedisDB != 3 {
 		t.Fatalf("RedisDB=%d", cfg.RedisDB)
 	}
@@ -84,6 +90,7 @@ func TestLoadRejectsInvalidRedisConfig(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			setJWTKeys(t)
 			t.Setenv(tt.key, tt.value)
+
 			if _, err := Load(); err == nil {
 				t.Fatal("expected Redis configuration error")
 			}
@@ -93,6 +100,7 @@ func TestLoadRejectsInvalidRedisConfig(t *testing.T) {
 
 func TestValidateRedisRequiresHost(t *testing.T) {
 	t.Parallel()
+
 	cfg := Config{RedisDriver: "redis", RedisPort: 6379}
 	if err := cfg.ValidateRedis(); err == nil {
 		t.Fatal("expected Redis host error")

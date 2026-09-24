@@ -74,7 +74,8 @@ Spec: [analytics-dashboard.md](../features/analytics-dashboard.md)
 
 ## Cross-cutting
 
-- [ ] Update `paths/analytics.yaml` and the admin analytics paths first, then `make routes`
+- [ ] Bind analytics ingest and admin analytics handlers in `routes.Register*`, annotate them,
+      then `make swagger` + `make routes-check`
 - [ ] Load test ingest at expected peak write volume
 - [ ] Query-performance tests on rollup reads with realistic row counts
 - [ ] Privacy review: retention, anonymisation, and export scope

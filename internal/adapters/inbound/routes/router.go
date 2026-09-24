@@ -25,11 +25,14 @@ type Dependencies struct {
 // NewRouter builds the Gin engine with global middleware and Register*.
 func NewRouter(deps Dependencies) (*gin.Engine, error) {
 	gin.SetMode(gin.ReleaseMode)
+
 	router := gin.New()
+
 	router.HandleMethodNotAllowed = true
 	if len(deps.GlobalMiddleware) > 0 {
 		router.Use(deps.GlobalMiddleware...)
 	}
+
 	if err := router.SetTrustedProxies(deps.TrustedProxies); err != nil {
 		return nil, err
 	}
@@ -39,6 +42,7 @@ func NewRouter(deps Dependencies) (*gin.Engine, error) {
 	if deps.HealthAlias != nil {
 		router.GET("/api/v1/health", deps.HealthAlias)
 	}
+
 	if deps.MountSwagger != nil {
 		if err := deps.MountSwagger(router); err != nil {
 			return nil, err
@@ -51,5 +55,6 @@ func NewRouter(deps Dependencies) (*gin.Engine, error) {
 	router.NoMethod(func(c *gin.Context) {
 		responses.Failure(c, nethttp.StatusMethodNotAllowed, "method.not_allowed", "Method not allowed")
 	})
+
 	return router, nil
 }

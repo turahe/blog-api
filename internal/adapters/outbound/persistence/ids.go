@@ -18,9 +18,11 @@ func idByUUID(db *gorm.DB, table string, id uuid.UUID) (int64, error) {
 	if err := db.Table(table).Where("uuid = ?", id).Limit(1).Pluck("id", &ids).Error; err != nil {
 		return 0, err
 	}
+
 	if len(ids) == 0 {
 		return 0, fmt.Errorf("%s %s: %w", table, id, errUnknownReference)
 	}
+
 	return ids[0], nil
 }
 
@@ -29,10 +31,12 @@ func optionalIDByUUID(db *gorm.DB, table string, id *uuid.UUID) (*int64, error) 
 	if id == nil {
 		return nil, nil
 	}
+
 	resolved, err := idByUUID(db, table, *id)
 	if err != nil {
 		return nil, err
 	}
+
 	return &resolved, nil
 }
 

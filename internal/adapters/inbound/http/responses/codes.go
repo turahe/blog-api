@@ -35,7 +35,7 @@ const (
 
 // BuildResponseCode builds a response code from HTTP status, service code, and case code.
 // Format: HTTP_STATUS_CODE (3 digits) + SERVICE_CODE (2 digits) + CASE_CODE (2 digits)
-// Example: 2010301 = HTTP 201 + Service 03 (Comments) + Case 01 (Success)
+// Example: 2010301 = HTTP 201 + Service 03 (Comments) + Case 01 (Success).
 func BuildResponseCode(httpStatus, serviceCode, caseCode int) int {
 	return (httpStatus%1000)*10000 + (serviceCode%100)*100 + (caseCode % 100)
 }
@@ -65,9 +65,11 @@ func CaseCodeForStatus(status int) int {
 		if status >= 500 {
 			return CaseInternalError
 		}
+
 		if status >= 200 && status < 300 {
 			return CaseSuccess
 		}
+
 		return CaseInternalError
 	}
 }

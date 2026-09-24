@@ -27,6 +27,7 @@ func (f fakeAuthService) ParseAccessToken(token string) (authdomain.AccessClaims
 	if f.parseAccessFn != nil {
 		return f.parseAccessFn(token)
 	}
+
 	return authdomain.AccessClaims{}, nil
 }
 

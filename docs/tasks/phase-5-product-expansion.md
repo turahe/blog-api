@@ -89,7 +89,7 @@ Spec: [newsletter-subscriptions.md](../features/newsletter-subscriptions.md)
 
 - [ ] Choose the search backend: database full-text versus an external engine, and record the decision
 - [ ] Search port in the core layer with a swappable outbound adapter
-- [ ] Search query support on `public.posts.list`, or a dedicated search operation added to `paths/`
+- [ ] Search query support on `public.posts.list`, or a dedicated search operation bound in `routes.Register*`
 - [ ] Indexing on publish, update, and delete, driven by Phase 4 events
 - [ ] Reindex command exposed through `cmd`
 - [ ] Relevance and highlighting expectations documented
@@ -126,7 +126,8 @@ Spec: [newsletter-subscriptions.md](../features/newsletter-subscriptions.md)
 
 ## Cross-cutting
 
-- [ ] Update `paths/admin.yaml`, `paths/newsletter.yaml`, `paths/analytics.yaml` first, then `make routes`
+- [ ] Bind admin, newsletter, and privacy handlers in `routes.Register*`, annotate them, then
+      `make swagger` + `make routes-check`
 - [ ] Authorization tests for every new admin operation
 - [ ] Impersonation-specific security review and audit assertions
 - [ ] Token-handling review for newsletter and privacy tokens

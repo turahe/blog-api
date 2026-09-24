@@ -33,14 +33,14 @@ Design: [2026-07-30-messaging-brokers-design.md](../superpowers/specs/2026-07-30
 ## Epic: domain event publishing
 
 - [x] `outbox_events` table from migration `00001`
-- [ ] Event catalogue matching `contracts/asyncapi.yaml` channels
+- [ ] Event catalogue matching the channels in [asyncapi.yaml](../architecture/asyncapi.yaml)
 - [ ] Outbound event-publisher port in the core layer with no Watermill import
 - [ ] Publish `post.published` from the post service
 - [ ] Publish `post.created` and `post.updated`
 - [ ] Publish `comment.created` and `comment.moderated` (needs Phase 3)
 - [ ] Publish `user.registered` and `user.password_reset_requested`
 - [ ] Publish `media.uploaded` and `media.transform_requested` (needs Phase 2 media)
-- [ ] Keep `contracts/asyncapi.yaml` authoritative and validated in committed OpenAPI bundles under `contracts/`
+- [ ] Keep [asyncapi.yaml](../architecture/asyncapi.yaml) authoritative and validate it in CI
 
 ## Epic: durable outbox
 

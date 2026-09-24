@@ -1,3 +1,4 @@
+// Package http assembles the Gin router from core services and route registrations.
 package http
 
 import (
@@ -10,6 +11,7 @@ import (
 	"github.com/turahe/blog-api/internal/adapters/inbound/routes"
 	authports "github.com/turahe/blog-api/internal/core/auth/ports"
 	categoryservice "github.com/turahe/blog-api/internal/core/category/service"
+	commentservice "github.com/turahe/blog-api/internal/core/comment/service"
 	healthports "github.com/turahe/blog-api/internal/core/health/ports"
 	mediaports "github.com/turahe/blog-api/internal/core/media/ports"
 	postservice "github.com/turahe/blog-api/internal/core/post/service"
@@ -30,6 +32,9 @@ type Dependencies struct {
 	Categories     *categoryservice.CategoryService
 	Tags           *tagservice.Service
 	Media          mediaports.Service
+	Comments       *commentservice.Service
+	RateLimiter    middleware.Limiter
+	CommentRates   handlers.CommentRates
 	Version        string
 	TrustedProxies []string
 	SwaggerEnabled bool
@@ -63,16 +68,20 @@ func NewRouter(deps Dependencies) (*gin.Engine, error) {
 			middleware.Recovery(deps.Logger),
 		},
 		Controllers: handlers.NewControllers(handlers.Deps{
-			Health:     deps.Health,
-			Auth:       deps.Auth,
-			Users:      deps.Users,
-			Roles:      deps.Roles,
-			RBAC:       deps.RBAC,
-			Posts:      deps.Posts,
-			Categories: deps.Categories,
-			Tags:       deps.Tags,
-			Media:      deps.Media,
-			Version:    deps.Version,
+			Logger:       deps.Logger,
+			Health:       deps.Health,
+			Auth:         deps.Auth,
+			Users:        deps.Users,
+			Roles:        deps.Roles,
+			RBAC:         deps.RBAC,
+			Posts:        deps.Posts,
+			Categories:   deps.Categories,
+			Tags:         deps.Tags,
+			Media:        deps.Media,
+			Comments:     deps.Comments,
+			RateLimiter:  deps.RateLimiter,
+			CommentRates: deps.CommentRates,
+			Version:      deps.Version,
 		}),
 		Auth: routes.AuthMiddleware{
 			Optional: optional,

@@ -33,8 +33,8 @@ func TestSuccessPaginatedLaravelShape(t *testing.T) {
 			total:        40,
 			wantCurrent:  1,
 			wantLast:     3,
-			wantFrom:     intPtr(1),
-			wantTo:       intPtr(15),
+			wantFrom:     new(1),
+			wantTo:       new(15),
 			wantPrevNull: true,
 			wantNextNull: false,
 		},
@@ -45,8 +45,8 @@ func TestSuccessPaginatedLaravelShape(t *testing.T) {
 			total:        40,
 			wantCurrent:  2,
 			wantLast:     3,
-			wantFrom:     intPtr(16),
-			wantTo:       intPtr(30),
+			wantFrom:     new(16),
+			wantTo:       new(30),
 			wantPrevNull: false,
 			wantNextNull: false,
 		},
@@ -67,15 +67,17 @@ func TestSuccessPaginatedLaravelShape(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
+
 			w := httptest.NewRecorder()
 			c, _ := gin.CreateTestContext(w)
-			c.Request = httptest.NewRequest(http.MethodGet, "/api/v1/users?page=2&per_page=15&q=a", nil)
+			c.Request = httptest.NewRequestWithContext(t.Context(), http.MethodGet, "/api/v1/users?page=2&per_page=15&q=a", nil)
 			c.Request.Host = "example.com"
 
 			items := []gin.H{{"id": 1}}
 			SuccessPaginated(c, http.StatusOK, items, tt.page, tt.perPage, tt.total)
 
 			require.Equal(t, http.StatusOK, w.Code)
+
 			var envelope Envelope
 			require.NoError(t, json.Unmarshal(w.Body.Bytes(), &envelope))
 			require.True(t, envelope.OK)
@@ -90,6 +92,7 @@ func TestSuccessPaginatedLaravelShape(t *testing.T) {
 
 			metaBytes, err := json.Marshal(envelope.Meta)
 			require.NoError(t, err)
+
 			var meta PaginationMeta
 			require.NoError(t, json.Unmarshal(metaBytes, &meta))
 			require.Equal(t, tt.wantCurrent, meta.CurrentPage)
@@ -97,12 +100,14 @@ func TestSuccessPaginatedLaravelShape(t *testing.T) {
 			require.Equal(t, tt.perPage, meta.PerPage)
 			require.Equal(t, tt.total, meta.Total)
 			require.Equal(t, "http://example.com/api/v1/users", meta.Path)
+
 			if tt.wantFrom == nil {
 				require.Nil(t, meta.From)
 			} else {
 				require.NotNil(t, meta.From)
 				require.Equal(t, *tt.wantFrom, *meta.From)
 			}
+
 			if tt.wantTo == nil {
 				require.Nil(t, meta.To)
 			} else {
@@ -112,5 +117,3 @@ func TestSuccessPaginatedLaravelShape(t *testing.T) {
 		})
 	}
 }
-
-func intPtr(v int) *int { return &v }

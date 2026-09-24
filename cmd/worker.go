@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"os/signal"
@@ -17,7 +18,7 @@ func newWorkerCmd() *cobra.Command {
 		Use:   "worker",
 		Short: "Run asynchronous event consumers",
 		Args:  cobra.NoArgs,
-		RunE: func(cmd *cobra.Command, _ []string) error {
+		RunE: func(cmd *cobra.Command, _ []string) (err error) {
 			ctx, stop := signal.NotifyContext(cmd.Context(), os.Interrupt, syscall.SIGTERM)
 			defer stop()
 
@@ -25,16 +26,18 @@ func newWorkerCmd() *cobra.Command {
 			if err != nil {
 				return err
 			}
+
 			if !cfg.MessagingEnabled() {
-				return fmt.Errorf("MESSAGE_BROKER must be set to run the worker")
+				return errors.New("MESSAGE_BROKER must be set to run the worker")
 			}
 
 			logger := newLogger(cfg.Environment)
+
 			bus, err := messaging.Open(ctx, cfg)
 			if err != nil {
 				return fmt.Errorf("open messaging: %w", err)
 			}
-			defer bus.Close()
+			defer func() { err = errors.Join(err, bus.Close()) }()
 
 			router, err := message.NewRouter(message.RouterConfig{}, bus.Logger)
 			if err != nil {
@@ -54,9 +57,11 @@ func newWorkerCmd() *cobra.Command {
 			)
 
 			logger.Info("worker started", "broker", bus.Broker, "topic", topic)
+
 			if err := router.Run(ctx); err != nil && ctx.Err() == nil {
 				return fmt.Errorf("router: %w", err)
 			}
+
 			return nil
 		},
 	}

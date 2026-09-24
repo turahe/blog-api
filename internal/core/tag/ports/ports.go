@@ -1,3 +1,4 @@
+// Package ports declares the tag repository and service interfaces.
 package ports
 
 import (
@@ -7,6 +8,7 @@ import (
 	tagdomain "github.com/turahe/blog-api/internal/core/tag/domain"
 )
 
+// Repository stores tags and post tag links.
 type Repository interface {
 	List(ctx context.Context) ([]tagdomain.Tag, error)
 	GetByID(ctx context.Context, id uuid.UUID) (tagdomain.Tag, error)
@@ -21,6 +23,7 @@ type Repository interface {
 	ListByPostID(ctx context.Context, postID uuid.UUID) ([]tagdomain.Tag, error)
 }
 
+// Service is the tag use-case API consumed by HTTP handlers.
 type Service interface {
 	List(ctx context.Context) ([]tagdomain.Tag, error)
 	Create(ctx context.Context, name, slug string) (tagdomain.Tag, error)

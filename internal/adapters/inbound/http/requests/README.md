@@ -11,5 +11,6 @@ JSON request bodies and bind/validate helpers for the HTTP adapter.
 | [categories.go](categories.go) | Admin create category |
 | [tags.go](tags.go) | Admin create/update/merge tag |
 | [media.go](media.go) | Presign + patch tags |
+| [comments.go](comments.go) | Create/edit/flag comment |
 
 Handlers import these types and call `requests.BindJSON(c, &req)`.

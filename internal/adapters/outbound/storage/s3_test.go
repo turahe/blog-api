@@ -39,6 +39,7 @@ func TestNewS3UsesPathStyleForCustomEndpoint(t *testing.T) {
 	if client.endpoint != "http://127.0.0.1:9000" {
 		t.Fatalf("expected endpoint to be set, got %q", client.endpoint)
 	}
+
 	if !client.usePathStyle {
 		t.Fatal("expected path-style requests for custom endpoint")
 	}
@@ -70,15 +71,19 @@ func TestPresignPutReturnsSignedHeaders(t *testing.T) {
 	if url != "https://example.test/upload" {
 		t.Fatalf("expected URL to be preserved, got %q", url)
 	}
+
 	if headers["Content-Type"] != "image/png" {
 		t.Fatalf("expected Content-Type header, got %#v", headers)
 	}
+
 	if headers["X-Amz-Meta-App"] != "blog-api" {
 		t.Fatalf("expected signed metadata header, got %#v", headers)
 	}
+
 	if _, ok := headers["Host"]; ok {
 		t.Fatalf("expected Host header to be omitted, got %#v", headers)
 	}
+
 	if presigner.lastExpires != 5*time.Minute {
 		t.Fatalf("expected presign TTL to be forwarded, got %s", presigner.lastExpires)
 	}
@@ -125,9 +130,11 @@ func TestHeadObjectReturnsObjectInfo(t *testing.T) {
 	if info.Size != 512 {
 		t.Fatalf("expected size 512, got %d", info.Size)
 	}
+
 	if info.ContentType != "image/webp" {
 		t.Fatalf("expected content type image/webp, got %q", info.ContentType)
 	}
+
 	if info.ETag != "etag-1" {
 		t.Fatalf("expected trimmed etag, got %q", info.ETag)
 	}
@@ -142,6 +149,7 @@ func (f *fakeHeadClient) HeadObject(_ context.Context, _ *s3.HeadObjectInput, _ 
 	if f.err != nil {
 		return nil, f.err
 	}
+
 	return f.output, nil
 }
 
@@ -156,9 +164,11 @@ func (f *fakePresignClient) PresignPutObject(_ context.Context, _ *s3.PutObjectI
 	for _, optFn := range optFns {
 		optFn(&options)
 	}
+
 	f.lastExpires = options.Expires
 	if f.err != nil {
 		return nil, f.err
 	}
+
 	return f.request, nil
 }

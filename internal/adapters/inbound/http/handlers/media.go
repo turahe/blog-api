@@ -31,7 +31,7 @@ func adminPresignMediaHandler(media mediaports.Service) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		userID, ok := middleware.CurrentUserID(c)
 		if !ok {
-			responses.Failure(c, nethttp.StatusUnauthorized, "unauthorized", "Authentication required")
+			responses.Failure(c, nethttp.StatusUnauthorized, responses.ErrorCodeUnauthorized, "Authentication required")
 			return
 		}
 
@@ -41,6 +41,7 @@ func adminPresignMediaHandler(media mediaports.Service) gin.HandlerFunc {
 		}
 
 		uploadedBy := userID
+
 		result, err := media.PresignUpload(
 			c.Request.Context(),
 			&uploadedBy,
@@ -71,7 +72,7 @@ func adminCompleteMediaHandler(media mediaports.Service) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		id, err := uuid.Parse(strings.TrimSpace(c.Param("param1")))
 		if err != nil {
-			responses.Failure(c, nethttp.StatusBadRequest, "validation_error", "Invalid media id")
+			responses.Failure(c, nethttp.StatusBadRequest, responses.ErrorCodeValidation, "Invalid media id")
 			return
 		}
 
@@ -100,6 +101,7 @@ func adminListMediaHandler(media mediaports.Service) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		page := parsePositiveInt(c.Query("page"), 1)
 		perPage := parsePositiveInt(c.Query("per_page"), 20)
+
 		result, err := media.List(c.Request.Context(), mediadomain.ListFilter{
 			Page:    page,
 			PerPage: perPage,
@@ -109,10 +111,12 @@ func adminListMediaHandler(media mediaports.Service) gin.HandlerFunc {
 		if mapMediaError(c, err) {
 			return
 		}
+
 		items := make([]gin.H, 0, len(result.Items))
 		for _, asset := range result.Items {
 			items = append(items, responses.MediaAsset(asset))
 		}
+
 		responses.SuccessPaginatedFor(c, nethttp.StatusOK, responses.PageOpts{
 			Service: responses.ServiceMedia,
 			Data:    items,
@@ -135,12 +139,14 @@ func adminDeleteMediaHandler(media mediaports.Service) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		id, err := uuid.Parse(strings.TrimSpace(c.Param("param1")))
 		if err != nil {
-			responses.Failure(c, nethttp.StatusBadRequest, "validation_error", "Invalid media id")
+			responses.Failure(c, nethttp.StatusBadRequest, responses.ErrorCodeValidation, "Invalid media id")
 			return
 		}
+
 		if err := media.Delete(c.Request.Context(), id); mapMediaError(c, err) {
 			return
 		}
+
 		responses.Success(c, nethttp.StatusOK, nil)
 	}
 }
@@ -160,17 +166,20 @@ func adminPatchMediaTagsHandler(media mediaports.Service) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		id, err := uuid.Parse(strings.TrimSpace(c.Param("param1")))
 		if err != nil {
-			responses.Failure(c, nethttp.StatusBadRequest, "validation_error", "Invalid media id")
+			responses.Failure(c, nethttp.StatusBadRequest, responses.ErrorCodeValidation, "Invalid media id")
 			return
 		}
+
 		var req requests.PatchMediaTags
 		if !requests.BindJSON(c, &req) {
 			return
 		}
+
 		asset, err := media.UpdateTags(c.Request.Context(), id, req.Tags)
 		if mapMediaError(c, err) {
 			return
 		}
+
 		responses.Success(c, nethttp.StatusOK, responses.MediaAsset(asset))
 	}
 }
@@ -188,13 +197,15 @@ func publicGetMediaHandler(media mediaports.Service) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		id, err := uuid.Parse(strings.TrimSpace(c.Param("param1")))
 		if err != nil {
-			responses.Failure(c, nethttp.StatusBadRequest, "validation_error", "Invalid media id")
+			responses.Failure(c, nethttp.StatusBadRequest, responses.ErrorCodeValidation, "Invalid media id")
 			return
 		}
+
 		asset, err := media.GetReady(c.Request.Context(), id)
 		if mapMediaError(c, err) {
 			return
 		}
+
 		responses.Success(c, nethttp.StatusOK, responses.MediaAsset(asset))
 	}
 }
@@ -204,6 +215,7 @@ func parsePositiveInt(raw string, fallback int) int {
 	if err != nil || n < 1 {
 		return fallback
 	}
+
 	return n
 }
 
@@ -211,12 +223,13 @@ func mapMediaError(c *gin.Context, err error) bool {
 	if err == nil {
 		return false
 	}
+
 	switch {
 	case errors.Is(err, mediaservice.ErrValidation):
 		responses.FailureFor(c, nethttp.StatusBadRequest, responses.FailureOpts{
 			Service: responses.ServiceMedia,
 			Case:    responses.CaseValidation,
-			Code:    "validation_error",
+			Code:    responses.ErrorCodeValidation,
 			Message: err.Error(),
 			Details: nil,
 		})
@@ -224,7 +237,7 @@ func mapMediaError(c *gin.Context, err error) bool {
 		responses.FailureFor(c, nethttp.StatusNotFound, responses.FailureOpts{
 			Service: responses.ServiceMedia,
 			Case:    responses.CaseNotFound,
-			Code:    "not_found",
+			Code:    responses.ErrorCodeNotFound,
 			Message: "Media not found",
 			Details: nil,
 		})
@@ -256,10 +269,11 @@ func mapMediaError(c *gin.Context, err error) bool {
 		responses.FailureFor(c, nethttp.StatusInternalServerError, responses.FailureOpts{
 			Service: responses.ServiceMedia,
 			Case:    responses.CaseInternalError,
-			Code:    "internal_error",
+			Code:    responses.ErrorCodeInternal,
 			Message: "Failed to process media",
 			Details: nil,
 		})
 	}
+
 	return true
 }

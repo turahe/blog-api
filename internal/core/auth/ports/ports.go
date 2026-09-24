@@ -1,3 +1,4 @@
+// Package ports declares the interfaces the auth service depends on and exposes.
 package ports
 
 import (
@@ -9,6 +10,7 @@ import (
 	userdomain "github.com/turahe/blog-api/internal/core/user/domain"
 )
 
+// UserRepository is the user storage the auth service needs.
 type UserRepository interface {
 	FindByEmail(ctx context.Context, email string) (userdomain.User, error)
 	FindByID(ctx context.Context, id uuid.UUID) (userdomain.User, error)
@@ -18,6 +20,7 @@ type UserRepository interface {
 	UpdatePassword(ctx context.Context, id uuid.UUID, hash string, changedAt time.Time) error
 }
 
+// SessionRepository stores refresh sessions.
 type SessionRepository interface {
 	Create(ctx context.Context, session authdomain.RefreshSession) (authdomain.RefreshSession, error)
 	FindByTokenHash(ctx context.Context, hash string) (authdomain.RefreshSession, error)
@@ -27,30 +30,35 @@ type SessionRepository interface {
 	Replace(ctx context.Context, oldID, newID uuid.UUID, at time.Time) error
 }
 
+// ResetTokenRepository stores password reset tokens.
 type ResetTokenRepository interface {
 	Create(ctx context.Context, token authdomain.PasswordResetToken) error
 	FindByHash(ctx context.Context, hash string) (authdomain.PasswordResetToken, error)
 	MarkUsed(ctx context.Context, id uuid.UUID, at time.Time) error
 }
 
+// PasswordHasher hashes and verifies passwords.
 type PasswordHasher interface {
 	Hash(password string) (string, error)
 	Compare(hash, password string) bool
 }
 
+// TokenService issues and verifies access, refresh, and reset tokens.
 type TokenService interface {
 	IssueAccess(claims authdomain.AccessClaims) (string, error)
 	ParseAccess(token string) (authdomain.AccessClaims, error)
-	IssueRefresh() (raw string, hash string, err error)
+	IssueRefresh() (raw, hash string, err error)
 	HashRefresh(raw string) string
-	IssueResetToken() (raw string, hash string, jti string, err error)
+	IssueResetToken() (raw, hash, jti string, err error)
 	HashResetToken(raw string) string
 }
 
+// Clock returns the current time.
 type Clock interface {
 	Now() time.Time
 }
 
+// IDGenerator returns new UUIDs.
 type IDGenerator interface {
 	New() uuid.UUID
 }
@@ -60,6 +68,7 @@ type ResetTokenSink interface {
 	Capture(rawToken string)
 }
 
+// Service is the auth use-case API consumed by HTTP handlers.
 type Service interface {
 	Login(ctx context.Context, email, password, userAgent, ip string, remember bool) (authdomain.TokenPair, error)
 	Refresh(ctx context.Context, refreshToken, userAgent, ip string) (authdomain.TokenPair, error)

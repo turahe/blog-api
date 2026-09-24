@@ -3,10 +3,12 @@ package database
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"fmt"
 	"strings"
 	"time"
 
+	// database/sql drivers registered for the raw *sql.DB pool (migrations, health).
 	_ "github.com/go-sql-driver/mysql"
 	_ "github.com/jackc/pgx/v5/stdlib"
 	_ "github.com/microsoft/go-mssqldb"
@@ -20,9 +22,9 @@ import (
 
 // Driver names accepted by DB_DRIVER.
 const (
-	DriverPostgres  = "postgres"
-	DriverMySQL     = "mysql"
-	DriverSQLServer = "sqlserver"
+	DriverPostgres  = config.DBDriverPostgres
+	DriverMySQL     = config.DBDriverMySQL
+	DriverSQLServer = config.DBDriverSQLServer
 )
 
 // Database wraps a GORM handle and the underlying sql.DB pool.
@@ -52,8 +54,10 @@ func Open(ctx context.Context, cfg config.Config) (*Database, error) {
 		if dsnErr != nil {
 			return nil, dsnErr
 		}
+
 		sqlDB, err = openDSN(driver, dsn)
 	}
+
 	if err != nil {
 		return nil, err
 	}
@@ -65,31 +69,39 @@ func Open(ctx context.Context, cfg config.Config) (*Database, error) {
 
 	pingCtx, cancel := context.WithTimeout(ctx, 5*time.Second)
 	defer cancel()
+
 	if err := sqlDB.PingContext(pingCtx); err != nil {
 		_ = sqlDB.Close()
+
 		if cleanup != nil {
 			_ = cleanup()
 		}
+
 		return nil, fmt.Errorf("ping %s: %w", driver, err)
 	}
 
 	dialector, err := gormDialector(driver, sqlDB)
 	if err != nil {
 		_ = sqlDB.Close()
+
 		if cleanup != nil {
 			_ = cleanup()
 		}
+
 		return nil, err
 	}
+
 	gdb, err := gorm.Open(dialector, &gorm.Config{
 		Logger:                                   logger.Default.LogMode(logger.Silent),
 		DisableForeignKeyConstraintWhenMigrating: true,
 	})
 	if err != nil {
 		_ = sqlDB.Close()
+
 		if cleanup != nil {
 			_ = cleanup()
 		}
+
 		return nil, fmt.Errorf("open gorm (%s): %w", driver, err)
 	}
 
@@ -101,17 +113,20 @@ func (db *Database) Close() error {
 	if db == nil {
 		return nil
 	}
+
 	var first error
 	if db.SQL != nil {
 		if err := db.SQL.Close(); err != nil && first == nil {
 			first = err
 		}
 	}
+
 	if db.cleanup != nil {
 		if err := db.cleanup(); err != nil && first == nil {
 			first = err
 		}
 	}
+
 	return first
 }
 
@@ -131,12 +146,14 @@ func NormalizeDriver(raw string) (string, error) {
 
 func openDSN(driver, dsn string) (*sql.DB, error) {
 	if strings.TrimSpace(dsn) == "" {
-		return nil, fmt.Errorf("database DSN is empty when DB_INSTANCE_CONNECTION_NAME is empty")
+		return nil, errors.New("database DSN is empty when DB_INSTANCE_CONNECTION_NAME is empty")
 	}
+
 	var (
 		sqlDriver string
 		openDSN   string
 	)
+
 	switch driver {
 	case DriverPostgres:
 		sqlDriver = "pgx"
@@ -150,17 +167,20 @@ func openDSN(driver, dsn string) (*sql.DB, error) {
 	default:
 		return nil, fmt.Errorf("unsupported driver %q", driver)
 	}
+
 	db, err := sql.Open(sqlDriver, openDSN)
 	if err != nil {
 		return nil, fmt.Errorf("open %s: %w", driver, err)
 	}
+
 	return db, nil
 }
 
 func normalizeMySQLDSN(dsn string) string {
-	if strings.HasPrefix(dsn, "mysql://") {
-		return strings.TrimPrefix(dsn, "mysql://")
+	if after, ok := strings.CutPrefix(dsn, "mysql://"); ok {
+		return after
 	}
+
 	return dsn
 }
 

@@ -21,6 +21,7 @@ import (
 	tagservice "github.com/turahe/blog-api/internal/core/tag/service"
 )
 
+//nolint:dupl // the test fake's function fields intentionally mirror these signatures
 type postAdminAPI interface {
 	ListAdmin(ctx context.Context, filter postdomain.AdminListFilter) (postdomain.ListResult, error)
 	CreateDraft(ctx context.Context, authorID uuid.UUID, title, slug, excerpt, content string, categoryID *uuid.UUID, tags *[]string) (postdomain.Post, []tagdomain.Tag, error)
@@ -42,22 +43,27 @@ func adminCreatePostHandler(posts postAdminAPI) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		userID, ok := middleware.CurrentUserID(c)
 		if !ok {
-			responses.Failure(c, nethttp.StatusUnauthorized, "unauthorized", "Authentication required")
+			responses.Failure(c, nethttp.StatusUnauthorized, responses.ErrorCodeUnauthorized, "Authentication required")
 			return
 		}
+
 		var req requests.CreatePost
 		if !requests.BindJSON(c, &req) {
 			return
 		}
+
 		var categoryID *uuid.UUID
+
 		if req.CategoryID != nil && strings.TrimSpace(*req.CategoryID) != "" {
 			id, err := uuid.Parse(strings.TrimSpace(*req.CategoryID))
 			if err != nil {
-				responses.Failure(c, nethttp.StatusBadRequest, "validation_error", "Invalid category_id")
+				responses.Failure(c, nethttp.StatusBadRequest, responses.ErrorCodeValidation, "Invalid category_id")
 				return
 			}
+
 			categoryID = &id
 		}
+
 		post, tags, err := posts.CreateDraft(
 			c.Request.Context(),
 			userID,
@@ -71,6 +77,7 @@ func adminCreatePostHandler(posts postAdminAPI) gin.HandlerFunc {
 		if mapPostError(c, err) {
 			return
 		}
+
 		responses.Success(c, nethttp.StatusCreated, responses.PostWithTags(post, tags))
 	}
 }
@@ -90,13 +97,15 @@ func adminPublishPostHandler(posts *postservice.PostService) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		id, err := uuid.Parse(strings.TrimSpace(c.Param("param1")))
 		if err != nil {
-			responses.Failure(c, nethttp.StatusBadRequest, "validation_error", "Invalid post id")
+			responses.Failure(c, nethttp.StatusBadRequest, responses.ErrorCodeValidation, "Invalid post id")
 			return
 		}
+
 		post, err := posts.Publish(c.Request.Context(), id)
 		if mapPostError(c, err) {
 			return
 		}
+
 		responses.Success(c, nethttp.StatusOK, responses.Post(post))
 	}
 }
@@ -123,26 +132,28 @@ func adminListPostsHandlerWithDeps(posts postAdminAPI, roles RoleLookup) gin.Han
 	return func(c *gin.Context) {
 		userID, ok := middleware.CurrentUserID(c)
 		if !ok {
-			responses.Failure(c, nethttp.StatusUnauthorized, "unauthorized", "Authentication required")
+			responses.Failure(c, nethttp.StatusUnauthorized, responses.ErrorCodeUnauthorized, "Authentication required")
 			return
 		}
 
 		page, _ := strconv.Atoi(c.DefaultQuery("page", "1"))
 		perPage, _ := strconv.Atoi(c.DefaultQuery("per_page", "20"))
+
 		authorID, err := postservice.ParseOptionalUUID(c.Query("author_id"))
 		if err != nil {
-			responses.Failure(c, nethttp.StatusBadRequest, "validation_error", "Invalid author_id")
+			responses.Failure(c, nethttp.StatusBadRequest, responses.ErrorCodeValidation, "Invalid author_id")
 			return
 		}
+
 		categoryID, err := postservice.ParseOptionalUUID(c.Query("category_id"))
 		if err != nil {
-			responses.Failure(c, nethttp.StatusBadRequest, "validation_error", "Invalid category_id")
+			responses.Failure(c, nethttp.StatusBadRequest, responses.ErrorCodeValidation, "Invalid category_id")
 			return
 		}
 
 		unrestricted, err := resolveUnrestrictedEditor(c.Request.Context(), roles, userID)
 		if err != nil {
-			responses.Failure(c, nethttp.StatusInternalServerError, "internal_error", "Failed to resolve roles")
+			responses.Failure(c, nethttp.StatusInternalServerError, responses.ErrorCodeInternal, "Failed to resolve roles")
 			return
 		}
 
@@ -167,6 +178,7 @@ func adminListPostsHandlerWithDeps(posts postAdminAPI, roles RoleLookup) gin.Han
 		for _, post := range result.Items {
 			items = append(items, responses.Post(post))
 		}
+
 		responses.SuccessPaginatedFor(c, nethttp.StatusOK, responses.PageOpts{
 			Service: responses.ServicePosts,
 			Data:    items,
@@ -199,13 +211,13 @@ func adminUpdatePostHandlerWithDeps(posts postAdminAPI, roles RoleLookup) gin.Ha
 	return func(c *gin.Context) {
 		userID, ok := middleware.CurrentUserID(c)
 		if !ok {
-			responses.Failure(c, nethttp.StatusUnauthorized, "unauthorized", "Authentication required")
+			responses.Failure(c, nethttp.StatusUnauthorized, responses.ErrorCodeUnauthorized, "Authentication required")
 			return
 		}
 
 		postID, err := uuid.Parse(strings.TrimSpace(c.Param("param1")))
 		if err != nil {
-			responses.Failure(c, nethttp.StatusBadRequest, "validation_error", "Invalid post id")
+			responses.Failure(c, nethttp.StatusBadRequest, responses.ErrorCodeValidation, "Invalid post id")
 			return
 		}
 
@@ -216,7 +228,7 @@ func adminUpdatePostHandlerWithDeps(posts postAdminAPI, roles RoleLookup) gin.Ha
 
 		unrestricted, err := resolveUnrestrictedEditor(c.Request.Context(), roles, userID)
 		if err != nil {
-			responses.Failure(c, nethttp.StatusInternalServerError, "internal_error", "Failed to resolve roles")
+			responses.Failure(c, nethttp.StatusInternalServerError, responses.ErrorCodeInternal, "Failed to resolve roles")
 			return
 		}
 
@@ -229,10 +241,12 @@ func adminUpdatePostHandlerWithDeps(posts postAdminAPI, roles RoleLookup) gin.Ha
 		}
 		if len(req.CategoryID) > 0 {
 			in.CategoryUUID.Present = true
+
 			categoryID, ok := parseNullableUUID(c, req.CategoryID, "category_id")
 			if !ok {
 				return
 			}
+
 			in.CategoryUUID.Value = categoryID
 		}
 
@@ -262,43 +276,51 @@ func adminReplacePostMediaHandler(posts *postservice.PostService) gin.HandlerFun
 	return func(c *gin.Context) {
 		postID, err := uuid.Parse(strings.TrimSpace(c.Param("param1")))
 		if err != nil {
-			responses.Failure(c, nethttp.StatusBadRequest, "validation_error", "Invalid post id")
+			responses.Failure(c, nethttp.StatusBadRequest, responses.ErrorCodeValidation, "Invalid post id")
 			return
 		}
+
 		var req requests.ReplacePostMedia
 		if !requests.BindJSON(c, &req) {
 			return
 		}
+
 		enforce := true
 		if req.EnforceCoverConsistency != nil {
 			enforce = *req.EnforceCoverConsistency
 		}
+
 		items := make([]mediadomain.PostMediaItem, 0, len(req.Items))
 		for _, item := range req.Items {
 			mediaID, err := uuid.Parse(strings.TrimSpace(item.MediaAssetID))
 			if err != nil {
-				responses.Failure(c, nethttp.StatusBadRequest, "validation_error", "Invalid media_asset_id")
+				responses.Failure(c, nethttp.StatusBadRequest, responses.ErrorCodeValidation, "Invalid media_asset_id")
 				return
 			}
+
 			items = append(items, mediadomain.PostMediaItem{
 				MediaAssetUUID: mediaID,
 				Kind:           item.Kind,
 				SortOrder:      item.SortOrder,
 			})
 		}
+
 		out, err := posts.ReplaceMedia(c.Request.Context(), postID, items, enforce)
 		if errors.Is(err, postdomain.ErrNotFound) {
-			responses.Failure(c, nethttp.StatusNotFound, "not_found", "Post not found")
+			responses.Failure(c, nethttp.StatusNotFound, responses.ErrorCodeNotFound, "Post not found")
 			return
 		}
+
 		if errors.Is(err, postservice.ErrValidation) {
-			responses.Failure(c, nethttp.StatusBadRequest, "validation_error", err.Error())
+			responses.Failure(c, nethttp.StatusBadRequest, responses.ErrorCodeValidation, err.Error())
 			return
 		}
+
 		if err != nil {
-			responses.Failure(c, nethttp.StatusInternalServerError, "internal_error", "Failed to replace post media")
+			responses.Failure(c, nethttp.StatusInternalServerError, responses.ErrorCodeInternal, "Failed to replace post media")
 			return
 		}
+
 		payload := make([]gin.H, 0, len(out))
 		for _, item := range out {
 			row := gin.H{
@@ -309,8 +331,10 @@ func adminReplacePostMediaHandler(posts *postservice.PostService) gin.HandlerFun
 			if item.Media != nil {
 				row["media"] = responses.MediaAsset(*item.Media)
 			}
+
 			payload = append(payload, row)
 		}
+
 		responses.Success(c, nethttp.StatusOK, gin.H{
 			"post_id": postID.String(),
 			"items":   payload,
@@ -324,26 +348,30 @@ func parseNullableUUID(c *gin.Context, raw json.RawMessage, field string) (*uuid
 	if requests.IsJSONNull(raw) {
 		return nil, true
 	}
+
 	var s string
 	if err := json.Unmarshal(raw, &s); err != nil {
-		responses.Failure(c, nethttp.StatusBadRequest, "validation_error", "Invalid "+field)
+		responses.Failure(c, nethttp.StatusBadRequest, responses.ErrorCodeValidation, "Invalid "+field)
 		return nil, false
 	}
+
 	id, err := uuid.Parse(strings.TrimSpace(s))
 	if err != nil {
-		responses.Failure(c, nethttp.StatusBadRequest, "validation_error", "Invalid "+field)
+		responses.Failure(c, nethttp.StatusBadRequest, responses.ErrorCodeValidation, "Invalid "+field)
 		return nil, false
 	}
+
 	return &id, true
 }
 
 func isUnrestrictedEditor(roles []string) bool {
 	for _, role := range roles {
 		switch strings.TrimSpace(strings.ToLower(role)) {
-		case "admin", "editor":
+		case roleAdmin, roleEditor:
 			return true
 		}
 	}
+
 	return false
 }
 
@@ -351,10 +379,12 @@ func resolveUnrestrictedEditor(ctx context.Context, roles RoleLookup, userID uui
 	if roles == nil {
 		return false, nil
 	}
+
 	names, err := roles.ListRoleNames(ctx, userID)
 	if err != nil {
 		return false, err
 	}
+
 	return isUnrestrictedEditor(names), nil
 }
 
@@ -362,12 +392,13 @@ func mapPostError(c *gin.Context, err error) bool {
 	if err == nil {
 		return false
 	}
+
 	switch {
 	case errors.Is(err, postservice.ErrValidation):
 		responses.FailureFor(c, nethttp.StatusBadRequest, responses.FailureOpts{
 			Service: responses.ServicePosts,
 			Case:    responses.CaseValidation,
-			Code:    "validation_error",
+			Code:    responses.ErrorCodeValidation,
 			Message: err.Error(),
 			Details: nil,
 		})
@@ -375,7 +406,7 @@ func mapPostError(c *gin.Context, err error) bool {
 		responses.FailureFor(c, nethttp.StatusBadRequest, responses.FailureOpts{
 			Service: responses.ServiceTags,
 			Case:    responses.CaseValidation,
-			Code:    "validation_error",
+			Code:    responses.ErrorCodeValidation,
 			Message: err.Error(),
 			Details: nil,
 		})
@@ -383,7 +414,7 @@ func mapPostError(c *gin.Context, err error) bool {
 		responses.FailureFor(c, nethttp.StatusNotFound, responses.FailureOpts{
 			Service: responses.ServicePosts,
 			Case:    responses.CaseNotFound,
-			Code:    "not_found",
+			Code:    responses.ErrorCodeNotFound,
 			Message: "Post not found",
 			Details: nil,
 		})
@@ -391,7 +422,7 @@ func mapPostError(c *gin.Context, err error) bool {
 		responses.FailureFor(c, nethttp.StatusNotFound, responses.FailureOpts{
 			Service: responses.ServiceTags,
 			Case:    responses.CaseNotFound,
-			Code:    "not_found",
+			Code:    responses.ErrorCodeNotFound,
 			Message: "Tag not found",
 			Details: nil,
 		})
@@ -407,7 +438,7 @@ func mapPostError(c *gin.Context, err error) bool {
 		responses.FailureFor(c, nethttp.StatusConflict, responses.FailureOpts{
 			Service: responses.ServicePosts,
 			Case:    responses.CaseConflict,
-			Code:    "conflict",
+			Code:    responses.ErrorCodeConflict,
 			Message: "Post conflict",
 			Details: nil,
 		})
@@ -415,7 +446,7 @@ func mapPostError(c *gin.Context, err error) bool {
 		responses.FailureFor(c, nethttp.StatusConflict, responses.FailureOpts{
 			Service: responses.ServiceTags,
 			Case:    responses.CaseConflict,
-			Code:    "conflict",
+			Code:    responses.ErrorCodeConflict,
 			Message: "Tag conflict",
 			Details: nil,
 		})
@@ -423,10 +454,11 @@ func mapPostError(c *gin.Context, err error) bool {
 		responses.FailureFor(c, nethttp.StatusInternalServerError, responses.FailureOpts{
 			Service: responses.ServicePosts,
 			Case:    responses.CaseInternalError,
-			Code:    "internal_error",
+			Code:    responses.ErrorCodeInternal,
 			Message: "Failed to process post",
 			Details: nil,
 		})
 	}
+
 	return true
 }

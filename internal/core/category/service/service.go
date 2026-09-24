@@ -1,3 +1,4 @@
+// Package service implements category CRUD and nested-set tree maintenance.
 package service
 
 import (
@@ -5,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"regexp"
+	"slices"
 	"sort"
 	"strings"
 	"time"
@@ -15,60 +17,77 @@ import (
 	"github.com/turahe/blog-api/internal/core/category/ports"
 )
 
+// ErrValidation wraps invalid category input.
 var (
 	ErrValidation = errors.New("validation error")
 	slugPattern   = regexp.MustCompile(`^[a-z0-9]+(?:-[a-z0-9]+)*$`)
 )
 
-type CreateInput = ports.CreateInput
-type UpdateInput = ports.UpdateInput
+type (
+	// CreateInput is ports.CreateInput.
+	CreateInput = ports.CreateInput
+	// UpdateInput is ports.UpdateInput.
+	UpdateInput = ports.UpdateInput
+)
 
+// IDGenerator returns new UUIDs.
 type IDGenerator interface {
 	New() uuid.UUID
 }
 
+// Clock returns the current time.
 type Clock interface {
 	Now() time.Time
 }
 
+// CategoryService implements ports.Service.
 type CategoryService struct {
 	repo  ports.Repository
 	ids   IDGenerator
 	clock Clock
 }
 
+// New returns a CategoryService.
 func New(repo ports.Repository, ids IDGenerator, clock Clock) *CategoryService {
 	return &CategoryService{repo: repo, ids: ids, clock: clock}
 }
 
+// List returns every category in tree order.
 func (s *CategoryService) List(ctx context.Context) ([]categorydomain.Category, error) {
 	return s.repo.List(ctx)
 }
 
+// GetBySlug returns the category with the slug.
 func (s *CategoryService) GetBySlug(ctx context.Context, slug string) (categorydomain.Category, error) {
 	slug = strings.TrimSpace(slug)
 	if slug == "" {
 		return categorydomain.Category{}, categorydomain.ErrNotFound
 	}
+
 	return s.repo.GetBySlug(ctx, slug)
 }
 
+// Create validates and inserts a category, then rebuilds the tree bounds.
 func (s *CategoryService) Create(ctx context.Context, in ports.CreateInput) (categorydomain.Category, error) {
 	name, slug, desc, err := s.validateCreateFields(ctx, in)
 	if err != nil {
 		return categorydomain.Category{}, err
 	}
+
 	if err := s.validateParentAndBefore(ctx, in.ParentID, in.BeforeID); err != nil {
 		return categorydomain.Category{}, err
 	}
 
 	var out categorydomain.Category
+
 	err = s.repo.WithinTx(ctx, func(ctx context.Context, r ports.Repository) error {
 		all, err := r.List(ctx)
 		if err != nil {
 			return err
 		}
+
 		now := s.clock.Now()
+
 		cat := categorydomain.Category{
 			UUID:        s.ids.New(),
 			Name:        name,
@@ -82,21 +101,28 @@ func (s *CategoryService) Create(ctx context.Context, in ports.CreateInput) (cat
 		if _, err := r.Create(ctx, cat); err != nil {
 			return err
 		}
+
 		all = append(all, cat)
+
 		all, err = applyBefore(all, cat.UUID, in.ParentID, in.BeforeID)
 		if err != nil {
 			return err
 		}
+
 		all = rebuildBounds(all)
 		if err := r.ReplaceTreeBounds(ctx, all); err != nil {
 			return err
 		}
+
 		out = findByID(all, cat.UUID)
+
 		return nil
 	})
+
 	return out, err
 }
 
+// Update changes metadata fields; use Move to reparent.
 func (s *CategoryService) Update(ctx context.Context, id uuid.UUID, in ports.UpdateInput) (categorydomain.Category, error) {
 	if in.Name == nil && in.Slug == nil && in.Description == nil && !in.ImageIDProvided {
 		return categorydomain.Category{}, fmt.Errorf("%w: no fields to update", ErrValidation)
@@ -108,34 +134,15 @@ func (s *CategoryService) Update(ctx context.Context, id uuid.UUID, in ports.Upd
 	}
 
 	if in.Name != nil {
-		name := strings.TrimSpace(*in.Name)
-		if name == "" {
-			return categorydomain.Category{}, fmt.Errorf("%w: name required", ErrValidation)
+		if cat.Name, err = validateName(*in.Name); err != nil {
+			return categorydomain.Category{}, err
 		}
-		if utf8.RuneCountInString(name) > 128 {
-			return categorydomain.Category{}, fmt.Errorf("%w: name too long", ErrValidation)
-		}
-		cat.Name = name
 	}
 
 	if in.Slug != nil {
-		slugVal := strings.TrimSpace(strings.ToLower(*in.Slug))
-		if slugVal == "" {
-			return categorydomain.Category{}, fmt.Errorf("%w: slug required", ErrValidation)
+		if cat.Slug, err = s.updatedSlug(ctx, cat, *in.Slug); err != nil {
+			return categorydomain.Category{}, err
 		}
-		if !slugPattern.MatchString(slugVal) {
-			return categorydomain.Category{}, fmt.Errorf("%w: invalid slug", ErrValidation)
-		}
-		if slugVal != cat.Slug {
-			taken, err := s.repo.SlugTaken(ctx, slugVal, cat.UUID)
-			if err != nil {
-				return categorydomain.Category{}, err
-			}
-			if taken {
-				return categorydomain.Category{}, categorydomain.ErrConflict
-			}
-		}
-		cat.Slug = slugVal
 	}
 
 	if in.Description != nil {
@@ -147,21 +154,66 @@ func (s *CategoryService) Update(ctx context.Context, id uuid.UUID, in ports.Upd
 	}
 
 	cat.UpdatedAt = s.clock.Now()
+
 	return s.repo.Update(ctx, cat)
 }
 
+func validateName(raw string) (string, error) {
+	name := strings.TrimSpace(raw)
+	if name == "" {
+		return "", fmt.Errorf("%w: name required", ErrValidation)
+	}
+
+	if utf8.RuneCountInString(name) > 128 {
+		return "", fmt.Errorf("%w: name too long", ErrValidation)
+	}
+
+	return name, nil
+}
+
+// updatedSlug validates a new slug and checks it is free unless unchanged.
+func (s *CategoryService) updatedSlug(ctx context.Context, cat categorydomain.Category, raw string) (string, error) {
+	slug := strings.TrimSpace(strings.ToLower(raw))
+	if slug == "" {
+		return "", fmt.Errorf("%w: slug required", ErrValidation)
+	}
+
+	if !slugPattern.MatchString(slug) {
+		return "", fmt.Errorf("%w: invalid slug", ErrValidation)
+	}
+
+	if slug == cat.Slug {
+		return slug, nil
+	}
+
+	taken, err := s.repo.SlugTaken(ctx, slug, cat.UUID)
+	if err != nil {
+		return "", err
+	}
+
+	if taken {
+		return "", categorydomain.ErrConflict
+	}
+
+	return slug, nil
+}
+
+// Delete removes a category with no children or posts, then rebuilds the tree bounds.
 func (s *CategoryService) Delete(ctx context.Context, id uuid.UUID) error {
 	children, err := s.repo.CountChildren(ctx, id)
 	if err != nil {
 		return err
 	}
+
 	if children > 0 {
 		return categorydomain.ErrInUse
 	}
+
 	posts, err := s.repo.CountPosts(ctx, id)
 	if err != nil {
 		return err
 	}
+
 	if posts > 0 {
 		return categorydomain.ErrInUse
 	}
@@ -170,76 +222,91 @@ func (s *CategoryService) Delete(ctx context.Context, id uuid.UUID) error {
 		if err := r.Delete(ctx, id); err != nil {
 			return err
 		}
+
 		all, err := r.List(ctx)
 		if err != nil {
 			return err
 		}
+
 		all = rebuildBounds(all)
+
 		return r.ReplaceTreeBounds(ctx, all)
 	})
 }
 
-func (s *CategoryService) Move(ctx context.Context, id uuid.UUID, parentID *uuid.UUID, beforeID *uuid.UUID) (categorydomain.Category, error) {
+// Move reparents a category and places it before beforeID among its new siblings.
+func (s *CategoryService) Move(ctx context.Context, id uuid.UUID, parentID, beforeID *uuid.UUID) (categorydomain.Category, error) {
 	if parentID != nil && *parentID == id {
 		return categorydomain.Category{}, fmt.Errorf("%w: cannot move category under itself", ErrValidation)
 	}
+
 	if err := s.validateParentAndBefore(ctx, parentID, beforeID); err != nil {
 		return categorydomain.Category{}, err
 	}
 
 	var out categorydomain.Category
+
 	err := s.repo.WithinTx(ctx, func(ctx context.Context, r ports.Repository) error {
 		all, err := r.List(ctx)
 		if err != nil {
 			return err
 		}
+
 		node, ok := findByIDOptional(all, id)
 		if !ok {
 			return categorydomain.ErrNotFound
 		}
+
 		if parentID != nil {
 			if isDescendant(all, id, *parentID) {
 				return fmt.Errorf("%w: cannot move category under its descendant", ErrValidation)
 			}
 		}
+
 		node.ParentUUID = parentID
 		node.UpdatedAt = s.clock.Now()
 		all = replace(all, node)
+
 		all, err = applyBefore(all, id, parentID, beforeID)
 		if err != nil {
 			return err
 		}
+
 		if _, err := r.Update(ctx, node); err != nil {
 			return err
 		}
+
 		all = rebuildBounds(all)
 		if err := r.ReplaceTreeBounds(ctx, all); err != nil {
 			return err
 		}
+
 		out = findByID(all, id)
+
 		return nil
 	})
+
 	return out, err
 }
 
+// RebuildAll recomputes nested-set bounds from parent links.
 func (s *CategoryService) RebuildAll(ctx context.Context) error {
 	return s.repo.WithinTx(ctx, func(ctx context.Context, r ports.Repository) error {
 		all, err := r.List(ctx)
 		if err != nil {
 			return err
 		}
+
 		all = rebuildBounds(all)
+
 		return r.ReplaceTreeBounds(ctx, all)
 	})
 }
 
 func (s *CategoryService) validateCreateFields(ctx context.Context, in ports.CreateInput) (name, slug, desc string, err error) {
-	name = strings.TrimSpace(in.Name)
-	if name == "" {
-		return "", "", "", fmt.Errorf("%w: name required", ErrValidation)
-	}
-	if utf8.RuneCountInString(name) > 128 {
-		return "", "", "", fmt.Errorf("%w: name too long", ErrValidation)
+	name, err = validateName(in.Name)
+	if err != nil {
+		return "", "", "", err
 	}
 
 	slug = strings.TrimSpace(in.Slug)
@@ -259,6 +326,7 @@ func (s *CategoryService) validateCreateFields(ctx context.Context, in ports.Cre
 	if err != nil {
 		return "", "", "", err
 	}
+
 	if taken {
 		return "", "", "", categorydomain.ErrConflict
 	}
@@ -266,6 +334,7 @@ func (s *CategoryService) validateCreateFields(ctx context.Context, in ports.Cre
 	if in.Description != nil {
 		desc = *in.Description
 	}
+
 	return name, slug, desc, nil
 }
 
@@ -275,21 +344,26 @@ func (s *CategoryService) validateParentAndBefore(ctx context.Context, parentID,
 			if errors.Is(err, categorydomain.ErrNotFound) {
 				return fmt.Errorf("%w: parent not found", ErrValidation)
 			}
+
 			return err
 		}
 	}
+
 	if beforeID != nil {
 		before, err := s.repo.GetByID(ctx, *beforeID)
 		if err != nil {
 			if errors.Is(err, categorydomain.ErrNotFound) {
 				return fmt.Errorf("%w: before_id not found", ErrValidation)
 			}
+
 			return err
 		}
+
 		if !sameParent(before.ParentUUID, parentID) {
 			return fmt.Errorf("%w: before_id must share parent", ErrValidation)
 		}
 	}
+
 	return nil
 }
 
@@ -299,7 +373,9 @@ func rebuildBounds(cats []categorydomain.Category) []categorydomain.Category {
 	}
 
 	children := make(map[uuid.UUID][]categorydomain.Category)
+
 	var roots []categorydomain.Category
+
 	for _, cat := range cats {
 		if cat.ParentUUID == nil {
 			roots = append(roots, cat)
@@ -314,9 +390,11 @@ func rebuildBounds(cats []categorydomain.Category) []categorydomain.Category {
 			if s[i].SortOrder != s[j].SortOrder {
 				return s[i].SortOrder < s[j].SortOrder
 			}
+
 			if s[i].Name != s[j].Name {
 				return s[i].Name < s[j].Name
 			}
+
 			return s[i].UUID.String() < s[j].UUID.String()
 		})
 	}
@@ -324,9 +402,11 @@ func rebuildBounds(cats []categorydomain.Category) []categorydomain.Category {
 	sortSiblings(roots)
 
 	var out []categorydomain.Category
+
 	counter := 1
 
 	var walk func(cat categorydomain.Category, depth int)
+
 	walk = func(cat categorydomain.Category, depth int) {
 		cat.Depth = depth
 		cat.Lft = counter
@@ -334,6 +414,7 @@ func rebuildBounds(cats []categorydomain.Category) []categorydomain.Category {
 
 		kids := children[cat.UUID]
 		sortSiblings(kids)
+
 		for i := range kids {
 			kids[i].SortOrder = i
 			walk(kids[i], depth+1)
@@ -341,6 +422,7 @@ func rebuildBounds(cats []categorydomain.Category) []categorydomain.Category {
 
 		cat.Rgt = counter
 		counter++
+
 		out = append(out, cat)
 	}
 
@@ -348,6 +430,7 @@ func rebuildBounds(cats []categorydomain.Category) []categorydomain.Category {
 		roots[i].SortOrder = i
 		walk(roots[i], 0)
 	}
+
 	return out
 }
 
@@ -357,55 +440,15 @@ func applyBefore(cats []categorydomain.Category, id uuid.UUID, parentID, beforeI
 		if !ok {
 			return nil, fmt.Errorf("%w: before_id not found", ErrValidation)
 		}
+
 		if !sameParent(before.ParentUUID, parentID) {
 			return nil, fmt.Errorf("%w: before_id must share parent", ErrValidation)
 		}
 	}
 
-	var siblings []categorydomain.Category
-	for _, cat := range cats {
-		if cat.UUID == id {
-			cat.ParentUUID = parentID
-			siblings = append(siblings, cat)
-			continue
-		}
-		if sameParent(cat.ParentUUID, parentID) {
-			siblings = append(siblings, cat)
-		}
-	}
-
-	sort.Slice(siblings, func(i, j int) bool {
-		if siblings[i].SortOrder != siblings[j].SortOrder {
-			return siblings[i].SortOrder < siblings[j].SortOrder
-		}
-		if siblings[i].Name != siblings[j].Name {
-			return siblings[i].Name < siblings[j].Name
-		}
-		return siblings[i].UUID.String() < siblings[j].UUID.String()
-	})
-
-	ordered := make([]uuid.UUID, 0, len(siblings))
-	for _, sib := range siblings {
-		if sib.UUID == id {
-			continue
-		}
-		ordered = append(ordered, sib.UUID)
-	}
-
-	if beforeID == nil {
-		ordered = append(ordered, id)
-	} else {
-		idx := -1
-		for i, sid := range ordered {
-			if sid == *beforeID {
-				idx = i
-				break
-			}
-		}
-		if idx < 0 {
-			return nil, fmt.Errorf("%w: before_id not found among siblings", ErrValidation)
-		}
-		ordered = append(ordered[:idx], append([]uuid.UUID{id}, ordered[idx:]...)...)
+	ordered, err := insertBefore(siblingOrder(cats, id, parentID), id, beforeID)
+	if err != nil {
+		return nil, err
 	}
 
 	for i, sid := range ordered {
@@ -414,7 +457,52 @@ func applyBefore(cats []categorydomain.Category, id uuid.UUID, parentID, beforeI
 		cat.ParentUUID = parentID
 		cats = replace(cats, cat)
 	}
+
 	return cats, nil
+}
+
+// siblingOrder returns the current sibling ids under parentID in display order, excluding id.
+func siblingOrder(cats []categorydomain.Category, id uuid.UUID, parentID *uuid.UUID) []uuid.UUID {
+	var siblings []categorydomain.Category
+
+	for _, cat := range cats {
+		if cat.UUID != id && sameParent(cat.ParentUUID, parentID) {
+			siblings = append(siblings, cat)
+		}
+	}
+
+	sort.Slice(siblings, func(i, j int) bool {
+		if siblings[i].SortOrder != siblings[j].SortOrder {
+			return siblings[i].SortOrder < siblings[j].SortOrder
+		}
+
+		if siblings[i].Name != siblings[j].Name {
+			return siblings[i].Name < siblings[j].Name
+		}
+
+		return siblings[i].UUID.String() < siblings[j].UUID.String()
+	})
+
+	ordered := make([]uuid.UUID, 0, len(siblings)+1)
+	for _, sib := range siblings {
+		ordered = append(ordered, sib.UUID)
+	}
+
+	return ordered
+}
+
+// insertBefore places id before beforeID in ordered, or appends it when beforeID is nil.
+func insertBefore(ordered []uuid.UUID, id uuid.UUID, beforeID *uuid.UUID) ([]uuid.UUID, error) {
+	if beforeID == nil {
+		return append(ordered, id), nil
+	}
+
+	idx := slices.Index(ordered, *beforeID)
+	if idx < 0 {
+		return nil, fmt.Errorf("%w: before_id not found among siblings", ErrValidation)
+	}
+
+	return slices.Insert(ordered, idx, id), nil
 }
 
 func isDescendant(cats []categorydomain.Category, ancestorID, candidateID uuid.UUID) bool {
@@ -422,15 +510,18 @@ func isDescendant(cats []categorydomain.Category, ancestorID, candidateID uuid.U
 	if !ok {
 		return false
 	}
+
 	for current.ParentUUID != nil {
 		if *current.ParentUUID == ancestorID {
 			return true
 		}
+
 		current, ok = findByIDOptional(cats, *current.ParentUUID)
 		if !ok {
 			return false
 		}
 	}
+
 	return false
 }
 
@@ -438,9 +529,11 @@ func sameParent(a, b *uuid.UUID) bool {
 	if a == nil && b == nil {
 		return true
 	}
+
 	if a == nil || b == nil {
 		return false
 	}
+
 	return *a == *b
 }
 
@@ -449,6 +542,7 @@ func findByID(cats []categorydomain.Category, id uuid.UUID) categorydomain.Categ
 	if !ok {
 		return categorydomain.Category{}
 	}
+
 	return cat
 }
 
@@ -458,6 +552,7 @@ func findByIDOptional(cats []categorydomain.Category, id uuid.UUID) (categorydom
 			return cat, true
 		}
 	}
+
 	return categorydomain.Category{}, false
 }
 
@@ -468,11 +563,13 @@ func replace(cats []categorydomain.Category, updated categorydomain.Category) []
 			return cats
 		}
 	}
+
 	return append(cats, updated)
 }
 
 func slugify(name string) string {
 	s := strings.ToLower(strings.TrimSpace(name))
+
 	s = strings.Map(func(r rune) rune {
 		switch {
 		case r >= 'a' && r <= 'z', r >= '0' && r <= '9':
@@ -486,5 +583,6 @@ func slugify(name string) string {
 	for strings.Contains(s, "--") {
 		s = strings.ReplaceAll(s, "--", "-")
 	}
+
 	return strings.Trim(s, "-")
 }

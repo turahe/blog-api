@@ -14,10 +14,12 @@ func Post(post postdomain.Post) gin.H {
 	if post.CategoryUUID != nil {
 		categoryID = post.CategoryUUID.String()
 	}
+
 	var coverImageMediaID any
 	if post.CoverImageMediaUUID != nil {
 		coverImageMediaID = post.CoverImageMediaUUID.String()
 	}
+
 	return gin.H{
 		"id":                   post.UUID.String(),
 		"author_id":            post.AuthorUUID.String(),
@@ -41,10 +43,13 @@ func PostWithTags(post postdomain.Post, tags []tagdomain.Tag) gin.H {
 		payload["tags"] = []gin.H{}
 		return payload
 	}
+
 	encoded := make([]gin.H, 0, len(tags))
 	for _, tag := range tags {
 		encoded = append(encoded, Tag(tag))
 	}
+
 	payload["tags"] = encoded
+
 	return payload
 }

@@ -4,11 +4,12 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
-	"github.com/turahe/blog-api/internal/adapters/inbound/http/responses"
 	nethttp "net/http"
 	"net/http/httptest"
 	"testing"
 	"time"
+
+	"github.com/turahe/blog-api/internal/adapters/inbound/http/responses"
 
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
@@ -61,11 +62,12 @@ func TestListTagsHandlerReturnsItems(t *testing.T) {
 
 	w := httptest.NewRecorder()
 	c, _ := gin.CreateTestContext(w)
-	c.Request = httptest.NewRequest(nethttp.MethodGet, "/api/v1/tags", nil)
+	c.Request = httptest.NewRequestWithContext(t.Context(), nethttp.MethodGet, "/api/v1/tags", nil)
 
 	listTagsHandler(svc)(c)
 
 	require.Equal(t, nethttp.StatusOK, w.Code)
+
 	var envelope responses.Envelope
 	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &envelope))
 	require.True(t, envelope.OK)
@@ -84,18 +86,20 @@ func TestAdminCreateTagHandlerCreatesTag(t *testing.T) {
 		createFn: func(_ context.Context, name, slug string) (tagdomain.Tag, error) {
 			require.Equal(t, "Go", name)
 			require.Equal(t, "go", slug)
+
 			return tagdomain.Tag{UUID: tagID, Name: name, Slug: slug, CreatedAt: now}, nil
 		},
 	}
 
 	w := httptest.NewRecorder()
 	c, _ := gin.CreateTestContext(w)
-	c.Request = httptest.NewRequest(nethttp.MethodPost, "/api/v1/admin/tags", bytes.NewBufferString(`{"name":"Go","slug":"go"}`))
+	c.Request = httptest.NewRequestWithContext(t.Context(), nethttp.MethodPost, "/api/v1/admin/tags", bytes.NewBufferString(`{"name":"Go","slug":"go"}`))
 	c.Request.Header.Set("Content-Type", "application/json")
 
 	adminCreateTagHandler(svc)(c)
 
 	require.Equal(t, nethttp.StatusCreated, w.Code)
+
 	var envelope responses.Envelope
 	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &envelope))
 	require.True(t, envelope.OK)
@@ -119,11 +123,12 @@ func TestAdminDeleteTagHandlerMapsInUse(t *testing.T) {
 	w := httptest.NewRecorder()
 	c, _ := gin.CreateTestContext(w)
 	c.Params = gin.Params{{Key: "param1", Value: tagID.String()}}
-	c.Request = httptest.NewRequest(nethttp.MethodDelete, "/api/v1/admin/tags/"+tagID.String(), nil)
+	c.Request = httptest.NewRequestWithContext(t.Context(), nethttp.MethodDelete, "/api/v1/admin/tags/"+tagID.String(), nil)
 
 	adminDeleteTagHandler(svc)(c)
 
 	require.Equal(t, nethttp.StatusConflict, w.Code)
+
 	var envelope responses.Envelope
 	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &envelope))
 	require.False(t, envelope.OK)
@@ -147,12 +152,13 @@ func TestAdminMergeTagHandlerReturnsTargetTag(t *testing.T) {
 	w := httptest.NewRecorder()
 	c, _ := gin.CreateTestContext(w)
 	c.Params = gin.Params{{Key: "param1", Value: sourceID.String()}}
-	c.Request = httptest.NewRequest(nethttp.MethodPost, "/api/v1/admin/tags/"+sourceID.String()+"/merge", bytes.NewBufferString(`{"into_id":"`+intoID.String()+`"}`))
+	c.Request = httptest.NewRequestWithContext(t.Context(), nethttp.MethodPost, "/api/v1/admin/tags/"+sourceID.String()+"/merge", bytes.NewBufferString(`{"into_id":"`+intoID.String()+`"}`))
 	c.Request.Header.Set("Content-Type", "application/json")
 
 	adminMergeTagHandler(svc)(c)
 
 	require.Equal(t, nethttp.StatusOK, w.Code)
+
 	var envelope responses.Envelope
 	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &envelope))
 	require.True(t, envelope.OK)

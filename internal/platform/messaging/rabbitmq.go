@@ -23,5 +23,6 @@ func openRabbitMQ(_ context.Context, bus *Bus, cfg config.Config) error {
 
 	bus.Publisher = publisher
 	bus.Subscriber = subscriber
+
 	return nil
 }

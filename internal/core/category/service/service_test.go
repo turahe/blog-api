@@ -28,8 +28,10 @@ func (f *fixedIDs) New() uuid.UUID {
 	if len(f.next) == 0 {
 		return uuid.New()
 	}
+
 	id := f.next[0]
 	f.next = f.next[1:]
+
 	return id
 }
 
@@ -50,6 +52,7 @@ func newFakeRepo(cats ...categorydomain.Category) *fakeRepo {
 	for _, cat := range cats {
 		repo.put(cat)
 	}
+
 	return repo
 }
 
@@ -63,12 +66,15 @@ func (f *fakeRepo) List(context.Context) ([]categorydomain.Category, error) {
 	for _, cat := range f.byID {
 		out = append(out, cat)
 	}
+
 	sort.Slice(out, func(i, j int) bool {
 		if out[i].Lft != out[j].Lft {
 			return out[i].Lft < out[j].Lft
 		}
+
 		return out[i].Name < out[j].Name
 	})
+
 	return out, nil
 }
 
@@ -77,6 +83,7 @@ func (f *fakeRepo) GetByID(_ context.Context, id uuid.UUID) (categorydomain.Cate
 	if !ok {
 		return categorydomain.Category{}, categorydomain.ErrNotFound
 	}
+
 	return cat, nil
 }
 
@@ -85,6 +92,7 @@ func (f *fakeRepo) GetBySlug(_ context.Context, slug string) (categorydomain.Cat
 	if !ok {
 		return categorydomain.Category{}, categorydomain.ErrNotFound
 	}
+
 	return cat, nil
 }
 
@@ -98,7 +106,9 @@ func (f *fakeRepo) Update(_ context.Context, cat categorydomain.Category) (categ
 	if ok && old.Slug != cat.Slug {
 		delete(f.bySlug, old.Slug)
 	}
+
 	f.put(cat)
+
 	return cat, nil
 }
 
@@ -107,9 +117,11 @@ func (f *fakeRepo) Delete(_ context.Context, id uuid.UUID) error {
 	if !ok {
 		return categorydomain.ErrNotFound
 	}
+
 	delete(f.byID, id)
 	delete(f.bySlug, cat.Slug)
 	f.deleted = append(f.deleted, id)
+
 	return nil
 }
 
@@ -118,6 +130,7 @@ func (f *fakeRepo) SlugTaken(_ context.Context, slug string, excludeID uuid.UUID
 	if !ok {
 		return false, nil
 	}
+
 	return cat.UUID != excludeID, nil
 }
 
@@ -127,11 +140,13 @@ func (f *fakeRepo) CountPosts(_ context.Context, categoryID uuid.UUID) (int64, e
 
 func (f *fakeRepo) CountChildren(_ context.Context, categoryID uuid.UUID) (int64, error) {
 	var n int64
+
 	for _, cat := range f.byID {
 		if cat.ParentUUID != nil && *cat.ParentUUID == categoryID {
 			n++
 		}
 	}
+
 	return n, nil
 }
 
@@ -142,8 +157,10 @@ func (f *fakeRepo) ReplaceTreeBounds(_ context.Context, cats []categorydomain.Ca
 		if ok && old.Slug != cat.Slug {
 			delete(f.bySlug, old.Slug)
 		}
+
 		f.put(cat)
 	}
+
 	return nil
 }
 
@@ -152,6 +169,8 @@ func (f *fakeRepo) WithinTx(ctx context.Context, fn func(context.Context, ports.
 }
 
 func TestCreateSlugifiesNameRejectsEmptyAndConflicts(t *testing.T) {
+	t.Parallel()
+
 	ctx := context.Background()
 	now := time.Date(2026, 8, 1, 1, 0, 0, 0, time.UTC)
 	newID := uuid.MustParse("11111111-1111-1111-1111-111111111111")
@@ -178,6 +197,8 @@ func TestCreateSlugifiesNameRejectsEmptyAndConflicts(t *testing.T) {
 }
 
 func TestCreateWithParentAndBeforePlacesSiblingOrderAndRebuilds(t *testing.T) {
+	t.Parallel()
+
 	ctx := context.Background()
 	now := time.Date(2026, 8, 1, 2, 0, 0, 0, time.UTC)
 	parentID := uuid.MustParse("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa")
@@ -202,6 +223,7 @@ func TestCreateWithParentAndBeforePlacesSiblingOrderAndRebuilds(t *testing.T) {
 	first := repo.byID[firstID]
 	second := repo.byID[secondID]
 	parent := repo.byID[parentID]
+
 	require.Equal(t, 0, first.SortOrder)
 	require.Equal(t, 2, second.SortOrder)
 	require.Equal(t, 1, parent.Lft)
@@ -210,6 +232,8 @@ func TestCreateWithParentAndBeforePlacesSiblingOrderAndRebuilds(t *testing.T) {
 }
 
 func TestUpdateRejectsSlugConflictAndUpdatesMetadataOnly(t *testing.T) {
+	t.Parallel()
+
 	ctx := context.Background()
 	now := time.Date(2026, 8, 1, 3, 0, 0, 0, time.UTC)
 	catID := uuid.MustParse("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa")
@@ -237,7 +261,7 @@ func TestUpdateRejectsSlugConflictAndUpdatesMetadataOnly(t *testing.T) {
 	})
 	require.NoError(t, err)
 	require.Equal(t, "Renamed", got.Name)
-	require.Equal(t, "", got.Description)
+	require.Empty(t, got.Description)
 	require.Nil(t, got.ImageUUID)
 	require.Equal(t, &parentID, got.ParentUUID)
 	require.Equal(t, 2, got.Lft)
@@ -247,6 +271,8 @@ func TestUpdateRejectsSlugConflictAndUpdatesMetadataOnly(t *testing.T) {
 }
 
 func TestMoveRejectsOwnDescendantAndReparentsSuccessfully(t *testing.T) {
+	t.Parallel()
+
 	ctx := context.Background()
 	rootID := uuid.MustParse("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa")
 	childID := uuid.MustParse("bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb")
@@ -268,11 +294,13 @@ func TestMoveRejectsOwnDescendantAndReparentsSuccessfully(t *testing.T) {
 	require.Equal(t, &otherRootID, got.ParentUUID)
 	require.Equal(t, 1, got.Depth)
 	require.Equal(t, 2, repo.byID[grandID].Depth)
-	require.True(t, repo.byID[otherRootID].Lft < got.Lft)
-	require.True(t, got.Lft < repo.byID[grandID].Lft)
+	require.Less(t, repo.byID[otherRootID].Lft, got.Lft)
+	require.Less(t, got.Lft, repo.byID[grandID].Lft)
 }
 
 func TestDeleteBlocksInUseAndRebuildsAfterDelete(t *testing.T) {
+	t.Parallel()
+
 	ctx := context.Background()
 	rootID := uuid.MustParse("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa")
 	childID := uuid.MustParse("bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb")
@@ -301,6 +329,8 @@ func TestDeleteBlocksInUseAndRebuildsAfterDelete(t *testing.T) {
 }
 
 func TestRebuildAllAssignsStableNestedSetOrder(t *testing.T) {
+	t.Parallel()
+
 	ctx := context.Background()
 	rootA := uuid.MustParse("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa")
 	rootB := uuid.MustParse("bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb")

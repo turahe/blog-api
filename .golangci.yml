@@ -107,10 +107,26 @@ linters:
       - third_party$
       - testutils$
       - examples$
+    rules:
+      # Test fixtures use throwaway DSNs such as amqp://guest:guest@localhost.
+      - path: _test\.go
+        linters: [gosec]
+        text: G101
+      # Repeated fixture literals read better inline than as test constants, and
+      # tests for sibling resources (categories/tags) intentionally mirror each other.
+      - path: _test\.go
+        linters: [goconst, dupl]
+      # JSON field names (responses) and column names (persistence) document the
+      # wire/table shape; constants for "created_at" or "status" would obscure it.
+      - path: internal/adapters/(inbound/http/responses|outbound/persistence)/
+        linters: [goconst]
 
   settings:
     dupl:
       threshold: 100 # lower => stricter (tokens)
+    dupword:
+      ignore:
+        - body # swag "@Param body body <type>" (name + location)
     errcheck:
       check-type-assertions: true
     funlen:
@@ -142,7 +158,8 @@ formatters:
     # - swaggo   # swaggo comment formatting — only for swaggo users
   settings:
     gofumpt:
-      extra-rules: true
+      extra:
+        group-params: true
   exclusions:
     generated: lax
     paths:

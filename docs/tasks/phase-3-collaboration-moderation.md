@@ -8,32 +8,40 @@ Index: [README.md](./README.md).
 
 ## Status
 
-**Planned** — the `comments` and `audit_logs` tables exist from migration `00001`, but there is
-no comment core module, repository, or handler. All 13 comment operations and all 3 notification
-operations still return `501`.
+**Partial** — the comment core, repository, and all 8 public and self-service comment
+operations are wired (migration `00009_comments.sql`), with ownership checks and Redis rate
+limits. Moderation, audit writing, and notifications are still open; the 6 admin comment and
+3 notification operations return `501`.
 
 ## Epic: comment model and service
 
 - [x] `comments` table with post, author, parent, and status columns
-- [ ] Comment domain and ports under `internal/core/comment`
-- [ ] Comment service covering create, edit window, soft delete, and threading depth limits
-- [ ] Comment repository in `internal/adapters/outbound/persistence`
-- [ ] Migration for upvotes and flag counters if the schema does not already carry them
-- [ ] Reconcile the existing `comments` columns against [model.md](../backend/model.md) and
-      add a follow-up migration for any gaps
+- [x] Comment domain and ports under `internal/core/comment`
+- [x] Comment service covering create, edit window, soft delete, and threading depth limits
+- [x] Comment repository in `internal/adapters/outbound/persistence/comment_repository.go`
+- [x] Migration for upvotes and flag counters (`comment_upvotes`, `comment_flags`, cached
+      `upvote_count` / `flag_count`)
+- [x] Reconcile the `comments` columns against [ERD.md](../backend/ERD.md): `00009` renames
+      `user_id`/`body` to `author_id`/`content` and adds guest identity, `ip_hash`, `user_agent`,
+      `depth` (0–5, DB-checked), `edited_at`, `deleted_by`, and the `flagged` status. `reply_count`
+      is computed on read. Moderation and spam columns are tracked under the moderation epic.
+- [ ] Render `content` to sanitized `content_html` (allow-list markdown); clients must escape
+      `content` until then
 
 ## Epic: public and self comment endpoints
 
-- [ ] `public.posts.comments.list` — `GET /api/v1/posts/{id}/comments`
-- [ ] `public.posts.comments.create` — `POST /api/v1/posts/{id}/comments`
-- [ ] `public.comments.get` — `GET /api/v1/comments/{id}`
-- [ ] `public.comments.flag` — `POST /api/v1/comments/{id}/flag`
-- [ ] `self.comments.list` — `GET /api/v1/me/comments`
-- [ ] `self.comments.patch` — `PATCH /api/v1/comments/{id}`
-- [ ] `self.comments.delete` — `DELETE /api/v1/comments/{id}`
-- [ ] `self.comments.upvote` — `POST /api/v1/comments/{id}/upvote`
-- [ ] Ownership checks so `self.*` operations cannot touch another user's comment
-- [ ] Rate limiting on create, flag, and upvote
+- [x] `public.posts.comments.list` — `GET /api/v1/posts/{id}/comments` (roots, or `?parent_id=` replies)
+- [x] `public.posts.comments.create` — `POST /api/v1/posts/{id}/comments` (optional auth; guests via `COMMENTS_GUEST_ENABLED`)
+- [x] `public.comments.get` — `GET /api/v1/comments/{id}` (with first page of replies)
+- [x] `public.comments.flag` — `POST /api/v1/comments/{id}/flag` (deduped per user or IP+UA hash)
+- [x] `self.comments.list` — `GET /api/v1/me/comments`
+- [x] `self.comments.patch` — `PATCH /api/v1/comments/{id}` (inside `COMMENTS_EDIT_WINDOW`)
+- [x] `self.comments.delete` — `DELETE /api/v1/comments/{id}` (soft delete, placeholder kept)
+- [x] `self.comments.upvote` — `POST /api/v1/comments/{id}/upvote` (toggle)
+- [x] Ownership checks so `self.*` operations cannot touch another user's comment
+- [x] Rate limiting on create, flag, and upvote (`COMMENTS_CREATE_PER_MINUTE`, `COMMENTS_ACTIONS_PER_MINUTE`)
+- [ ] Captcha (`turnstile_response`) on guest create when a challenge setting is enabled
+- [ ] Per-post comment policy (disabled, read-only, authenticated-only)
 
 ## Epic: moderation workflow
 
@@ -44,8 +52,12 @@ operations still return `501`.
 - [ ] `admin.comments.delete` — `DELETE /api/v1/admin/comments/{id}`
 - [ ] `admin.comments.stats` — `GET /api/v1/admin/comments/stats`
 - [ ] Casbin permissions for `comment.moderate` and `comment.delete`, seeded into `casbin_rules`
-- [ ] Explicit state machine for pending / approved / rejected / spam with allowed transitions
-- [ ] Optional spam heuristics or third-party check, or a documented decision to defer
+- [ ] Explicit state machine for pending / approved / flagged / rejected / spam with allowed transitions
+- [ ] Moderation columns (`moderation_reviewed_by`, `moderation_reason`) and an append-only
+      `comment_moderation_log`
+- [x] Honeypot field marks bot submissions as `spam` without telling the client
+- [ ] Optional spam heuristics or third-party check (`spam_engine`, `spam_score`, `spam_verdict`),
+      or a documented decision to defer
 
 Spec: [comments-and-moderation.md](../features/comments-and-moderation.md)
 
@@ -74,7 +86,7 @@ Specs: [notification.md](../features/notification.md),
 
 ## Dependencies and order
 
-1. The comment core module blocks every comment endpoint.
+1. The comment core module blocks every comment endpoint — done.
 2. Moderation needs seeded Casbin permissions before admin routes can be guarded.
 3. Notifications depend on comment events existing to react to.
 4. SSE fan-out across replicas depends on the Phase 4 broker being wired to real handlers.
@@ -82,9 +94,14 @@ Specs: [notification.md](../features/notification.md),
 
 ## Cross-cutting
 
-- [ ] Update `paths/comments.yaml` and `paths/notifications.yaml` first, then `make routes`
-- [ ] Handler tests for ownership and moderation authorization failures
-- [ ] Service tests for threading depth and edit-window expiry
+- [x] Bind public and self comment handlers in `routes.Register*` (`routes/comments.go`), annotate
+      them, then `make swagger` + `make routes-check`
+- [ ] Bind admin comment and notification handlers the same way
+- [x] Handler tests for ownership failures (`handlers/comments_test.go`) and comment route auth modes
+- [ ] Handler tests for moderation authorization failures
+- [x] Service tests for threading depth and edit-window expiry (`comment/service/service_test.go`)
+- [ ] Repository tests against a real database for flag dedupe, upvote toggle, and reply counts
+      (covered today by a manual end-to-end smoke only)
 - [ ] Abuse-and-spam section added to [overview.md](../security/overview.md)
 - [ ] SSE testing approach documented in [strategy.md](../testing/strategy.md)
 

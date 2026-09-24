@@ -32,12 +32,16 @@ func TestLoadEnvFileSetsMissingKeysOnly(t *testing.T) {
 }
 
 func TestLoadEnvFileRejectsMalformedLine(t *testing.T) {
+	t.Parallel()
+
 	dir := t.TempDir()
 	path := filepath.Join(dir, ".env")
 	require.NoError(t, os.WriteFile(path, []byte("NO_EQUALS\n"), 0o600))
 	require.ErrorContains(t, loadEnvFile(path), "expected KEY=VALUE")
 }
 
+//nolint:paralleltest // t.Chdir mutates the process working directory
+//nolint:paralleltest // t.Chdir mutates the process working directory
 func TestResolveEnvFileDefaultLoadsDotEnvWhenPresent(t *testing.T) {
 	dir := t.TempDir()
 	t.Chdir(dir)
@@ -48,22 +52,28 @@ func TestResolveEnvFileDefaultLoadsDotEnvWhenPresent(t *testing.T) {
 	require.Equal(t, ".env", path)
 }
 
+//nolint:paralleltest // t.Chdir mutates the process working directory
+//nolint:paralleltest // t.Chdir mutates the process working directory
 func TestResolveEnvFileEmptyDisablesWhenMissing(t *testing.T) {
 	dir := t.TempDir()
 	t.Chdir(dir)
 
 	path, err := resolveEnvFile("")
 	require.NoError(t, err)
-	require.Equal(t, "", path)
+	require.Empty(t, path)
 }
 
 func TestResolveEnvFileDashDisables(t *testing.T) {
+	t.Parallel()
+
 	path, err := resolveEnvFile("-")
 	require.NoError(t, err)
-	require.Equal(t, "", path)
+	require.Empty(t, path)
 }
 
 func TestResolveEnvFileExplicitMissingErrors(t *testing.T) {
+	t.Parallel()
+
 	_, err := resolveEnvFile(filepath.Join(t.TempDir(), "missing.env"))
 	require.ErrorContains(t, err, "env file")
 }

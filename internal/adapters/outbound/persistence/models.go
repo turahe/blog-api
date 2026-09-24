@@ -8,6 +8,7 @@ import (
 	"gorm.io/gorm"
 )
 
+// UserModel is the users row.
 type UserModel struct {
 	ID                int64     `gorm:"primaryKey"`
 	UUID              uuid.UUID `gorm:"type:uuid;column:uuid;default:gen_random_uuid()"`
@@ -25,8 +26,10 @@ type UserModel struct {
 	DeletedAt         gorm.DeletedAt `gorm:"index"`
 }
 
+// TableName returns the users table name for GORM.
 func (UserModel) TableName() string { return "users" }
 
+// RefreshSessionModel is a refresh_sessions row; rotated sessions link to their replacement.
 type RefreshSessionModel struct {
 	ID             int64      `gorm:"primaryKey"`
 	UUID           uuid.UUID  `gorm:"type:uuid;column:uuid;default:gen_random_uuid()"`
@@ -43,8 +46,10 @@ type RefreshSessionModel struct {
 	ReplacedByUUID *uuid.UUID `gorm:"column:replaced_by_uuid;->"`
 }
 
+// TableName returns the refresh_sessions table name for GORM.
 func (RefreshSessionModel) TableName() string { return "refresh_sessions" }
 
+// PostModel is the posts row.
 type PostModel struct {
 	ID                  int64     `gorm:"primaryKey"`
 	UUID                uuid.UUID `gorm:"type:uuid;column:uuid;default:gen_random_uuid()"`
@@ -66,8 +71,10 @@ type PostModel struct {
 	CoverImageMediaUUID *uuid.UUID     `gorm:"column:cover_image_media_uuid;->"`
 }
 
+// TableName returns the posts table name for GORM.
 func (PostModel) TableName() string { return "posts" }
 
+// MediaAssetModel is the media_assets row.
 type MediaAssetModel struct {
 	ID               int64          `gorm:"primaryKey"`
 	UUID             uuid.UUID      `gorm:"type:uuid;column:uuid;default:gen_random_uuid()"`
@@ -89,8 +96,10 @@ type MediaAssetModel struct {
 	UploadedByUUID   *uuid.UUID     `gorm:"column:uploaded_by_uuid;->"`
 }
 
+// TableName returns the media_assets table name for GORM.
 func (MediaAssetModel) TableName() string { return "media_assets" }
 
+// RoleModel is the roles row.
 type RoleModel struct {
 	ID          int64     `gorm:"primaryKey"`
 	UUID        uuid.UUID `gorm:"type:uuid;column:uuid;default:gen_random_uuid()"`
@@ -100,8 +109,10 @@ type RoleModel struct {
 	UpdatedAt   time.Time
 }
 
+// TableName returns the roles table name for GORM.
 func (RoleModel) TableName() string { return "roles" }
 
+// PermissionModel is the permissions row.
 type PermissionModel struct {
 	ID          int64     `gorm:"primaryKey"`
 	UUID        uuid.UUID `gorm:"type:uuid;column:uuid;default:gen_random_uuid()"`
@@ -110,12 +121,15 @@ type PermissionModel struct {
 	CreatedAt   time.Time
 }
 
+// TableName returns the permissions table name for GORM.
 func (PermissionModel) TableName() string { return "permissions" }
 
+// UserRoleModel is the user_roles join row.
 type UserRoleModel struct {
 	UserID    int64 `gorm:"primaryKey;autoIncrement:false;column:user_id"`
 	RoleID    int64 `gorm:"primaryKey;autoIncrement:false;column:role_id"`
 	CreatedAt time.Time
 }
 
+// TableName returns the user_roles table name for GORM.
 func (UserRoleModel) TableName() string { return "user_roles" }

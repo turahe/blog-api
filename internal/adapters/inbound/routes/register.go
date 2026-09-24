@@ -24,6 +24,7 @@ func Register(router gin.IRouter, c Controllers, auth AuthMiddleware) {
 	registerPublic(v1, c)
 	registerAuth(v1, auth, c)
 	registerMe(v1, auth, c)
+	registerComments(v1, auth, c)
 	registerAdmin(v1, auth, c)
 	registerAnalytics(v1, c)
 	registerContractStubs(v1, auth, c)
@@ -55,11 +56,14 @@ func fullPath(r gin.IRoutes, path string) string {
 		if base == "/" {
 			return path
 		}
+
 		if path == "" || path == "/" {
 			return base
 		}
+
 		return base + path
 	}
+
 	return path
 }
 

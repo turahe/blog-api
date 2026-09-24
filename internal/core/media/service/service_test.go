@@ -3,6 +3,7 @@ package service
 import (
 	"context"
 	"errors"
+	"maps"
 	"strings"
 	"testing"
 	"time"
@@ -73,15 +74,19 @@ func TestPresignUploadHappyPath(t *testing.T) {
 	if result.Asset.Status != mediadomain.StatusPending {
 		t.Fatalf("expected pending status, got %q", result.Asset.Status)
 	}
+
 	if !strings.HasPrefix(result.Asset.StorageKey, "media/") {
 		t.Fatalf("expected media/ prefix, got %q", result.Asset.StorageKey)
 	}
+
 	if result.UploadURL != storage.presignURL {
 		t.Fatalf("expected upload URL %q, got %q", storage.presignURL, result.UploadURL)
 	}
+
 	if got := repo.assets[result.Asset.UUID]; got.UUID != result.Asset.UUID {
 		t.Fatalf("expected asset to be stored in repo")
 	}
+
 	if storage.lastPresignKey != result.Asset.StorageKey {
 		t.Fatalf("expected presign key %q, got %q", result.Asset.StorageKey, storage.lastPresignKey)
 	}
@@ -119,9 +124,11 @@ func TestCompleteUploadMarksReadyAfterHeadOK(t *testing.T) {
 	if got.Status != mediadomain.StatusReady {
 		t.Fatalf("expected ready status, got %q", got.Status)
 	}
+
 	if got.SizeBytes != 1024 {
 		t.Fatalf("expected size 1024, got %d", got.SizeBytes)
 	}
+
 	if got.ContentType != "image/webp" {
 		t.Fatalf("expected content type image/webp, got %q", got.ContentType)
 	}
@@ -130,6 +137,7 @@ func TestCompleteUploadMarksReadyAfterHeadOK(t *testing.T) {
 	if stored.Status != mediadomain.StatusReady {
 		t.Fatalf("expected stored asset to be ready, got %q", stored.Status)
 	}
+
 	if stored.SizeBytes != 1024 {
 		t.Fatalf("expected stored size 1024, got %d", stored.SizeBytes)
 	}
@@ -148,9 +156,11 @@ func TestCompleteUploadAlreadyReadyIsIdempotent(t *testing.T) {
 	if err != nil {
 		t.Fatalf("CompleteUpload returned error: %v", err)
 	}
+
 	if got.UUID != asset.UUID {
 		t.Fatalf("expected same asset ID %s, got %s", asset.UUID, got.UUID)
 	}
+
 	if storage.headCalls != 0 {
 		t.Fatalf("expected no storage head calls, got %d", storage.headCalls)
 	}
@@ -188,6 +198,7 @@ func (r *fakeRepo) GetByID(_ context.Context, id uuid.UUID) (mediadomain.MediaAs
 	if !ok {
 		return mediadomain.MediaAsset{}, ErrNotFound
 	}
+
 	return cloneAsset(asset), nil
 }
 
@@ -201,8 +212,10 @@ func (r *fakeRepo) List(_ context.Context, filter mediadomain.ListFilter) (media
 		if asset.DeletedAt != nil {
 			continue
 		}
+
 		items = append(items, cloneAsset(asset))
 	}
+
 	return mediadomain.ListResult{Items: items, Total: int64(len(items)), Page: filter.Page, PerPage: filter.PerPage}, nil
 }
 
@@ -211,9 +224,11 @@ func (r *fakeRepo) SoftDelete(_ context.Context, id uuid.UUID, deletedAt time.Ti
 	if !ok || asset.DeletedAt != nil {
 		return ErrNotFound
 	}
+
 	asset.DeletedAt = &deletedAt
 	asset.UpdatedAt = deletedAt
 	r.assets[id] = asset
+
 	return nil
 }
 
@@ -224,6 +239,7 @@ func (r *fakeRepo) ClearEntityReferences(_ context.Context, _ uuid.UUID) error {
 func (r *fakeRepo) store(asset mediadomain.MediaAsset) mediadomain.MediaAsset {
 	cloned := cloneAsset(asset)
 	r.assets[asset.UUID] = cloned
+
 	return cloneAsset(cloned)
 }
 
@@ -256,10 +272,12 @@ func (s *fakeObjectStorage) HeadObject(_ context.Context, key string) (ports.Obj
 	if s.headErr != nil {
 		return ports.ObjectInfo{}, s.headErr
 	}
+
 	info, ok := s.headInfo[key]
 	if !ok {
 		return ports.ObjectInfo{}, ports.ErrObjectNotFound
 	}
+
 	return info, nil
 }
 
@@ -292,11 +310,13 @@ func newTestService() (*Service, *fakeRepo, *fakeObjectStorage) {
 		2048,
 		15*time.Minute,
 	)
+
 	return svc, repo, storage
 }
 
 func makePendingAsset() mediadomain.MediaAsset {
 	expiresAt := baseTime().Add(15 * time.Minute)
+
 	return mediadomain.MediaAsset{
 		UUID:             fixedID(),
 		StorageKey:       "media/22222222-2222-2222-2222-222222222222/cover.png",
@@ -322,6 +342,7 @@ func cloneAsset(asset mediadomain.MediaAsset) mediadomain.MediaAsset {
 	if asset.Tags != nil {
 		asset.Tags = append([]string(nil), asset.Tags...)
 	}
+
 	return asset
 }
 
@@ -329,9 +350,9 @@ func cloneHeaders(headers map[string]string) map[string]string {
 	if headers == nil {
 		return nil
 	}
+
 	cloned := make(map[string]string, len(headers))
-	for k, v := range headers {
-		cloned[k] = v
-	}
+	maps.Copy(cloned, headers)
+
 	return cloned
 }

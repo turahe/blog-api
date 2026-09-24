@@ -12,6 +12,7 @@ import (
 
 var _ ports.PostMediaRepository = (*PostMediaRepository)(nil)
 
+// PostMediaModel is the post_media join row.
 type PostMediaModel struct {
 	ID             int64     `gorm:"primaryKey"`
 	UUID           uuid.UUID `gorm:"type:uuid;column:uuid;default:gen_random_uuid()"`
@@ -23,35 +24,44 @@ type PostMediaModel struct {
 	MediaAssetUUID uuid.UUID `gorm:"column:media_asset_uuid;->"`
 }
 
+// TableName returns the post_media table name for GORM.
 func (PostMediaModel) TableName() string { return "post_media" }
 
+// PostMediaRepository implements mediaports.PostMediaRepository.
 type PostMediaRepository struct {
 	db *gorm.DB
 }
 
+// NewPostMediaRepository returns a PostMediaRepository backed by db.
 func NewPostMediaRepository(db *gorm.DB) *PostMediaRepository {
 	return &PostMediaRepository{db: db}
 }
 
+// ReplaceAll replaces every media attachment of the post in one transaction.
 func (r *PostMediaRepository) ReplaceAll(ctx context.Context, postID uuid.UUID, items []mediadomain.PostMediaItem) error {
 	return r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
 		postRowID, err := idByUUID(tx, "posts", postID)
 		if err != nil {
 			return err
 		}
+
 		if err := tx.Where("post_id = ?", postRowID).Delete(&PostMediaModel{}).Error; err != nil {
 			return err
 		}
+
 		if len(items) == 0 {
 			return nil
 		}
+
 		now := time.Now().UTC()
+
 		models := make([]PostMediaModel, 0, len(items))
 		for _, item := range items {
 			mediaID, err := idByUUID(tx, "media_assets", item.MediaAssetUUID)
 			if err != nil {
 				return err
 			}
+
 			models = append(models, PostMediaModel{
 				UUID:         uuid.New(),
 				PostID:       postRowID,
@@ -61,10 +71,12 @@ func (r *PostMediaRepository) ReplaceAll(ctx context.Context, postID uuid.UUID, 
 				CreatedAt:    now,
 			})
 		}
+
 		return tx.Create(&models).Error
 	})
 }
 
+// ListByPostID returns the post's attachments with their assets, in sort order.
 func (r *PostMediaRepository) ListByPostID(ctx context.Context, postID uuid.UUID) ([]mediadomain.PostMediaItem, error) {
 	var models []PostMediaModel
 	if err := r.db.WithContext(ctx).
@@ -74,6 +86,7 @@ func (r *PostMediaRepository) ListByPostID(ctx context.Context, postID uuid.UUID
 		Find(&models).Error; err != nil {
 		return nil, err
 	}
+
 	items := make([]mediadomain.PostMediaItem, 0, len(models))
 	for _, model := range models {
 		items = append(items, mediadomain.PostMediaItem{
@@ -82,5 +95,6 @@ func (r *PostMediaRepository) ListByPostID(ctx context.Context, postID uuid.UUID
 			SortOrder:      model.SortOrder,
 		})
 	}
+
 	return items, nil
 }

@@ -85,7 +85,11 @@ and rate limits to combat abuse.
 - `comments.moderate.hard_delete`
 - `comments.stats.read` — dashboard widgets and per-post totals
 
-## Key API Endpoints (see paths/comments.yaml for full contracts)
+## Key API Endpoints
+
+Full request and response contracts are in [swagger.json](../swagger.json). Public and
+self-service operations are implemented; admin moderation operations still return `501`.
+Delivery status is tracked in [phase-3-collaboration-moderation.md](../tasks/phase-3-collaboration-moderation.md).
 
 - Public / self
   - `GET /api/v1/posts/{id}/comments` list threaded tree by post

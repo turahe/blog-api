@@ -19,7 +19,7 @@ func newServeCmd() *cobra.Command {
 		Use:   "serve",
 		Short: "Start the HTTP API",
 		Args:  cobra.NoArgs,
-		RunE: func(cmd *cobra.Command, _ []string) error {
+		RunE: func(cmd *cobra.Command, _ []string) (err error) {
 			ctx, stop := signal.NotifyContext(cmd.Context(), os.Interrupt, syscall.SIGTERM)
 			defer stop()
 
@@ -27,16 +27,20 @@ func newServeCmd() *cobra.Command {
 			if err != nil {
 				return err
 			}
+
 			logger := newLogger(cfg.Environment)
+
 			app, err := bootstrap.NewRuntime(ctx, cfg, logger, version)
 			if err != nil {
 				return fmt.Errorf("bootstrap application: %w", err)
 			}
-			defer app.Close()
+			defer func() { err = errors.Join(err, app.Close()) }()
 
 			serverErr := make(chan error, 1)
+
 			go func() {
 				logger.Info("HTTP server listening", "address", cfg.Address, "version", version)
+
 				serverErr <- app.Server.ListenAndServe()
 			}()
 
@@ -44,14 +48,17 @@ func newServeCmd() *cobra.Command {
 			case <-ctx.Done():
 				shutdownCtx, cancel := context.WithTimeout(context.Background(), cfg.ShutdownTimeout)
 				defer cancel()
+
 				if err := app.Server.Shutdown(shutdownCtx); err != nil {
 					return fmt.Errorf("shutdown HTTP server: %w", err)
 				}
+
 				return nil
 			case err := <-serverErr:
 				if errors.Is(err, http.ErrServerClosed) {
 					return nil
 				}
+
 				return fmt.Errorf("serve HTTP: %w", err)
 			}
 		},

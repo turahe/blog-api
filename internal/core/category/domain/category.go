@@ -1,3 +1,4 @@
+// Package domain holds the nested-set category entity and its errors.
 package domain
 
 import (
@@ -7,12 +8,14 @@ import (
 	"github.com/google/uuid"
 )
 
+// Category errors.
 var (
 	ErrNotFound = errors.New("category not found")
 	ErrConflict = errors.New("conflict")
 	ErrInUse    = errors.New("category in use")
 )
 
+// Category is a node of the nested-set category tree.
 type Category struct {
 	ID          int64
 	UUID        uuid.UUID

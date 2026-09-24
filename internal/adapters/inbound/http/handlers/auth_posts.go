@@ -1,3 +1,4 @@
+// Package handlers implements the Gin HTTP handlers bound by routes.Register*.
 package handlers
 
 import (
@@ -30,6 +31,7 @@ func loginHandler(auth authports.Service) gin.HandlerFunc {
 		if !requests.BindJSON(c, &req) {
 			return
 		}
+
 		pair, err := auth.Login(c.Request.Context(), req.Email, req.Password, c.Request.UserAgent(), c.ClientIP(), req.Remember)
 		if err != nil {
 			code, message, status := authservice.MapError(err)
@@ -40,8 +42,10 @@ func loginHandler(auth authports.Service) gin.HandlerFunc {
 				Message: message,
 				Details: nil,
 			})
+
 			return
 		}
+
 		responses.SuccessFor(c, nethttp.StatusOK, responses.ServiceAuth, responses.CaseSuccess, responses.TokenPair(pair))
 	}
 }
@@ -62,6 +66,7 @@ func refreshHandler(auth authports.Service) gin.HandlerFunc {
 		if !requests.BindJSON(c, &req) {
 			return
 		}
+
 		pair, err := auth.Refresh(c.Request.Context(), req.RefreshToken, c.Request.UserAgent(), c.ClientIP())
 		if err != nil {
 			code, message, status := authservice.MapError(err)
@@ -72,8 +77,10 @@ func refreshHandler(auth authports.Service) gin.HandlerFunc {
 				Message: message,
 				Details: nil,
 			})
+
 			return
 		}
+
 		responses.SuccessFor(c, nethttp.StatusOK, responses.ServiceAuth, responses.CaseSuccess, responses.TokenPair(pair))
 	}
 }
@@ -96,13 +103,16 @@ func logoutHandler(auth authports.Service) gin.HandlerFunc {
 			responses.FailureFor(c, nethttp.StatusUnauthorized, responses.FailureOpts{
 				Service: responses.ServiceAuth,
 				Case:    responses.CaseUnauthorized,
-				Code:    "unauthorized",
+				Code:    responses.ErrorCodeUnauthorized,
 				Message: "Authentication required",
 				Details: nil,
 			})
+
 			return
 		}
+
 		var req requests.Logout
+
 		_ = c.ShouldBindJSON(&req) // body optional
 		if err := auth.Logout(c.Request.Context(), userID, req.RefreshToken); err != nil {
 			code, message, status := authservice.MapError(err)
@@ -113,8 +123,10 @@ func logoutHandler(auth authports.Service) gin.HandlerFunc {
 				Message: message,
 				Details: nil,
 			})
+
 			return
 		}
+
 		responses.SuccessFor(c, nethttp.StatusOK, responses.ServiceAuth, responses.CaseSuccess, gin.H{})
 	}
 }
@@ -135,6 +147,7 @@ func forgotPasswordHandler(auth authports.Service) gin.HandlerFunc {
 		if !requests.BindJSON(c, &req) {
 			return
 		}
+
 		if err := auth.ForgotPassword(c.Request.Context(), req.EmailOrUsername); err != nil {
 			code, message, status := authservice.MapError(err)
 			responses.FailureFor(c, status, responses.FailureOpts{
@@ -144,8 +157,10 @@ func forgotPasswordHandler(auth authports.Service) gin.HandlerFunc {
 				Message: message,
 				Details: nil,
 			})
+
 			return
 		}
+
 		responses.SuccessFor(c, nethttp.StatusAccepted, responses.ServiceAuth, responses.CaseAccepted, gin.H{})
 	}
 }
@@ -162,6 +177,7 @@ func forgotPasswordHandler(auth authports.Service) gin.HandlerFunc {
 func resetTokenValidityHandler(auth authports.Service) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		token := strings.TrimSpace(c.Param("param1"))
+
 		validity, err := auth.CheckResetToken(c.Request.Context(), token)
 		if err != nil {
 			code, message, status := authservice.MapResetError(err)
@@ -172,8 +188,10 @@ func resetTokenValidityHandler(auth authports.Service) gin.HandlerFunc {
 				Message: message,
 				Details: nil,
 			})
+
 			return
 		}
+
 		responses.SuccessFor(c, nethttp.StatusOK, responses.ServiceAuth, responses.CaseSuccess, gin.H{
 			"valid":      validity.Valid,
 			"expires_at": validity.ExpiresAt.UTC().Format(time.RFC3339),
@@ -197,6 +215,7 @@ func resetPasswordHandler(auth authports.Service) gin.HandlerFunc {
 		if !requests.BindJSON(c, &req) {
 			return
 		}
+
 		if err := auth.ResetPassword(c.Request.Context(), req.Token, req.NewPassword, req.ConfirmPassword); err != nil {
 			code, message, status := authservice.MapResetError(err)
 			responses.FailureFor(c, status, responses.FailureOpts{
@@ -206,8 +225,10 @@ func resetPasswordHandler(auth authports.Service) gin.HandlerFunc {
 				Message: message,
 				Details: nil,
 			})
+
 			return
 		}
+
 		responses.SuccessFor(c, nethttp.StatusOK, responses.ServiceAuth, responses.CaseSuccess, gin.H{})
 	}
 }
@@ -231,20 +252,24 @@ func changePasswordHandler(auth authports.Service) gin.HandlerFunc {
 			responses.FailureFor(c, nethttp.StatusUnauthorized, responses.FailureOpts{
 				Service: responses.ServiceAuth,
 				Case:    responses.CaseUnauthorized,
-				Code:    "unauthorized",
+				Code:    responses.ErrorCodeUnauthorized,
 				Message: "Authentication required",
 				Details: nil,
 			})
+
 			return
 		}
+
 		var req requests.ChangePassword
 		if !requests.BindJSON(c, &req) {
 			return
 		}
+
 		revokeAll := true
 		if req.RevokeAllSessions != nil {
 			revokeAll = *req.RevokeAllSessions
 		}
+
 		changedAt, invalidated, err := auth.ChangePassword(
 			c.Request.Context(), userID, req.CurrentPassword, req.NewPassword, req.ConfirmPassword, revokeAll,
 		)
@@ -257,8 +282,10 @@ func changePasswordHandler(auth authports.Service) gin.HandlerFunc {
 				Message: message,
 				Details: nil,
 			})
+
 			return
 		}
+
 		responses.SuccessFor(c, nethttp.StatusOK, responses.ServiceAuth, responses.CaseSuccess, gin.H{
 			"password_changed_at":  changedAt.UTC().Format(time.RFC3339),
 			"sessions_invalidated": invalidated,

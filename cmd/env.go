@@ -2,6 +2,7 @@ package cmd
 
 import (
 	"bufio"
+	"errors"
 	"fmt"
 	"os"
 	"strings"
@@ -11,30 +12,37 @@ import (
 // variables win so Docker/K8s/shell exports are never overridden. Blank lines
 // and # comments are ignored. Values may be single- or double-quoted.
 func loadEnvFile(path string) error {
-	file, err := os.Open(path)
+	file, err := os.Open(path) //nolint:gosec // G304: path is the operator-supplied --env-file flag
 	if err != nil {
 		return err
 	}
-	defer file.Close()
+
+	defer func() { _ = file.Close() }()
 
 	scanner := bufio.NewScanner(file)
+
 	lineNo := 0
 	for scanner.Scan() {
 		lineNo++
+
 		key, value, skip, err := parseEnvLine(scanner.Text())
 		if err != nil {
 			return fmt.Errorf("%q:%d: %w", path, lineNo, err)
 		}
+
 		if skip {
 			continue
 		}
+
 		if _, exists := os.LookupEnv(key); exists {
 			continue
 		}
+
 		if err := os.Setenv(key, value); err != nil {
 			return fmt.Errorf("%q:%d: set %q: %w", path, lineNo, key, err)
 		}
 	}
+
 	return scanner.Err()
 }
 
@@ -45,18 +53,23 @@ func parseEnvLine(raw string) (key, value string, skip bool, err error) {
 	if line == "" || strings.HasPrefix(line, "#") {
 		return "", "", true, nil
 	}
-	if strings.HasPrefix(line, "export ") {
-		line = strings.TrimSpace(strings.TrimPrefix(line, "export "))
+
+	if after, ok := strings.CutPrefix(line, "export "); ok {
+		line = strings.TrimSpace(after)
 	}
+
 	key, value, ok := strings.Cut(line, "=")
 	if !ok {
-		return "", "", false, fmt.Errorf("expected KEY=VALUE")
+		return "", "", false, errors.New("expected KEY=VALUE")
 	}
+
 	key = strings.TrimSpace(key)
 	if key == "" {
-		return "", "", false, fmt.Errorf("empty key")
+		return "", "", false, errors.New("empty key")
 	}
+
 	value = unquoteEnvValue(strings.TrimSpace(value))
+
 	return key, value, false, nil
 }
 
@@ -64,11 +77,14 @@ func unquoteEnvValue(value string) string {
 	if len(value) < 2 {
 		return value
 	}
+
 	doubleQuoted := value[0] == '"' && value[len(value)-1] == '"'
+
 	singleQuoted := value[0] == '\'' && value[len(value)-1] == '\''
 	if doubleQuoted || singleQuoted {
 		return value[1 : len(value)-1]
 	}
+
 	return value
 }
 
@@ -84,14 +100,17 @@ func resolveEnvFile(flag string) (string, error) {
 		if err == nil {
 			return ".env", nil
 		}
+
 		if os.IsNotExist(err) {
 			return "", nil
 		}
+
 		return "", fmt.Errorf("env file %q: %w", ".env", err)
 	default:
 		if _, err := os.Stat(flag); err != nil {
 			return "", fmt.Errorf("env file %q: %w", flag, err)
 		}
+
 		return flag, nil
 	}
 }
