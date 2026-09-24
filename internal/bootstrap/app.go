@@ -13,6 +13,7 @@ import (
 	"github.com/redis/go-redis/v9"
 	httpadapter "github.com/turahe/blog-api/internal/adapters/inbound/http"
 	"github.com/turahe/blog-api/internal/adapters/inbound/http/handlers"
+	"github.com/turahe/blog-api/internal/adapters/inbound/http/middleware"
 	"github.com/turahe/blog-api/internal/adapters/outbound/cache"
 	"github.com/turahe/blog-api/internal/adapters/outbound/mail"
 	"github.com/turahe/blog-api/internal/adapters/outbound/notify"
@@ -36,6 +37,7 @@ import (
 	"github.com/turahe/blog-api/internal/platform/config"
 	"github.com/turahe/blog-api/internal/platform/database"
 	"github.com/turahe/blog-api/internal/platform/messaging"
+	"github.com/turahe/blog-api/internal/platform/metrics"
 	redisplatform "github.com/turahe/blog-api/internal/platform/redis"
 	jwttoken "github.com/turahe/blog-api/internal/platform/security/jwt"
 	"github.com/turahe/blog-api/internal/platform/security/password"
@@ -49,7 +51,9 @@ type Runtime struct {
 	Redis      *redis.Client
 	Cache      *cache.Redis // nil when CACHE_ENABLED=false
 	Server     *nethttp.Server
-	Auth       *authservice.AuthService
+	// MetricsServer serves Prometheus /metrics; nil when METRICS_ADDR is empty.
+	MetricsServer *nethttp.Server
+	Auth          *authservice.AuthService
 	Users      *userservice.UserService
 	Posts      *postservice.PostService
 	Categories *categoryservice.CategoryService
@@ -148,7 +152,19 @@ func NewRuntime(ctx context.Context, cfg config.Config, logger *slog.Logger, ver
 		return nil, fmt.Errorf("create rbac enforcer: %w", err)
 	}
 
+	var (
+		appMetrics    *metrics.Metrics
+		metricsServer *nethttp.Server
+		recorder      middleware.MetricsRecorder
+	)
+	if cfg.MetricsAddr != "" {
+		appMetrics = metrics.New(db.SQL, version)
+		metricsServer = appMetrics.NewServer(cfg.MetricsAddr)
+		recorder = appMetrics
+	}
+
 	router, err := httpadapter.NewRouter(httpadapter.Dependencies{
+		Metrics:        recorder,
 		Logger:         logger,
 		Health:         healthservice.New(version, healthCheckers(cfg, db, redisClient)...),
 		Auth:           auth,
@@ -183,6 +199,7 @@ func NewRuntime(ctx context.Context, cfg config.Config, logger *slog.Logger, ver
 	return &Runtime{
 		Config: cfg, Database: db, Redis: redisClient, Cache: readCache,
 		Auth: auth, Users: userSvc, Posts: posts, Categories: categories, Media: media,
+		MetricsServer: metricsServer,
 		Server: &nethttp.Server{
 			Addr: cfg.Address, Handler: router,
 			ReadTimeout: cfg.ReadTimeout, ReadHeaderTimeout: cfg.ReadHeaderTimeout,

@@ -40,7 +40,7 @@ func newServeCmd() *cobra.Command {
 			}
 			defer func() { err = errors.Join(err, app.Close()) }()
 
-			serverErr := make(chan error, 1)
+			serverErr := make(chan error, 2)
 
 			go func() {
 				logger.Info("HTTP server listening", "address", cfg.Address, "version", version)
@@ -48,16 +48,33 @@ func newServeCmd() *cobra.Command {
 				serverErr <- app.Server.ListenAndServe()
 			}()
 
+			if app.MetricsServer != nil {
+				go func() {
+					logger.Info("metrics server listening", "address", app.MetricsServer.Addr)
+
+					if err := app.MetricsServer.ListenAndServe(); err != nil {
+						serverErr <- fmt.Errorf("metrics: %w", err)
+					}
+				}()
+			}
+
 			select {
 			case <-ctx.Done():
 				shutdownCtx, cancel := context.WithTimeout(context.Background(), cfg.ShutdownTimeout)
 				defer cancel()
 
+				var errs []error
 				if err := app.Server.Shutdown(shutdownCtx); err != nil {
-					return fmt.Errorf("shutdown HTTP server: %w", err)
+					errs = append(errs, fmt.Errorf("shutdown HTTP server: %w", err))
 				}
 
-				return nil
+				if app.MetricsServer != nil {
+					if err := app.MetricsServer.Shutdown(shutdownCtx); err != nil {
+						errs = append(errs, fmt.Errorf("shutdown metrics server: %w", err))
+					}
+				}
+
+				return errors.Join(errs...)
 			case err := <-serverErr:
 				if errors.Is(err, http.ErrServerClosed) {
 					return nil

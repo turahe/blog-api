@@ -11,7 +11,7 @@ Index: [README.md](./README.md).
 **Partial** — bootstrap, config, PostgreSQL persistence (bigint row ids plus public UUIDs),
 Redis, health, password-based auth with refresh rotation, and Casbin authorization are in
 place, along with the SMTP mailer, login lockout, and a messaging readiness check. Admin user
-management, second-factor and OAuth login, session administration, and metrics are still open.
+management, second-factor and OAuth login, and session administration are still open.
 
 ## Epic: project bootstrap and configuration
 
@@ -50,7 +50,8 @@ management, second-factor and OAuth login, session administration, and metrics a
 - [x] `app doctor` reports database driver, Redis, and messaging reachability
 - [x] Add a messaging readiness checker to `health.ready` when `MESSAGE_BROKER` is set
       (`messaging.Probe`, TCP reachability)
-- [ ] Expose Prometheus-style metrics or document the deliberate decision not to
+- [x] Expose Prometheus-style metrics or document the deliberate decision not to
+      (`METRICS_ADDR`, `internal/platform/metrics`)
 
 ## Epic: auth foundation
 

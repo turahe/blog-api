@@ -98,6 +98,21 @@ refresh/reset tokens. Additional handling rules are in
 
 Local Mailpit UI is [http://127.0.0.1:8025](http://127.0.0.1:8025). Messages cover password reset, password change, and email change. The raw token is only in the message body.
 
+## Metrics
+
+| Variable | Default | Required | Purpose |
+| --- | --- | --- | --- |
+| `METRICS_ADDR` | empty | No | Listen address for Prometheus `GET /metrics` (e.g. `0.0.0.0:9090`). Empty disables metrics. |
+
+Metrics are served on their own listener so they never share the public API port; keep that
+port off the public load balancer. Series use the `blog_` prefix:
+
+- `blog_http_requests_total{method,route,status}` and `blog_http_request_duration_seconds{method,route}`,
+  labelled by route template (`unmatched` for 404s), so login attempt and lockout rates are
+  `route="/api/v1/auth/login"` by status
+- `blog_http_requests_in_flight`, `blog_build_info{version}`
+- `blog_db_*` connection-pool stats, plus Go runtime (`go_*`) and process (`process_*`) series
+
 ## Database
 
 The connection mode is selected by `DB_INSTANCE_CONNECTION_NAME`:

@@ -1,5 +1,12 @@
 # Changelog
 
+## 2026-09-25 — Prometheus metrics
+
+### Added
+
+- `METRICS_ADDR` starts a separate listener serving Prometheus `GET /metrics` (Compose binds it to `127.0.0.1:9090`)
+- Series: `blog_http_requests_total`, `blog_http_request_duration_seconds`, `blog_http_requests_in_flight` (labelled by route template), `blog_build_info`, `blog_db_*` pool stats, and Go/process collectors
+
 ## 2026-09-25 — Login throttling and lockout
 
 ### Security

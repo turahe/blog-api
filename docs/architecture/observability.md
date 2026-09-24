@@ -15,6 +15,9 @@
 
 ## Metrics
 
+Prometheus metrics are served on `METRICS_ADDR` (see
+[config.md](../deployment/config.md#metrics)); HTTP, database pool, and runtime series exist today.
+
 Track at minimum:
 
 - request count, latency, and error rate by endpoint

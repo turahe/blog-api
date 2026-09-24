@@ -102,6 +102,7 @@ type Config struct {
 	SMTPPassword                  string
 	SMTPFrom                      string
 	AppPublicURL                  string
+	MetricsAddr                   string
 }
 
 // SentryEnabled reports whether SENTRY_DSN is set.
@@ -438,6 +439,7 @@ func Load() (Config, error) {
 		SMTPPassword:                  env("SMTP_PASSWORD", ""),
 		SMTPFrom:                      env("SMTP_FROM", "Blog <blog@localhost>"),
 		AppPublicURL:                  env("APP_PUBLIC_URL", "http://127.0.0.1:8080"),
+		MetricsAddr:                   env("METRICS_ADDR", ""),
 	}
 	cfg.SwaggerEnabled = boolEnv("APP_SWAGGER_ENABLED", cfg.Environment == "local")
 	cfg.SentryEnvironment = env("SENTRY_ENVIRONMENT", cfg.Environment)

@@ -39,6 +39,7 @@ type Dependencies struct {
 	RateLimiter    middleware.Limiter
 	CommentRates   handlers.CommentRates
 	LoginPerMinute int
+	Metrics        middleware.MetricsRecorder // nil disables request metrics
 	Version        string
 	TrustedProxies []string
 	SwaggerEnabled bool
@@ -69,8 +70,12 @@ func NewRouter(deps Dependencies) (*gin.Engine, error) {
 		middleware.Tracing(),
 		middleware.SecurityHeaders(),
 		middleware.AccessLog(deps.Logger),
-		middleware.Recovery(deps.Logger),
 	}
+	if deps.Metrics != nil {
+		global = append(global, middleware.Metrics(deps.Metrics))
+	}
+
+	global = append(global, middleware.Recovery(deps.Logger))
 	if deps.CacheBypassHeader {
 		global = append(global, middleware.CacheBypass())
 	}
