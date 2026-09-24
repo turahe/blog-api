@@ -17,6 +17,7 @@ import (
 	mediaports "github.com/turahe/blog-api/internal/core/media/ports"
 	postservice "github.com/turahe/blog-api/internal/core/post/service"
 	rbacports "github.com/turahe/blog-api/internal/core/rbac/ports"
+	rbacservice "github.com/turahe/blog-api/internal/core/rbac/service"
 	tagservice "github.com/turahe/blog-api/internal/core/tag/service"
 	userservice "github.com/turahe/blog-api/internal/core/user/service"
 )
@@ -28,6 +29,7 @@ type Dependencies struct {
 	Auth           authports.Service
 	Users          *userservice.UserService
 	AdminUsers     *authservice.AuthService
+	RoleAdmin      *rbacservice.RoleService
 	Profiles       *userservice.ProfileService
 	EmailChange    authports.EmailChanger
 	AvatarMaxBytes int64 // > 0 enables avatar routes
@@ -107,6 +109,10 @@ func NewRouter(deps Dependencies) (*gin.Engine, error) {
 
 	if deps.AdminUsers != nil {
 		controllerDeps.AdminUsers = deps.AdminUsers
+	}
+
+	if deps.RoleAdmin != nil {
+		controllerDeps.RoleAdmin = deps.RoleAdmin
 	}
 
 	return routes.NewRouter(routes.Dependencies{

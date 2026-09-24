@@ -31,6 +31,7 @@ import (
 	mediaservice "github.com/turahe/blog-api/internal/core/media/service"
 	notificationservice "github.com/turahe/blog-api/internal/core/notification/service"
 	postservice "github.com/turahe/blog-api/internal/core/post/service"
+	rbacservice "github.com/turahe/blog-api/internal/core/rbac/service"
 	"github.com/turahe/blog-api/internal/core/readcache"
 	tagservice "github.com/turahe/blog-api/internal/core/tag/service"
 	userservice "github.com/turahe/blog-api/internal/core/user/service"
@@ -152,7 +153,8 @@ func NewRuntime(ctx context.Context, cfg config.Config, logger *slog.Logger, ver
 		return nil, fmt.Errorf("create rbac enforcer: %w", err)
 	}
 
-	auth.WithRoles(outboundrbac.NewRoleStore(db.GORM, enforcer))
+	roleStore := outboundrbac.NewRoleStore(db.GORM, enforcer)
+	auth.WithRoles(roleStore)
 
 	var (
 		appMetrics    *metrics.Metrics
@@ -173,6 +175,7 @@ func NewRuntime(ctx context.Context, cfg config.Config, logger *slog.Logger, ver
 		AvatarMaxBytes: avatarMaxBytes,
 		Users:          userSvc,
 		AdminUsers:     auth,
+		RoleAdmin:      rbacservice.NewRoleService(roleStore),
 		Profiles:       profiles,
 		EmailChange:    auth,
 		Roles:          users,

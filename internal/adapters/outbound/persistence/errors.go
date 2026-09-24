@@ -8,7 +8,11 @@ import (
 
 const pgUniqueViolation = "23505"
 
-// isUniqueViolation reports whether err is a PostgreSQL unique-constraint violation.
+// IsUniqueViolation reports whether err is a PostgreSQL unique-constraint violation.
+func IsUniqueViolation(err error) bool {
+	return isUniqueViolation(err)
+}
+
 func isUniqueViolation(err error) bool {
 	return uniqueConstraint(err) != ""
 }

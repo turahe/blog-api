@@ -143,6 +143,10 @@ func seedRBAC(ctx context.Context, db *gorm.DB) (*outboundrbac.Enforcer, error) 
 		}
 	}
 
+	if err := mirrorRolePermissions(ctx, db); err != nil {
+		return nil, err
+	}
+
 	enforcer, err := outboundrbac.NewEnforcer(db)
 	if err != nil {
 		return nil, err
@@ -220,6 +224,29 @@ func ensureRole(ctx context.Context, db *gorm.DB, name, description string) erro
 	return db.WithContext(ctx).Create(&persistence.RoleModel{
 		UUID: uuid.New(), Name: name, Description: &desc, CreatedAt: now, UpdatedAt: now,
 	}).Error
+}
+
+// mirrorRolePermissions records the seeded grants in role_permissions so the
+// relational tables agree with the Casbin policy.
+func mirrorRolePermissions(ctx context.Context, db *gorm.DB) error {
+	for role, perms := range rolePermissions {
+		for _, key := range perms {
+			if key == "*" {
+				continue
+			}
+
+			err := db.WithContext(ctx).Exec(`
+				INSERT INTO role_permissions (role_id, permission_id, created_at)
+				SELECT r.id, p.id, now() FROM roles r, permissions p
+				WHERE r.name = ? AND p.key = ?
+				ON CONFLICT DO NOTHING`, role, key).Error
+			if err != nil {
+				return fmt.Errorf("mirror %s permission %s: %w", role, key, err)
+			}
+		}
+	}
+
+	return nil
 }
 
 func ensurePermission(ctx context.Context, db *gorm.DB, key string) error {

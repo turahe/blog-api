@@ -1,5 +1,24 @@
 # Changelog
 
+## 2026-09-25 — Role and permission administration
+
+### Added
+
+- `/api/v1/admin/roles` (list, get, create, update description, delete),
+  `PUT /api/v1/admin/roles/{name}/permissions`, and `GET /api/v1/admin/permissions`,
+  gated by `role.read` / `role.manage`
+- `GET|POST /api/v1/admin/users/{id}/roles` and `DELETE /api/v1/admin/users/{id}/roles/{name}`
+- The `admin` role is protected: it cannot be deleted or regranted, and an admin cannot revoke
+  it from themselves; the `*` permission cannot be granted to other roles
+- Role writes update the relational tables and `casbin_rules` in one transaction and reload the
+  enforcer, so changes apply without a restart
+- The seeder mirrors seeded grants into `role_permissions`
+
+### Fixed
+
+- `migrations.Up` takes a PostgreSQL advisory lock, so replicas or parallel test packages
+  migrating the same database no longer race
+
 ## 2026-09-25 — Admin user create and admin password reset
 
 ### Added

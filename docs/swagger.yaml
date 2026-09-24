@@ -34,6 +34,17 @@ definitions:
         description: RevokeSessions defaults to true.
         type: boolean
     type: object
+  requests.AssignUserRoles:
+    properties:
+      roles:
+        items:
+          type: string
+        maxItems: 20
+        minItems: 1
+        type: array
+    required:
+    - roles
+    type: object
   requests.BulkModerateComments:
     properties:
       action:
@@ -150,6 +161,24 @@ definitions:
     required:
     - content
     - title
+    type: object
+  requests.CreateRole:
+    properties:
+      description:
+        maxLength: 255
+        type: string
+      name:
+        maxLength: 60
+        minLength: 2
+        type: string
+      permissions:
+        items:
+          type: string
+        maxItems: 200
+        type: array
+    required:
+    - name
+    - permissions
     type: object
   requests.CreateTag:
     properties:
@@ -344,6 +373,16 @@ definitions:
     - new_password
     - token
     type: object
+  requests.SetRolePermissions:
+    properties:
+      permissions:
+        items:
+          type: string
+        maxItems: 200
+        type: array
+    required:
+    - permissions
+    type: object
   requests.SocialLinks:
     properties:
       github:
@@ -379,6 +418,12 @@ definitions:
           type: string
         type: array
       title:
+        type: string
+    type: object
+  requests.UpdateRole:
+    properties:
+      description:
+        maxLength: 255
         type: string
     type: object
   requests.UpdateTag:
@@ -930,6 +975,20 @@ paths:
       summary: Patch media tags
       tags:
       - admin
+  /api/v1/admin/permissions:
+    get:
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/responses.Envelope'
+      security:
+      - Bearer: []
+      summary: List registered permissions
+      tags:
+      - admin
   /api/v1/admin/posts:
     get:
       parameters:
@@ -1247,6 +1306,194 @@ paths:
       summary: Unpublish post
       tags:
       - admin
+  /api/v1/admin/roles:
+    get:
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/responses.Envelope'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/responses.Envelope'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/responses.Envelope'
+      security:
+      - Bearer: []
+      summary: List roles
+      tags:
+      - admin
+    post:
+      consumes:
+      - application/json
+      description: Names are 2-60 characters of a-z, 0-9 and '_'. Permissions must
+        be registered keys; "*" is reserved for the admin role.
+      parameters:
+      - description: role
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/requests.CreateRole'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            $ref: '#/definitions/responses.Envelope'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/responses.Envelope'
+        "409":
+          description: Conflict
+          schema:
+            $ref: '#/definitions/responses.Envelope'
+        "422":
+          description: Unprocessable Entity
+          schema:
+            $ref: '#/definitions/responses.Envelope'
+      security:
+      - Bearer: []
+      summary: Create a role
+      tags:
+      - admin
+  /api/v1/admin/roles/{param1}:
+    delete:
+      description: Removes the role, its grants, and its user assignments. The admin
+        role cannot be deleted.
+      parameters:
+      - description: role name
+        in: path
+        name: param1
+        required: true
+        type: string
+      responses:
+        "204":
+          description: No Content
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/responses.Envelope'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/responses.Envelope'
+      security:
+      - Bearer: []
+      summary: Delete a role
+      tags:
+      - admin
+    get:
+      parameters:
+      - description: role name
+        in: path
+        name: param1
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/responses.Envelope'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/responses.Envelope'
+      security:
+      - Bearer: []
+      summary: Get a role
+      tags:
+      - admin
+    patch:
+      consumes:
+      - application/json
+      parameters:
+      - description: role name
+        in: path
+        name: param1
+        required: true
+        type: string
+      - description: fields
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/requests.UpdateRole'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/responses.Envelope'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/responses.Envelope'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/responses.Envelope'
+      security:
+      - Bearer: []
+      summary: Update a role's description
+      tags:
+      - admin
+  /api/v1/admin/roles/{param1}/permissions:
+    put:
+      consumes:
+      - application/json
+      description: Overwrites the role's permission set; an empty list clears it.
+        The admin role's set is fixed.
+      parameters:
+      - description: role name
+        in: path
+        name: param1
+        required: true
+        type: string
+      - description: permission keys
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/requests.SetRolePermissions'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/responses.Envelope'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/responses.Envelope'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/responses.Envelope'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/responses.Envelope'
+        "422":
+          description: Unprocessable Entity
+          schema:
+            $ref: '#/definitions/responses.Envelope'
+      security:
+      - Bearer: []
+      summary: Replace a role's permissions
+      tags:
+      - admin
   /api/v1/admin/tags:
     post:
       consumes:
@@ -1525,6 +1772,99 @@ paths:
       security:
       - Bearer: []
       summary: Update a user's profile
+      tags:
+      - admin
+  /api/v1/admin/users/{param1}/roles:
+    get:
+      parameters:
+      - description: user UUID
+        in: path
+        name: param1
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/responses.Envelope'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/responses.Envelope'
+      security:
+      - Bearer: []
+      summary: List a user's roles
+      tags:
+      - admin
+    post:
+      consumes:
+      - application/json
+      parameters:
+      - description: user UUID
+        in: path
+        name: param1
+        required: true
+        type: string
+      - description: role names
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/requests.AssignUserRoles'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/responses.Envelope'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/responses.Envelope'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/responses.Envelope'
+      security:
+      - Bearer: []
+      summary: Assign roles to a user
+      tags:
+      - admin
+  /api/v1/admin/users/{param1}/roles/{param2}:
+    delete:
+      description: Administrators cannot revoke the admin role from themselves.
+      parameters:
+      - description: user UUID
+        in: path
+        name: param1
+        required: true
+        type: string
+      - description: role name
+        in: path
+        name: param2
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/responses.Envelope'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/responses.Envelope'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/responses.Envelope'
+      security:
+      - Bearer: []
+      summary: Revoke a role from a user
       tags:
       - admin
   /api/v1/auth/login:

@@ -20,6 +20,21 @@ type Controllers struct {
 	Tags     Tags
 	Media    Media
 	Comments Comments
+	Roles    Roles
+}
+
+// Roles holds role and permission administration handlers.
+type Roles struct {
+	List            gin.HandlerFunc
+	Get             gin.HandlerFunc
+	Create          gin.HandlerFunc
+	Update          gin.HandlerFunc
+	Delete          gin.HandlerFunc
+	SetPermissions  gin.HandlerFunc
+	Permissions     gin.HandlerFunc
+	UserRolesList   gin.HandlerFunc
+	UserRolesAssign gin.HandlerFunc
+	UserRoleRevoke  gin.HandlerFunc
 }
 
 // Health probe handlers.

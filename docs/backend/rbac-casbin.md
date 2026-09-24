@@ -104,6 +104,13 @@ Custom matchers registered via `enforcer.AddFunction("scopeMatch", ScopeMatchFun
 
 ## Endpoints Catalog
 
+> **Implemented today** (see [api.md § Roles and permissions](./api.md#roles-and-permissions)):
+> role CRUD, `PUT /admin/roles/{name}/permissions`, `GET /admin/permissions`, and
+> list/assign/revoke under `/admin/users/{id}/roles`, gated by `role.read` / `role.manage`.
+> Code lives in `internal/core/rbac/service` and `internal/adapters/outbound/rbac/roles.go`.
+> Roles are addressed by name; `admin` is the protected role. Tiers, inheritance, expiring
+> assignments, step-up 2FA, the policy/audit endpoints, and a Redis watcher are not built yet.
+
 Full HTTP definitions → [api.md](./api.md) + [openapi.yaml](../swagger.json). Summary:
 
 ### Admin RBAC

@@ -83,11 +83,23 @@ func sampleView() userdomain.ProfileView {
 
 type profileRequest struct {
 	method, target, body, contentType string
-	param                             string
+	param, param2                     string
 	user                              *uuid.UUID
 }
 
 func runProfile(t *testing.T, handler gin.HandlerFunc, req profileRequest) (*httptest.ResponseRecorder, map[string]any) {
+	t.Helper()
+
+	w := runRaw(t, handler, req)
+
+	var body map[string]any
+	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &body), w.Body.String())
+
+	return w, body
+}
+
+// runRaw runs handler without decoding the response, for empty-body replies.
+func runRaw(t *testing.T, handler gin.HandlerFunc, req profileRequest) *httptest.ResponseRecorder {
 	t.Helper()
 	gin.SetMode(gin.TestMode)
 
@@ -103,16 +115,17 @@ func runProfile(t *testing.T, handler gin.HandlerFunc, req profileRequest) (*htt
 		c.Params = gin.Params{{Key: "param1", Value: req.param}}
 	}
 
+	if req.param2 != "" {
+		c.Params = append(c.Params, gin.Param{Key: "param2", Value: req.param2})
+	}
+
 	if req.user != nil {
 		c.Set(middleware.ContextUserIDKey, *req.user)
 	}
 
 	handler(c)
 
-	var body map[string]any
-	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &body), w.Body.String())
-
-	return w, body
+	return w
 }
 
 func errorCode(body map[string]any) string {

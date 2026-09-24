@@ -87,7 +87,8 @@ Spec: [authentication.md](../features/authentication.md)
 - [x] `admin.users.create` — `POST /api/v1/admin/users` (`user.create`; roles also need `role.manage`)
 - [x] `admin.users.password.admin_reset` — `POST /api/v1/admin/users/{id}/password/admin-reset`
 - [ ] `admin.users.activity.list` — `GET /api/v1/admin/users/{id}/activity`
-- [ ] Role and permission administration endpoints, or a documented decision to seed-only
+- [x] Role and permission administration endpoints, or a documented decision to seed-only
+      (`/api/v1/admin/roles`, `/admin/permissions`, `/admin/users/{id}/roles`; `admin` is protected)
 - [ ] Policy reload without restart when `casbin_rules` changes
 
 Specs: [user-management.md](../features/user-management.md),

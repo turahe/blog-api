@@ -25,6 +25,7 @@ type Deps struct {
 	Auth        authports.Service
 	Users       *userservice.UserService
 	AdminUsers  adminUserAPI
+	RoleAdmin   roleAPI
 	Profiles    profileAPI
 	EmailChange authports.EmailChanger
 	// AvatarMaxBytes > 0 enables avatar upload and removal (requires media storage).
@@ -102,6 +103,21 @@ func NewControllers(deps Deps) routes.Controllers {
 		canManageRoles := func(c *gin.Context) bool { return holds(c, deps, permRoleManage, adminRoles) }
 		c.Users.AdminCreate = gate(deps, "user.create", adminRoles, adminCreateUserHandler(deps.AdminUsers, canManageRoles))
 		c.Users.AdminPasswordReset = gate(deps, "user.password.admin_reset", adminRoles, adminResetPasswordHandler(deps.AdminUsers))
+	}
+
+	if r := deps.RoleAdmin; r != nil {
+		c.Roles = routes.Roles{
+			List:            gate(deps, permRoleRead, adminRoles, adminRolesListHandler(r)),
+			Get:             gate(deps, permRoleRead, adminRoles, adminRoleGetHandler(r)),
+			Create:          gate(deps, permRoleManage, adminRoles, adminRoleCreateHandler(r)),
+			Update:          gate(deps, permRoleManage, adminRoles, adminRoleUpdateHandler(r)),
+			Delete:          gate(deps, permRoleManage, adminRoles, adminRoleDeleteHandler(r)),
+			SetPermissions:  gate(deps, permRoleManage, adminRoles, adminRolePermissionsSetHandler(r)),
+			Permissions:     gate(deps, permRoleRead, adminRoles, adminPermissionsListHandler(r)),
+			UserRolesList:   gate(deps, permRoleRead, adminRoles, adminUserRolesListHandler(r)),
+			UserRolesAssign: gate(deps, permRoleManage, adminRoles, adminUserRolesAssignHandler(r)),
+			UserRoleRevoke:  gate(deps, permRoleManage, adminRoles, adminUserRoleRevokeHandler(r)),
+		}
 	}
 
 	wireProfiles(&c.Users, deps)

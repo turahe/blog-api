@@ -19,6 +19,17 @@ func registerAdmin(v1 *gin.RouterGroup, auth AuthMiddleware, c Controllers) {
 	post(admin, "/users/:param1/password/admin-reset", "admin.users.password.admin_reset", g, AuthRequired, c, c.Users.AdminPasswordReset)
 	get(admin, "/users/:param1/profile", "admin.users.profile.get", g, AuthRequired, c, c.Users.AdminProfileGet)
 	patch(admin, "/users/:param1/profile", "admin.users.profile.patch", g, AuthRequired, c, c.Users.AdminProfilePatch)
+	get(admin, "/users/:param1/roles", "admin.users.roles.list", g, AuthRequired, c, c.Roles.UserRolesList)
+	post(admin, "/users/:param1/roles", "admin.users.roles.assign", g, AuthRequired, c, c.Roles.UserRolesAssign)
+	del(admin, "/users/:param1/roles/:param2", "admin.users.roles.revoke", g, AuthRequired, c, c.Roles.UserRoleRevoke)
+
+	get(admin, "/roles", "admin.roles.list", g, AuthRequired, c, c.Roles.List)
+	post(admin, "/roles", "admin.roles.create", g, AuthRequired, c, c.Roles.Create)
+	get(admin, "/roles/:param1", "admin.roles.get", g, AuthRequired, c, c.Roles.Get)
+	patch(admin, "/roles/:param1", "admin.roles.update", g, AuthRequired, c, c.Roles.Update)
+	del(admin, "/roles/:param1", "admin.roles.delete", g, AuthRequired, c, c.Roles.Delete)
+	put(admin, "/roles/:param1/permissions", "admin.roles.permissions.set", g, AuthRequired, c, c.Roles.SetPermissions)
+	get(admin, "/permissions", "admin.permissions.list", g, AuthRequired, c, c.Roles.Permissions)
 
 	get(admin, "/posts", "admin.posts.list", g, AuthRequired, c, c.Posts.AdminList)
 	post(admin, "/posts", "admin.posts.create", g, AuthRequired, c, c.Posts.AdminCreate)

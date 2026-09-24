@@ -87,6 +87,37 @@ the wired Phase 2 surface and where it deliberately differs from the target.
   [services.md](services.md#public-read-caching). Cached entries are domain results, so
   `meta.request_id` is always per request.
 
+### Roles and permissions
+
+| Operation | Route | Permission |
+| --- | --- | --- |
+| `admin.roles.list` | `GET /api/v1/admin/roles` | `role.read` |
+| `admin.roles.get` | `GET /api/v1/admin/roles/{name}` | `role.read` |
+| `admin.roles.create` | `POST /api/v1/admin/roles` | `role.manage` |
+| `admin.roles.update` | `PATCH /api/v1/admin/roles/{name}` | `role.manage` |
+| `admin.roles.delete` | `DELETE /api/v1/admin/roles/{name}` | `role.manage` |
+| `admin.roles.permissions.set` | `PUT /api/v1/admin/roles/{name}/permissions` | `role.manage` |
+| `admin.permissions.list` | `GET /api/v1/admin/permissions` | `role.read` |
+| `admin.users.roles.list` | `GET /api/v1/admin/users/{id}/roles` | `role.read` |
+| `admin.users.roles.assign` | `POST /api/v1/admin/users/{id}/roles` | `role.manage` |
+| `admin.users.roles.revoke` | `DELETE /api/v1/admin/users/{id}/roles/{name}` | `role.manage` |
+
+- Roles are addressed by name: 2–60 characters of `a-z 0-9 _`, starting with a letter.
+  A role carries `id`, `name`, `description`, `permissions` (sorted keys), `protected`,
+  and timestamps. Create body: `name`, optional `description` (≤255), optional
+  `permissions`; `PATCH` changes only `description`.
+- `PUT …/permissions` takes `{"permissions": [...]}` and replaces the whole set; `[]` clears it.
+  Keys must be registered (`GET /admin/permissions`) → otherwise
+  `422 rbac.permission.not_found`. `"*"` is reserved for `admin` → `400`.
+- `admin` is protected: deleting it or changing its permissions → `403 rbac.role.protected`;
+  revoking it from yourself → `403 rbac.role.self_revoke`.
+- User-role endpoints return `{"user_id", "roles"}` after the change. `POST` takes
+  `{"roles": [...]}` (1–20 names) and keeps existing assignments.
+- Errors: unknown role → `404 rbac.role.not_found`; unknown user → `404 user.not_found`;
+  duplicate name → `409 rbac.role.exists`. Responses use service code `11` (RBAC).
+- Every write updates `roles`/`role_permissions`/`user_roles` and `casbin_rules` in one
+  transaction, then reloads this instance's enforcer, so the change applies without a restart.
+
 ### Profiles and email change
 
 | Operation | Route | Auth | Rate limit |

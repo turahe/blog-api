@@ -22,6 +22,9 @@
 - `POST /api/v1/admin/users` — create an active user (`user.create`; assigning roles also needs `role.manage`)
 - `POST /api/v1/admin/users/{id}/password/admin-reset` — email a fresh reset link and, by default,
   revoke sessions (`user.password.admin_reset`)
+- `GET|POST /api/v1/admin/users/{id}/roles`, `DELETE /api/v1/admin/users/{id}/roles/{name}` —
+  list, assign, and revoke roles (`role.read` / `role.manage`)
+- `/api/v1/admin/roles` and `/api/v1/admin/permissions` — role CRUD and permission sets
 
 Contracts: [api.md](../backend/api.md).
 

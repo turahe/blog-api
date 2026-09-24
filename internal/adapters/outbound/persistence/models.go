@@ -133,3 +133,13 @@ type UserRoleModel struct {
 
 // TableName returns the user_roles table name for GORM.
 func (UserRoleModel) TableName() string { return "user_roles" }
+
+// RolePermissionModel is the role_permissions join row.
+type RolePermissionModel struct {
+	RoleID       int64 `gorm:"primaryKey;autoIncrement:false;column:role_id"`
+	PermissionID int64 `gorm:"primaryKey;autoIncrement:false;column:permission_id"`
+	CreatedAt    time.Time
+}
+
+// TableName returns the role_permissions table name for GORM.
+func (RolePermissionModel) TableName() string { return "role_permissions" }

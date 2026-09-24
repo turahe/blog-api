@@ -184,3 +184,8 @@ func (e *Enforcer) AddPermissionForRole(_ context.Context, role, permission stri
 func (e *Enforcer) Save() error {
 	return e.e.SavePolicy()
 }
+
+// Reload replaces the in-memory policy with the rows in casbin_rules.
+func (e *Enforcer) Reload() error {
+	return e.e.LoadPolicy()
+}
