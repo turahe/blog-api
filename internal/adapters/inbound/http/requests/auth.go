@@ -1,3 +1,4 @@
+// Package requests declares HTTP request bodies and binding/validation helpers.
 package requests
 
 // Login is POST /api/v1/auth/login.

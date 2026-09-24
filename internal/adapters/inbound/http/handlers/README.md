@@ -12,6 +12,7 @@ Laravel-style HTTP handlers for the inbound adapter.
 | [categories.go](categories.go) | Categories |
 | [tags.go](tags.go) | Tags |
 | [media.go](media.go) | Media |
+| [comments.go](comments.go) | Comments (public + self-service) |
 
 Request DTOs live in [`../requests/`](../requests/). Resource JSON lives in [`../responses/`](../responses/).
 `../router.go` wires middleware and calls `routes.NewRouter`.

@@ -1,3 +1,4 @@
+// Package responses builds the { ok, code, data, meta, error } response envelopes and resource serializers.
 package responses
 
 import (
@@ -22,5 +23,6 @@ func RFC3339(t *time.Time) any {
 	if t == nil {
 		return nil
 	}
+
 	return t.UTC().Format(time.RFC3339)
 }

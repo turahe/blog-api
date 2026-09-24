@@ -1,3 +1,4 @@
+// Package main is the blog-api entrypoint; see package cmd for subcommands.
 package main
 
 import (

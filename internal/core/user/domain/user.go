@@ -1,3 +1,4 @@
+// Package domain holds the user entity and account statuses.
 package domain
 
 import (
@@ -6,8 +7,10 @@ import (
 	"github.com/google/uuid"
 )
 
+// Status is a user account state.
 type Status string
 
+// User account states.
 const (
 	StatusPending   Status = "pending"
 	StatusActive    Status = "active"
@@ -15,6 +18,7 @@ const (
 	StatusDeleted   Status = "deleted"
 )
 
+// User is an account.
 type User struct {
 	ID                int64
 	UUID              uuid.UUID
@@ -32,6 +36,7 @@ type User struct {
 	DeletedAt         *time.Time
 }
 
+// IsActive reports whether the account may sign in.
 func (u User) IsActive() bool {
 	return u.Status == StatusActive && u.DeletedAt == nil
 }

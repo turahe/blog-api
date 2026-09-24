@@ -59,6 +59,7 @@ func newFakePostRepo(posts ...postdomain.Post) *fakePostRepo {
 	for _, post := range posts {
 		items[post.UUID] = post
 	}
+
 	return &fakePostRepo{
 		posts:           items,
 		slugTakenBySlug: map[string]bool{},
@@ -83,17 +84,20 @@ func (f *fakePostRepo) GetByID(_ context.Context, id uuid.UUID) (postdomain.Post
 	if !ok {
 		return postdomain.Post{}, postdomain.ErrNotFound
 	}
+
 	if f.bumpAfterRead {
 		stored := post
 		stored.Version++
 		f.posts[id] = stored
 	}
+
 	return post, nil
 }
 
 func (f *fakePostRepo) Create(_ context.Context, post postdomain.Post) (postdomain.Post, error) {
 	f.createCalls++
 	f.posts[post.UUID] = post
+
 	return post, nil
 }
 
@@ -102,8 +106,10 @@ func (f *fakePostRepo) Update(_ context.Context, post postdomain.Post) (postdoma
 	if stored, ok := f.posts[post.UUID]; ok && stored.Version != post.Version-1 {
 		return postdomain.Post{}, postdomain.ErrStaleVersion
 	}
+
 	f.updatedPost = post
 	f.posts[post.UUID] = post
+
 	return post, nil
 }
 
@@ -111,10 +117,12 @@ func (f *fakePostRepo) SlugTaken(_ context.Context, slug string, excludeID uuid.
 	if f.slugTakenErr != nil {
 		return false, f.slugTakenErr
 	}
+
 	post, ok := f.posts[excludeID]
 	if ok && post.Slug == slug {
 		return false, nil
 	}
+
 	return f.slugTakenBySlug[slug], nil
 }
 
@@ -129,7 +137,9 @@ func (f *fakeTagLinker) ResolveOrCreate(_ context.Context, names []string) ([]ta
 
 func (f *fakeTagLinker) ReplacePostTags(_ context.Context, postID uuid.UUID, tagIDs []uuid.UUID) error {
 	f.replacePostID = postID
+
 	f.replaceTagIDs = append([]uuid.UUID(nil), tagIDs...)
+
 	return f.replaceErr
 }
 
@@ -552,5 +562,5 @@ func TestPostServiceUpdateRejectsInvalidTagsBeforePersistingUpdate(t *testing.T)
 
 	require.ErrorIs(t, err, tagservice.ErrValidation)
 	require.Equal(t, 0, repo.updateCalls)
-	require.Equal(t, 1, len(repo.posts))
+	require.Len(t, repo.posts, 1)
 }

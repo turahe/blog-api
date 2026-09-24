@@ -8,11 +8,14 @@ import (
 )
 
 func TestRootHelpListsGroupedCommands(t *testing.T) {
+	t.Parallel()
+
 	root := newRootCmd()
 	buf := new(bytes.Buffer)
 	root.SetOut(buf)
 	root.SetArgs([]string{"--help"})
 	require.NoError(t, root.Execute())
+
 	out := buf.String()
 	require.Contains(t, out, "Runtime Commands:")
 	require.Contains(t, out, "Data Commands:")
@@ -23,6 +26,8 @@ func TestRootHelpListsGroupedCommands(t *testing.T) {
 }
 
 func TestVersionCommand(t *testing.T) {
+	t.Parallel()
+
 	root := newRootCmd()
 	buf := new(bytes.Buffer)
 	root.SetOut(buf)

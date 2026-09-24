@@ -16,40 +16,50 @@ var _ ports.Repository = (*MediaRepository)(nil)
 
 var mediaColumns = withRefs("media_assets", uuidRef("users", "media_assets.uploaded_by", "uploaded_by_uuid"))
 
+// MediaRepository implements mediaports.Repository.
 type MediaRepository struct {
 	db *gorm.DB
 }
 
+// NewMediaRepository returns a MediaRepository backed by db.
 func NewMediaRepository(db *gorm.DB) *MediaRepository {
 	return &MediaRepository{db: db}
 }
 
+// Create inserts a media asset row.
 func (r *MediaRepository) Create(ctx context.Context, asset mediadomain.MediaAsset) (mediadomain.MediaAsset, error) {
 	now := time.Now().UTC()
 	if asset.CreatedAt.IsZero() {
 		asset.CreatedAt = now
 	}
+
 	if asset.UpdatedAt.IsZero() {
 		asset.UpdatedAt = asset.CreatedAt
 	}
 
 	db := r.db.WithContext(ctx)
+
 	uploadedBy, err := optionalIDByUUID(db, "users", asset.UploadedByUUID)
 	if err != nil {
 		return mediadomain.MediaAsset{}, err
 	}
+
 	model := mapMediaAssetModel(asset)
+
 	model.UploadedBy = uploadedBy
 	if err := db.Create(&model).Error; err != nil {
 		return mediadomain.MediaAsset{}, err
 	}
+
 	model.UploadedByUUID = asset.UploadedByUUID
 
 	return mapMediaAsset(model), nil
 }
 
+// GetByID returns the live media asset with the given UUID or ErrNotFound.
 func (r *MediaRepository) GetByID(ctx context.Context, id uuid.UUID) (mediadomain.MediaAsset, error) {
 	var model MediaAssetModel
+
 	err := r.db.WithContext(ctx).
 		Select(mediaColumns).
 		Where("uuid = ? AND deleted_at IS NULL", id).
@@ -57,6 +67,7 @@ func (r *MediaRepository) GetByID(ctx context.Context, id uuid.UUID) (mediadomai
 	if errors.Is(err, gorm.ErrRecordNotFound) {
 		return mediadomain.MediaAsset{}, mediadomain.ErrNotFound
 	}
+
 	if err != nil {
 		return mediadomain.MediaAsset{}, err
 	}
@@ -64,11 +75,14 @@ func (r *MediaRepository) GetByID(ctx context.Context, id uuid.UUID) (mediadomai
 	return mapMediaAsset(model), nil
 }
 
+// Update persists status, size, checksum, and tag changes.
 func (r *MediaRepository) Update(ctx context.Context, asset mediadomain.MediaAsset) (mediadomain.MediaAsset, error) {
 	if asset.UpdatedAt.IsZero() {
 		asset.UpdatedAt = time.Now().UTC()
 	}
+
 	db := r.db.WithContext(ctx)
+
 	uploadedBy, err := optionalIDByUUID(db, "users", asset.UploadedByUUID)
 	if err != nil {
 		return mediadomain.MediaAsset{}, err
@@ -101,15 +115,19 @@ func (r *MediaRepository) Update(ctx context.Context, asset mediadomain.MediaAss
 	return r.GetByID(ctx, asset.UUID)
 }
 
+// List returns a page of live media assets matching the filter.
 func (r *MediaRepository) List(ctx context.Context, filter mediadomain.ListFilter) (mediadomain.ListResult, error) {
 	q := r.db.WithContext(ctx).Model(&MediaAssetModel{}).Where("deleted_at IS NULL")
+
 	if filter.Query != "" {
 		like := "%" + filter.Query + "%"
 		q = q.Where("original_filename ILIKE ? OR storage_key ILIKE ?", like, like)
 	}
+
 	if filter.Disk != "" {
 		q = q.Where("disk = ?", filter.Disk)
 	}
+
 	if filter.Status != "" {
 		q = q.Where("status = ?", filter.Status)
 	}
@@ -120,6 +138,7 @@ func (r *MediaRepository) List(ctx context.Context, filter mediadomain.ListFilte
 	}
 
 	var models []MediaAssetModel
+
 	offset := (filter.Page - 1) * filter.PerPage
 	if err := q.Select(mediaColumns).Order("created_at DESC").Limit(filter.PerPage).Offset(offset).Find(&models).Error; err != nil {
 		return mediadomain.ListResult{}, err
@@ -129,9 +148,11 @@ func (r *MediaRepository) List(ctx context.Context, filter mediadomain.ListFilte
 	for _, model := range models {
 		items = append(items, mapMediaAsset(model))
 	}
+
 	return mediadomain.ListResult{Items: items, Total: total, Page: filter.Page, PerPage: filter.PerPage}, nil
 }
 
+// SoftDelete marks the asset deleted at deletedAt.
 func (r *MediaRepository) SoftDelete(ctx context.Context, id uuid.UUID, deletedAt time.Time) error {
 	res := r.db.WithContext(ctx).Model(&MediaAssetModel{}).
 		Where("uuid = ? AND deleted_at IS NULL", id).
@@ -142,33 +163,42 @@ func (r *MediaRepository) SoftDelete(ctx context.Context, id uuid.UUID, deletedA
 	if res.Error != nil {
 		return res.Error
 	}
+
 	if res.RowsAffected == 0 {
 		return mediadomain.ErrNotFound
 	}
+
 	return nil
 }
 
+// ClearEntityReferences nulls user avatar, category image, and post cover references to the asset.
 func (r *MediaRepository) ClearEntityReferences(ctx context.Context, id uuid.UUID) error {
 	return r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
 		mediaID, err := idByUUID(tx, "media_assets", id)
 		if errors.Is(err, errUnknownReference) {
 			return nil
 		}
+
 		if err != nil {
 			return err
 		}
+
 		if err := tx.Exec(`UPDATE users SET avatar_id = NULL WHERE avatar_id = ?`, mediaID).Error; err != nil {
 			return err
 		}
+
 		if err := tx.Exec(`UPDATE categories SET image_id = NULL WHERE image_id = ?`, mediaID).Error; err != nil {
 			return err
 		}
+
 		if err := tx.Exec(`UPDATE posts SET cover_image_media_id = NULL WHERE cover_image_media_id = ?`, mediaID).Error; err != nil {
 			return err
 		}
+
 		if err := tx.Exec(`DELETE FROM post_media WHERE media_asset_id = ?`, mediaID).Error; err != nil {
 			return err
 		}
+
 		return nil
 	})
 }
@@ -229,5 +259,6 @@ func mapMediaAsset(model MediaAssetModel) mediadomain.MediaAsset {
 func mediaTags(tags []string) pq.StringArray {
 	out := make(pq.StringArray, len(tags))
 	copy(out, tags)
+
 	return out
 }

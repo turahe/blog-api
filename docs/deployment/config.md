@@ -201,7 +201,7 @@ broker; `app serve` can run without one.
 | `KAFKA_CONSUMER_GROUP` | `blog-api` | For Kafka | Consumer group name. |
 | `RABBITMQ_URL` | empty | For RabbitMQ | AMQP connection URL. |
 | `GOOGLE_PUBSUB_PROJECT_ID` | empty | For Pub/Sub | Google Cloud project containing topics and subscriptions. |
-| `GOOGLE_PUBSUB_CREDENTIALS_SOURCE` | `workload-identity` | No | `workload-identity`, `adc`, or `path:/absolute/key.json`. |
+| `GOOGLE_PUBSUB_CREDENTIALS_SOURCE` | `workload-identity` | No | `workload-identity`, `adc`, or `path:/absolute/key.json` (service-account key file). |
 
 Examples:
 
@@ -249,6 +249,21 @@ delivery semantics are in [events.md](../backend/events.md).
 Media is enabled only when `S3_BUCKET`, `S3_ACCESS_KEY`, and `S3_SECRET_KEY` are all set.
 In that mode, `S3_DISK` must be one of the supported values, the allowlist must not be
 empty, and the size/TTL values must be positive.
+
+## Comments
+
+| Variable | Default | Required | Purpose |
+| --- | --- | --- | --- |
+| `COMMENTS_GUEST_ENABLED` | `false` | No | Allow comments without a bearer token (`author_name` and `author_email` required). Guest comments always start `pending`. |
+| `COMMENTS_REQUIRE_APPROVAL` | `false` | No | Start signed-in users' comments as `pending` instead of `approved`. |
+| `COMMENTS_EDIT_WINDOW` | `15m` | No | How long after posting an author may edit their own comment. |
+| `COMMENTS_FLAG_THRESHOLD` | `3` | No | Distinct flags that move an approved comment to `flagged` (hidden from readers). |
+| `COMMENTS_CREATE_PER_MINUTE` | `6` | No | Comment creates per caller per minute; `0` disables the limit. |
+| `COMMENTS_ACTIONS_PER_MINUTE` | `30` | No | Flags and upvote toggles per caller per minute; `0` disables the limit. |
+
+Rate limits are Redis fixed windows keyed by the authenticated user, or by client IP for
+guests (see `APP_TRUSTED_PROXIES`). If Redis is unreachable, requests are let through and a
+warning is logged.
 
 ## Production validation
 

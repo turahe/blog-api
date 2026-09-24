@@ -15,6 +15,8 @@ import (
 )
 
 func TestIssueAndParseAccess(t *testing.T) {
+	t.Parallel()
+
 	svc := newTestService(t)
 
 	now := time.Now().UTC()
@@ -32,6 +34,8 @@ func TestIssueAndParseAccess(t *testing.T) {
 }
 
 func TestRefreshHashStable(t *testing.T) {
+	t.Parallel()
+
 	svc := newTestService(t)
 	raw, hash, err := svc.IssueRefresh()
 	require.NoError(t, err)
@@ -39,6 +43,8 @@ func TestRefreshHashStable(t *testing.T) {
 }
 
 func TestRejectsMismatchedKeyPair(t *testing.T) {
+	t.Parallel()
+
 	privA, err := rsa.GenerateKey(rand.Reader, 2048)
 	require.NoError(t, err)
 	privB, err := rsa.GenerateKey(rand.Reader, 2048)
@@ -55,6 +61,7 @@ func TestRejectsMismatchedKeyPair(t *testing.T) {
 
 func newTestService(t *testing.T) *jwttoken.Service {
 	t.Helper()
+
 	priv, err := rsa.GenerateKey(rand.Reader, 2048)
 	require.NoError(t, err)
 	svc, err := jwttoken.New(
@@ -64,19 +71,24 @@ func newTestService(t *testing.T) *jwttoken.Service {
 		"blog-api",
 	)
 	require.NoError(t, err)
+
 	return svc
 }
 
 func encodePrivatePEM(t *testing.T, key *rsa.PrivateKey) string {
 	t.Helper()
+
 	der, err := x509.MarshalPKCS8PrivateKey(key)
 	require.NoError(t, err)
+
 	return string(pem.EncodeToMemory(&pem.Block{Type: "PRIVATE KEY", Bytes: der}))
 }
 
 func encodePublicPEM(t *testing.T, key *rsa.PublicKey) string {
 	t.Helper()
+
 	der, err := x509.MarshalPKIXPublicKey(key)
 	require.NoError(t, err)
+
 	return string(pem.EncodeToMemory(&pem.Block{Type: "PUBLIC KEY", Bytes: der}))
 }

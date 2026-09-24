@@ -4,12 +4,13 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
-	"github.com/turahe/blog-api/internal/adapters/inbound/http/middleware"
-	"github.com/turahe/blog-api/internal/adapters/inbound/http/responses"
 	nethttp "net/http"
 	"net/http/httptest"
 	"testing"
 	"time"
+
+	"github.com/turahe/blog-api/internal/adapters/inbound/http/middleware"
+	"github.com/turahe/blog-api/internal/adapters/inbound/http/responses"
 
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
@@ -64,6 +65,7 @@ func TestAdminListPostsHandlerReturnsMetaTotalAndScopesRestrictedAuthors(t *test
 			require.Equal(t, "hello", filter.Query)
 			require.NotNil(t, filter.ScopeAuthorUUID)
 			require.Equal(t, userID, *filter.ScopeAuthorUUID)
+
 			return postdomain.ListResult{
 				Items: []postdomain.Post{{
 					UUID:         postID,
@@ -95,12 +97,13 @@ func TestAdminListPostsHandlerReturnsMetaTotalAndScopesRestrictedAuthors(t *test
 
 	w := httptest.NewRecorder()
 	c, _ := gin.CreateTestContext(w)
-	c.Request = httptest.NewRequest(nethttp.MethodGet, "/api/v1/admin/posts?page=2&per_page=10&status=draft&q=hello", nil)
+	c.Request = httptest.NewRequestWithContext(t.Context(), nethttp.MethodGet, "/api/v1/admin/posts?page=2&per_page=10&status=draft&q=hello", nil)
 	c.Set(middleware.ContextUserIDKey, userID)
 
 	adminListPostsHandlerWithDeps(svc, fakeRoleLookup{names: []string{"author"}})(c)
 
 	require.Equal(t, nethttp.StatusOK, w.Code)
+
 	var envelope responses.Envelope
 	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &envelope))
 	require.True(t, envelope.OK)
@@ -108,11 +111,13 @@ func TestAdminListPostsHandlerReturnsMetaTotalAndScopesRestrictedAuthors(t *test
 	require.NotNil(t, envelope.Links)
 	metaBytes, err := json.Marshal(envelope.Meta)
 	require.NoError(t, err)
+
 	var meta responses.PaginationMeta
 	require.NoError(t, json.Unmarshal(metaBytes, &meta))
 	require.Equal(t, int64(7), meta.Total)
 	require.Equal(t, 2, meta.CurrentPage)
 	require.Equal(t, 10, meta.PerPage)
+
 	data, ok := envelope.Data.([]any)
 	require.True(t, ok)
 	require.Len(t, data, 1)
@@ -141,13 +146,14 @@ func TestAdminUpdatePostHandlerRejectsEmptyBody(t *testing.T) {
 	w := httptest.NewRecorder()
 	c, _ := gin.CreateTestContext(w)
 	c.Params = gin.Params{{Key: "param1", Value: postID.String()}}
-	c.Request = httptest.NewRequest(nethttp.MethodPatch, "/api/v1/admin/posts/"+postID.String(), nil)
+	c.Request = httptest.NewRequestWithContext(t.Context(), nethttp.MethodPatch, "/api/v1/admin/posts/"+postID.String(), nil)
 	c.Request.Header.Set("Content-Type", "application/json")
 	c.Set(middleware.ContextUserIDKey, uuid.New())
 
 	adminUpdatePostHandlerWithDeps(svc, fakeRoleLookup{names: []string{"admin"}})(c)
 
 	require.Equal(t, nethttp.StatusBadRequest, w.Code)
+
 	var envelope responses.Envelope
 	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &envelope))
 	require.False(t, envelope.OK)
@@ -176,6 +182,7 @@ func TestAdminUpdatePostHandlerMapsConflict(t *testing.T) {
 			require.True(t, unrestricted)
 			require.NotNil(t, in.Slug)
 			require.Equal(t, "taken-slug", *in.Slug)
+
 			return postdomain.Post{}, nil, postservice.ErrConflict
 		},
 	}
@@ -183,7 +190,7 @@ func TestAdminUpdatePostHandlerMapsConflict(t *testing.T) {
 	w := httptest.NewRecorder()
 	c, _ := gin.CreateTestContext(w)
 	c.Params = gin.Params{{Key: "param1", Value: postID.String()}}
-	c.Request = httptest.NewRequest(
+	c.Request = httptest.NewRequestWithContext(t.Context(),
 		nethttp.MethodPatch,
 		"/api/v1/admin/posts/"+postID.String(),
 		bytes.NewBufferString(`{"slug":"taken-slug"}`),
@@ -194,6 +201,7 @@ func TestAdminUpdatePostHandlerMapsConflict(t *testing.T) {
 	adminUpdatePostHandlerWithDeps(svc, fakeRoleLookup{names: []string{"editor"}})(c)
 
 	require.Equal(t, nethttp.StatusConflict, w.Code)
+
 	var envelope responses.Envelope
 	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &envelope))
 	require.False(t, envelope.OK)
@@ -219,6 +227,7 @@ func TestAdminCreatePostHandlerReturnsTags(t *testing.T) {
 			require.Nil(t, categoryID)
 			require.NotNil(t, tags)
 			require.Equal(t, []string{"Go"}, *tags)
+
 			return postdomain.Post{
 				UUID:       postID,
 				AuthorUUID: authorID,
@@ -240,19 +249,20 @@ func TestAdminCreatePostHandlerReturnsTags(t *testing.T) {
 
 	w := httptest.NewRecorder()
 	c, _ := gin.CreateTestContext(w)
-	c.Request = httptest.NewRequest(nethttp.MethodPost, "/api/v1/admin/posts", bytes.NewBufferString(`{"title":"Title","slug":"title","excerpt":"Excerpt","content":"Content","tags":["Go"]}`))
+	c.Request = httptest.NewRequestWithContext(t.Context(), nethttp.MethodPost, "/api/v1/admin/posts", bytes.NewBufferString(`{"title":"Title","slug":"title","excerpt":"Excerpt","content":"Content","tags":["Go"]}`))
 	c.Request.Header.Set("Content-Type", "application/json")
 	c.Set(middleware.ContextUserIDKey, userID)
 
 	adminCreatePostHandler(svc)(c)
 
 	require.Equal(t, nethttp.StatusCreated, w.Code)
+
 	var envelope responses.Envelope
 	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &envelope))
 	require.True(t, envelope.OK)
 	data, ok := envelope.Data.(map[string]any)
 	require.True(t, ok)
-	require.Equal(t, "go", data["tags"].([]any)[0].(map[string]any)["slug"])
+	require.Equal(t, "go", as[map[string]any](t, as[[]any](t, data["tags"])[0])["slug"])
 }
 
 func TestAdminUpdatePostHandlerAllowsTagsOnlyPatch(t *testing.T) {
@@ -279,6 +289,7 @@ func TestAdminUpdatePostHandlerAllowsTagsOnlyPatch(t *testing.T) {
 			require.Nil(t, in.Content)
 			require.NotNil(t, in.Tags)
 			require.Equal(t, []string{"Go"}, *in.Tags)
+
 			return postdomain.Post{
 				UUID:       postID,
 				AuthorUUID: userID,
@@ -295,19 +306,20 @@ func TestAdminUpdatePostHandlerAllowsTagsOnlyPatch(t *testing.T) {
 	w := httptest.NewRecorder()
 	c, _ := gin.CreateTestContext(w)
 	c.Params = gin.Params{{Key: "param1", Value: postID.String()}}
-	c.Request = httptest.NewRequest(nethttp.MethodPatch, "/api/v1/admin/posts/"+postID.String(), bytes.NewBufferString(`{"tags":["Go"]}`))
+	c.Request = httptest.NewRequestWithContext(t.Context(), nethttp.MethodPatch, "/api/v1/admin/posts/"+postID.String(), bytes.NewBufferString(`{"tags":["Go"]}`))
 	c.Request.Header.Set("Content-Type", "application/json")
 	c.Set(middleware.ContextUserIDKey, userID)
 
 	adminUpdatePostHandlerWithDeps(svc, fakeRoleLookup{names: []string{"admin"}})(c)
 
 	require.Equal(t, nethttp.StatusOK, w.Code)
+
 	var envelope responses.Envelope
 	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &envelope))
 	require.True(t, envelope.OK)
 	data, ok := envelope.Data.(map[string]any)
 	require.True(t, ok)
-	require.Equal(t, "go", data["tags"].([]any)[0].(map[string]any)["slug"])
+	require.Equal(t, "go", as[map[string]any](t, as[[]any](t, data["tags"])[0])["slug"])
 }
 
 func TestAdminCreatePostHandlerMapsTagValidation(t *testing.T) {
@@ -327,81 +339,65 @@ func TestAdminCreatePostHandlerMapsTagValidation(t *testing.T) {
 
 	w := httptest.NewRecorder()
 	c, _ := gin.CreateTestContext(w)
-	c.Request = httptest.NewRequest(nethttp.MethodPost, "/api/v1/admin/posts", bytes.NewBufferString(`{"title":"Title","slug":"title","tags":["bad tag"]}`))
+	c.Request = httptest.NewRequestWithContext(t.Context(), nethttp.MethodPost, "/api/v1/admin/posts", bytes.NewBufferString(`{"title":"Title","slug":"title","tags":["bad tag"]}`))
 	c.Request.Header.Set("Content-Type", "application/json")
 	c.Set(middleware.ContextUserIDKey, userID)
 
 	adminCreatePostHandler(svc)(c)
 
 	require.Equal(t, nethttp.StatusBadRequest, w.Code)
+
 	var envelope responses.Envelope
 	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &envelope))
 	require.False(t, envelope.OK)
 	require.Equal(t, "validation_error", envelope.Error.Code)
 }
 
-func TestAdminUpdatePostHandlerMapsTagConflict(t *testing.T) {
+func TestAdminUpdatePostHandlerMapsTagErrors(t *testing.T) {
 	t.Parallel()
 	gin.SetMode(gin.TestMode)
 
-	postID := uuid.MustParse("dddddddd-dddd-dddd-dddd-dddddddddddd")
-	userID := uuid.MustParse("eeeeeeee-eeee-eeee-eeee-eeeeeeeeeeee")
-	svc := &fakePostAdminService{
-		createFn: func(context.Context, uuid.UUID, string, string, string, string, *uuid.UUID, *[]string) (postdomain.Post, []tagdomain.Tag, error) {
-			t.Fatal("unexpected create call")
-			return postdomain.Post{}, nil, nil
-		},
-		updateFn: func(context.Context, uuid.UUID, uuid.UUID, bool, postdomain.UpdateInput) (postdomain.Post, []tagdomain.Tag, error) {
-			return postdomain.Post{}, nil, tagdomain.ErrConflict
-		},
+	cases := map[string]struct {
+		err    error
+		role   string
+		status int
+		code   string
+	}{
+		"conflict":  {tagdomain.ErrConflict, "admin", nethttp.StatusConflict, "conflict"},
+		"not found": {tagdomain.ErrNotFound, "editor", nethttp.StatusNotFound, "not_found"},
 	}
+	for name, tc := range cases {
+		t.Run(name, func(t *testing.T) {
+			t.Parallel()
 
-	w := httptest.NewRecorder()
-	c, _ := gin.CreateTestContext(w)
-	c.Params = gin.Params{{Key: "param1", Value: postID.String()}}
-	c.Request = httptest.NewRequest(nethttp.MethodPatch, "/api/v1/admin/posts/"+postID.String(), bytes.NewBufferString(`{"tags":["Go"]}`))
-	c.Request.Header.Set("Content-Type", "application/json")
-	c.Set(middleware.ContextUserIDKey, userID)
+			postID := uuid.New()
+			svc := &fakePostAdminService{
+				createFn: func(context.Context, uuid.UUID, string, string, string, string, *uuid.UUID, *[]string) (postdomain.Post, []tagdomain.Tag, error) {
+					t.Fatal("unexpected create call")
+					return postdomain.Post{}, nil, nil
+				},
+				updateFn: func(context.Context, uuid.UUID, uuid.UUID, bool, postdomain.UpdateInput) (postdomain.Post, []tagdomain.Tag, error) {
+					return postdomain.Post{}, nil, tc.err
+				},
+			}
 
-	adminUpdatePostHandlerWithDeps(svc, fakeRoleLookup{names: []string{"admin"}})(c)
+			w := httptest.NewRecorder()
+			c, _ := gin.CreateTestContext(w)
+			c.Params = gin.Params{{Key: "param1", Value: postID.String()}}
+			c.Request = httptest.NewRequestWithContext(t.Context(), nethttp.MethodPatch, "/api/v1/admin/posts/"+postID.String(), bytes.NewBufferString(`{"tags":["Go"]}`))
+			c.Request.Header.Set("Content-Type", "application/json")
+			c.Set(middleware.ContextUserIDKey, uuid.New())
 
-	require.Equal(t, nethttp.StatusConflict, w.Code)
-	var envelope responses.Envelope
-	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &envelope))
-	require.False(t, envelope.OK)
-	require.Equal(t, "conflict", envelope.Error.Code)
-}
+			adminUpdatePostHandlerWithDeps(svc, fakeRoleLookup{names: []string{tc.role}})(c)
 
-func TestAdminUpdatePostHandlerMapsTagNotFound(t *testing.T) {
-	t.Parallel()
-	gin.SetMode(gin.TestMode)
+			require.Equal(t, tc.status, w.Code)
 
-	postID := uuid.MustParse("ffffffff-ffff-ffff-ffff-ffffffffffff")
-	userID := uuid.MustParse("12121212-1212-1212-1212-121212121212")
-	svc := &fakePostAdminService{
-		createFn: func(context.Context, uuid.UUID, string, string, string, string, *uuid.UUID, *[]string) (postdomain.Post, []tagdomain.Tag, error) {
-			t.Fatal("unexpected create call")
-			return postdomain.Post{}, nil, nil
-		},
-		updateFn: func(context.Context, uuid.UUID, uuid.UUID, bool, postdomain.UpdateInput) (postdomain.Post, []tagdomain.Tag, error) {
-			return postdomain.Post{}, nil, tagdomain.ErrNotFound
-		},
+			var envelope responses.Envelope
+			require.NoError(t, json.Unmarshal(w.Body.Bytes(), &envelope))
+			require.False(t, envelope.OK)
+			require.Equal(t, tc.code, envelope.Error.Code)
+		})
 	}
-
-	w := httptest.NewRecorder()
-	c, _ := gin.CreateTestContext(w)
-	c.Params = gin.Params{{Key: "param1", Value: postID.String()}}
-	c.Request = httptest.NewRequest(nethttp.MethodPatch, "/api/v1/admin/posts/"+postID.String(), bytes.NewBufferString(`{"tags":["Go"]}`))
-	c.Request.Header.Set("Content-Type", "application/json")
-	c.Set(middleware.ContextUserIDKey, userID)
-
-	adminUpdatePostHandlerWithDeps(svc, fakeRoleLookup{names: []string{"editor"}})(c)
-
-	require.Equal(t, nethttp.StatusNotFound, w.Code)
-	var envelope responses.Envelope
-	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &envelope))
-	require.False(t, envelope.OK)
-	require.Equal(t, "not_found", envelope.Error.Code)
 }
 
 func TestAdminUpdatePostHandlerCategoryIDPresence(t *testing.T) {
@@ -424,7 +420,9 @@ func TestAdminUpdatePostHandlerCategoryIDPresence(t *testing.T) {
 			t.Parallel()
 
 			postID := uuid.New()
+
 			var got postdomain.UpdateInput
+
 			svc := &fakePostAdminService{
 				updateFn: func(_ context.Context, _, _ uuid.UUID, _ bool, in postdomain.UpdateInput) (postdomain.Post, []tagdomain.Tag, error) {
 					got = in
@@ -435,7 +433,7 @@ func TestAdminUpdatePostHandlerCategoryIDPresence(t *testing.T) {
 			w := httptest.NewRecorder()
 			c, _ := gin.CreateTestContext(w)
 			c.Params = gin.Params{{Key: "param1", Value: postID.String()}}
-			c.Request = httptest.NewRequest(nethttp.MethodPatch, "/api/v1/admin/posts/"+postID.String(), bytes.NewBufferString(tc.body))
+			c.Request = httptest.NewRequestWithContext(t.Context(), nethttp.MethodPatch, "/api/v1/admin/posts/"+postID.String(), bytes.NewBufferString(tc.body))
 			c.Request.Header.Set("Content-Type", "application/json")
 			c.Set(middleware.ContextUserIDKey, uuid.New())
 
@@ -462,13 +460,14 @@ func TestAdminUpdatePostHandlerMapsStaleVersion(t *testing.T) {
 	w := httptest.NewRecorder()
 	c, _ := gin.CreateTestContext(w)
 	c.Params = gin.Params{{Key: "param1", Value: postID.String()}}
-	c.Request = httptest.NewRequest(nethttp.MethodPatch, "/api/v1/admin/posts/"+postID.String(), bytes.NewBufferString(`{"title":"T"}`))
+	c.Request = httptest.NewRequestWithContext(t.Context(), nethttp.MethodPatch, "/api/v1/admin/posts/"+postID.String(), bytes.NewBufferString(`{"title":"T"}`))
 	c.Request.Header.Set("Content-Type", "application/json")
 	c.Set(middleware.ContextUserIDKey, uuid.New())
 
 	adminUpdatePostHandlerWithDeps(svc, fakeRoleLookup{names: []string{"editor"}})(c)
 
 	require.Equal(t, nethttp.StatusConflict, w.Code)
+
 	var envelope responses.Envelope
 	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &envelope))
 	require.False(t, envelope.OK)

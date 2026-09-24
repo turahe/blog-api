@@ -13,10 +13,12 @@ func Category(cat categorydomain.Category) gin.H {
 	if cat.ParentUUID != nil {
 		parent = cat.ParentUUID.String()
 	}
+
 	var image any
 	if cat.ImageUUID != nil {
 		image = cat.ImageUUID.String()
 	}
+
 	return gin.H{
 		"id":          cat.UUID.String(),
 		"name":        cat.Name,

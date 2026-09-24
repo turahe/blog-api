@@ -18,14 +18,17 @@ func init() {
 	if !ok {
 		return
 	}
+
 	engine.RegisterTagNameFunc(func(field reflect.StructField) string {
-		name := strings.SplitN(field.Tag.Get("json"), ",", 2)[0]
+		name, _, _ := strings.Cut(field.Tag.Get("json"), ",")
 		if name == "-" {
 			return ""
 		}
+
 		if name != "" {
 			return name
 		}
+
 		return field.Name
 	})
 }
@@ -38,6 +41,7 @@ func BindJSON(c *gin.Context, dst any) bool {
 		FailValidation(c, err)
 		return false
 	}
+
 	return true
 }
 
@@ -46,7 +50,7 @@ func FailValidation(c *gin.Context, err error) {
 	responses.FailureWithDetails(
 		c,
 		400,
-		"validation_error",
+		responses.ErrorCodeValidation,
 		"The given data was invalid.",
 		validationErrorDetails(err),
 	)
@@ -56,18 +60,20 @@ func FailValidation(c *gin.Context, err error) {
 //
 //	{ "email": ["The email field is required."], ... }
 func validationErrorDetails(err error) map[string][]string {
-	var verrs validator.ValidationErrors
-	if errors.As(err, &verrs) {
+	if verrs, ok := errors.AsType[validator.ValidationErrors](err); ok {
 		bag := make(map[string][]string, len(verrs))
 		for _, fe := range verrs {
 			field := fe.Field()
 			if field == "" {
 				field = "_form"
 			}
+
 			bag[field] = append(bag[field], validationMessage(fe))
 		}
+
 		return bag
 	}
+
 	return map[string][]string{"_form": {"The request body is invalid."}}
 }
 
@@ -94,16 +100,22 @@ func camelToSnake(s string) string {
 	if s == "" {
 		return s
 	}
+
 	var b strings.Builder
+
 	for i, r := range s {
 		if unicode.IsUpper(r) {
 			if i > 0 {
 				b.WriteByte('_')
 			}
+
 			b.WriteRune(unicode.ToLower(r))
+
 			continue
 		}
+
 		b.WriteRune(r)
 	}
+
 	return b.String()
 }

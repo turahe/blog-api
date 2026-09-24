@@ -20,6 +20,7 @@ func RequestID() gin.HandlerFunc {
 		if _, err := uuid.Parse(id); err != nil {
 			id = uuid.NewString()
 		}
+
 		c.Set(responses.ContextRequestIDKey, id)
 		c.Header("X-Request-ID", id)
 		c.Next()
@@ -30,7 +31,9 @@ func RequestID() gin.HandlerFunc {
 func AccessLog(logger *slog.Logger) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		started := time.Now()
+
 		c.Next()
+
 		attrs := []any{
 			"request_id", responses.RequestID(c),
 			"method", c.Request.Method,
@@ -45,6 +48,7 @@ func AccessLog(logger *slog.Logger) gin.HandlerFunc {
 				"auth_mode", string(route.Auth),
 			)
 		}
+
 		logger.InfoContext(c.Request.Context(), "http request", attrs...)
 	}
 }
@@ -59,9 +63,10 @@ func Recovery(logger *slog.Logger) gin.HandlerFunc {
 					"panic", recovered,
 					"stack", string(debug.Stack()),
 				)
-				responses.Failure(c, nethttp.StatusInternalServerError, "internal_error", "An unexpected error occurred")
+				responses.Failure(c, nethttp.StatusInternalServerError, responses.ErrorCodeInternal, "An unexpected error occurred")
 			}
 		}()
+
 		c.Next()
 	}
 }
@@ -73,6 +78,7 @@ func SecurityHeaders() gin.HandlerFunc {
 		if swagger.IsDocsPath(c.Request.URL.Path) {
 			csp = swagger.ContentSecurityPolicy
 		}
+
 		c.Header("Content-Security-Policy", csp)
 		c.Header("Referrer-Policy", "no-referrer")
 		c.Header("X-Content-Type-Options", "nosniff")

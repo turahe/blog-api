@@ -7,9 +7,10 @@ import (
 
 func newLogger(environment string) *slog.Logger {
 	level := slog.LevelInfo
-	switch environment {
-	case "local":
+
+	if environment == "local" {
 		level = slog.LevelDebug
 	}
+
 	return slog.New(slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{Level: level}))
 }

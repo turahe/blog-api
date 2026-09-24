@@ -13,7 +13,7 @@ func newVersionCmd() *cobra.Command {
 		Short: "Print build information",
 		Args:  cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
-			fmt.Fprintf(
+			_, err := fmt.Fprintf(
 				cmd.OutOrStdout(),
 				"version=%s commit=%s built=%s go=%s\n",
 				version,
@@ -21,7 +21,8 @@ func newVersionCmd() *cobra.Command {
 				buildTime,
 				runtime.Version(),
 			)
-			return nil
+
+			return err
 		},
 	}
 }

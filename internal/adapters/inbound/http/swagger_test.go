@@ -22,13 +22,13 @@ func TestSwaggerEnabledServesUIAndSpec(t *testing.T) {
 	require.NoError(t, err)
 
 	rec := httptest.NewRecorder()
-	router.ServeHTTP(rec, httptest.NewRequest(nethttp.MethodGet, "/swagger/index.html", nil))
+	router.ServeHTTP(rec, httptest.NewRequestWithContext(t.Context(), nethttp.MethodGet, "/swagger/index.html", nil))
 	require.Equal(t, nethttp.StatusOK, rec.Code)
 	require.Contains(t, rec.Body.String(), "swagger")
 	require.Equal(t, swagger.ContentSecurityPolicy, rec.Header().Get("Content-Security-Policy"))
 
 	rec = httptest.NewRecorder()
-	router.ServeHTTP(rec, httptest.NewRequest(nethttp.MethodGet, "/swagger/doc.json", nil))
+	router.ServeHTTP(rec, httptest.NewRequestWithContext(t.Context(), nethttp.MethodGet, "/swagger/doc.json", nil))
 	require.Equal(t, nethttp.StatusOK, rec.Code)
 	require.Contains(t, rec.Body.String(), `"swagger"`)
 	require.Contains(t, rec.Body.String(), "Blog API")
@@ -46,7 +46,7 @@ func TestSwaggerDisabledReturnsNotFound(t *testing.T) {
 
 	for _, path := range []string{"/swagger/index.html", "/swagger/doc.json"} {
 		rec := httptest.NewRecorder()
-		router.ServeHTTP(rec, httptest.NewRequest(nethttp.MethodGet, path, nil))
+		router.ServeHTTP(rec, httptest.NewRequestWithContext(t.Context(), nethttp.MethodGet, path, nil))
 		require.Equal(t, nethttp.StatusNotFound, rec.Code, path)
 	}
 }

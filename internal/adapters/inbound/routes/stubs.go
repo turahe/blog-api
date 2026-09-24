@@ -7,10 +7,9 @@ import (
 // registerContractStubs mounts OpenAPI operations that are not yet implemented.
 func registerContractStubs(v1 *gin.RouterGroup, auth AuthMiddleware, c Controllers) {
 	none := v1.Group("")
-	optional := v1.Group("")
-	optional.Use(auth.Optional...)
 	required := v1.Group("")
 	required.Use(auth.Required...)
+
 	admin := v1.Group("/admin")
 	admin.Use(auth.Required...)
 
@@ -19,10 +18,8 @@ func registerContractStubs(v1 *gin.RouterGroup, auth AuthMiddleware, c Controlle
 	ag, ar := GroupAdmin, AuthRequired
 	authG := GroupAuth
 
-	get(none, "/comments/:param1", "public.comments.get", pub, n, c, nil)
 	get(none, "/media/:param1/transform", "public.media.transform", pub, n, c, nil)
 	get(none, "/newsletter/preferences/:param1", "public.newsletter.preferences.get", pub, n, c, nil)
-	get(none, "/posts/:param1/comments", "public.posts.comments.list", pub, n, c, nil)
 	get(none, "/posts/:param1/seo-meta", "public.posts.seo_meta", pub, n, c, nil)
 	get(none, "/users/:param1", "public.users.profile", pub, n, c, nil)
 	patch(none, "/newsletter/preferences/:param1", "public.newsletter.preferences.patch", pub, n, c, nil)
@@ -31,24 +28,17 @@ func registerContractStubs(v1 *gin.RouterGroup, auth AuthMiddleware, c Controlle
 	post(none, "/newsletter/subscribe", "public.newsletter.subscribe", pub, n, c, nil)
 	post(none, "/newsletter/unsubscribe", "public.newsletter.unsubscribe", pub, n, c, nil)
 
-	post(optional, "/comments/:param1/flag", "public.comments.flag", pub, AuthOptional, c, nil)
-	post(optional, "/posts/:param1/comments", "public.posts.comments.create", pub, AuthOptional, c, nil)
-
 	post(none, "/auth/oauth/:param1/callback", "auth.oauth.callback", authG, n, c, nil)
 	post(required, "/auth/2fa/challenge", "auth.2fa.challenge", authG, req, c, nil)
 
 	get(required, "/me/activity", "me.activity.list", self, req, c, nil)
 	get(required, "/me/activity/export", "me.activity.export", self, req, c, nil)
-	get(required, "/me/comments", "self.comments.list", self, req, c, nil)
 	get(required, "/me/newsletter/subscriptions", "me.newsletter.subscriptions.list", self, req, c, nil)
 	get(required, "/me/notifications", "me.notifications.list", self, req, c, nil)
 	get(required, "/me/notifications/stream", "me.notifications.stream", self, req, c, nil)
 	get(required, "/me/privacy", "me.privacy.get", self, req, c, nil)
 	del(required, "/me/avatar", "me.avatar.delete", self, req, c, nil)
-	del(required, "/comments/:param1", "self.comments.delete", self, req, c, nil)
-	patch(required, "/comments/:param1", "self.comments.patch", self, req, c, nil)
 	patch(required, "/me/profile", "me.profile.patch", self, req, c, nil)
-	post(required, "/comments/:param1/upvote", "self.comments.upvote", self, req, c, nil)
 	post(required, "/me/activity/erase", "me.activity.erase", self, req, c, nil)
 	post(required, "/me/avatar", "me.avatar.upload", self, req, c, nil)
 	post(required, "/me/email/confirm-change", "me.email.confirm_change", self, req, c, nil)

@@ -6,6 +6,7 @@ import "github.com/gin-gonic/gin"
 // Group is the route group an operation belongs to. See docs/backend/api.md.
 type Group string
 
+// Route groups tag each operation for access logs and middleware selection.
 const (
 	GroupHealth      Group = "health"
 	GroupAuth        Group = "auth"
@@ -18,6 +19,7 @@ const (
 // AuthMode is the credential requirement for the route.
 type AuthMode string
 
+// Auth modes declared per route: no auth, optional bearer, or required bearer.
 const (
 	AuthNone     AuthMode = "none"
 	AuthOptional AuthMode = "optional"
@@ -39,6 +41,7 @@ type Route struct {
 func RouteOf(c *gin.Context) (Route, bool) {
 	value, exists := c.Get(routeContextKey)
 	route, ok := value.(Route)
+
 	return route, exists && ok
 }
 
@@ -64,5 +67,6 @@ func orStub(stub func(Route) gin.HandlerFunc, route Route, handler gin.HandlerFu
 	if handler != nil {
 		return handler
 	}
+
 	return stub(route)
 }

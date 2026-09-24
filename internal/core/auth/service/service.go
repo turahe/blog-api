@@ -1,3 +1,4 @@
+// Package service implements login, token refresh/rotation, logout, and password reset.
 package service
 
 import (
@@ -13,12 +14,14 @@ import (
 	"github.com/turahe/blog-api/internal/core/auth/ports"
 )
 
+// Config sets token lifetimes.
 type Config struct {
 	AccessTTL     time.Duration
 	RefreshTTL    time.Duration
 	ResetTokenTTL time.Duration
 }
 
+// AuthService implements ports.Service.
 type AuthService struct {
 	users    ports.UserRepository
 	sessions ports.SessionRepository
@@ -31,6 +34,7 @@ type AuthService struct {
 	cfg      Config
 }
 
+// New returns an AuthService; sink, when non-nil, receives raw reset tokens (dev/test delivery).
 func New(
 	users ports.UserRepository,
 	sessions ports.SessionRepository,
@@ -45,18 +49,22 @@ func New(
 	if cfg.AccessTTL <= 0 {
 		cfg.AccessTTL = 15 * time.Minute
 	}
+
 	if cfg.RefreshTTL <= 0 {
 		cfg.RefreshTTL = 30 * 24 * time.Hour
 	}
+
 	if cfg.ResetTokenTTL <= 0 {
 		cfg.ResetTokenTTL = time.Hour
 	}
+
 	return &AuthService{
 		users: users, sessions: sessions, resets: resets, hasher: hasher,
 		tokens: tokens, clock: clock, ids: ids, sink: sink, cfg: cfg,
 	}
 }
 
+// Login verifies credentials and issues a token pair; remember extends the refresh lifetime.
 func (s *AuthService) Login(ctx context.Context, email, password, userAgent, ip string, remember bool) (authdomain.TokenPair, error) {
 	email = strings.TrimSpace(strings.ToLower(email))
 	if email == "" || password == "" {
@@ -67,9 +75,11 @@ func (s *AuthService) Login(ctx context.Context, email, password, userAgent, ip 
 	if err != nil {
 		return authdomain.TokenPair{}, authdomain.ErrInvalidCredentials
 	}
+
 	if !user.IsActive() {
 		return authdomain.TokenPair{}, authdomain.ErrUserInactive
 	}
+
 	if user.PasswordHash == "" || !s.hasher.Compare(user.PasswordHash, password) {
 		return authdomain.TokenPair{}, authdomain.ErrInvalidCredentials
 	}
@@ -83,24 +93,30 @@ func (s *AuthService) Login(ctx context.Context, email, password, userAgent, ip 
 	if !remember {
 		ttl = 7 * 24 * time.Hour
 	}
+
 	return s.issuePair(ctx, user.UUID, user.Email, user.Username, userAgent, ip, ttl)
 }
 
+// Refresh rotates the refresh token; reusing a revoked token revokes its whole family.
 func (s *AuthService) Refresh(ctx context.Context, refreshToken, userAgent, ip string) (authdomain.TokenPair, error) {
 	refreshToken = strings.TrimSpace(refreshToken)
 	if refreshToken == "" {
 		return authdomain.TokenPair{}, authdomain.ErrInvalidToken
 	}
+
 	hash := s.tokens.HashRefresh(refreshToken)
+
 	session, err := s.sessions.FindByTokenHash(ctx, hash)
 	if err != nil {
 		return authdomain.TokenPair{}, authdomain.ErrInvalidToken
 	}
+
 	now := s.clock.Now()
 	if session.RevokedAt != nil {
 		_ = s.sessions.RevokeFamily(ctx, session.UserUUID, session.FamilyID, now)
 		return authdomain.TokenPair{}, authdomain.ErrTokenRevoked
 	}
+
 	if !session.ExpiresAt.After(now) {
 		return authdomain.TokenPair{}, authdomain.ErrTokenExpired
 	}
@@ -114,6 +130,7 @@ func (s *AuthService) Refresh(ctx context.Context, refreshToken, userAgent, ip s
 	if err != nil {
 		return authdomain.TokenPair{}, err
 	}
+
 	newSession := authdomain.RefreshSession{
 		UUID:      s.ids.New(),
 		UserUUID:  user.UUID,
@@ -127,6 +144,7 @@ func (s *AuthService) Refresh(ctx context.Context, refreshToken, userAgent, ip s
 	if _, err := s.sessions.Create(ctx, newSession); err != nil {
 		return authdomain.TokenPair{}, err
 	}
+
 	if err := s.sessions.Replace(ctx, session.UUID, newSession.UUID, now); err != nil {
 		return authdomain.TokenPair{}, err
 	}
@@ -142,6 +160,7 @@ func (s *AuthService) Refresh(ctx context.Context, refreshToken, userAgent, ip s
 	if err != nil {
 		return authdomain.TokenPair{}, err
 	}
+
 	return authdomain.TokenPair{
 		AccessToken:  access,
 		RefreshToken: raw,
@@ -150,40 +169,63 @@ func (s *AuthService) Refresh(ctx context.Context, refreshToken, userAgent, ip s
 	}, nil
 }
 
+// Logout revokes the user's refresh session; unknown tokens are ignored.
 func (s *AuthService) Logout(ctx context.Context, userID uuid.UUID, refreshToken string) error {
 	refreshToken = strings.TrimSpace(refreshToken)
 	if refreshToken == "" {
 		return nil
 	}
+
 	hash := s.tokens.HashRefresh(refreshToken)
+
 	session, err := s.sessions.FindByTokenHash(ctx, hash)
-	if err != nil {
+	if errors.Is(err, authdomain.ErrInvalidToken) {
 		return nil
 	}
+
+	if err != nil {
+		return err
+	}
+
 	if session.UserUUID != userID {
 		return authdomain.ErrInvalidToken
 	}
+
 	return s.sessions.Revoke(ctx, session.UUID, s.clock.Now())
 }
 
+// ParseAccessToken verifies an access token and returns its claims.
 func (s *AuthService) ParseAccessToken(token string) (authdomain.AccessClaims, error) {
 	return s.tokens.ParseAccess(token)
 }
 
+// ForgotPassword issues a reset token for an active account; unknown accounts succeed silently.
 func (s *AuthService) ForgotPassword(ctx context.Context, emailOrUsername string) error {
 	emailOrUsername = strings.TrimSpace(emailOrUsername)
 	if len(emailOrUsername) < 3 {
 		return fmt.Errorf("%w: email_or_username required", authdomain.ErrValidation)
 	}
+
 	user, err := s.users.FindByUsernameOrEmail(ctx, emailOrUsername)
-	if err != nil || !user.IsActive() {
+	if errors.Is(err, authdomain.ErrInvalidCredentials) {
 		return nil
 	}
+
+	if err != nil {
+		return err
+	}
+
+	if !user.IsActive() {
+		return nil
+	}
+
 	raw, hash, jti, err := s.tokens.IssueResetToken()
 	if err != nil {
 		return err
 	}
+
 	now := s.clock.Now()
+
 	token := authdomain.PasswordResetToken{
 		UUID: s.ids.New(), UserUUID: user.UUID, JTI: jti, TokenHash: hash,
 		Purpose: "password_reset", ExpiresAt: now.Add(s.cfg.ResetTokenTTL), CreatedAt: now,
@@ -191,91 +233,124 @@ func (s *AuthService) ForgotPassword(ctx context.Context, emailOrUsername string
 	if err := s.resets.Create(ctx, token); err != nil {
 		return err
 	}
+
 	if s.sink != nil {
 		s.sink.Capture(raw)
 	}
+
 	return nil
 }
 
+// CheckResetToken reports whether a reset token can still be used.
 func (s *AuthService) CheckResetToken(ctx context.Context, rawToken string) (authdomain.ResetTokenValidity, error) {
 	rawToken = strings.TrimSpace(rawToken)
 	if rawToken == "" {
 		return authdomain.ResetTokenValidity{}, fmt.Errorf("%w: token required", authdomain.ErrValidation)
 	}
+
 	token, err := s.resets.FindByHash(ctx, s.tokens.HashResetToken(rawToken))
-	if err != nil {
+	if errors.Is(err, authdomain.ErrInvalidToken) {
 		return authdomain.ResetTokenValidity{Valid: false}, nil
 	}
+
+	if err != nil {
+		return authdomain.ResetTokenValidity{}, err
+	}
+
 	now := s.clock.Now()
+
 	if token.UsedAt != nil {
 		return authdomain.ResetTokenValidity{Valid: false, ExpiresAt: token.ExpiresAt}, nil
 	}
+
 	if !token.ExpiresAt.After(now) {
 		return authdomain.ResetTokenValidity{Valid: false, ExpiresAt: token.ExpiresAt}, nil
 	}
+
 	return authdomain.ResetTokenValidity{Valid: true, ExpiresAt: token.ExpiresAt}, nil
 }
 
+// ResetPassword consumes a reset token, sets the new password, and revokes all sessions.
 func (s *AuthService) ResetPassword(ctx context.Context, rawToken, newPassword, confirmPassword string) error {
 	if newPassword != confirmPassword {
 		return authdomain.ErrPasswordMismatch
 	}
+
 	if err := validatePasswordStrength(newPassword); err != nil {
 		return err
 	}
+
 	token, err := s.resets.FindByHash(ctx, s.tokens.HashResetToken(strings.TrimSpace(rawToken)))
 	if err != nil {
 		return authdomain.ErrInvalidToken
 	}
+
 	now := s.clock.Now()
+
 	if token.UsedAt != nil {
 		return authdomain.ErrTokenUsed
 	}
+
 	if !token.ExpiresAt.After(now) {
 		return authdomain.ErrTokenExpired
 	}
+
 	hash, err := s.hasher.Hash(newPassword)
 	if err != nil {
 		return err
 	}
+
 	if err := s.users.UpdatePassword(ctx, token.UserUUID, hash, now); err != nil {
 		return err
 	}
+
 	if err := s.resets.MarkUsed(ctx, token.UUID, now); err != nil {
 		return err
 	}
+
 	return s.sessions.RevokeAllForUser(ctx, token.UserUUID, now)
 }
 
+// ChangePassword verifies the current password, sets a new one, and revokes
+// every session of the user when revokeAll is true.
 func (s *AuthService) ChangePassword(ctx context.Context, userID uuid.UUID, current, newPassword, confirm string, revokeAll bool) (time.Time, bool, error) {
 	if newPassword != confirm {
 		return time.Time{}, false, authdomain.ErrPasswordMismatch
 	}
+
 	if err := validatePasswordStrength(newPassword); err != nil {
 		return time.Time{}, false, err
 	}
+
 	user, err := s.users.FindByID(ctx, userID)
 	if err != nil {
 		return time.Time{}, false, err
 	}
+
 	if !s.hasher.Compare(user.PasswordHash, current) {
 		return time.Time{}, false, authdomain.ErrCurrentPassword
 	}
+
 	hash, err := s.hasher.Hash(newPassword)
 	if err != nil {
 		return time.Time{}, false, err
 	}
+
 	now := s.clock.Now()
 	if err := s.users.UpdatePassword(ctx, userID, hash, now); err != nil {
 		return time.Time{}, false, err
 	}
+
 	invalidated := false
+
 	if revokeAll {
 		if err := s.sessions.RevokeAllForUser(ctx, userID, now); err != nil {
 			return time.Time{}, false, err
 		}
+
 		invalidated = true
 	}
+
 	return now, invalidated, nil
 }
 
@@ -286,10 +361,12 @@ func (s *AuthService) issuePair(
 	refreshTTL time.Duration,
 ) (authdomain.TokenPair, error) {
 	now := s.clock.Now()
+
 	raw, hash, err := s.tokens.IssueRefresh()
 	if err != nil {
 		return authdomain.TokenPair{}, err
 	}
+
 	session := authdomain.RefreshSession{
 		UUID:      s.ids.New(),
 		UserUUID:  userID,
@@ -303,6 +380,7 @@ func (s *AuthService) issuePair(
 	if _, err := s.sessions.Create(ctx, session); err != nil {
 		return authdomain.TokenPair{}, err
 	}
+
 	access, err := s.tokens.IssueAccess(authdomain.AccessClaims{
 		Subject:   userID,
 		Email:     email,
@@ -314,6 +392,7 @@ func (s *AuthService) issuePair(
 	if err != nil {
 		return authdomain.TokenPair{}, err
 	}
+
 	return authdomain.TokenPair{
 		AccessToken:  access,
 		RefreshToken: raw,
@@ -326,7 +405,9 @@ func validatePasswordStrength(password string) error {
 	if len(password) < 12 || len(password) > 128 {
 		return authdomain.ErrPasswordStrength
 	}
+
 	var upper, lower, digit bool
+
 	for _, r := range password {
 		switch {
 		case unicode.IsUpper(r):
@@ -337,13 +418,16 @@ func validatePasswordStrength(password string) error {
 			digit = true
 		}
 	}
-	if !(upper && lower && digit) {
+
+	if !upper || !lower || !digit {
 		return authdomain.ErrPasswordStrength
 	}
+
 	return nil
 }
 
-func MapError(err error) (code string, message string, status int) {
+// MapError maps auth errors to an error code, message, and HTTP status.
+func MapError(err error) (code, message string, status int) {
 	switch {
 	case errors.Is(err, authdomain.ErrValidation):
 		return "validation_error", err.Error(), 400
@@ -369,7 +453,8 @@ func MapError(err error) (code string, message string, status int) {
 	}
 }
 
-func MapResetError(err error) (code string, message string, status int) {
+// MapResetError maps password reset errors to an error code, message, and HTTP status.
+func MapResetError(err error) (code, message string, status int) {
 	switch {
 	case errors.Is(err, authdomain.ErrInvalidToken):
 		return "auth.password.reset_token_invalid", "Invalid reset token", 400

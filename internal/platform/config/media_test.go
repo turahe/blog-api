@@ -7,6 +7,7 @@ import (
 
 func TestParseMIMEList(t *testing.T) {
 	t.Parallel()
+
 	got := ParseMIMEList("image/png, image/jpeg ,image/webp")
 	if len(got) != 3 || got[0] != "image/png" || got[2] != "image/webp" {
 		t.Fatalf("got %#v", got)
@@ -15,6 +16,7 @@ func TestParseMIMEList(t *testing.T) {
 
 func TestValidateMediaDisabledOK(t *testing.T) {
 	t.Parallel()
+
 	cfg := Config{}
 	if err := cfg.ValidateMedia(); err != nil {
 		t.Fatal(err)
@@ -23,6 +25,7 @@ func TestValidateMediaDisabledOK(t *testing.T) {
 
 func TestValidateMediaRequiresDisk(t *testing.T) {
 	t.Parallel()
+
 	cfg := Config{
 		S3Bucket:              "blog-media",
 		S3AccessKey:           "k",
@@ -39,6 +42,7 @@ func TestValidateMediaRequiresDisk(t *testing.T) {
 
 func TestValidateMediaRequiresAllowlist(t *testing.T) {
 	t.Parallel()
+
 	cfg := Config{
 		S3Bucket:            "blog-media",
 		S3AccessKey:         "k",
@@ -54,6 +58,7 @@ func TestValidateMediaRequiresAllowlist(t *testing.T) {
 
 func TestValidateMediaRequiresPositiveMaxUploadBytes(t *testing.T) {
 	t.Parallel()
+
 	cfg := Config{
 		S3Bucket:              "blog-media",
 		S3AccessKey:           "k",
@@ -69,6 +74,7 @@ func TestValidateMediaRequiresPositiveMaxUploadBytes(t *testing.T) {
 
 func TestValidateMediaRequiresPositivePresignTTL(t *testing.T) {
 	t.Parallel()
+
 	cfg := Config{
 		S3Bucket:              "blog-media",
 		S3AccessKey:           "k",
@@ -87,16 +93,20 @@ func TestLoadMediaDefaults(t *testing.T) {
 	t.Setenv("S3_BUCKET", "blog-media")
 	t.Setenv("S3_ACCESS_KEY", "minioadmin")
 	t.Setenv("S3_SECRET_KEY", "minioadmin")
+
 	cfg, err := Load()
 	if err != nil {
 		t.Fatal(err)
 	}
+
 	if !cfg.MediaEnabled() {
 		t.Fatal("expected MediaEnabled")
 	}
+
 	if cfg.MediaMaxUploadBytes != 10<<20 {
 		t.Fatalf("max=%d", cfg.MediaMaxUploadBytes)
 	}
+
 	if len(cfg.MediaAllowedMIMETypes) < 4 {
 		t.Fatalf("allowlist=%v", cfg.MediaAllowedMIMETypes)
 	}

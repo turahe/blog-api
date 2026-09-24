@@ -1,3 +1,4 @@
+// Package middleware provides Gin middleware: authentication, request ids, access logs, and rate limits.
 package middleware
 
 import (
@@ -9,6 +10,7 @@ import (
 	authports "github.com/turahe/blog-api/internal/core/auth/ports"
 )
 
+// Gin context keys set by Auth for downstream handlers.
 const (
 	ContextUserIDKey    = "auth_user_id"
 	ContextClaimsKey    = "auth_claims"
@@ -20,15 +22,18 @@ func BearerAuth(auth authports.Service) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		header := c.GetHeader(authorizationHeader)
 		if header == "" || !strings.HasPrefix(strings.ToLower(header), "bearer ") {
-			responses.Failure(c, 401, "unauthorized", "Authentication required")
+			responses.Failure(c, 401, responses.ErrorCodeUnauthorized, "Authentication required")
 			return
 		}
+
 		raw := strings.TrimSpace(header[len("Bearer "):])
+
 		claims, err := auth.ParseAccessToken(raw)
 		if err != nil {
-			responses.Failure(c, 401, "unauthorized", "Invalid or expired access token")
+			responses.Failure(c, 401, responses.ErrorCodeUnauthorized, "Invalid or expired access token")
 			return
 		}
+
 		c.Set(ContextUserIDKey, claims.Subject)
 		c.Set(ContextClaimsKey, claims)
 		c.Next()
@@ -46,6 +51,7 @@ func OptionalBearerAuth(auth authports.Service) gin.HandlerFunc {
 				c.Set(ContextClaimsKey, claims)
 			}
 		}
+
 		c.Next()
 	}
 }
@@ -56,6 +62,8 @@ func CurrentUserID(c *gin.Context) (uuid.UUID, bool) {
 	if !ok {
 		return uuid.Nil, false
 	}
+
 	id, ok := value.(uuid.UUID)
+
 	return id, ok
 }

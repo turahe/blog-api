@@ -2,21 +2,23 @@ package http
 
 import (
 	"encoding/json"
-	"github.com/turahe/blog-api/internal/adapters/inbound/http/responses"
-	"io"
 	"log/slog"
 	nethttp "net/http"
 	"net/http/httptest"
 	"strings"
 	"testing"
 
+	"github.com/turahe/blog-api/internal/adapters/inbound/http/responses"
+
 	"github.com/stretchr/testify/require"
 	healthservice "github.com/turahe/blog-api/internal/core/health/service"
 )
 
 func TestLoginValidationReturnsLaravelStyleFieldErrors(t *testing.T) {
+	t.Parallel()
+
 	router, err := NewRouter(Dependencies{
-		Logger:  slog.New(slog.NewTextHandler(io.Discard, nil)),
+		Logger:  slog.New(slog.DiscardHandler),
 		Health:  healthservice.New("test"),
 		Auth:    fakeAuthService{},
 		Version: "test",
@@ -24,11 +26,12 @@ func TestLoginValidationReturnsLaravelStyleFieldErrors(t *testing.T) {
 	require.NoError(t, err)
 
 	rec := httptest.NewRecorder()
-	req := httptest.NewRequest(nethttp.MethodPost, "/api/v1/auth/login", strings.NewReader(`{}`))
+	req := httptest.NewRequestWithContext(t.Context(), nethttp.MethodPost, "/api/v1/auth/login", strings.NewReader(`{}`))
 	req.Header.Set("Content-Type", "application/json")
 	router.ServeHTTP(rec, req)
 
 	require.Equal(t, nethttp.StatusBadRequest, rec.Code)
+
 	var envelope responses.Envelope
 	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &envelope))
 	require.False(t, envelope.OK)
@@ -42,8 +45,10 @@ func TestLoginValidationReturnsLaravelStyleFieldErrors(t *testing.T) {
 }
 
 func TestLoginValidationRejectsInvalidEmail(t *testing.T) {
+	t.Parallel()
+
 	router, err := NewRouter(Dependencies{
-		Logger:  slog.New(slog.NewTextHandler(io.Discard, nil)),
+		Logger:  slog.New(slog.DiscardHandler),
 		Health:  healthservice.New("test"),
 		Auth:    fakeAuthService{},
 		Version: "test",
@@ -52,11 +57,12 @@ func TestLoginValidationRejectsInvalidEmail(t *testing.T) {
 
 	rec := httptest.NewRecorder()
 	body := `{"email":"not-an-email","password":"secret"}`
-	req := httptest.NewRequest(nethttp.MethodPost, "/api/v1/auth/login", strings.NewReader(body))
+	req := httptest.NewRequestWithContext(t.Context(), nethttp.MethodPost, "/api/v1/auth/login", strings.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
 	router.ServeHTTP(rec, req)
 
 	require.Equal(t, nethttp.StatusBadRequest, rec.Code)
+
 	var envelope responses.Envelope
 	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &envelope))
 	details, ok := envelope.Error.Details.(map[string]any)

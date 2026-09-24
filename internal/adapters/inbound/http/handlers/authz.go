@@ -23,18 +23,21 @@ func requirePermission(enforcer permissionEnforcer, permission string) gin.Handl
 	return func(c *gin.Context) {
 		userID, ok := middleware.CurrentUserID(c)
 		if !ok {
-			responses.Failure(c, nethttp.StatusUnauthorized, "unauthorized", "Authentication required")
+			responses.Failure(c, nethttp.StatusUnauthorized, responses.ErrorCodeUnauthorized, "Authentication required")
 			return
 		}
+
 		if enforcer == nil {
-			responses.Failure(c, nethttp.StatusForbidden, "forbidden", "Authorization unavailable")
+			responses.Failure(c, nethttp.StatusForbidden, responses.ErrorCodeForbidden, "Authorization unavailable")
 			return
 		}
+
 		allowed, err := enforcer.Enforce(c.Request.Context(), userID, permission)
 		if err != nil {
-			responses.Failure(c, nethttp.StatusInternalServerError, "internal_error", "Authorization check failed")
+			responses.Failure(c, nethttp.StatusInternalServerError, responses.ErrorCodeInternal, "Authorization check failed")
 			return
 		}
+
 		if !allowed {
 			responses.Failure(c, nethttp.StatusForbidden, "rbac.forbidden", "Insufficient permissions")
 			return
@@ -47,22 +50,26 @@ func requireRoles(lookup RoleLookup, roles ...string) gin.HandlerFunc {
 	for _, role := range roles {
 		allowed[role] = struct{}{}
 	}
+
 	return func(c *gin.Context) {
 		userID, ok := middleware.CurrentUserID(c)
 		if !ok {
-			responses.Failure(c, nethttp.StatusUnauthorized, "unauthorized", "Authentication required")
+			responses.Failure(c, nethttp.StatusUnauthorized, responses.ErrorCodeUnauthorized, "Authentication required")
 			return
 		}
+
 		names, err := lookup.ListRoleNames(c.Request.Context(), userID)
 		if err != nil {
-			responses.Failure(c, nethttp.StatusInternalServerError, "internal_error", "Failed to resolve roles")
+			responses.Failure(c, nethttp.StatusInternalServerError, responses.ErrorCodeInternal, "Failed to resolve roles")
 			return
 		}
+
 		for _, name := range names {
 			if _, ok := allowed[name]; ok {
 				return
 			}
 		}
-		responses.Failure(c, nethttp.StatusForbidden, "forbidden", "Insufficient permissions")
+
+		responses.Failure(c, nethttp.StatusForbidden, responses.ErrorCodeForbidden, "Insufficient permissions")
 	}
 }

@@ -1,3 +1,4 @@
+// Package storage implements media object storage on S3-compatible services.
 package storage
 
 import (
@@ -26,6 +27,7 @@ type presignPutClient interface {
 	PresignPutObject(ctx context.Context, params *s3.PutObjectInput, optFns ...func(*s3.PresignOptions)) (*v4.PresignedHTTPRequest, error)
 }
 
+// Client implements mediaports.ObjectStorage on an S3-compatible bucket.
 type Client struct {
 	bucket       string
 	endpoint     string
@@ -36,22 +38,26 @@ type Client struct {
 
 var _ ports.ObjectStorage = (*Client)(nil)
 
+// NewS3 builds a client from the S3_* settings (path-style addressing for MinIO/RustFS).
 func NewS3(ctx context.Context, cfg appconfig.Config) (*Client, error) {
 	bucket := strings.TrimSpace(cfg.S3Bucket)
 	if bucket == "" {
-		return nil, fmt.Errorf("S3_BUCKET must not be empty")
+		return nil, errors.New("S3_BUCKET must not be empty")
 	}
+
 	if strings.TrimSpace(cfg.S3AccessKey) == "" {
-		return nil, fmt.Errorf("S3_ACCESS_KEY must not be empty")
+		return nil, errors.New("S3_ACCESS_KEY must not be empty")
 	}
+
 	if strings.TrimSpace(cfg.S3SecretKey) == "" {
-		return nil, fmt.Errorf("S3_SECRET_KEY must not be empty")
+		return nil, errors.New("S3_SECRET_KEY must not be empty")
 	}
 
 	region := strings.TrimSpace(cfg.S3Region)
 	if region == "" {
 		region = "auto"
 	}
+
 	endpoint := strings.TrimSpace(cfg.S3Endpoint)
 	usePathStyle := cfg.S3ForcePathStyle || endpoint != ""
 
@@ -84,6 +90,7 @@ func NewS3(ctx context.Context, cfg appconfig.Config) (*Client, error) {
 	}, nil
 }
 
+// PresignPut returns a presigned PUT URL and the headers the uploader must send.
 func (c *Client) PresignPut(ctx context.Context, key, contentType string, ttl time.Duration) (string, map[string]string, error) {
 	input := &s3.PutObjectInput{
 		Bucket: aws.String(c.bucket),
@@ -108,6 +115,7 @@ func (c *Client) PresignPut(ctx context.Context, key, contentType string, ttl ti
 	return request.URL, headers, nil
 }
 
+// HeadObject returns object metadata, or ports.ErrObjectNotFound when the key is missing.
 func (c *Client) HeadObject(ctx context.Context, key string) (ports.ObjectInfo, error) {
 	output, err := c.head.HeadObject(ctx, &s3.HeadObjectInput{
 		Bucket: aws.String(c.bucket),
@@ -117,6 +125,7 @@ func (c *Client) HeadObject(ctx context.Context, key string) (ports.ObjectInfo, 
 		if isObjectNotFound(err) {
 			return ports.ObjectInfo{}, fmt.Errorf("%w: bucket=%s key=%s", ports.ErrObjectNotFound, c.bucket, key)
 		}
+
 		return ports.ObjectInfo{}, err
 	}
 
@@ -137,14 +146,15 @@ func signedHeaders(header http.Header) map[string]string {
 		if strings.EqualFold(key, "host") || len(values) == 0 {
 			continue
 		}
+
 		headers[key] = strings.Join(values, ", ")
 	}
+
 	return headers
 }
 
 func isObjectNotFound(err error) bool {
-	var apiErr smithy.APIError
-	if errors.As(err, &apiErr) {
+	if apiErr, ok := errors.AsType[smithy.APIError](err); ok {
 		switch apiErr.ErrorCode() {
 		case "NotFound", "NoSuchKey", "404":
 			return true

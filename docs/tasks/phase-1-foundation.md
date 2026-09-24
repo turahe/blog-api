@@ -8,9 +8,10 @@ Index: [README.md](./README.md).
 
 ## Status
 
-**Partial** — bootstrap, config, multi-dialect persistence, Redis, health, password-based
-auth, and Casbin authorization are in place. Admin user management, second-factor and OAuth
-login, session administration, and the real mailer are still open.
+**Partial** — bootstrap, config, PostgreSQL persistence (bigint row ids plus public UUIDs),
+Redis, health, password-based auth with refresh rotation, and Casbin authorization are in
+place. Admin user management, second-factor and OAuth login, session administration, and the
+real mailer are still open.
 
 ## Epic: project bootstrap and configuration
 
@@ -18,23 +19,26 @@ login, session administration, and the real mailer are still open.
 - [x] `cmd` Cobra CLI (`main.go` at repo root → `cmd.Execute()`; subcommands under `cmd/`)
 - [x] `internal/platform/config` loads and validates environment configuration
 - [x] `.env.example` documents every supported variable
-- [x] `Makefile` targets for build, test, lint, contracts, routes, infra, migrate, run
+- [x] `Makefile` targets for build, test, lint, swagger, routes-check, infra, migrate, run
 - [x] Dockerfile and `compose.yaml` for local infrastructure
 - [x] GitHub Actions workflow at `.github/workflows/go.yml`
-- [ ] Add structured request logging with correlation IDs propagated into the core layer
-- [ ] Add graceful-shutdown timeouts driven by config rather than hard-coded values
+- [x] Request correlation IDs (`middleware.RequestID`, `X-Request-ID`) logged by `middleware.AccessLog`
+- [ ] Propagate the request ID into `context.Context` so core services and outbound adapters log it
+- [x] Graceful-shutdown timeout driven by `APP_SHUTDOWN_TIMEOUT` (`cmd/serve.go`)
 
 ## Epic: persistence and cache
 
 - [x] Multi-dialect database open in `internal/platform/database` (`postgres`, `mysql`, `sqlserver`)
 - [x] Google Cloud SQL connectivity via `cloud.google.com/go/cloudsqlconn` with IAM auth and private IP
 - [x] Connection pool tuning from config (`DB_MAX_OPEN`, `DB_MAX_IDLE`, lifetimes)
-- [x] Goose-style SQL migrations `00001`–`00004` under `internal/platform/migrations/sql`
+- [x] Goose SQL migrations `00001`–`00009` under `internal/platform/migrations/sql`
+- [x] Every entity table keys on `id bigint` identity with a unique public `uuid`; foreign keys are bigint
 - [x] Redis client in `internal/platform/redis`
 - [x] Seeder in `internal/platform/seed` for baseline roles
-- [ ] Verify every migration applies cleanly on MySQL and SQL Server, not only PostgreSQL
-- [ ] Add a `migrate-down` / rollback path and document it in [database.md](../backend/database.md)
-- [ ] Extend the seeder to cover permissions and Casbin policy rows, not just roles
+- [ ] Port the migrations to MySQL and SQL Server (they use PostgreSQL identity columns,
+      `gen_random_uuid()`, and partial indexes) or drop those drivers from `internal/platform/database`
+- [x] `app migrate down` rollback path, documented in [database.md](../backend/database.md)
+- [x] Seeder covers permissions and Casbin policy rows, not just roles
 
 ## Epic: health and diagnostics
 
@@ -54,15 +58,16 @@ login, session administration, and the real mailer are still open.
 - [x] `auth.password.reset_token_validity` — `GET /api/v1/auth/password/reset/{token}`
 - [x] `auth.password.reset` — `POST /api/v1/auth/password/reset`
 - [x] `me.password.update` — `PUT /api/v1/me/password`
-- [x] Argon2id password hashing in `internal/platform/security/password`
+- [x] bcrypt password hashing in `internal/platform/security/password`
+- [ ] Reject passwords over bcrypt's 72-byte input limit (DTOs currently allow `max=128`)
 - [x] JWT issue and verify in `internal/platform/security/jwt`
-- [x] Bearer auth middleware in `internal/adapters/inbound/http/auth_middleware.go`
+- [x] Bearer auth middleware in `internal/adapters/inbound/http/middleware`
 - [x] Transport request validation with `github.com/go-playground/validator/v10` (Laravel-style field errors via `bindJSON`)
 - [ ] `admin.auth.login` — `POST /api/v1/admin/auth/login`
 - [ ] `auth.2fa.challenge` — `POST /api/v1/auth/2fa/challenge`
 - [ ] `auth.oauth.callback` — `POST /api/v1/auth/oauth/{provider}/callback`
 - [ ] Replace the reset-token log stub with a real mailer per [email.md](../backend/email.md)
-- [ ] Enforce refresh-token rotation with reuse detection and session revocation
+- [x] Refresh-token rotation with reuse detection revoking the whole session family
 - [ ] Add login throttling and lockout on repeated failures
 
 Spec: [authentication.md](../features/authentication.md)
@@ -89,12 +94,13 @@ Specs: [user-management.md](../features/user-management.md),
 2. JWT and password hashing gate every auth handler — done.
 3. Casbin enforcer gates admin route wiring — done.
 4. The real mailer blocks completing password reset and email-change flows.
-5. Refresh-token rotation should land before second-factor and OAuth login.
+5. Refresh-token rotation should land before second-factor and OAuth login — done.
 
 ## Cross-cutting
 
 - [x] Unit tests for JWT, config messaging validation, and database driver normalization
-- [x] Router contract test asserting generated routes match `paths/`
+- [x] Route smoke tests (`make routes-check`) for `routes.Register*` auth ordering, route metadata, and 501 stubs
+- [ ] Test that every mounted Gin route has a matching operation in `docs/swagger.json` and vice versa
 - [ ] Integration tests for the full login / refresh / logout cycle against a real database
 - [ ] Negative-path tests for expired and reused refresh tokens
 - [ ] Document the auth threat model in [authn-authz.md](../security/authn-authz.md)
@@ -106,7 +112,7 @@ Specs: [user-management.md](../features/user-management.md),
 | --- | --- |
 | Architecture | [architecture.md](../architecture/architecture.md) |
 | Tech stack | [tech-stack.md](../architecture/tech-stack.md) |
-| Database and dialects | [database.md](../backend/database.md) |
+| Database | [database.md](../backend/database.md) |
 | Data models | [model.md](../backend/model.md) |
 | ERD | [ERD.md](../backend/ERD.md) |
 | RBAC | [rbac-casbin.md](../backend/rbac-casbin.md) |

@@ -7,7 +7,7 @@ Each phase file says *what is left to build*; the goals below say *what each pha
 | --- | --- | --- | --- |
 | 1 — Foundation | [phase-1-foundation.md](./phase-1-foundation.md) | Partial | Bootstrap, config, DB/Redis, health, auth, user/role/permission model |
 | 2 — Content Core | [phase-2-content-core.md](./phase-2-content-core.md) | Partial | Posts, categories, tags, media, public reads, Redis caching |
-| 3 — Collaboration and Moderation | [phase-3-collaboration-moderation.md](./phase-3-collaboration-moderation.md) | Planned | Comments, moderation, audit logging, notification hooks |
+| 3 — Collaboration and Moderation | [phase-3-collaboration-moderation.md](./phase-3-collaboration-moderation.md) | Partial | Comments, moderation, audit logging, notification hooks |
 | 4 — Event-Driven Platform | [phase-4-event-driven-platform.md](./phase-4-event-driven-platform.md) | Partial | Watermill publishing, durable outbox, workers/jobs, media cache, ops hardening |
 | 5 — Product Expansion | [phase-5-product-expansion.md](./phase-5-product-expansion.md) | Planned | Richer admin UX, search, analytics dashboard, privacy/consent, media pipeline |
 | 6 — Analytics and Reporting | [phase-6-analytics-reporting.md](./phase-6-analytics-reporting.md) | Planned | Telemetry ingest, popular/retention widgets, search CTR, realtime admin views, export/retention |
@@ -26,20 +26,34 @@ Each phase file says *what is left to build*; the goals below say *what each pha
 
 Snapshot of the tree these files were written against:
 
-- **HTTP surface** — hand-maintained routes in `internal/adapters/inbound/routes/api.go`.
-  About 19 are wired to real handlers; the rest return `501` through `notImplementedHandler`.
-- **Wired operations** — `health.live`, `health.ready`, `health.version`, `auth.login`,
+- **HTTP surface** — Gin `routes.Register*` binds in `internal/adapters/inbound/routes/` are the
+  runtime source of truth; the published contract is swag-generated into
+  [swagger.json](../swagger.json) (`make swagger`, `make routes-check`). Operations without a
+  handler return `501 operation.not_implemented` via `routes.NotImplemented` (`stubs.go`,
+  `analytics.go`).
+- **Wired operations** — `health.live`, `health.ready`, `health.version`; `auth.login`,
   `auth.refresh`, `auth.logout`, `auth.password.forgot`, `auth.password.reset`,
-  `auth.password.reset_token_validity`, `me.get`, `me.password.update`, `admin.users.list`,
-  `admin.posts.create`, `admin.posts.publish`, `public.posts.list`, `public.posts.get`,
-  `public.categories.list`, `public.categories.get`, `public.tags.list`.
-- **Schema** — migrations `00001`–`00004` create users, roles, permissions, user_roles,
-  role_permissions, posts, categories, tags, post_tags, comments, audit_logs, outbox_events,
-  refresh_sessions, password_reset_tokens, casbin_rules.
-- **Platform** — multi-dialect database (`postgres` / `mysql` / `sqlserver`) plus Cloud SQL
-  connector, Redis, JWT, Casbin enforcer, and multi-broker Watermill messaging
-  (`MESSAGE_BROKER`) with an `app worker` scaffold.
-- **Schema-only** — `comments` and `outbox_events` tables exist with no service or HTTP layer.
+  `auth.password.reset_token_validity`; `me.get`, `me.password.update`; `admin.users.list`;
+  `admin.posts.create`, `admin.posts.list`, `admin.posts.update`, `admin.posts.publish`,
+  `admin.posts.media.replace`; `admin.categories.list`, `admin.categories.create`,
+  `admin.categories.update`, `admin.categories.delete`, `admin.categories.move`;
+  `admin.tags.create`, `admin.tags.update`, `admin.tags.merge`, `admin.tags.delete`;
+  `admin.media.create`, `admin.media.complete`, `admin.media.list`, `admin.media.delete`,
+  `admin.media.tags.patch`; `public.posts.list`, `public.posts.get`, `public.categories.list`,
+  `public.categories.get`, `public.tags.list`, `public.media.get`;
+  `public.posts.comments.list`, `public.posts.comments.create`, `public.comments.get`,
+  `public.comments.flag`, `self.comments.list`, `self.comments.patch`, `self.comments.delete`,
+  `self.comments.upvote`.
+- **Schema** — PostgreSQL migrations `00001`–`00009` create users, roles, permissions,
+  user_roles, role_permissions, posts, categories (nested set), tags, post_tags, comments,
+  comment_flags, comment_upvotes, audit_logs, outbox_events, refresh_sessions,
+  password_reset_tokens, casbin_rules, media_assets, post_media, plus list indexes. Entity tables key on `id bigint` identity with a
+  unique public `uuid`; only the UUID leaves the persistence adapters.
+- **Platform** — PostgreSQL (plus Cloud SQL connector), Redis (including fixed-window rate
+  limits), JWT, bcrypt, Casbin enforcer,
+  S3-compatible object storage, and multi-broker Watermill messaging (`MESSAGE_BROKER`) with an
+  `app worker` scaffold.
+- **Schema-only** — `audit_logs` and `outbox_events` tables exist with no service or HTTP layer.
 
 ## Maintenance rules
 

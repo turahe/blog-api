@@ -11,6 +11,7 @@ Envelope writers and resource serializers for the HTTP adapter.
 | [categories.go](categories.go) | `Category` |
 | [tags.go](tags.go) | `Tag` |
 | [media.go](media.go) | `MediaPresign`, `MediaAsset` |
+| [comments.go](comments.go) | `Comment`, `CommentThread` |
 | [users.go](users.go) | `User` |
 
 Handlers call `responses.Success(c, status, responses.Post(post))` (etc.).

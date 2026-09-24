@@ -28,27 +28,32 @@ func listPublishedPostsHandler(posts *postservice.PostService) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		page, _ := strconv.Atoi(c.DefaultQuery("page", "1"))
 		perPage, _ := strconv.Atoi(c.DefaultQuery("per_page", "20"))
+
 		categoryID, err := postservice.ParseOptionalUUID(c.Query("category_id"))
 		if err != nil {
-			responses.Failure(c, nethttp.StatusBadRequest, "validation_error", "Invalid category_id")
+			responses.Failure(c, nethttp.StatusBadRequest, responses.ErrorCodeValidation, "Invalid category_id")
 			return
 		}
+
 		tagID, err := postservice.ParseOptionalUUID(c.Query("tag_id"))
 		if err != nil {
-			responses.Failure(c, nethttp.StatusBadRequest, "validation_error", "Invalid tag_id")
+			responses.Failure(c, nethttp.StatusBadRequest, responses.ErrorCodeValidation, "Invalid tag_id")
 			return
 		}
+
 		result, err := posts.ListPublished(c.Request.Context(), postdomain.ListFilter{
 			Page: page, PerPage: perPage, CategoryUUID: categoryID, TagUUID: tagID,
 		})
 		if err != nil {
-			responses.Failure(c, nethttp.StatusInternalServerError, "internal_error", "Failed to list posts")
+			responses.Failure(c, nethttp.StatusInternalServerError, responses.ErrorCodeInternal, "Failed to list posts")
 			return
 		}
+
 		items := make([]gin.H, 0, len(result.Items))
 		for _, post := range result.Items {
 			items = append(items, responses.Post(post))
 		}
+
 		responses.SuccessPaginatedFor(c, nethttp.StatusOK, responses.PageOpts{
 			Service: responses.ServicePosts,
 			Data:    items,
@@ -71,15 +76,18 @@ func listPublishedPostsHandler(posts *postservice.PostService) gin.HandlerFunc {
 func getPublishedPostHandler(posts *postservice.PostService) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		slug := strings.TrimSpace(c.Param("param1"))
+
 		post, err := posts.GetPublishedBySlug(c.Request.Context(), slug)
 		if errors.Is(err, postdomain.ErrNotFound) {
-			responses.Failure(c, nethttp.StatusNotFound, "not_found", "Post not found")
+			responses.Failure(c, nethttp.StatusNotFound, responses.ErrorCodeNotFound, "Post not found")
 			return
 		}
+
 		if err != nil {
-			responses.Failure(c, nethttp.StatusInternalServerError, "internal_error", "Failed to load post")
+			responses.Failure(c, nethttp.StatusInternalServerError, responses.ErrorCodeInternal, "Failed to load post")
 			return
 		}
+
 		responses.Success(c, nethttp.StatusOK, responses.Post(post))
 	}
 }

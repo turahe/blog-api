@@ -1,3 +1,4 @@
+// Package ports declares the post repository, tag linker, and service interfaces.
 package ports
 
 import (
@@ -10,12 +11,14 @@ import (
 	tagdomain "github.com/turahe/blog-api/internal/core/tag/domain"
 )
 
+// TagLinker resolves tag names and links tags to posts.
 type TagLinker interface {
 	ResolveOrCreate(ctx context.Context, names []string) ([]tagdomain.Tag, error)
 	ReplacePostTags(ctx context.Context, postID uuid.UUID, tagIDs []uuid.UUID) error
 	ListByPostID(ctx context.Context, postID uuid.UUID) ([]tagdomain.Tag, error)
 }
 
+// Repository stores posts.
 type Repository interface {
 	ListPublished(ctx context.Context, filter postdomain.ListFilter) (postdomain.ListResult, error)
 	ListAdmin(ctx context.Context, filter postdomain.AdminListFilter) (postdomain.ListResult, error)
@@ -29,6 +32,7 @@ type Repository interface {
 	SetCoverImage(ctx context.Context, postID uuid.UUID, mediaID *uuid.UUID, updatedAt time.Time) error
 }
 
+// Service is the post use-case API consumed by HTTP handlers.
 type Service interface {
 	ListPublished(ctx context.Context, filter postdomain.ListFilter) (postdomain.ListResult, error)
 	ListAdmin(ctx context.Context, filter postdomain.AdminListFilter) (postdomain.ListResult, error)

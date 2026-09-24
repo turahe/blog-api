@@ -1,6 +1,8 @@
+// Package cmd wires the Cobra CLI (serve, worker, migrate, seed, doctor, version).
 package cmd
 
 import (
+	"errors"
 	"fmt"
 
 	"github.com/spf13/cobra"
@@ -14,29 +16,42 @@ func newDoctorCmd() *cobra.Command {
 		Use:   "doctor",
 		Short: "Check required runtime dependencies",
 		Args:  cobra.NoArgs,
-		RunE: func(cmd *cobra.Command, _ []string) error {
+		RunE: func(cmd *cobra.Command, _ []string) (err error) {
 			cfg, err := config.Load()
 			if err != nil {
 				return err
 			}
+
 			app, err := bootstrap.NewRuntime(cmd.Context(), cfg, newLogger(cfg.Environment), version)
 			if err != nil {
 				return err
 			}
-			defer app.Close()
-			fmt.Fprintf(cmd.OutOrStdout(), "database (%s): ok\n", app.Database.Driver)
-			fmt.Fprintln(cmd.OutOrStdout(), "redis: ok")
-			if !app.Config.MessagingEnabled() {
-				fmt.Fprintln(cmd.OutOrStdout(), "messaging: skipped (MESSAGE_BROKER unset)")
-				return nil
+
+			defer func() { err = errors.Join(err, app.Close()) }()
+
+			out := cmd.OutOrStdout()
+			if _, err := fmt.Fprintf(out, "database (%s): ok\nredis: ok\n", app.Database.Driver); err != nil {
+				return err
 			}
+
+			if !app.Config.MessagingEnabled() {
+				_, err := fmt.Fprintln(out, "messaging: skipped (MESSAGE_BROKER unset)")
+
+				return err
+			}
+
 			bus, err := messaging.Open(cmd.Context(), app.Config)
 			if err != nil {
 				return fmt.Errorf("messaging: %w", err)
 			}
-			_ = bus.Close()
-			fmt.Fprintf(cmd.OutOrStdout(), "messaging (%s): ok\n", bus.Broker)
-			return nil
+
+			if err := bus.Close(); err != nil {
+				return fmt.Errorf("messaging close: %w", err)
+			}
+
+			_, err = fmt.Fprintf(out, "messaging (%s): ok\n", bus.Broker)
+
+			return err
 		},
 	}
 }

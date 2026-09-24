@@ -1,7 +1,9 @@
+// Package messaging opens Watermill publishers/subscribers for Kafka, RabbitMQ, and Google Pub/Sub.
 package messaging
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"os"
 	"strings"
@@ -37,6 +39,7 @@ func openGooglePubSub(_ context.Context, bus *Bus, cfg config.Config) error {
 
 	bus.Publisher = publisher
 	bus.Subscriber = subscriber
+
 	return nil
 }
 
@@ -48,12 +51,14 @@ func googleCredentialsOptions(source string) ([]option.ClientOption, error) {
 	case strings.HasPrefix(source, "path:"):
 		path := strings.TrimSpace(strings.TrimPrefix(source, "path:"))
 		if path == "" {
-			return nil, fmt.Errorf("GOOGLE_PUBSUB_CREDENTIALS_SOURCE path is empty")
+			return nil, errors.New("GOOGLE_PUBSUB_CREDENTIALS_SOURCE path is empty")
 		}
+
 		if _, err := os.Stat(path); err != nil {
 			return nil, fmt.Errorf("GOOGLE_PUBSUB_CREDENTIALS_SOURCE credentials file: %w", err)
 		}
-		return []option.ClientOption{option.WithCredentialsFile(path)}, nil
+
+		return []option.ClientOption{option.WithAuthCredentialsFile(option.ServiceAccount, path)}, nil
 	default:
 		return nil, fmt.Errorf("unsupported GOOGLE_PUBSUB_CREDENTIALS_SOURCE %q", source)
 	}

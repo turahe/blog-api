@@ -39,6 +39,29 @@ definitions:
     required:
     - name
     type: object
+  requests.CreateComment:
+    properties:
+      author_email:
+        maxLength: 254
+        type: string
+      author_name:
+        description: Guest commenters only; ignored when a bearer token is sent.
+        maxLength: 100
+        type: string
+      content:
+        description: Plain text or markdown; HTML is not rendered.
+        maxLength: 10000
+        type: string
+      honeypot:
+        description: Leave empty. Anti-spam trap for bots; must stay hidden in forms.
+        maxLength: 500
+        type: string
+      parent_id:
+        format: uuid
+        type: string
+    required:
+    - content
+    type: object
   requests.CreatePost:
     properties:
       category_id:
@@ -76,6 +99,27 @@ definitions:
         type: string
     required:
     - name
+    type: object
+  requests.FlagComment:
+    properties:
+      details:
+        maxLength: 2000
+        type: string
+      reason_code:
+        enum:
+        - spam
+        - abuse
+        - hate
+        - harassment
+        - doxx
+        - self_harm
+        - copyright
+        - impersonation
+        - illegal
+        - other
+        type: string
+    required:
+    - reason_code
     type: object
   requests.ForgotPassword:
     properties:
@@ -182,6 +226,14 @@ definitions:
     - confirm_password
     - new_password
     - token
+    type: object
+  requests.UpdateComment:
+    properties:
+      content:
+        maxLength: 10000
+        type: string
+    required:
+    - content
     type: object
   requests.UpdatePost:
     properties:
@@ -983,6 +1035,184 @@ paths:
       summary: Get category by slug
       tags:
       - public
+  /api/v1/comments/{param1}:
+    delete:
+      description: 'Soft delete: the comment stays in the thread as a placeholder
+        without content or author.'
+      parameters:
+      - description: comment UUID
+        in: path
+        name: param1
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/responses.Envelope'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/responses.Envelope'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/responses.Envelope'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/responses.Envelope'
+      security:
+      - Bearer: []
+      summary: Delete my comment
+      tags:
+      - self-service
+    get:
+      parameters:
+      - description: comment UUID
+        in: path
+        name: param1
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/responses.Envelope'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/responses.Envelope'
+      summary: Get a comment with its first replies
+      tags:
+      - public
+    patch:
+      consumes:
+      - application/json
+      description: Authors may edit their own comment within the edit window after
+        posting.
+      parameters:
+      - description: comment UUID
+        in: path
+        name: param1
+        required: true
+        type: string
+      - description: new content
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/requests.UpdateComment'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/responses.Envelope'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/responses.Envelope'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/responses.Envelope'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/responses.Envelope'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/responses.Envelope'
+        "409":
+          description: Conflict
+          schema:
+            $ref: '#/definitions/responses.Envelope'
+      security:
+      - Bearer: []
+      summary: Edit my comment
+      tags:
+      - self-service
+  /api/v1/comments/{param1}/flag:
+    post:
+      consumes:
+      - application/json
+      description: Repeat flags from the same user (or guest IP and user agent) are
+        accepted but counted once.
+      parameters:
+      - description: comment UUID
+        in: path
+        name: param1
+        required: true
+        type: string
+      - description: flag
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/requests.FlagComment'
+      produces:
+      - application/json
+      responses:
+        "202":
+          description: Accepted
+          schema:
+            $ref: '#/definitions/responses.Envelope'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/responses.Envelope'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/responses.Envelope'
+        "429":
+          description: Too Many Requests
+          schema:
+            $ref: '#/definitions/responses.Envelope'
+      security:
+      - Bearer: []
+      summary: Flag a comment for moderation
+      tags:
+      - public
+  /api/v1/comments/{param1}/upvote:
+    post:
+      parameters:
+      - description: comment UUID
+        in: path
+        name: param1
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/responses.Envelope'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/responses.Envelope'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/responses.Envelope'
+        "429":
+          description: Too Many Requests
+          schema:
+            $ref: '#/definitions/responses.Envelope'
+      security:
+      - Bearer: []
+      summary: Toggle my upvote on a comment
+      tags:
+      - self-service
   /api/v1/me:
     get:
       produces:
@@ -999,6 +1229,37 @@ paths:
       security:
       - Bearer: []
       summary: Current user
+      tags:
+      - self-service
+  /api/v1/me/comments:
+    get:
+      description: All of the caller's comments except deleted ones, newest first,
+        including pending and rejected.
+      parameters:
+      - default: 1
+        description: page
+        in: query
+        name: page
+        type: integer
+      - default: 20
+        description: per page
+        in: query
+        name: per_page
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/responses.Envelope'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/responses.Envelope'
+      security:
+      - Bearer: []
+      summary: List my comments
       tags:
       - self-service
   /api/v1/me/password:
@@ -1109,6 +1370,97 @@ paths:
           schema:
             $ref: '#/definitions/responses.Envelope'
       summary: Get published post by slug
+      tags:
+      - public
+  /api/v1/posts/{param1}/comments:
+    get:
+      description: Top-level comments by default; pass parent_id to list the direct
+        replies of a comment.
+      parameters:
+      - description: post UUID
+        in: path
+        name: param1
+        required: true
+        type: string
+      - description: parent comment UUID
+        in: query
+        name: parent_id
+        type: string
+      - default: 1
+        description: page
+        in: query
+        name: page
+        type: integer
+      - default: 20
+        description: per page
+        in: query
+        name: per_page
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/responses.Envelope'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/responses.Envelope'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/responses.Envelope'
+      summary: List comments on a post
+      tags:
+      - public
+    post:
+      consumes:
+      - application/json
+      description: Signed-in users comment as themselves. Guests send author_name
+        and author_email when guest comments are enabled; guest comments await moderation.
+      parameters:
+      - description: post UUID
+        in: path
+        name: param1
+        required: true
+        type: string
+      - description: comment
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/requests.CreateComment'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            $ref: '#/definitions/responses.Envelope'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/responses.Envelope'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/responses.Envelope'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/responses.Envelope'
+        "422":
+          description: Unprocessable Entity
+          schema:
+            $ref: '#/definitions/responses.Envelope'
+        "429":
+          description: Too Many Requests
+          schema:
+            $ref: '#/definitions/responses.Envelope'
+      security:
+      - Bearer: []
+      summary: Comment on a post
       tags:
       - public
   /api/v1/tags:

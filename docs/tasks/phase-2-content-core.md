@@ -26,7 +26,7 @@ on-the-fly transform and public-read caching remain open.
 - [x] Post update endpoint
 - [ ] Post unpublish / archive transition
 - [ ] Soft delete and restore semantics consistent with [model.md](../backend/model.md)
-- [ ] Cursor or page pagination on both list endpoints with `meta` populated per the envelope
+- [x] Page pagination on `public.posts.list` and `admin.posts.list` with `meta` and `links` per the envelope
 - [ ] Slug uniqueness collision handling with a deterministic suffix strategy
 
 ## Epic: categories and tags
@@ -96,12 +96,12 @@ Specs: [user-profile-management.md](../features/user-profile-management.md),
 
 ## Cross-cutting
 
-- [ ] Contract-first updates to `paths/posts.yaml`, `paths/categories.yaml`, `paths/media.yaml`
-      before handlers, then `make routes`
+- [x] Bind post, category, tag, and media routes in `routes.Register*`, annotate handlers, and
+      publish them with `make swagger` + `make routes-check`
 - [ ] Handler tests for each newly wired operation ID
 - [ ] Repository tests against a real database for pagination and filtering
 - [ ] Upload security review — MIME sniffing, path traversal, and quota abuse
-- [ ] Update [api.md](../backend/api.md) as operations move off the 501 stub
+- [ ] Keep [api.md](../backend/api.md) in step as operations move off the 501 stub
 
 ## References
 
