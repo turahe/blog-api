@@ -10,8 +10,8 @@ Index: [README.md](./README.md).
 
 **Partial** — bootstrap, config, PostgreSQL persistence (bigint row ids plus public UUIDs),
 Redis, health, password-based auth with refresh rotation, and Casbin authorization are in
-place. Admin user management, second-factor and OAuth login, session administration, and the
-real mailer are still open.
+place, along with the SMTP mailer, login lockout, and a messaging readiness check. Admin user
+management, second-factor and OAuth login, session administration, and metrics are still open.
 
 ## Epic: project bootstrap and configuration
 
@@ -68,7 +68,8 @@ real mailer are still open.
 - [ ] `admin.auth.login` — `POST /api/v1/admin/auth/login`
 - [ ] `auth.2fa.challenge` — `POST /api/v1/auth/2fa/challenge`
 - [ ] `auth.oauth.callback` — `POST /api/v1/auth/oauth/{provider}/callback`
-- [ ] Replace the reset-token log stub with a real mailer per [email.md](../backend/email.md)
+- [x] Replace the reset-token log stub with a real mailer per [email.md](../backend/email.md)
+      (`mail.SMTP` behind `notification/ports.Mailer`; log stub only when `SMTP_HOST` is empty)
 - [x] Refresh-token rotation with reuse detection revoking the whole session family
 - [x] Add login throttling and lockout on repeated failures (`AUTH_LOGIN_*`; per-IP limit plus
       per-email Redis lockout, `429` with `Retry-After`)
@@ -96,7 +97,7 @@ Specs: [user-management.md](../features/user-management.md),
 1. Config and database open must land before migrations and seeding — done.
 2. JWT and password hashing gate every auth handler — done.
 3. Casbin enforcer gates admin route wiring — done.
-4. The real mailer blocks completing password reset and email-change flows.
+4. The real mailer blocks completing password reset and email-change flows — done.
 5. Refresh-token rotation should land before second-factor and OAuth login — done.
 
 ## Cross-cutting
