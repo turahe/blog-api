@@ -24,7 +24,7 @@ func TestNormalizeBroker(t *testing.T) {
 func TestOpenRequiresMessaging(t *testing.T) {
 	t.Parallel()
 
-	_, err := Open(context.Background(), config.Config{})
+	_, err := Open(context.Background(), config.Config{}, nil)
 	if err == nil {
 		t.Fatal("expected error when MESSAGE_BROKER empty")
 	}
@@ -36,7 +36,7 @@ func TestOpenAMQPAliasAccepted(t *testing.T) {
 	bus, err := Open(context.Background(), config.Config{
 		MessageBroker: "amqp",
 		RabbitMQURL:   "amqp://guest:guest@localhost:5672/",
-	})
+	}, nil)
 	if err == nil {
 		if bus == nil {
 			t.Fatal("expected bus when open succeeds")
@@ -59,7 +59,7 @@ func TestOpenRejectsIncompleteKafkaWithoutDial(t *testing.T) {
 	_, err := Open(context.Background(), config.Config{
 		MessageBroker:      "kafka",
 		KafkaConsumerGroup: "blog-api",
-	})
+	}, nil)
 	if err == nil {
 		t.Fatal("expected validation error")
 	}

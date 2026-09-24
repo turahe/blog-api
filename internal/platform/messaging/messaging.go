@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"log/slog"
 	"slices"
 	"strings"
 
@@ -45,8 +46,9 @@ func NormalizeBroker(raw string) (string, error) {
 	}
 }
 
-// Open connects the publisher and subscriber for the configured broker.
-func Open(ctx context.Context, cfg config.Config) (*Bus, error) {
+// Open connects the publisher and subscriber for the configured broker; Watermill
+// logs through logger (slog.Default when nil).
+func Open(ctx context.Context, cfg config.Config, logger *slog.Logger) (*Bus, error) {
 	broker, err := NormalizeBroker(cfg.MessageBroker)
 	if err != nil {
 		return nil, err
@@ -59,9 +61,13 @@ func Open(ctx context.Context, cfg config.Config) (*Bus, error) {
 		return nil, err
 	}
 
+	if logger == nil {
+		logger = slog.Default()
+	}
+
 	bus := &Bus{
 		Broker:      broker,
-		Logger:      watermill.NewStdLogger(false, false),
+		Logger:      watermill.NewSlogLogger(logger.With("component", "watermill", "broker", broker)),
 		topicPrefix: cfg.MessageTopicPrefix,
 	}
 

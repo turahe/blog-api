@@ -34,7 +34,7 @@ func newWorkerCmd() *cobra.Command {
 
 			logger := newLogger(cfg.Environment)
 
-			bus, err := messaging.Open(ctx, cfg)
+			bus, err := messaging.Open(ctx, cfg, logger)
 			if err != nil {
 				return fmt.Errorf("open messaging: %w", err)
 			}

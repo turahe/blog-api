@@ -23,14 +23,7 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v7
 
-      - name: Setup Go
-        uses: actions/setup-go@v7
-        with:
-          go-version-file: go.mod
-
-      - name: Install swag
-        run: go install github.com/swaggo/swag/cmd/swag@v1.16.6
-
+      # make swagger / routes-check run swag and go test inside Docker (see Makefile).
       - name: Regenerate docs
         run: make swagger
 

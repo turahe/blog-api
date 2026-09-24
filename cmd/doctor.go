@@ -22,7 +22,9 @@ func newDoctorCmd() *cobra.Command {
 				return err
 			}
 
-			app, err := bootstrap.NewRuntime(cmd.Context(), cfg, newLogger(cfg.Environment), version)
+			logger := newLogger(cfg.Environment)
+
+			app, err := bootstrap.NewRuntime(cmd.Context(), cfg, logger, version)
 			if err != nil {
 				return err
 			}
@@ -40,7 +42,7 @@ func newDoctorCmd() *cobra.Command {
 				return err
 			}
 
-			bus, err := messaging.Open(cmd.Context(), app.Config)
+			bus, err := messaging.Open(cmd.Context(), app.Config, logger)
 			if err != nil {
 				return fmt.Errorf("messaging: %w", err)
 			}
