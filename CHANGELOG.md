@@ -1,5 +1,14 @@
 # Changelog
 
+## 2026-09-25 — Casbin policy reload without restart
+
+### Added
+
+- Role writes publish on Redis channel `rbac:policy:reload`; every instance reloads its Casbin
+  policy from `casbin_rules` when a peer announces a change
+- `RBAC_POLICY_RELOAD_INTERVAL` (default `30s`, `0` disables) reloads the policy on a timer,
+  covering missed announcements and direct edits such as `app seed`
+
 ## 2026-09-25 — Role and permission administration
 
 ### Added

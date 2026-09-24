@@ -75,6 +75,7 @@ Do not use `0.0.0.0/0`, `*`, or arbitrary client-controlled addresses in
 | `AUTH_LOGIN_PER_MINUTE` | `10` | No | Per-IP request budget for `POST /api/v1/auth/login`; `0` disables it. |
 | `AUTH_LOGIN_MAX_FAILURES` | `5` | No | Failed logins per email (known or unknown) before a lockout; `0` disables lockout. |
 | `AUTH_LOGIN_LOCKOUT` | `15m` | No | Lockout length, and the window in which failures are counted. |
+| `RBAC_POLICY_RELOAD_INTERVAL` | `30s` | No | How often each instance reloads the Casbin policy from `casbin_rules`; `0` disables the timer. Role writes also publish on Redis channel `rbac:policy:reload`, so other instances reload at once. |
 
 A locked or throttled login answers `429` with `Retry-After`. Lockout is keyed by email, so
 a correct password is refused until the lock expires; both limits are stored in Redis and fail

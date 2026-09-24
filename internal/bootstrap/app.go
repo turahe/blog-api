@@ -54,6 +54,9 @@ type Runtime struct {
 	Server   *nethttp.Server
 	// MetricsServer serves Prometheus /metrics; nil when METRICS_ADDR is empty.
 	MetricsServer *nethttp.Server
+	// PolicySync reloads the Casbin policy on peer announcements and on an interval;
+	// the caller starts it and Close stops it.
+	PolicySync    *outboundrbac.PolicySync
 	Auth          *authservice.AuthService
 	Users         *userservice.UserService
 	Posts         *postservice.PostService
@@ -153,7 +156,8 @@ func NewRuntime(ctx context.Context, cfg config.Config, logger *slog.Logger, ver
 		return nil, fmt.Errorf("create rbac enforcer: %w", err)
 	}
 
-	roleStore := outboundrbac.NewRoleStore(db.GORM, enforcer)
+	policySync := outboundrbac.NewPolicySync(enforcer, redisClient, cfg.RBACPolicyReloadInterval, logger)
+	roleStore := outboundrbac.NewRoleStore(db.GORM, enforcer).WithNotifier(policySync)
 	auth.WithRoles(roleStore)
 
 	var (
@@ -205,7 +209,7 @@ func NewRuntime(ctx context.Context, cfg config.Config, logger *slog.Logger, ver
 	return &Runtime{
 		Config: cfg, Database: db, Redis: redisClient, Cache: readCache,
 		Auth: auth, Users: userSvc, Posts: posts, Categories: categories, Media: media,
-		MetricsServer: metricsServer,
+		MetricsServer: metricsServer, PolicySync: policySync,
 		Server: &nethttp.Server{
 			Addr: cfg.Address, Handler: router,
 			ReadTimeout: cfg.ReadTimeout, ReadHeaderTimeout: cfg.ReadHeaderTimeout,
@@ -332,6 +336,10 @@ func healthCheckers(cfg config.Config, db *database.Database, redisClient *redis
 // Close releases Redis and database connections.
 func (r *Runtime) Close() error {
 	var errs []error
+
+	if r.PolicySync != nil {
+		r.PolicySync.Stop()
+	}
 
 	if r.Redis != nil {
 		if err := r.Redis.Close(); err != nil {

@@ -3,13 +3,18 @@ package rbac
 import (
 	"context"
 	"database/sql"
+	"io"
+	"log/slog"
 	"os"
 	"strings"
 	"sync"
 	"testing"
+	"time"
 
+	"github.com/alicebob/miniredis/v2"
 	"github.com/google/uuid"
 	_ "github.com/jackc/pgx/v5/stdlib"
+	"github.com/redis/go-redis/v9"
 	"github.com/stretchr/testify/require"
 	rbacdomain "github.com/turahe/blog-api/internal/core/rbac/domain"
 	"github.com/turahe/blog-api/internal/platform/migrations"
@@ -59,6 +64,58 @@ func integrationTx(t *testing.T) *gorm.DB {
 }
 
 func suffix() string { return strings.ReplaceAll(uuid.NewString()[:8], "-", "") }
+
+// The peer reloads concurrently with the writer, which a single transaction's
+// connection cannot serve, so this test commits its rows and deletes them after.
+func TestPolicySyncPropagatesWritesToPeers(t *testing.T) {
+	integrationTx(t)
+
+	db := integrationGorm
+	ctx := context.Background()
+
+	perm := "itest.sync." + suffix()
+	name := "itest_" + suffix()
+	user := uuid.New()
+
+	t.Cleanup(func() {
+		db.Exec("DELETE FROM casbin_rules WHERE v0 IN (?, ?) OR v1 = ?", name, user.String(), name)
+		db.Exec("DELETE FROM roles WHERE name = ?", name)
+		db.Exec("DELETE FROM users WHERE uuid = ?", user)
+		db.Exec("DELETE FROM permissions WHERE key = ?", perm)
+	})
+
+	require.NoError(t, db.Exec("INSERT INTO permissions (key) VALUES (?)", perm).Error)
+	require.NoError(t, db.Exec("INSERT INTO users (uuid, email, username, full_name) VALUES (?, ?, ?, ?)",
+		user, name+"@example.test", name, name).Error)
+
+	mr := miniredis.RunT(t)
+	client := redis.NewClient(&redis.Options{Addr: mr.Addr()})
+	t.Cleanup(func() { _ = client.Close() })
+
+	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
+
+	writer, err := NewEnforcer(db)
+	require.NoError(t, err)
+
+	peer, err := NewEnforcer(db)
+	require.NoError(t, err)
+
+	peerSync := NewPolicySync(peer, client, 0, logger)
+	peerSync.Start(ctx)
+	t.Cleanup(peerSync.Stop)
+
+	require.Eventually(t, func() bool { return mr.PubSubNumSub(PolicyChannel)[PolicyChannel] > 0 }, 2*time.Second, 10*time.Millisecond)
+
+	store := NewRoleStore(db, writer).WithNotifier(NewPolicySync(writer, client, 0, logger))
+	_, err = store.CreateRole(ctx, rbacdomain.Role{Name: name, Permissions: []string{perm}})
+	require.NoError(t, err)
+	require.NoError(t, store.AssignRoles(ctx, user, []string{name}))
+
+	require.Eventually(t, func() bool {
+		ok, err := peer.Enforce(ctx, user, perm)
+		return err == nil && ok
+	}, 2*time.Second, 10*time.Millisecond, "the peer reloads after the announcement")
+}
 
 func TestRoleStoreLifecycleSyncsEnforcer(t *testing.T) {
 	tx := integrationTx(t)

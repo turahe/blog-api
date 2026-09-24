@@ -40,6 +40,8 @@ func newServeCmd() *cobra.Command {
 			}
 			defer func() { err = errors.Join(err, app.Close()) }()
 
+			app.PolicySync.Start(ctx)
+
 			serverErr := make(chan error, 2)
 
 			go func() {

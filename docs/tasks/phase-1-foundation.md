@@ -89,7 +89,8 @@ Spec: [authentication.md](../features/authentication.md)
 - [ ] `admin.users.activity.list` — `GET /api/v1/admin/users/{id}/activity`
 - [x] Role and permission administration endpoints, or a documented decision to seed-only
       (`/api/v1/admin/roles`, `/admin/permissions`, `/admin/users/{id}/roles`; `admin` is protected)
-- [ ] Policy reload without restart when `casbin_rules` changes
+- [x] Policy reload without restart when `casbin_rules` changes (Redis announcement on role
+      writes plus `RBAC_POLICY_RELOAD_INTERVAL` polling)
 
 Specs: [user-management.md](../features/user-management.md),
 [rbac-with-casbin.md](../features/rbac-with-casbin.md)

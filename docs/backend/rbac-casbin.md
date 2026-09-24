@@ -108,8 +108,11 @@ Custom matchers registered via `enforcer.AddFunction("scopeMatch", ScopeMatchFun
 > role CRUD, `PUT /admin/roles/{name}/permissions`, `GET /admin/permissions`, and
 > list/assign/revoke under `/admin/users/{id}/roles`, gated by `role.read` / `role.manage`.
 > Code lives in `internal/core/rbac/service` and `internal/adapters/outbound/rbac/roles.go`.
-> Roles are addressed by name; `admin` is the protected role. Tiers, inheritance, expiring
-> assignments, step-up 2FA, the policy/audit endpoints, and a Redis watcher are not built yet.
+> Roles are addressed by name; `admin` is the protected role. Policy propagation uses
+> `rbac.PolicySync`: writes publish on Redis channel `rbac:policy:reload` and every instance
+> reloads from `casbin_rules`, with a `RBAC_POLICY_RELOAD_INTERVAL` (default 30s) timer as the
+> fallback. Tiers, inheritance, expiring assignments, step-up 2FA, and the policy/audit
+> endpoints are not built yet.
 
 Full HTTP definitions → [api.md](./api.md) + [openapi.yaml](../swagger.json). Summary:
 

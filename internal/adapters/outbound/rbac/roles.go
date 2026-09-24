@@ -29,6 +29,12 @@ const (
 type RoleStore struct {
 	db       *gorm.DB
 	enforcer *Enforcer
+	notifier PolicyNotifier
+}
+
+// PolicyNotifier tells other instances that the policy changed.
+type PolicyNotifier interface {
+	Notify(ctx context.Context)
 }
 
 // NewRoleStore returns a RoleStore over db and enforcer.
@@ -36,10 +42,21 @@ func NewRoleStore(db *gorm.DB, enforcer *Enforcer) *RoleStore {
 	return &RoleStore{db: db, enforcer: enforcer}
 }
 
-// write runs fn in a transaction and reloads the enforcer policy after commit.
+// WithNotifier announces every committed write through n.
+func (s *RoleStore) WithNotifier(n PolicyNotifier) *RoleStore {
+	s.notifier = n
+	return s
+}
+
+// write runs fn in a transaction, reloads the enforcer policy after commit, and
+// announces the change to other instances.
 func (s *RoleStore) write(ctx context.Context, fn func(tx *gorm.DB) error) error {
 	if err := s.db.WithContext(ctx).Transaction(fn); err != nil {
 		return err
+	}
+
+	if s.notifier != nil {
+		defer s.notifier.Notify(ctx)
 	}
 
 	if err := s.enforcer.Reload(); err != nil {
