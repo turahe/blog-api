@@ -36,13 +36,41 @@ Admin upload uses **presigned PUT** (bytes go client → object storage, not thr
    `upload_url`, `required_headers`, `expires_at`, `media_id`, `storage_key`, `disk`
 3. Client `PUT`s the file to `upload_url` with the required headers (at least `Content-Type`)
 4. `POST /api/v1/admin/media/{id}/complete` (`admin.media.complete`, same permission) — API `HeadObject`s
-   storage, then marks the asset `ready` (or returns `media.upload_incomplete` / `media.upload_expired`)
+   storage, re-checks type and size, sniffs the first 512 bytes (a mismatch with the declared type
+   is a `400`), then marks the asset `ready` (or returns `media.upload_incomplete` / `media.upload_expired`)
+
+Presign is rate limited per user (`media.presign`, 60/min).
 
 Config: `S3_*` + `MEDIA_ALLOWED_MIME_TYPES`, `MEDIA_MAX_UPLOAD_BYTES`, `MEDIA_PRESIGN_TTL` — see
 [config.md](../deployment/config.md). Design: [2026-07-31-media-upload-design.md](../superpowers/specs/2026-07-31-media-upload-design.md).
+Security review: [upload-security.md](upload-security.md).
 
-**Deferred (not in this slice):** multipart through API, malware scan, on-the-fly transform,
-outbox events.
+## Server-side image upload (avatars)
+
+`POST /api/v1/me/avatar` is the one multipart path through the API
+(`media.Service.UploadImage`). The type comes from magic bytes (JPEG, PNG, GIF, WebP), the key
+extension is rewritten to match, dimensions are read from the header (max 8192 px per side),
+and the asset is stored `ready` with its width, height and SHA-256. The size cap is
+`AVATAR_MAX_BYTES`. The bucket must exist before the first upload — locally, create
+`S3_BUCKET` in RustFS or MinIO once.
+
+**Deferred:** malware scan, outbox events, and on-the-fly transform (see below).
+
+## Transform decision (Phase 2)
+
+`public.media.transform` stays a `501` stub and avatar size variants (64–512 px) are not
+produced; clients use the original. Doing transforms properly needs work that does not belong
+in Phase 2:
+
+- a non-cgo resizer and encoder (WebP encoding needs cgo or an external service),
+- a bounded worker pool and a decoded-pixel budget, because decoding is where image bombs and
+  CPU amplification happen,
+- a variant cache (Redis or object storage) and invalidation tied to media delete,
+- a parameter allowlist (fixed width steps) so the variant space cannot be enumerated.
+
+The preferred direction is to delegate to a CDN or image proxy (imgproxy, Cloudflare Images)
+in front of the bucket rather than decode in the API process. Revisit together with the
+Phase 4 worker runtime.
 
 ## Featured media on posts
 

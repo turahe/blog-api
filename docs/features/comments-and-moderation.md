@@ -88,7 +88,10 @@ and rate limits to combat abuse.
 ## Key API Endpoints
 
 Full request and response contracts are in [swagger.json](../swagger.json). Public and
-self-service operations are implemented; admin moderation operations still return `501`.
+self-service operations and the admin moderation operations are implemented. Admin routes are
+guarded by the coarser `comment.moderate` and `comment.delete` (hard delete) permissions rather
+than the per-action keys above, and the `spam_score` / `flagged_reason` list filters wait on a
+spam engine.
 Delivery status is tracked in [phase-3-collaboration-moderation.md](../tasks/phase-3-collaboration-moderation.md).
 
 - Public / self

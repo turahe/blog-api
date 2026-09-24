@@ -1,5 +1,9 @@
 # User Profile Backend Module
 
+This is the target design. What is wired today, and how it differs (the service is
+`userservice.ProfileService`, email change lives in the auth service, no step-up or outbox
+yet), is recorded in [api.md](api.md#profiles-and-email-change).
+
 ## Hexagonal Placement
 
 This module sits under the existing `user` core module boundary and uses new sub-packages to avoid circular coupling with media, auth, analytics, and settings.

@@ -76,6 +76,17 @@ func (m *memUsers) UpdatePassword(_ context.Context, id uuid.UUID, hash string, 
 	return nil
 }
 
+func (m *memUsers) UpdateEmail(_ context.Context, id uuid.UUID, email string, verifiedAt time.Time) error {
+	u := m.byID[id]
+	delete(m.byEmail, u.Email)
+	u.Email = email
+	u.EmailVerifiedAt = &verifiedAt
+	m.byID[id] = u
+	m.byEmail[email] = u
+
+	return nil
+}
+
 type memSessions struct {
 	byHash          map[string]authdomain.RefreshSession
 	byID            map[uuid.UUID]authdomain.RefreshSession
@@ -171,6 +182,18 @@ func (m *memResets) MarkUsed(_ context.Context, id uuid.UUID, at time.Time) erro
 	t.UsedAt = &at
 	m.byID[id] = t
 	m.byHash[t.TokenHash] = t
+
+	return nil
+}
+
+func (m *memResets) RevokePending(_ context.Context, userID uuid.UUID, purpose string, at time.Time) error {
+	for id, t := range m.byID {
+		if t.UserUUID == userID && t.Purpose == purpose && t.UsedAt == nil {
+			t.UsedAt = &at
+			m.byID[id] = t
+			m.byHash[t.TokenHash] = t
+		}
+	}
 
 	return nil
 }

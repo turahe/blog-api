@@ -19,6 +19,7 @@ type PasswordResetTokenModel struct {
 	JTI       string     `gorm:"column:jti"`
 	TokenHash string     `gorm:"column:token_hash"`
 	Purpose   string     `gorm:"column:purpose"`
+	NewEmail  *string    `gorm:"column:new_email"`
 	ExpiresAt time.Time  `gorm:"column:expires_at"`
 	UsedAt    *time.Time `gorm:"column:used_at"`
 	CreatedAt time.Time  `gorm:"column:created_at"`
@@ -45,10 +46,15 @@ func (r *ResetTokenRepository) Create(ctx context.Context, token authdomain.Pass
 		return err
 	}
 
-	return r.db.WithContext(ctx).Create(&PasswordResetTokenModel{
+	model := PasswordResetTokenModel{
 		UUID: token.UUID, UserID: userID, JTI: token.JTI, TokenHash: token.TokenHash,
 		Purpose: token.Purpose, ExpiresAt: token.ExpiresAt, CreatedAt: token.CreatedAt,
-	}).Error
+	}
+	if token.NewEmail != "" {
+		model.NewEmail = &token.NewEmail
+	}
+
+	return r.db.WithContext(ctx).Create(&model).Error
 }
 
 // FindByHash returns the token with the hash or authdomain.ErrInvalidToken.
@@ -66,14 +72,26 @@ func (r *ResetTokenRepository) FindByHash(ctx context.Context, hash string) (aut
 		return authdomain.PasswordResetToken{}, fmt.Errorf("find reset token by hash: %w", err)
 	}
 
-	return authdomain.PasswordResetToken{
+	token := authdomain.PasswordResetToken{
 		ID: model.ID, UUID: model.UUID, UserUUID: model.UserUUID, JTI: model.JTI, TokenHash: model.TokenHash,
 		Purpose: model.Purpose, ExpiresAt: model.ExpiresAt, UsedAt: model.UsedAt, CreatedAt: model.CreatedAt,
-	}, nil
+	}
+	if model.NewEmail != nil {
+		token.NewEmail = *model.NewEmail
+	}
+
+	return token, nil
 }
 
 // MarkUsed records that the token was consumed at the given time.
 func (r *ResetTokenRepository) MarkUsed(ctx context.Context, id uuid.UUID, at time.Time) error {
 	return r.db.WithContext(ctx).Model(&PasswordResetTokenModel{}).Where("uuid = ? AND used_at IS NULL", id).
+		Update("used_at", at).Error
+}
+
+// RevokePending marks every unused token of purpose for the user as used.
+func (r *ResetTokenRepository) RevokePending(ctx context.Context, userID uuid.UUID, purpose string, at time.Time) error {
+	return r.db.WithContext(ctx).Model(&PasswordResetTokenModel{}).
+		Where("user_id = "+idOf("users")+" AND purpose = ? AND used_at IS NULL", userID, purpose).
 		Update("used_at", at).Error
 }

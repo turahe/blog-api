@@ -20,9 +20,16 @@ var (
 	ErrPasswordStrength   = errors.New("password strength")
 	ErrPasswordMismatch   = errors.New("password confirm mismatch")
 	ErrCurrentPassword    = errors.New("current password mismatch")
+	ErrEmailTaken         = errors.New("email already in use")
 )
 
-// PasswordResetToken is a hashed single-use password reset token.
+// Single-use token purposes.
+const (
+	PurposePasswordReset = "password_reset"
+	PurposeEmailChange   = "email_change"
+)
+
+// PasswordResetToken is a hashed single-use token for a password reset or an email change.
 type PasswordResetToken struct {
 	ID        int64
 	UUID      uuid.UUID
@@ -30,9 +37,16 @@ type PasswordResetToken struct {
 	JTI       string
 	TokenHash string
 	Purpose   string
+	NewEmail  string // pending address, PurposeEmailChange only
 	ExpiresAt time.Time
 	UsedAt    *time.Time
 	CreatedAt time.Time
+}
+
+// EmailChangeRequest is a pending email change awaiting confirmation.
+type EmailChangeRequest struct {
+	NewEmail  string
+	ExpiresAt time.Time
 }
 
 // Active reports whether the token is unused and unexpired at now.

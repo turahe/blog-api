@@ -140,7 +140,7 @@ func (r *MediaRepository) List(ctx context.Context, filter mediadomain.ListFilte
 	var models []MediaAssetModel
 
 	offset := (filter.Page - 1) * filter.PerPage
-	if err := q.Select(mediaColumns).Order("created_at DESC").Limit(filter.PerPage).Offset(offset).Find(&models).Error; err != nil {
+	if err := q.Select(mediaColumns).Order("created_at DESC, id DESC").Limit(filter.PerPage).Offset(offset).Find(&models).Error; err != nil {
 		return mediadomain.ListResult{}, err
 	}
 

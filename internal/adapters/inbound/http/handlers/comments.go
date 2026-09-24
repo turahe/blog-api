@@ -405,28 +405,8 @@ func mapCommentError(c *gin.Context, err error) bool {
 		return false
 	}
 
-	status, code, message := nethttp.StatusInternalServerError, responses.ErrorCodeInternal, "Failed to process comment"
-
-	switch {
-	case errors.Is(err, commentdomain.ErrValidation):
-		status, code, message = nethttp.StatusBadRequest, responses.ErrorCodeValidation, err.Error()
-	case errors.Is(err, commentdomain.ErrGuestDisabled):
-		status, code, message = nethttp.StatusUnauthorized, responses.ErrorCodeUnauthorized, "Sign in to comment"
-	case errors.Is(err, commentdomain.ErrForbidden):
-		status, code, message = nethttp.StatusForbidden, responses.ErrorCodeForbidden, "You can only change your own comments"
-	case errors.Is(err, commentdomain.ErrEditWindowClosed):
-		status, code, message = nethttp.StatusForbidden, "comment.edit_window_closed", "The edit window for this comment has closed"
-	case errors.Is(err, commentdomain.ErrNotFound):
-		status, code, message = nethttp.StatusNotFound, responses.ErrorCodeNotFound, "Comment not found"
-	case errors.Is(err, commentdomain.ErrPostNotFound):
-		status, code, message = nethttp.StatusNotFound, responses.ErrorCodeNotFound, "Post not found"
-	case errors.Is(err, commentdomain.ErrNotEditable):
-		status, code, message = nethttp.StatusConflict, "comment.not_editable", "This comment can no longer be edited"
-	case errors.Is(err, commentdomain.ErrParentInvalid):
-		status, code, message = nethttp.StatusUnprocessableEntity, "comment.parent_invalid", "parent_id must be an approved comment on the same post"
-	case errors.Is(err, commentdomain.ErrDepthExceeded):
-		status, code, message = nethttp.StatusUnprocessableEntity, "comment.depth_exceeded", "Replies cannot be nested deeper than 5 levels"
-	default:
+	status, code, message, known := classifyCommentError(err)
+	if !known {
 		responses.RecordError(c, err)
 	}
 
@@ -434,7 +414,50 @@ func mapCommentError(c *gin.Context, err error) bool {
 		Service: responses.ServiceComments,
 		Code:    code,
 		Message: message,
+		Details: batchDetails(err),
 	})
 
 	return true
+}
+
+// batchDetails lists the comments that blocked a bulk moderation.
+func batchDetails(err error) any {
+	batch, ok := errors.AsType[*commentdomain.BatchError](err)
+	if !ok {
+		return nil
+	}
+
+	ids := make([]string, 0, len(batch.IDs))
+	for _, id := range batch.IDs {
+		ids = append(ids, id.String())
+	}
+
+	return gin.H{"ids": ids}
+}
+
+func classifyCommentError(err error) (status int, code, message string, known bool) {
+	switch {
+	case errors.Is(err, commentdomain.ErrInvalidTransition):
+		return nethttp.StatusConflict, "comment.invalid_transition", "The action is not allowed from the comment's current status", true
+	case errors.Is(err, commentdomain.ErrValidation):
+		return nethttp.StatusBadRequest, responses.ErrorCodeValidation, err.Error(), true
+	case errors.Is(err, commentdomain.ErrGuestDisabled):
+		return nethttp.StatusUnauthorized, responses.ErrorCodeUnauthorized, "Sign in to comment", true
+	case errors.Is(err, commentdomain.ErrForbidden):
+		return nethttp.StatusForbidden, responses.ErrorCodeForbidden, "You can only change your own comments", true
+	case errors.Is(err, commentdomain.ErrEditWindowClosed):
+		return nethttp.StatusForbidden, "comment.edit_window_closed", "The edit window for this comment has closed", true
+	case errors.Is(err, commentdomain.ErrNotFound):
+		return nethttp.StatusNotFound, responses.ErrorCodeNotFound, "Comment not found", true
+	case errors.Is(err, commentdomain.ErrPostNotFound):
+		return nethttp.StatusNotFound, responses.ErrorCodeNotFound, "Post not found", true
+	case errors.Is(err, commentdomain.ErrNotEditable):
+		return nethttp.StatusConflict, "comment.not_editable", "This comment can no longer be edited", true
+	case errors.Is(err, commentdomain.ErrParentInvalid):
+		return nethttp.StatusUnprocessableEntity, "comment.parent_invalid", "parent_id must be an approved comment on the same post", true
+	case errors.Is(err, commentdomain.ErrDepthExceeded):
+		return nethttp.StatusUnprocessableEntity, "comment.depth_exceeded", "Replies cannot be nested deeper than 5 levels", true
+	default:
+		return nethttp.StatusInternalServerError, responses.ErrorCodeInternal, "Failed to process comment", false
+	}
 }

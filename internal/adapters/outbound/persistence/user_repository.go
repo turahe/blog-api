@@ -96,6 +96,20 @@ func (r *UserRepository) UpdatePassword(ctx context.Context, id uuid.UUID, hash 
 	}).Error
 }
 
+// UpdateEmail sets the address and marks it verified; a live duplicate is authdomain.ErrEmailTaken.
+func (r *UserRepository) UpdateEmail(ctx context.Context, id uuid.UUID, email string, verifiedAt time.Time) error {
+	err := r.db.WithContext(ctx).Model(&UserModel{}).Where("uuid = ?", id).Updates(map[string]any{
+		"email":             email,
+		"email_verified_at": verifiedAt,
+		"updated_at":        verifiedAt,
+	}).Error
+	if isUniqueViolation(err) {
+		return authdomain.ErrEmailTaken
+	}
+
+	return err
+}
+
 // List returns a page of users.
 func (r *UserRepository) List(ctx context.Context, page, perPage int) ([]userdomain.User, int64, error) {
 	q := r.db.WithContext(ctx).Model(&UserModel{}).Where("deleted_at IS NULL")
@@ -108,7 +122,7 @@ func (r *UserRepository) List(ctx context.Context, page, perPage int) ([]userdom
 	var models []UserModel
 
 	offset := (page - 1) * perPage
-	if err := q.Order("created_at DESC").Limit(perPage).Offset(offset).Find(&models).Error; err != nil {
+	if err := q.Order("created_at DESC, id DESC").Limit(perPage).Offset(offset).Find(&models).Error; err != nil {
 		return nil, 0, err
 	}
 

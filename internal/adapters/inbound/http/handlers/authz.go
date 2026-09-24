@@ -3,6 +3,7 @@ package handlers
 import (
 	"context"
 	nethttp "net/http"
+	"slices"
 
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
@@ -72,4 +73,35 @@ func requireRoles(lookup RoleLookup, roles ...string) gin.HandlerFunc {
 
 		responses.Failure(c, nethttp.StatusForbidden, responses.ErrorCodeForbidden, "Insufficient permissions")
 	}
+}
+
+// holds reports whether the signed-in caller has permission (or, without an
+// enforcer, one of roles); unlike gate it never writes a response.
+func holds(c *gin.Context, deps Deps, permission string, roles []string) bool {
+	userID, ok := middleware.CurrentUserID(c)
+	if !ok {
+		return false
+	}
+
+	if deps.RBAC != nil {
+		allowed, err := deps.RBAC.Enforce(c.Request.Context(), userID, permission)
+		return err == nil && allowed
+	}
+
+	if deps.Roles == nil {
+		return false
+	}
+
+	names, err := deps.Roles.ListRoleNames(c.Request.Context(), userID)
+	if err != nil {
+		return false
+	}
+
+	for _, name := range names {
+		if slices.Contains(roles, name) {
+			return true
+		}
+	}
+
+	return false
 }

@@ -76,6 +76,17 @@ func TestCommentRoutesUseDeclaredAuthModes(t *testing.T) {
 		Comments: routes.Comments{
 			PostList: handler, PostCreate: handler, Get: handler, Flag: handler,
 			MeList: handler, Patch: handler, Delete: handler, Upvote: handler,
+			AdminList: handler, AdminGet: handler, AdminStats: handler, AdminModerate: handler,
+			AdminBulkModerate: handler, AdminHardDelete: handler,
+		},
+		Posts: routes.Posts{
+			AdminPublish: handler, AdminUnpublish: handler, AdminArchive: handler,
+			AdminDelete: handler, AdminRestore: handler,
+		},
+		Users: routes.Users{
+			MeProfilePatch: handler, MeAvatarUpload: handler, MeAvatarDelete: handler,
+			MeEmailRequestChange: handler, MeEmailConfirmChange: handler, PublicProfile: handler,
+			AdminProfileGet: handler, AdminProfilePatch: handler,
 		},
 	}, routes.AuthMiddleware{
 		Optional: gin.HandlersChain{record("optional")},
@@ -94,6 +105,25 @@ func TestCommentRoutesUseDeclaredAuthModes(t *testing.T) {
 		{nethttp.MethodPatch, "/api/v1/comments/c", []string{"required", "self.comments.patch"}},
 		{nethttp.MethodDelete, "/api/v1/comments/c", []string{"required", "self.comments.delete"}},
 		{nethttp.MethodPost, "/api/v1/comments/c/upvote", []string{"required", "self.comments.upvote"}},
+		{nethttp.MethodGet, "/api/v1/admin/comments", []string{"required", "admin.comments.list"}},
+		{nethttp.MethodGet, "/api/v1/admin/comments/stats", []string{"required", "admin.comments.stats"}},
+		{nethttp.MethodGet, "/api/v1/admin/comments/c", []string{"required", "admin.comments.get"}},
+		{nethttp.MethodPost, "/api/v1/admin/comments/c/moderate", []string{"required", "admin.comments.moderate"}},
+		{nethttp.MethodPost, "/api/v1/admin/comments/bulk-moderate", []string{"required", "admin.comments.bulk_moderate"}},
+		{nethttp.MethodDelete, "/api/v1/admin/comments/c", []string{"required", "admin.comments.delete"}},
+		{nethttp.MethodPost, "/api/v1/admin/posts/p/publish", []string{"required", "admin.posts.publish"}},
+		{nethttp.MethodPost, "/api/v1/admin/posts/p/unpublish", []string{"required", "admin.posts.unpublish"}},
+		{nethttp.MethodPost, "/api/v1/admin/posts/p/archive", []string{"required", "admin.posts.archive"}},
+		{nethttp.MethodPost, "/api/v1/admin/posts/p/restore", []string{"required", "admin.posts.restore"}},
+		{nethttp.MethodDelete, "/api/v1/admin/posts/p", []string{"required", "admin.posts.delete"}},
+		{nethttp.MethodPatch, "/api/v1/me/profile", []string{"required", "me.profile.patch"}},
+		{nethttp.MethodPost, "/api/v1/me/avatar", []string{"required", "me.avatar.upload"}},
+		{nethttp.MethodDelete, "/api/v1/me/avatar", []string{"required", "me.avatar.delete"}},
+		{nethttp.MethodPost, "/api/v1/me/email/request-change", []string{"required", "me.email.request_change"}},
+		{nethttp.MethodPost, "/api/v1/me/email/confirm-change", []string{"required", "me.email.confirm_change"}},
+		{nethttp.MethodGet, "/api/v1/users/ada", []string{"optional", "public.users.profile"}},
+		{nethttp.MethodGet, "/api/v1/admin/users/u/profile", []string{"required", "admin.users.profile.get"}},
+		{nethttp.MethodPatch, "/api/v1/admin/users/u/profile", []string{"required", "admin.users.profile.patch"}},
 	}
 	for _, tc := range cases {
 		chain = nil

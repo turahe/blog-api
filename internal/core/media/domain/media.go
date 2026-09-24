@@ -39,6 +39,16 @@ type MediaAsset struct {
 	DeletedAt        *time.Time
 }
 
+// ImageUpload is an image sent through the API rather than a presigned URL.
+// The stored content type is sniffed from Data; the client-declared type is ignored.
+type ImageUpload struct {
+	UploadedBy *uuid.UUID
+	Filename   string
+	Data       []byte
+	MaxBytes   int64
+	Tags       []string
+}
+
 // PresignResult is a pending asset with the presigned upload URL and required headers.
 type PresignResult struct {
 	Asset           MediaAsset

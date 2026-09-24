@@ -19,6 +19,24 @@ jobs:
           - "1.26"
           - "stable"
 
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_DB: blog_test
+          POSTGRES_USER: blog
+          POSTGRES_PASSWORD: blog
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U blog -d blog_test"
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 20
+
+    env:
+      TEST_DATABASE_URL: postgres://blog:blog@localhost:5432/blog_test?sslmode=disable
+
     steps:
       - uses: actions/checkout@v7
 

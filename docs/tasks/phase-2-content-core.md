@@ -8,10 +8,17 @@ Index: [README.md](./README.md).
 
 ## Status
 
-**Partial** — post create/publish/update (with tag attach), admin post list, admin tag catalog,
-admin category CRUD/move (nested-set tree), and public post/category/tag reads are wired.
-Media upload, list/delete/tags, public get, and post featured-media replace are wired;
-on-the-fly transform and public-read caching remain open.
+**Done** — the full post lifecycle (create, update, publish, unpublish, archive, soft delete,
+restore, deterministic slug suffixes), categories, tags, media (presigned upload with content
+sniffing on completion, list, delete, tags, public get, post attachments), Redis caching of
+public reads (posts, categories, tags, user profiles), and all 8 profile, avatar, and email
+change operations are wired. Migrations run through `00012_user_profiles.sql`.
+
+Deferred by decision: `public.media.transform` and avatar size variants (see the media epic).
+Carried to later phases: email delivery uses a logging notifier until the Phase 1 mailer
+lands; 2FA step-up, profile audit or outbox events, `/me/privacy`, `followers_only`
+visibility, per-user storage quota, and malware scanning are listed in
+[upload-security.md](../backend/upload-security.md) and [api.md](../backend/api.md#implementation-status).
 
 ## Epic: posts
 
@@ -24,10 +31,10 @@ on-the-fly transform and public-read caching remain open.
 - [x] `public.posts.get` — `GET /api/v1/posts/{slug}`
 - [x] `admin.posts.list` — `GET /api/v1/admin/posts` with status, author, and category filters
 - [x] Post update endpoint
-- [ ] Post unpublish / archive transition
-- [ ] Soft delete and restore semantics consistent with [model.md](../backend/model.md)
+- [x] Post unpublish / archive transition
+- [x] Soft delete and restore semantics consistent with [model.md](../backend/model.md)
 - [x] Page pagination on `public.posts.list` and `admin.posts.list` with `meta` and `links` per the envelope
-- [ ] Slug uniqueness collision handling with a deterministic suffix strategy
+- [x] Slug uniqueness collision handling with a deterministic suffix strategy
 
 ## Epic: categories and tags
 
@@ -57,7 +64,11 @@ on-the-fly transform and public-read caching remain open.
 - [x] `admin.media.tags.patch` — `PATCH /api/v1/admin/media/{id}/tags`
 - [x] `admin.posts.media.replace` — `PATCH /api/v1/admin/posts/{id}/media` (`post_media` + cover sync)
 - [x] `public.media.get` — `GET /api/v1/media/{id}` (ready assets only)
-- [ ] `public.media.transform` — `GET /api/v1/media/{id}/transform` (deferred)
+- [x] `public.media.transform` — `GET /api/v1/media/{id}/transform`, or a documented decision to
+      defer — **deferred**: the route stays a `501` stub and avatars are served as the original
+      image. Safe transforms need a non-cgo encoder, a decode budget, a variant cache, and a
+      width allowlist; the preferred path is an image proxy or CDN in front of the bucket,
+      revisited with the Phase 4 worker. See [media.md](../backend/media.md#transform-decision-phase-2)
 - [x] Upload validation: MIME allowlist, size ceiling, and filename sanitisation
 - [x] Presigned-URL strategy documented in [media.md](../backend/media.md)
 - [x] Media relations migration `00006_media_relations.sql` (`post_media`, `cover_image_media_id`, avatar/category FKs)
@@ -66,23 +77,23 @@ Spec: [media-management.md](../features/media-management.md) · MVP design: [202
 
 ## Epic: public read caching
 
-- [ ] Redis cache adapter for public post, category, and tag reads
-- [ ] Cache-key scheme including query parameters and a schema version prefix
-- [ ] TTL configuration per read family, surfaced in `.env.example`
-- [ ] Invalidation on publish, update, and delete
-- [ ] Cache bypass switch for debugging and for `app doctor`
-- [ ] Document the caching contract in [services.md](../backend/services.md)
+- [x] Redis cache adapter for public post, category, and tag reads
+- [x] Cache-key scheme including query parameters and a schema version prefix
+- [x] TTL configuration per read family, surfaced in `.env.example`
+- [x] Invalidation on publish, update, and delete
+- [x] Cache bypass switch for debugging and for `app doctor`
+- [x] Document the caching contract in [services.md](../backend/services.md)
 
 ## Epic: profiles and public user reads
 
-- [ ] `me.profile.patch` — `PATCH /api/v1/me/profile`
-- [ ] `me.avatar.upload` — `POST /api/v1/me/avatar` (depends on the media adapter)
-- [ ] `me.avatar.delete` — `DELETE /api/v1/me/avatar`
-- [ ] `me.email.request_change` — `POST /api/v1/me/email/request-change`
-- [ ] `me.email.confirm_change` — `POST /api/v1/me/email/confirm-change`
-- [ ] `public.users.profile` — `GET /api/v1/users/{username}`
-- [ ] `admin.users.profile.get` — `GET /api/v1/admin/users/{id}/profile`
-- [ ] `admin.users.profile.patch` — `PATCH /api/v1/admin/users/{id}/profile`
+- [x] `me.profile.patch` — `PATCH /api/v1/me/profile`
+- [x] `me.avatar.upload` — `POST /api/v1/me/avatar` (depends on the media adapter)
+- [x] `me.avatar.delete` — `DELETE /api/v1/me/avatar`
+- [x] `me.email.request_change` — `POST /api/v1/me/email/request-change`
+- [x] `me.email.confirm_change` — `POST /api/v1/me/email/confirm-change`
+- [x] `public.users.profile` — `GET /api/v1/users/{username}`
+- [x] `admin.users.profile.get` — `GET /api/v1/admin/users/{id}/profile`
+- [x] `admin.users.profile.patch` — `PATCH /api/v1/admin/users/{id}/profile`
 
 Specs: [user-profile-management.md](../features/user-profile-management.md),
 [user-profile.md](../backend/user-profile.md)
@@ -90,7 +101,8 @@ Specs: [user-profile-management.md](../features/user-profile-management.md),
 ## Dependencies and order
 
 1. The object-storage adapter blocks every media endpoint and avatar upload.
-2. Avatar and email-change flows need the real mailer from Phase 1.
+2. Email change needs the real mailer from Phase 1 to deliver its token; until then the
+   `EmailChangeNotifier` port logs a masked address (never the token).
 3. Caching should land after admin post mutation endpoints exist, so invalidation has real triggers.
 4. Tag attach/detach is wired on admin post create/update; public tag list uses `TagService`.
 
@@ -98,10 +110,11 @@ Specs: [user-profile-management.md](../features/user-profile-management.md),
 
 - [x] Bind post, category, tag, and media routes in `routes.Register*`, annotate handlers, and
       publish them with `make swagger` + `make routes-check`
-- [ ] Handler tests for each newly wired operation ID
-- [ ] Repository tests against a real database for pagination and filtering
-- [ ] Upload security review — MIME sniffing, path traversal, and quota abuse
-- [ ] Keep [api.md](../backend/api.md) in step as operations move off the 501 stub
+- [x] Handler tests for each newly wired operation ID
+- [x] Repository tests against a real database for pagination and filtering
+- [x] Upload security review — MIME sniffing, path traversal, and quota abuse
+      ([upload-security.md](../backend/upload-security.md))
+- [x] Keep [api.md](../backend/api.md) in step as operations move off the 501 stub
 
 ## References
 

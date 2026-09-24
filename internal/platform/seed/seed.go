@@ -30,6 +30,9 @@ const (
 	roleAuthor    = "author"
 	roleModerator = "moderator"
 	permPostRead  = "post.read"
+
+	permCommentModerate = "comment.moderate"
+	permCommentDelete   = "comment.delete"
 )
 
 var roleDescriptions = map[string]string{
@@ -41,22 +44,22 @@ var roleDescriptions = map[string]string{
 
 var rolePermissions = map[string][]string{
 	roleAdmin: {
-		"user.read", "user.create", "user.update",
-		permPostRead, "post.create", "post.update", "post.publish",
+		"user.read", "user.create", "user.update", "user.profile.read", "user.profile.edit",
+		permPostRead, "post.create", "post.update", "post.publish", "post.delete",
 		"category.read", "category.create", "category.update", "category.delete",
 		"tag.create", "tag.update", "tag.delete",
 		"settings.read", "settings.update",
 		"media.create", "media.delete",
-		"comments.moderate",
+		permCommentModerate, permCommentDelete,
 		"*",
 	},
 	roleEditor: {
 		"user.read",
-		permPostRead, "post.create", "post.update", "post.publish",
+		permPostRead, "post.create", "post.update", "post.publish", "post.delete",
 		"category.read", "category.create", "category.update", "category.delete",
 		"tag.create", "tag.update", "tag.delete",
 		"media.create", "media.delete",
-		"comments.moderate",
+		permCommentModerate,
 	},
 	roleAuthor: {
 		permPostRead, "post.create", "post.update",
@@ -64,7 +67,7 @@ var rolePermissions = map[string][]string{
 	},
 	roleModerator: {
 		permPostRead,
-		"comments.moderate",
+		permCommentModerate, permCommentDelete,
 	},
 }
 

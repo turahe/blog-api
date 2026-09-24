@@ -2,9 +2,11 @@
 package storage
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"fmt"
+	"io"
 	"net/http"
 	"strings"
 	"time"
@@ -27,6 +29,14 @@ type presignPutClient interface {
 	PresignPutObject(ctx context.Context, params *s3.PutObjectInput, optFns ...func(*s3.PresignOptions)) (*v4.PresignedHTTPRequest, error)
 }
 
+type putObjectClient interface {
+	PutObject(ctx context.Context, params *s3.PutObjectInput, optFns ...func(*s3.Options)) (*s3.PutObjectOutput, error)
+}
+
+type getObjectClient interface {
+	GetObject(ctx context.Context, params *s3.GetObjectInput, optFns ...func(*s3.Options)) (*s3.GetObjectOutput, error)
+}
+
 // Client implements mediaports.ObjectStorage on an S3-compatible bucket.
 type Client struct {
 	bucket       string
@@ -34,6 +44,8 @@ type Client struct {
 	usePathStyle bool
 	head         headObjectClient
 	presign      presignPutClient
+	put          putObjectClient
+	get          getObjectClient
 }
 
 var _ ports.ObjectStorage = (*Client)(nil)
@@ -87,7 +99,45 @@ func NewS3(ctx context.Context, cfg appconfig.Config) (*Client, error) {
 		usePathStyle: usePathStyle,
 		head:         s3Client,
 		presign:      s3.NewPresignClient(s3Client),
+		put:          s3Client,
+		get:          s3Client,
 	}, nil
+}
+
+// ReadPrefix fetches at most n leading bytes with a ranged GET, or ports.ErrObjectNotFound.
+func (c *Client) ReadPrefix(ctx context.Context, key string, n int64) ([]byte, error) {
+	if n < 1 {
+		return nil, fmt.Errorf("read prefix: invalid length %d", n)
+	}
+
+	output, err := c.get.GetObject(ctx, &s3.GetObjectInput{
+		Bucket: aws.String(c.bucket),
+		Key:    aws.String(key),
+		Range:  aws.String(fmt.Sprintf("bytes=0-%d", n-1)),
+	})
+	if err != nil {
+		if isObjectNotFound(err) {
+			return nil, fmt.Errorf("%w: bucket=%s key=%s", ports.ErrObjectNotFound, c.bucket, key)
+		}
+
+		return nil, err
+	}
+	defer func() { _ = output.Body.Close() }()
+
+	return io.ReadAll(io.LimitReader(output.Body, n))
+}
+
+// PutObject uploads body under key with the given content type.
+func (c *Client) PutObject(ctx context.Context, key, contentType string, body []byte) error {
+	_, err := c.put.PutObject(ctx, &s3.PutObjectInput{
+		Bucket:        aws.String(c.bucket),
+		Key:           aws.String(key),
+		Body:          bytes.NewReader(body),
+		ContentLength: aws.Int64(int64(len(body))),
+		ContentType:   aws.String(contentType),
+	})
+
+	return err
 }
 
 // PresignPut returns a presigned PUT URL and the headers the uploader must send.

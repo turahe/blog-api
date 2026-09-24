@@ -15,6 +15,7 @@ import (
 	"github.com/google/uuid"
 	categorydomain "github.com/turahe/blog-api/internal/core/category/domain"
 	"github.com/turahe/blog-api/internal/core/category/ports"
+	"github.com/turahe/blog-api/internal/core/readcache"
 )
 
 // ErrValidation wraps invalid category input.
@@ -45,6 +46,7 @@ type CategoryService struct {
 	repo  ports.Repository
 	ids   IDGenerator
 	clock Clock
+	cache readcache.Cache
 }
 
 // New returns a CategoryService.
@@ -52,9 +54,17 @@ func New(repo ports.Repository, ids IDGenerator, clock Clock) *CategoryService {
 	return &CategoryService{repo: repo, ids: ids, clock: clock}
 }
 
+// WithCache caches public reads in cache; every category write invalidates the categories family.
+func (s *CategoryService) WithCache(cache readcache.Cache) *CategoryService {
+	s.cache = cache
+	return s
+}
+
 // List returns every category in tree order.
 func (s *CategoryService) List(ctx context.Context) ([]categorydomain.Category, error) {
-	return s.repo.List(ctx)
+	return readcache.Through(ctx, s.cache, readcache.Categories, readcache.Key("list"), func() ([]categorydomain.Category, error) {
+		return s.repo.List(ctx)
+	})
 }
 
 // GetBySlug returns the category with the slug.
@@ -64,7 +74,18 @@ func (s *CategoryService) GetBySlug(ctx context.Context, slug string) (categoryd
 		return categorydomain.Category{}, categorydomain.ErrNotFound
 	}
 
-	return s.repo.GetBySlug(ctx, slug)
+	return readcache.Through(ctx, s.cache, readcache.Categories, readcache.Key("get", "slug", slug), func() (categorydomain.Category, error) {
+		return s.repo.GetBySlug(ctx, slug)
+	})
+}
+
+// written invalidates cached category reads when the write succeeded and returns err.
+func (s *CategoryService) written(ctx context.Context, err error) error {
+	if err == nil {
+		readcache.Invalidate(ctx, s.cache, readcache.Categories)
+	}
+
+	return err
 }
 
 // Create validates and inserts a category, then rebuilds the tree bounds.
@@ -119,7 +140,7 @@ func (s *CategoryService) Create(ctx context.Context, in ports.CreateInput) (cat
 		return nil
 	})
 
-	return out, err
+	return out, s.written(ctx, err)
 }
 
 // Update changes metadata fields; use Move to reparent.
@@ -155,7 +176,9 @@ func (s *CategoryService) Update(ctx context.Context, id uuid.UUID, in ports.Upd
 
 	cat.UpdatedAt = s.clock.Now()
 
-	return s.repo.Update(ctx, cat)
+	cat, err = s.repo.Update(ctx, cat)
+
+	return cat, s.written(ctx, err)
 }
 
 func validateName(raw string) (string, error) {
@@ -218,7 +241,7 @@ func (s *CategoryService) Delete(ctx context.Context, id uuid.UUID) error {
 		return categorydomain.ErrInUse
 	}
 
-	return s.repo.WithinTx(ctx, func(ctx context.Context, r ports.Repository) error {
+	return s.written(ctx, s.repo.WithinTx(ctx, func(ctx context.Context, r ports.Repository) error {
 		if err := r.Delete(ctx, id); err != nil {
 			return err
 		}
@@ -231,7 +254,7 @@ func (s *CategoryService) Delete(ctx context.Context, id uuid.UUID) error {
 		all = rebuildBounds(all)
 
 		return r.ReplaceTreeBounds(ctx, all)
-	})
+	}))
 }
 
 // Move reparents a category and places it before beforeID among its new siblings.
@@ -286,12 +309,12 @@ func (s *CategoryService) Move(ctx context.Context, id uuid.UUID, parentID, befo
 		return nil
 	})
 
-	return out, err
+	return out, s.written(ctx, err)
 }
 
 // RebuildAll recomputes nested-set bounds from parent links.
 func (s *CategoryService) RebuildAll(ctx context.Context) error {
-	return s.repo.WithinTx(ctx, func(ctx context.Context, r ports.Repository) error {
+	return s.written(ctx, s.repo.WithinTx(ctx, func(ctx context.Context, r ports.Repository) error {
 		all, err := r.List(ctx)
 		if err != nil {
 			return err
@@ -300,7 +323,7 @@ func (s *CategoryService) RebuildAll(ctx context.Context) error {
 		all = rebuildBounds(all)
 
 		return r.ReplaceTreeBounds(ctx, all)
-	})
+	}))
 }
 
 func (s *CategoryService) validateCreateFields(ctx context.Context, in ports.CreateInput) (name, slug, desc string, err error) {

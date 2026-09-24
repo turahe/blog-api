@@ -10,8 +10,9 @@ Index: [README.md](./README.md).
 
 **Partial** — the comment core, repository, and all 8 public and self-service comment
 operations are wired (migration `00009_comments.sql`), with ownership checks and Redis rate
-limits. Moderation, audit writing, and notifications are still open; the 6 admin comment and
-3 notification operations return `501`.
+limits. The 6 admin moderation operations are wired behind `comment.moderate` /
+`comment.delete` with an append-only moderation log (migration `00010_comment_moderation.sql`).
+Audit writing and notifications are still open; the 3 notification operations return `501`.
 
 ## Epic: comment model and service
 
@@ -45,19 +46,29 @@ limits. Moderation, audit writing, and notifications are still open; the 6 admin
 
 ## Epic: moderation workflow
 
-- [ ] `admin.comments.list` — `GET /api/v1/admin/comments` with status and post filters
-- [ ] `admin.comments.get` — `GET /api/v1/admin/comments/{id}`
-- [ ] `admin.comments.moderate` — `POST /api/v1/admin/comments/{id}/moderate`
-- [ ] `admin.comments.bulk_moderate` — `POST /api/v1/admin/comments/bulk-moderate`
-- [ ] `admin.comments.delete` — `DELETE /api/v1/admin/comments/{id}`
-- [ ] `admin.comments.stats` — `GET /api/v1/admin/comments/stats`
-- [ ] Casbin permissions for `comment.moderate` and `comment.delete`, seeded into `casbin_rules`
-- [ ] Explicit state machine for pending / approved / flagged / rejected / spam with allowed transitions
-- [ ] Moderation columns (`moderation_reviewed_by`, `moderation_reason`) and an append-only
-      `comment_moderation_log`
+- [x] `admin.comments.list` — `GET /api/v1/admin/comments` with status and post filters
+      (defaults to the pending + flagged queue, oldest first)
+- [x] `admin.comments.get` — `GET /api/v1/admin/comments/{id}` (identity fields, flags, moderation log)
+- [x] `admin.comments.moderate` — `POST /api/v1/admin/comments/{id}/moderate`
+      (`approve` / `reject` / `spam` / `restore`; `409 comment.invalid_transition` otherwise)
+- [x] `admin.comments.bulk_moderate` — `POST /api/v1/admin/comments/bulk-moderate`
+      (up to 500 ids, all-or-nothing; blocking ids returned in `error.details.ids`)
+- [x] `admin.comments.delete` — `DELETE /api/v1/admin/comments/{id}` (removes the row, or scrubs
+      content and author when replies exist so the `parent_id` cascade cannot delete them)
+- [x] `admin.comments.stats` — `GET /api/v1/admin/comments/stats`
+- [x] Casbin permissions for `comment.moderate` (admin, editor, moderator) and `comment.delete`
+      (admin, moderator), seeded into `casbin_rules`; `00010` drops the unused `comments.moderate`
+- [x] Explicit state machine for pending / approved / flagged / rejected / spam with allowed
+      transitions (`comment/domain/moderation.go`); approving a flagged comment resets
+      `flag_count`, and updates are conditional on the status read so concurrent moderators
+      get `409` instead of overwriting each other
+- [x] Moderation columns (`moderated_by`, `moderation_reason`, `moderated_at`) and an append-only
+      `comment_moderation_log` with before/after snapshots and `notify_author`
 - [x] Honeypot field marks bot submissions as `spam` without telling the client
-- [ ] Optional spam heuristics or third-party check (`spam_engine`, `spam_score`, `spam_verdict`),
-      or a documented decision to defer
+- [x] Optional spam heuristics or third-party check (`spam_engine`, `spam_score`, `spam_verdict`),
+      or a documented decision to defer — **deferred**: the honeypot, rate limits, and flag
+      escalation feed the moderation queue; no `spam_*` columns until an engine is chosen, so
+      the `spam_score` / `flagged_reason` list filters from the spec are not offered yet
 
 Spec: [comments-and-moderation.md](../features/comments-and-moderation.md)
 
@@ -96,12 +107,13 @@ Specs: [notification.md](../features/notification.md),
 
 - [x] Bind public and self comment handlers in `routes.Register*` (`routes/comments.go`), annotate
       them, then `make swagger` + `make routes-check`
-- [ ] Bind admin comment and notification handlers the same way
+- [x] Bind admin comment handlers the same way (`routes/admin.go`)
+- [ ] Bind notification handlers the same way
 - [x] Handler tests for ownership failures (`handlers/comments_test.go`) and comment route auth modes
-- [ ] Handler tests for moderation authorization failures
+- [x] Handler tests for moderation authorization failures (`handlers/comments_admin_test.go`)
 - [x] Service tests for threading depth and edit-window expiry (`comment/service/service_test.go`)
-- [ ] Repository tests against a real database for flag dedupe, upvote toggle, and reply counts
-      (covered today by a manual end-to-end smoke only)
+- [ ] Repository tests against a real database for flag dedupe, upvote toggle, reply counts,
+      moderation rollback, and hard-delete scrub (covered today by manual end-to-end smokes only)
 - [ ] Abuse-and-spam section added to [overview.md](../security/overview.md)
 - [ ] SSE testing approach documented in [strategy.md](../testing/strategy.md)
 

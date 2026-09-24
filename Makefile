@@ -1,4 +1,4 @@
-.PHONY: test test-race coverage lint routes-check swagger dev-keys infra-up infra-down infra-up-messaging infra-down-messaging docker-up docker-down docker-build docker-logs docker-seed docker-migrate
+.PHONY: test test-race test-integration coverage lint routes-check swagger dev-keys infra-up infra-down infra-up-messaging infra-down-messaging docker-up docker-down docker-build docker-logs docker-seed docker-migrate
 
 MODULE := github.com/turahe/blog-api
 TEST_PKGS := ./cmd/... ./internal/... ./docs/...
@@ -32,6 +32,17 @@ coverage:
 		go tool cover -html=coverage.out -o coverage.html && \
 		go tool cover -func=coverage.out | tail -n 1; \
 		status=$$?; chown $(HOST_UID_GID) coverage.out coverage.html 2>/dev/null; exit $$status'
+
+# Repository tests against the Compose Postgres (run `make infra-up` first), in a
+# throwaway database that is recreated on every run.
+TEST_DB ?= blog_api_test
+PG_ENV = docker compose exec -T postgres printenv
+
+test-integration:
+	docker compose exec -T postgres sh -c 'dropdb -U "$$POSTGRES_USER" --if-exists $(TEST_DB) && createdb -U "$$POSTGRES_USER" $(TEST_DB)'
+	$(DOCKER_GO) --network container:$$(docker compose ps -q postgres) \
+		-e TEST_DATABASE_URL="host=127.0.0.1 port=5432 sslmode=disable dbname=$(TEST_DB) user=$$($(PG_ENV) POSTGRES_USER) password=$$($(PG_ENV) POSTGRES_PASSWORD)" \
+		$(GO_IMAGE) go test -count=1 ./internal/adapters/outbound/persistence/...
 
 # Compile + smoke-test the Gin route registration.
 routes-check:

@@ -6,7 +6,7 @@
 | --- | --- | --- |
 | Unit | `internal/core/**/service`, `domain` | Pure rules, no Gin/GORM/Redis |
 | Adapter unit | `internal/adapters/inbound/http` | Middleware, envelopes, route registration |
-| Integration | `*_integration_test.go` (when added) | Postgres, Redis, MinIO via Compose |
+| Integration | `internal/adapters/outbound/persistence` (repository tests) | Postgres via Compose; the Redis adapter uses miniredis |
 | Contract | CI + committed `docs/` (swag) | Swagger / AsyncAPI validity |
 | Smoke | post-deploy | Health, login, one admin + one public path |
 
@@ -23,6 +23,21 @@
 *_test.go           # unit / adapter
 *_integration_test.go  # needs external services (build tag optional)
 ```
+
+## Repository tests against Postgres
+
+Persistence tests run against a real database when `TEST_DATABASE_URL` is set and skip
+otherwise, so `make test` stays hermetic. `make test-integration` recreates a scratch
+database (`TEST_DB`) in the Compose Postgres, migrates it, and runs the persistence package
+against it:
+
+```bash
+docker compose up -d postgres
+make test-integration
+```
+
+Migrations run once per test binary, and every test works inside a transaction that is
+rolled back at the end, so the suite can re-run against the same database.
 
 ## What to mock
 

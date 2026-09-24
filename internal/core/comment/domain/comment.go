@@ -75,6 +75,10 @@ type Comment struct {
 	UpdatedAt      time.Time
 	DeletedAt      *time.Time
 	DeletedByUUID  *uuid.UUID
+	// ModeratedByUUID, ModerationReason, and ModeratedAt describe the latest moderator decision.
+	ModeratedByUUID  *uuid.UUID
+	ModerationReason string
+	ModeratedAt      *time.Time
 }
 
 // Public reports whether readers may see the comment (content hidden when deleted).

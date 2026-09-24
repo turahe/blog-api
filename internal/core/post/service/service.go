@@ -14,6 +14,7 @@ import (
 	mediaports "github.com/turahe/blog-api/internal/core/media/ports"
 	postdomain "github.com/turahe/blog-api/internal/core/post/domain"
 	"github.com/turahe/blog-api/internal/core/post/ports"
+	"github.com/turahe/blog-api/internal/core/readcache"
 	tagdomain "github.com/turahe/blog-api/internal/core/tag/domain"
 )
 
@@ -42,6 +43,7 @@ type PostService struct {
 	media     mediaports.Repository
 	ids       IDGenerator
 	clock     Clock
+	cache     readcache.Cache
 }
 
 // New returns a PostService without media or tag support; see WithMedia and WithTags.
@@ -54,6 +56,12 @@ func (s *PostService) WithMedia(postMedia mediaports.PostMediaRepository, media 
 	s.postMedia = postMedia
 	s.media = media
 
+	return s
+}
+
+// WithCache caches public reads in cache; every post write invalidates the posts family.
+func (s *PostService) WithCache(cache readcache.Cache) *PostService {
+	s.cache = cache
 	return s
 }
 
@@ -73,7 +81,12 @@ func (s *PostService) ListPublished(ctx context.Context, filter postdomain.ListF
 		filter.PerPage = 20
 	}
 
-	return s.repo.ListPublished(ctx, filter)
+	key := readcache.Key("list", "page", filter.Page, "per_page", filter.PerPage,
+		"category", filter.CategoryUUID, "tag", filter.TagUUID)
+
+	return readcache.Through(ctx, s.cache, readcache.Posts, key, func() (postdomain.ListResult, error) {
+		return s.repo.ListPublished(ctx, filter)
+	})
 }
 
 // ListAdmin returns a page of posts for the admin list.
@@ -103,7 +116,14 @@ func (s *PostService) GetPublishedBySlug(ctx context.Context, slug string) (post
 		return postdomain.Post{}, postdomain.ErrNotFound
 	}
 
-	return s.repo.GetPublishedBySlug(ctx, slug)
+	return readcache.Through(ctx, s.cache, readcache.Posts, readcache.Key("get", "slug", slug), func() (postdomain.Post, error) {
+		return s.repo.GetPublishedBySlug(ctx, slug)
+	})
+}
+
+// invalidate drops cached public post reads after a write.
+func (s *PostService) invalidate(ctx context.Context) {
+	readcache.Invalidate(ctx, s.cache, readcache.Posts)
 }
 
 // CreateDraft validates and stores a draft post, optionally with tags.
@@ -115,20 +135,16 @@ func (s *PostService) CreateDraft(
 	tags *[]string,
 ) (postdomain.Post, []tagdomain.Tag, error) {
 	title = strings.TrimSpace(title)
-
-	slug = strings.TrimSpace(strings.ToLower(slug))
-	if title == "" || slug == "" {
-		return postdomain.Post{}, nil, fmt.Errorf("%w: title and slug required", ErrValidation)
+	if title == "" {
+		return postdomain.Post{}, nil, fmt.Errorf("%w: title required", ErrValidation)
 	}
 
-	if !slugPattern.MatchString(slug) {
-		return postdomain.Post{}, nil, fmt.Errorf("%w: invalid slug", ErrValidation)
+	slug, err := draftSlug(title, slug)
+	if err != nil {
+		return postdomain.Post{}, nil, err
 	}
 
-	var (
-		resolvedTags []tagdomain.Tag
-		err          error
-	)
+	var resolvedTags []tagdomain.Tag
 
 	if tags != nil {
 		if s.tags == nil {
@@ -147,7 +163,6 @@ func (s *PostService) CreateDraft(
 		AuthorUUID:   authorID,
 		CategoryUUID: categoryID,
 		Title:        title,
-		Slug:         slug,
 		Excerpt:      strings.TrimSpace(excerpt),
 		Content:      content,
 		Status:       postdomain.StatusDraft,
@@ -156,7 +171,10 @@ func (s *PostService) CreateDraft(
 		UpdatedAt:    now,
 	}
 
-	post, err = s.repo.Create(ctx, post)
+	post, err = s.withFreeSlug(ctx, slug, func(free string) (postdomain.Post, error) {
+		post.Slug = free
+		return s.repo.Create(ctx, post)
+	})
 	if err != nil {
 		return postdomain.Post{}, nil, err
 	}
@@ -184,26 +202,6 @@ func (s *PostService) CreateDraft(
 	}
 
 	return post, current, nil
-}
-
-// Publish marks the post published now.
-func (s *PostService) Publish(ctx context.Context, id uuid.UUID) (postdomain.Post, error) {
-	post, err := s.repo.GetByID(ctx, id)
-	if err != nil {
-		return postdomain.Post{}, err
-	}
-
-	if post.DeletedAt != nil {
-		return postdomain.Post{}, postdomain.ErrNotFound
-	}
-
-	now := s.clock.Now()
-	post.Status = postdomain.StatusPublished
-	post.PublishedAt = &now
-	post.UpdatedAt = now
-	post.Version++
-
-	return s.repo.Update(ctx, post)
 }
 
 // Update applies in to the post; unrestricted callers may edit posts they do not author.
@@ -238,6 +236,8 @@ func (s *PostService) Update(
 	if err != nil {
 		return postdomain.Post{}, nil, err
 	}
+
+	defer s.invalidate(ctx)
 
 	tags, err := s.syncTags(ctx, post.UUID, in.Tags != nil, resolvedTags)
 	if err != nil {
@@ -420,6 +420,8 @@ func (s *PostService) ReplaceMedia(
 	if err := s.postMedia.ReplaceAll(ctx, postID, normalized); err != nil {
 		return nil, err
 	}
+
+	defer s.invalidate(ctx)
 
 	if err := s.repo.SetCoverImage(ctx, postID, coverID, s.clock.Now()); err != nil {
 		return nil, err

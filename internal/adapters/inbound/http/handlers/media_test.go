@@ -52,6 +52,10 @@ func (f *fakeMediaService) UpdateTags(context.Context, uuid.UUID, []string) (med
 	return mediadomain.MediaAsset{}, mediaservice.ErrNotFound
 }
 
+func (f *fakeMediaService) UploadImage(context.Context, mediadomain.ImageUpload) (mediadomain.MediaAsset, error) {
+	return mediadomain.MediaAsset{}, mediaservice.ErrValidation
+}
+
 func TestMediaPresignHappyPath(t *testing.T) {
 	t.Parallel()
 

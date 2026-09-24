@@ -3,7 +3,9 @@ package storage
 import (
 	"context"
 	"errors"
+	"io"
 	"net/http"
+	"strings"
 	"testing"
 	"time"
 
@@ -138,6 +140,55 @@ func TestHeadObjectReturnsObjectInfo(t *testing.T) {
 	if info.ETag != "etag-1" {
 		t.Fatalf("expected trimmed etag, got %q", info.ETag)
 	}
+}
+
+func TestReadPrefixRequestsRange(t *testing.T) {
+	t.Parallel()
+
+	getter := &fakeGetClient{body: "0123456789"}
+	client := &Client{bucket: "blog-media", get: getter}
+
+	got, err := client.ReadPrefix(context.Background(), "media/1/a.png", 4)
+	if err != nil {
+		t.Fatalf("ReadPrefix returned error: %v", err)
+	}
+
+	if string(got) != "0123" {
+		t.Fatalf("expected body capped at 4 bytes, got %q", got)
+	}
+
+	if aws.ToString(getter.lastRange) != "bytes=0-3" {
+		t.Fatalf("expected range bytes=0-3, got %q", aws.ToString(getter.lastRange))
+	}
+}
+
+func TestReadPrefixMapsNotFound(t *testing.T) {
+	t.Parallel()
+
+	client := &Client{
+		bucket: "blog-media",
+		get:    &fakeGetClient{err: &smithy.GenericAPIError{Code: "NoSuchKey", Message: "missing"}},
+	}
+
+	_, err := client.ReadPrefix(context.Background(), "media/1/missing.png", 512)
+	if !errors.Is(err, ports.ErrObjectNotFound) {
+		t.Fatalf("expected ports.ErrObjectNotFound, got %v", err)
+	}
+}
+
+type fakeGetClient struct {
+	body      string
+	err       error
+	lastRange *string
+}
+
+func (f *fakeGetClient) GetObject(_ context.Context, params *s3.GetObjectInput, _ ...func(*s3.Options)) (*s3.GetObjectOutput, error) {
+	f.lastRange = params.Range
+	if f.err != nil {
+		return nil, f.err
+	}
+
+	return &s3.GetObjectOutput{Body: io.NopCloser(strings.NewReader(f.body))}, nil
 }
 
 type fakeHeadClient struct {

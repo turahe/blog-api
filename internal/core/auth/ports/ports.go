@@ -18,6 +18,8 @@ type UserRepository interface {
 	RecordLogin(ctx context.Context, id uuid.UUID, at time.Time) error
 	Create(ctx context.Context, user userdomain.User) (userdomain.User, error)
 	UpdatePassword(ctx context.Context, id uuid.UUID, hash string, changedAt time.Time) error
+	// UpdateEmail sets a verified address; a live duplicate is authdomain.ErrEmailTaken.
+	UpdateEmail(ctx context.Context, id uuid.UUID, email string, verifiedAt time.Time) error
 }
 
 // SessionRepository stores refresh sessions.
@@ -35,6 +37,23 @@ type ResetTokenRepository interface {
 	Create(ctx context.Context, token authdomain.PasswordResetToken) error
 	FindByHash(ctx context.Context, hash string) (authdomain.PasswordResetToken, error)
 	MarkUsed(ctx context.Context, id uuid.UUID, at time.Time) error
+	// RevokePending marks the user's unused tokens of purpose as used.
+	RevokePending(ctx context.Context, userID uuid.UUID, purpose string, at time.Time) error
+}
+
+// EmailChangeNotifier delivers email change messages. Implementations must not fail
+// the request; delivery problems are theirs to log or retry.
+type EmailChangeNotifier interface {
+	// EmailChangeRequested sends the confirmation token to the new address and a notice to the current one.
+	EmailChangeRequested(ctx context.Context, user userdomain.User, newEmail, rawToken string, expiresAt time.Time)
+	// EmailChanged tells both addresses that the change completed.
+	EmailChanged(ctx context.Context, user userdomain.User, oldEmail, newEmail string)
+}
+
+// EmailChanger is the email change use-case API consumed by HTTP handlers.
+type EmailChanger interface {
+	RequestEmailChange(ctx context.Context, userID uuid.UUID, newEmail, password string) (authdomain.EmailChangeRequest, error)
+	ConfirmEmailChange(ctx context.Context, userID uuid.UUID, rawToken string) (userdomain.User, error)
 }
 
 // PasswordHasher hashes and verifies passwords.

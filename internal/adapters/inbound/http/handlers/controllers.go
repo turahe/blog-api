@@ -20,20 +20,24 @@ import (
 
 // Deps are the services controllers need when wiring routes.
 type Deps struct {
-	Logger       *slog.Logger
-	Health       healthports.Service
-	Auth         authports.Service
-	Users        *userservice.UserService
-	Roles        RoleLookup
-	RBAC         rbacports.Enforcer
-	Posts        *postservice.PostService
-	Categories   *categoryservice.CategoryService
-	Tags         *tagservice.Service
-	Media        mediaports.Service
-	Comments     *commentservice.Service
-	RateLimiter  middleware.Limiter
-	CommentRates CommentRates
-	Version      string
+	Logger      *slog.Logger
+	Health      healthports.Service
+	Auth        authports.Service
+	Users       *userservice.UserService
+	Profiles    profileAPI
+	EmailChange authports.EmailChanger
+	// AvatarMaxBytes > 0 enables avatar upload and removal (requires media storage).
+	AvatarMaxBytes int64
+	Roles          RoleLookup
+	RBAC           rbacports.Enforcer
+	Posts          *postservice.PostService
+	Categories     *categoryservice.CategoryService
+	Tags           *tagservice.Service
+	Media          mediaports.Service
+	Comments       *commentservice.Service
+	RateLimiter    middleware.Limiter
+	CommentRates   CommentRates
+	Version        string
 }
 
 // CommentRates are per-caller request budgets per minute; zero disables the limit.
@@ -44,15 +48,23 @@ type CommentRates struct {
 
 // NewControllers builds domain handlers from deps for routes.Register*.
 const (
-	roleAdmin  = "admin"
-	roleEditor = "editor"
-	roleAuthor = "author"
+	roleAdmin     = "admin"
+	roleEditor    = "editor"
+	roleAuthor    = "author"
+	roleModerator = "moderator"
+
+	permCommentModerate = "comment.moderate"
+	permProfileRead     = "user.profile.read"
+	permProfileEdit     = "user.profile.edit"
 )
 
 // Fallback role sets for gate when no RBAC enforcer is wired.
 var (
-	editorRoles = []string{roleAdmin, roleEditor}
-	authorRoles = []string{roleAdmin, roleEditor, roleAuthor}
+	editorRoles     = []string{roleAdmin, roleEditor}
+	authorRoles     = []string{roleAdmin, roleEditor, roleAuthor}
+	moderatorRoles  = []string{roleAdmin, roleEditor, roleModerator}
+	hardDeleteRoles = []string{roleAdmin, roleModerator}
+	adminRoles      = []string{roleAdmin}
 )
 
 // NewControllers builds domain handlers from deps for routes.Register*; nil services fall back to 501 stubs.
@@ -79,11 +91,11 @@ func NewControllers(deps Deps) routes.Controllers {
 	}
 
 	if deps.Users != nil {
-		c.Users = routes.Users{
-			MeGet:          meGetHandler(deps.Users),
-			AdminUsersList: gate(deps, "user.read", editorRoles, adminUsersListHandler(deps.Users)),
-		}
+		c.Users.MeGet = meGetHandler(deps.Users)
+		c.Users.AdminUsersList = gate(deps, "user.read", editorRoles, adminUsersListHandler(deps.Users))
 	}
+
+	wireProfiles(&c.Users, deps)
 
 	if deps.Posts != nil {
 		c.Posts = routes.Posts{
@@ -92,8 +104,12 @@ func NewControllers(deps Deps) routes.Controllers {
 			AdminList:         gate(deps, "post.read", authorRoles, adminListPostsHandler(deps.Posts, deps.Roles)),
 			AdminCreate:       gate(deps, "post.create", authorRoles, adminCreatePostHandler(deps.Posts)),
 			AdminPublish:      gate(deps, "post.publish", editorRoles, adminPublishPostHandler(deps.Posts)),
+			AdminUnpublish:    gate(deps, "post.publish", editorRoles, adminUnpublishPostHandler(deps.Posts)),
+			AdminArchive:      gate(deps, "post.publish", editorRoles, adminArchivePostHandler(deps.Posts)),
 			AdminUpdate:       gate(deps, "post.update", authorRoles, adminUpdatePostHandler(deps.Posts, deps.Roles)),
 			AdminMediaReplace: gate(deps, "post.update", authorRoles, adminReplacePostMediaHandler(deps.Posts)),
+			AdminDelete:       gate(deps, "post.delete", editorRoles, adminDeletePostHandler(deps.Posts)),
+			AdminRestore:      gate(deps, "post.delete", editorRoles, adminRestorePostHandler(deps.Posts)),
 		}
 	}
 
@@ -101,7 +117,7 @@ func NewControllers(deps Deps) routes.Controllers {
 		c.Cats = routes.Categories{
 			PublicList:  listCategoriesHandler(deps.Categories),
 			PublicGet:   getCategoryHandler(deps.Categories),
-			AdminList:   gate(deps, "category.read", editorRoles, listCategoriesHandler(deps.Categories)),
+			AdminList:   gate(deps, "category.read", editorRoles, chain(middleware.NoReadCache(), listCategoriesHandler(deps.Categories))),
 			AdminCreate: gate(deps, "category.create", editorRoles, adminCreateCategoryHandler(deps.Categories)),
 			AdminUpdate: gate(deps, "category.update", editorRoles, adminUpdateCategoryHandler(deps.Categories)),
 			AdminDelete: gate(deps, "category.delete", editorRoles, adminDeleteCategoryHandler(deps.Categories)),
@@ -120,9 +136,10 @@ func NewControllers(deps Deps) routes.Controllers {
 	}
 
 	if deps.Media != nil {
+		presignLimit := middleware.RateLimit(deps.RateLimiter, deps.Logger, "media.presign", 60, time.Minute)
 		c.Media = routes.Media{
 			PublicGet:      publicGetMediaHandler(deps.Media),
-			AdminCreate:    gate(deps, "media.create", authorRoles, adminPresignMediaHandler(deps.Media)),
+			AdminCreate:    gate(deps, "media.create", authorRoles, chain(presignLimit, adminPresignMediaHandler(deps.Media))),
 			AdminComplete:  gate(deps, "media.create", authorRoles, adminCompleteMediaHandler(deps.Media)),
 			AdminList:      gate(deps, "media.create", authorRoles, adminListMediaHandler(deps.Media)),
 			AdminTagsPatch: gate(deps, "media.create", authorRoles, adminPatchMediaTagsHandler(deps.Media)),
@@ -144,10 +161,42 @@ func NewControllers(deps Deps) routes.Controllers {
 			Patch:      patchCommentHandler(deps.Comments),
 			Delete:     deleteCommentHandler(deps.Comments),
 			Upvote:     limit("comments.upvote", actions, upvoteCommentHandler(deps.Comments)),
+
+			AdminList:         gate(deps, permCommentModerate, moderatorRoles, adminListCommentsHandler(deps.Comments)),
+			AdminGet:          gate(deps, permCommentModerate, moderatorRoles, adminGetCommentHandler(deps.Comments)),
+			AdminStats:        gate(deps, permCommentModerate, moderatorRoles, adminCommentStatsHandler(deps.Comments)),
+			AdminModerate:     gate(deps, permCommentModerate, moderatorRoles, adminModerateCommentHandler(deps.Comments)),
+			AdminBulkModerate: gate(deps, permCommentModerate, moderatorRoles, adminBulkModerateCommentsHandler(deps.Comments)),
+			AdminHardDelete:   gate(deps, "comment.delete", hardDeleteRoles, adminHardDeleteCommentHandler(deps.Comments)),
 		}
 	}
 
 	return c
+}
+
+// wireProfiles binds profile, avatar, and email change handlers for the services that are present.
+func wireProfiles(users *routes.Users, deps Deps) {
+	limit := func(bucket string, n int, window time.Duration, handler gin.HandlerFunc) gin.HandlerFunc {
+		return chain(middleware.RateLimit(deps.RateLimiter, deps.Logger, bucket, n, window), handler)
+	}
+
+	if deps.Profiles != nil {
+		privileged := func(c *gin.Context) bool { return holds(c, deps, permProfileRead, adminRoles) }
+		users.MeProfilePatch = limit("profile.update", 30, time.Minute, mePatchProfileHandler(deps.Profiles))
+		users.PublicProfile = publicUserProfileHandler(deps.Profiles, privileged)
+		users.AdminProfileGet = gate(deps, permProfileRead, adminRoles, adminGetProfileHandler(deps.Profiles))
+		users.AdminProfilePatch = gate(deps, permProfileEdit, adminRoles, adminPatchProfileHandler(deps.Profiles))
+	}
+
+	if deps.Profiles != nil && deps.AvatarMaxBytes > 0 {
+		users.MeAvatarUpload = limit("profile.avatar", 10, time.Minute, meUploadAvatarHandler(deps.Profiles, deps.AvatarMaxBytes))
+		users.MeAvatarDelete = limit("profile.avatar", 10, time.Minute, meDeleteAvatarHandler(deps.Profiles))
+	}
+
+	if deps.EmailChange != nil {
+		users.MeEmailRequestChange = limit("email.change.request", 3, time.Hour, meRequestEmailChangeHandler(deps.EmailChange))
+		users.MeEmailConfirmChange = limit("email.change.confirm", 10, time.Minute, meConfirmEmailChangeHandler(deps.EmailChange))
+	}
 }
 
 func gate(deps Deps, permission string, roles []string, handler gin.HandlerFunc) gin.HandlerFunc {

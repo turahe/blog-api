@@ -82,34 +82,6 @@ func adminCreatePostHandler(posts postAdminAPI) gin.HandlerFunc {
 	}
 }
 
-// adminPublishPostHandler godoc
-//
-//	@Summary	Publish post
-//	@Tags		admin
-//	@Produce	json
-//	@Param		param1	path		string	true	"post UUID"
-//	@Success	200		{object}	responses.Envelope
-//	@Failure	404		{object}	responses.Envelope
-//	@Failure	409		{object}	responses.Envelope
-//	@Security	Bearer
-//	@Router		/api/v1/admin/posts/{param1}/publish [post]
-func adminPublishPostHandler(posts *postservice.PostService) gin.HandlerFunc {
-	return func(c *gin.Context) {
-		id, err := uuid.Parse(strings.TrimSpace(c.Param("param1")))
-		if err != nil {
-			responses.Failure(c, nethttp.StatusBadRequest, responses.ErrorCodeValidation, "Invalid post id")
-			return
-		}
-
-		post, err := posts.Publish(c.Request.Context(), id)
-		if mapPostError(c, err) {
-			return
-		}
-
-		responses.Success(c, nethttp.StatusOK, responses.Post(post))
-	}
-}
-
 // adminListPostsHandler godoc
 //
 //	@Summary	List admin posts
@@ -121,6 +93,7 @@ func adminPublishPostHandler(posts *postservice.PostService) gin.HandlerFunc {
 //	@Param		author_id	query		string	false	"author UUID"
 //	@Param		category_id	query		string	false	"category UUID"
 //	@Param		q			query		string	false	"search"
+//	@Param		trashed		query		bool	false	"list only soft-deleted posts"	default(false)
 //	@Success	200			{object}	responses.Envelope
 //	@Security	Bearer
 //	@Router		/api/v1/admin/posts [get]
@@ -157,6 +130,12 @@ func adminListPostsHandlerWithDeps(posts postAdminAPI, roles RoleLookup) gin.Han
 			return
 		}
 
+		trashed, err := strconv.ParseBool(c.DefaultQuery("trashed", "false"))
+		if err != nil {
+			responses.Failure(c, nethttp.StatusBadRequest, responses.ErrorCodeValidation, "Invalid trashed")
+			return
+		}
+
 		filter := postdomain.AdminListFilter{
 			Page:         page,
 			PerPage:      perPage,
@@ -164,6 +143,7 @@ func adminListPostsHandlerWithDeps(posts postAdminAPI, roles RoleLookup) gin.Han
 			AuthorUUID:   authorID,
 			CategoryUUID: categoryID,
 			Query:        c.Query("q"),
+			Trashed:      trashed,
 		}
 		if !unrestricted {
 			filter.ScopeAuthorUUID = &userID
@@ -424,6 +404,14 @@ func mapPostError(c *gin.Context, err error) bool {
 			Case:    responses.CaseNotFound,
 			Code:    responses.ErrorCodeNotFound,
 			Message: "Tag not found",
+			Details: nil,
+		})
+	case errors.Is(err, postdomain.ErrInvalidTransition):
+		responses.FailureFor(c, nethttp.StatusConflict, responses.FailureOpts{
+			Service: responses.ServicePosts,
+			Case:    responses.CaseConflict,
+			Code:    "post.invalid_transition",
+			Message: strings.TrimPrefix(err.Error(), postdomain.ErrConflict.Error()+": "),
 			Details: nil,
 		})
 	case errors.Is(err, postdomain.ErrStaleVersion):

@@ -12,6 +12,8 @@ import (
 	"github.com/redis/go-redis/v9"
 	httpadapter "github.com/turahe/blog-api/internal/adapters/inbound/http"
 	"github.com/turahe/blog-api/internal/adapters/inbound/http/handlers"
+	"github.com/turahe/blog-api/internal/adapters/outbound/cache"
+	"github.com/turahe/blog-api/internal/adapters/outbound/notify"
 	"github.com/turahe/blog-api/internal/adapters/outbound/persistence"
 	"github.com/turahe/blog-api/internal/adapters/outbound/ratelimit"
 	outboundrbac "github.com/turahe/blog-api/internal/adapters/outbound/rbac"
@@ -24,6 +26,7 @@ import (
 	mediaports "github.com/turahe/blog-api/internal/core/media/ports"
 	mediaservice "github.com/turahe/blog-api/internal/core/media/service"
 	postservice "github.com/turahe/blog-api/internal/core/post/service"
+	"github.com/turahe/blog-api/internal/core/readcache"
 	tagservice "github.com/turahe/blog-api/internal/core/tag/service"
 	userservice "github.com/turahe/blog-api/internal/core/user/service"
 	"github.com/turahe/blog-api/internal/platform/config"
@@ -39,6 +42,7 @@ type Runtime struct {
 	Config     config.Config
 	Database   *database.Database
 	Redis      *redis.Client
+	Cache      *cache.Redis // nil when CACHE_ENABLED=false
 	Server     *nethttp.Server
 	Auth       *authservice.AuthService
 	Users      *userservice.UserService
@@ -90,19 +94,27 @@ func NewRuntime(ctx context.Context, cfg config.Config, logger *slog.Logger, ver
 	clock := system.Clock{}
 	ids := system.UUIDGenerator{}
 
+	readCache := newReadCache(cfg, redisClient, logger)
+
+	var cacheOrNil readcache.Cache // stays a nil interface, not a typed nil, when disabled
+	if readCache != nil {
+		cacheOrNil = readCache
+	}
+
 	auth := authservice.New(users, sessions, resets, hasher, tokenService, clock, ids, authservice.Config{
 		AccessTTL:  cfg.AccessTokenTTL,
 		RefreshTTL: cfg.RefreshTokenTTL,
-	}, nil)
-	posts := postservice.New(postsRepo, ids, clock)
+	}, nil).WithEmailChange(notify.NewLog(logger), cacheOrNil)
+
+	posts := postservice.New(postsRepo, ids, clock).WithCache(cacheOrNil)
 	userSvc := userservice.New(users)
 
-	categories := categoryservice.New(categoriesRepo, ids, clock)
+	categories := categoryservice.New(categoriesRepo, ids, clock).WithCache(cacheOrNil)
 	if err := categories.RebuildAll(ctx); err != nil {
 		logger.Warn("category tree rebuild failed at startup", "error", err)
 	}
 
-	tags := tagservice.New(tagsRepo, ids, clock)
+	tags := tagservice.New(tagsRepo, ids, clock).WithCache(cacheOrNil)
 	posts.WithTags(tags)
 
 	comments := commentservice.New(persistence.NewCommentRepository(db.GORM), ids, clock, commentservice.Config{
@@ -112,12 +124,14 @@ func NewRuntime(ctx context.Context, cfg config.Config, logger *slog.Logger, ver
 		FlagThreshold:   cfg.CommentsFlagThreshold,
 	})
 
-	media, err := newMediaService(ctx, cfg, db, ids, clock, posts)
+	media, err := newMediaService(ctx, cfg, db, ids, clock, posts, cacheOrNil)
 	if err != nil {
 		closeAll()
 
 		return nil, err
 	}
+
+	profiles, avatarMaxBytes := newProfileService(cfg, db, clock, media, cacheOrNil)
 
 	enforcer, err := outboundrbac.NewEnforcer(db.GORM)
 	if err != nil {
@@ -127,25 +141,29 @@ func NewRuntime(ctx context.Context, cfg config.Config, logger *slog.Logger, ver
 	}
 
 	router, err := httpadapter.NewRouter(httpadapter.Dependencies{
-		Logger:      logger,
-		Health:      healthservice.New(version, healthCheckers(db, redisClient)...),
-		Auth:        auth,
-		Users:       userSvc,
-		Roles:       users,
-		RBAC:        enforcer,
-		Posts:       posts,
-		Categories:  categories,
-		Tags:        tags,
-		Media:       media,
-		Comments:    comments,
-		RateLimiter: ratelimit.NewRedis(redisClient),
+		Logger:         logger,
+		Health:         healthservice.New(version, healthCheckers(db, redisClient)...),
+		Auth:           auth,
+		AvatarMaxBytes: avatarMaxBytes,
+		Users:          userSvc,
+		Profiles:       profiles,
+		EmailChange:    auth,
+		Roles:          users,
+		RBAC:           enforcer,
+		Posts:          posts,
+		Categories:     categories,
+		Tags:           tags,
+		Media:          media,
+		Comments:       comments,
+		RateLimiter:    ratelimit.NewRedis(redisClient),
 		CommentRates: handlers.CommentRates{
 			CreatePerMinute:  cfg.CommentsCreatePerMinute,
 			ActionsPerMinute: cfg.CommentsActionsPerMinute,
 		},
-		Version:        version,
-		TrustedProxies: cfg.TrustedProxies,
-		SwaggerEnabled: cfg.SwaggerEnabled,
+		Version:           version,
+		TrustedProxies:    cfg.TrustedProxies,
+		SwaggerEnabled:    cfg.SwaggerEnabled,
+		CacheBypassHeader: cfg.CacheEnabled && cfg.CacheBypassHeader,
 	})
 	if err != nil {
 		closeAll()
@@ -154,7 +172,7 @@ func NewRuntime(ctx context.Context, cfg config.Config, logger *slog.Logger, ver
 	}
 
 	return &Runtime{
-		Config: cfg, Database: db, Redis: redisClient,
+		Config: cfg, Database: db, Redis: redisClient, Cache: readCache,
 		Auth: auth, Users: userSvc, Posts: posts, Categories: categories, Media: media,
 		Server: &nethttp.Server{
 			Addr: cfg.Address, Handler: router,
@@ -173,6 +191,7 @@ func newMediaService(
 	ids system.UUIDGenerator,
 	clock system.Clock,
 	posts *postservice.PostService,
+	readCache readcache.Cache,
 ) (mediaports.Service, error) {
 	if !cfg.MediaEnabled() {
 		return nil, nil
@@ -195,7 +214,42 @@ func newMediaService(
 		cfg.MediaAllowedMIMETypes,
 		cfg.MediaMaxUploadBytes,
 		cfg.MediaPresignTTL,
-	), nil
+	).WithCache(readCache), nil
+}
+
+// newProfileService wires profiles; avatars are enabled (non-zero max bytes) only with media storage.
+func newProfileService(
+	cfg config.Config,
+	db *database.Database,
+	clock system.Clock,
+	media mediaports.Service,
+	readCache readcache.Cache,
+) (*userservice.ProfileService, int64) {
+	profiles := userservice.NewProfileService(persistence.NewProfileRepository(db.GORM), clock).WithCache(readCache)
+	if media == nil {
+		return profiles, 0
+	}
+
+	return profiles.WithAvatars(media, cfg.AvatarMaxBytes), cfg.AvatarMaxBytes
+}
+
+// newReadCache returns the Redis public-read cache, or nil when CACHE_ENABLED=false.
+func newReadCache(cfg config.Config, client *redis.Client, logger *slog.Logger) *cache.Redis {
+	if !cfg.CacheEnabled {
+		return nil
+	}
+
+	return cache.NewRedis(client, CacheTTLs(cfg), logger)
+}
+
+// CacheTTLs maps each read family to its configured TTL.
+func CacheTTLs(cfg config.Config) map[readcache.Family]time.Duration {
+	return map[readcache.Family]time.Duration{
+		readcache.Posts:      cfg.CacheTTLPosts,
+		readcache.Categories: cfg.CacheTTLCategories,
+		readcache.Tags:       cfg.CacheTTLTags,
+		readcache.Users:      cfg.CacheTTLUsers,
+	}
 }
 
 func healthCheckers(db *database.Database, redisClient *redis.Client) []healthports.Checker {

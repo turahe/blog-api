@@ -8,10 +8,12 @@ import (
 	"path/filepath"
 	"strings"
 	"time"
+	"unicode"
 
 	"github.com/google/uuid"
 	mediadomain "github.com/turahe/blog-api/internal/core/media/domain"
 	"github.com/turahe/blog-api/internal/core/media/ports"
+	"github.com/turahe/blog-api/internal/core/readcache"
 )
 
 // Media service errors.
@@ -22,6 +24,8 @@ var (
 	ErrUploadExpired    = errors.New("upload expired")
 	ErrStorage          = errors.New("storage error")
 )
+
+const maxFilenameBytes = 255
 
 // IDGenerator returns new UUIDs.
 type IDGenerator interface {
@@ -43,6 +47,7 @@ type Service struct {
 	allowMIME  map[string]struct{}
 	maxBytes   int64
 	presignTTL time.Duration
+	cache      readcache.Cache
 }
 
 // New returns a Service enforcing the allowed MIME types and size limit.
@@ -76,6 +81,12 @@ func New(
 		maxBytes:   maxBytes,
 		presignTTL: presignTTL,
 	}
+}
+
+// WithCache lets Delete invalidate cached post and category reads that referenced the asset.
+func (s *Service) WithCache(cache readcache.Cache) *Service {
+	s.cache = cache
+	return s
 }
 
 // PresignUpload validates the upload, stores a pending asset, and returns a presigned PUT URL.
@@ -159,26 +170,13 @@ func (s *Service) CompleteUpload(ctx context.Context, id uuid.UUID) (mediadomain
 		return mediadomain.MediaAsset{}, fmt.Errorf("%w: presign expired for %s", ErrUploadExpired, asset.UUID)
 	}
 
-	info, err := s.storage.HeadObject(ctx, asset.StorageKey)
+	size, contentType, err := s.inspectObject(ctx, asset.StorageKey)
 	if err != nil {
-		if errors.Is(err, ports.ErrObjectNotFound) {
-			return mediadomain.MediaAsset{}, fmt.Errorf("%w: object %q", ErrUploadIncomplete, asset.StorageKey)
-		}
-
-		return mediadomain.MediaAsset{}, fmt.Errorf("%w: head object: %w", ErrStorage, err)
-	}
-
-	contentType := strings.TrimSpace(strings.ToLower(info.ContentType))
-	if !s.isAllowedContentType(contentType) {
-		return mediadomain.MediaAsset{}, fmt.Errorf("%w: content type %q not allowed", ErrValidation, contentType)
-	}
-
-	if info.Size < 1 || info.Size > s.maxBytes {
-		return mediadomain.MediaAsset{}, fmt.Errorf("%w: invalid size %d", ErrValidation, info.Size)
+		return mediadomain.MediaAsset{}, err
 	}
 
 	asset.Status = mediadomain.StatusReady
-	asset.SizeBytes = info.Size
+	asset.SizeBytes = size
 	asset.ContentType = contentType
 	asset.UpdatedAt = s.clock.Now()
 
@@ -188,6 +186,39 @@ func (s *Service) CompleteUpload(ctx context.Context, id uuid.UUID) (mediadomain
 	}
 
 	return asset, nil
+}
+
+// inspectObject checks the stored object's declared type and size against config and
+// its leading bytes against the declared type.
+func (s *Service) inspectObject(ctx context.Context, key string) (int64, string, error) {
+	info, err := s.storage.HeadObject(ctx, key)
+	if err != nil {
+		if errors.Is(err, ports.ErrObjectNotFound) {
+			return 0, "", fmt.Errorf("%w: object %q", ErrUploadIncomplete, key)
+		}
+
+		return 0, "", fmt.Errorf("%w: head object: %w", ErrStorage, err)
+	}
+
+	contentType := strings.TrimSpace(strings.ToLower(info.ContentType))
+	if !s.isAllowedContentType(contentType) {
+		return 0, "", fmt.Errorf("%w: content type %q not allowed", ErrValidation, contentType)
+	}
+
+	if info.Size < 1 || info.Size > s.maxBytes {
+		return 0, "", fmt.Errorf("%w: invalid size %d", ErrValidation, info.Size)
+	}
+
+	prefix, err := s.storage.ReadPrefix(ctx, key, sniffLen)
+	if err != nil {
+		return 0, "", fmt.Errorf("%w: read object: %w", ErrStorage, err)
+	}
+
+	if err := verifyContent(contentType, prefix); err != nil {
+		return 0, "", err
+	}
+
+	return info.Size, contentType, nil
 }
 
 // List returns a page of media assets.
@@ -246,6 +277,8 @@ func (s *Service) Delete(ctx context.Context, id uuid.UUID) error {
 		return err
 	}
 
+	readcache.Invalidate(ctx, s.cache, readcache.Posts, readcache.Categories, readcache.Users)
+
 	return s.repo.SoftDelete(ctx, id, now)
 }
 
@@ -299,7 +332,7 @@ func sanitizeFilename(filename string) (string, error) {
 		return "", fmt.Errorf("%w: filename required", ErrValidation)
 	}
 
-	if strings.ContainsAny(filename, `/\`) {
+	if len(filename) > maxFilenameBytes || strings.ContainsAny(filename, `/\`) || strings.ContainsFunc(filename, unicode.IsControl) {
 		return "", fmt.Errorf("%w: invalid filename", ErrValidation)
 	}
 

@@ -23,6 +23,7 @@ type fakeRepo struct {
 	comments    map[uuid.UUID]commentdomain.Comment
 	flags       []commentdomain.Flag
 	upvotes     map[uuid.UUID]map[uuid.UUID]bool
+	log         []commentdomain.ModerationEntry
 	lastFilter  commentdomain.ListFilter
 }
 
@@ -86,6 +87,90 @@ func (r *fakeRepo) ToggleUpvote(_ context.Context, commentID, voterID uuid.UUID,
 	}
 
 	return r.upvotes[commentID][voterID], count, nil
+}
+
+func (r *fakeRepo) GetByIDs(_ context.Context, ids []uuid.UUID) ([]commentdomain.Comment, error) {
+	var found []commentdomain.Comment
+
+	for _, id := range ids {
+		if c, ok := r.comments[id]; ok {
+			found = append(found, c)
+		}
+	}
+
+	return found, nil
+}
+
+func (r *fakeRepo) ApplyModerations(_ context.Context, changes []commentdomain.Moderation) error {
+	var stale []uuid.UUID
+
+	for _, change := range changes {
+		if r.comments[change.Comment.UUID].Status != change.From {
+			stale = append(stale, change.Comment.UUID)
+		}
+	}
+
+	if len(stale) > 0 {
+		return &commentdomain.BatchError{Err: commentdomain.ErrInvalidTransition, IDs: stale}
+	}
+
+	for _, change := range changes {
+		r.comments[change.Comment.UUID] = change.Comment
+		r.log = append(r.log, change.Entry)
+	}
+
+	return nil
+}
+
+func (r *fakeRepo) HardDelete(_ context.Context, id uuid.UUID, entry commentdomain.ModerationEntry) (bool, error) {
+	c, ok := r.comments[id]
+	if !ok {
+		return false, commentdomain.ErrNotFound
+	}
+
+	r.log = append(r.log, entry)
+
+	for _, other := range r.comments {
+		if other.ParentUUID != nil && *other.ParentUUID == id {
+			c.Content, c.AuthorUUID, c.AuthorName, c.AuthorEmail = "", nil, "", ""
+			c.Status = commentdomain.StatusDeleted
+			r.comments[id] = c
+
+			return true, nil
+		}
+	}
+
+	delete(r.comments, id)
+
+	return false, nil
+}
+
+func (r *fakeRepo) ListFlags(_ context.Context, id uuid.UUID) ([]commentdomain.Flag, error) {
+	var flags []commentdomain.Flag
+
+	for _, flag := range r.flags {
+		if flag.CommentUUID == id {
+			flags = append(flags, flag)
+		}
+	}
+
+	return flags, nil
+}
+
+func (r *fakeRepo) ListModerationLog(_ context.Context, id uuid.UUID) ([]commentdomain.ModerationEntry, error) {
+	var entries []commentdomain.ModerationEntry
+
+	for _, entry := range r.log {
+		if entry.CommentUUID == id {
+			entries = append(entries, entry)
+		}
+	}
+
+	return entries, nil
+}
+
+func (r *fakeRepo) Stats(context.Context) (commentdomain.Stats, error) {
+	return commentdomain.Stats{QueueDepth: int64(len(r.comments))}, nil
 }
 
 type fixture struct {

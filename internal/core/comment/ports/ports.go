@@ -23,4 +23,20 @@ type Repository interface {
 	AddFlag(ctx context.Context, flag commentdomain.Flag, threshold int) (added bool, err error)
 	// ToggleUpvote adds the voter's upvote, or removes it when present.
 	ToggleUpvote(ctx context.Context, commentID, voterID uuid.UUID, at time.Time) (upvoted bool, count int, err error)
+
+	// GetByIDs returns the comments that exist among ids, in no particular order.
+	GetByIDs(ctx context.Context, ids []uuid.UUID) ([]commentdomain.Comment, error)
+	// ApplyModerations persists every change and its log entry in one transaction. A change
+	// whose comment is no longer in its From status aborts the whole batch with a
+	// *BatchError wrapping ErrInvalidTransition.
+	ApplyModerations(ctx context.Context, changes []commentdomain.Moderation) error
+	// HardDelete appends entry, then removes the comment, or scrubs its content and author
+	// into a deleted placeholder when it has replies (so they are not cascade-deleted).
+	HardDelete(ctx context.Context, id uuid.UUID, entry commentdomain.ModerationEntry) (scrubbed bool, err error)
+	// ListFlags returns the comment's flags, newest first.
+	ListFlags(ctx context.Context, id uuid.UUID) ([]commentdomain.Flag, error)
+	// ListModerationLog returns the comment's moderation history, oldest first.
+	ListModerationLog(ctx context.Context, id uuid.UUID) ([]commentdomain.ModerationEntry, error)
+	// Stats summarises the moderation queue.
+	Stats(ctx context.Context) (commentdomain.Stats, error)
 }

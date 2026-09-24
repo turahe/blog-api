@@ -33,8 +33,8 @@ prefixes intentionally mix modes (see below).
 | `health` | `/health/live`, `/health/ready`, `/health/version` | 3 | none | no auth, no CSRF, no rate limit; stays cheap enough for probes |
 | `auth` | `/api/v1/auth` | 8 | 6 none, 2 required | strict per-IP and per-identity rate limits, timing-safe responses, no user enumeration |
 | `self-service` | `/api/v1/me`, `/api/v1/comments/:id` (mutations) | 22 | required | bearer or session auth, CSRF for browser clients, step-up re-verify on high-risk actions, ownership checks on owned resources |
-| `public` | `/api/v1/posts`, `/api/v1/categories`, `/api/v1/tags`, `/api/v1/media`, `/api/v1/users`, `/api/v1/comments`, `/api/v1/newsletter` | 19 | 17 none, 2 optional | anonymous-safe, cache-friendly, privacy filtering, spam and captcha checks on writes |
-| `admin` | `/api/v1/admin` | 60 | 59 required, 1 none | bearer auth, RBAC permission check, CSRF, audit logging |
+| `public` | `/api/v1/posts`, `/api/v1/categories`, `/api/v1/tags`, `/api/v1/media`, `/api/v1/users`, `/api/v1/comments`, `/api/v1/newsletter` | 19 | 16 none, 3 optional | anonymous-safe, cache-friendly, privacy filtering, spam and captcha checks on writes |
+| `admin` | `/api/v1/admin` | 64 | 63 required, 1 none | bearer auth, RBAC permission check, CSRF, audit logging |
 | `analytics` | `/api/v1/analytics` | 8 | none | consent gating, bot filtering, high-volume ingest rate limits |
 
 ### Auth modes
@@ -63,6 +63,74 @@ operations.
 | `/api/v1/comments/:id` | `GET` is anonymous (`public.comments.get`); `PATCH` and `DELETE` require auth (`self.comments.*`, group `self-service`) |
 | `/api/v1/posts/:id/comments` | `GET` is anonymous; `POST` is optional auth (anonymous commenting with name and email) |
 | `/api/v1/admin` | `POST /api/v1/admin/auth/login` is the single anonymous operation under the admin prefix |
+
+## Implementation Status
+
+The endpoint lists below describe the target API. What is actually wired is whatever
+`routes.Register*` binds to a handler; unbound routes answer `501`. This section records
+the wired Phase 2 surface and where it deliberately differs from the target.
+
+### Posts
+
+| Operation | Route | Notes |
+| --- | --- | --- |
+| `admin.posts.unpublish` | `POST /api/v1/admin/posts/{id}/unpublish` | published or scheduled → draft, clears `published_at`; `post.publish` |
+| `admin.posts.archive` | `POST /api/v1/admin/posts/{id}/archive` | draft, scheduled or published → archived; `post.publish` |
+| `admin.posts.delete` | `DELETE /api/v1/admin/posts/{id}` | soft delete, releases the slug; `post.delete` |
+| `admin.posts.restore` | `POST /api/v1/admin/posts/{id}/restore` | back as a draft; `post.delete` |
+
+- Publishing accepts draft, scheduled and archived posts. Other transitions return `409`.
+- `admin.posts.list?trashed=true` lists only soft-deleted posts (default `false`).
+- On create and restore a taken slug gets the lowest free `-2`, `-3`, … suffix, so the same
+  collisions always yield the same slug. On update a taken slug returns `409`.
+- Public post, category, tag and user-profile reads are cached; the contract is in
+  [services.md](services.md#public-read-caching). Cached entries are domain results, so
+  `meta.request_id` is always per request.
+
+### Profiles and email change
+
+| Operation | Route | Auth | Rate limit |
+| --- | --- | --- | --- |
+| `me.profile.patch` | `PATCH /api/v1/me/profile` | required | `profile.update` 30/min |
+| `me.avatar.upload` | `POST /api/v1/me/avatar` | required | `profile.avatar` 10/min |
+| `me.avatar.delete` | `DELETE /api/v1/me/avatar` | required | `profile.avatar` 10/min |
+| `me.email.request_change` | `POST /api/v1/me/email/request-change` | required | `email.change.request` 3/hour |
+| `me.email.confirm_change` | `POST /api/v1/me/email/confirm-change` | required | `email.change.confirm` 10/min |
+| `public.users.profile` | `GET /api/v1/users/{username_or_id}` | optional | — |
+| `admin.users.profile.get` | `GET /api/v1/admin/users/{id}/profile` | `user.profile.read` | — |
+| `admin.users.profile.patch` | `PATCH /api/v1/admin/users/{id}/profile` | `user.profile.edit` | — |
+
+Differences from the target rules below:
+
+- **Patch keys:** `full_name`, `display_name`, `bio`, `contact_website`, `contact_location`,
+  `social_links` (`twitter`, `linkedin`, `github`), `locale`, `timezone`,
+  `marketing_consent`. `null` clears a field. Unknown keys → `400 profile.unknown_field`;
+  `contact_phone` → `400 profile.field_unsupported` (it needs field encryption first).
+  A display name is unique case-insensitively → `409 profile.display_name_taken`.
+- **Avatar:** multipart field `file`. The response is the stored media asset (the original
+  image); size variants are not produced while `public.media.transform` is deferred. Over
+  `AVATAR_MAX_BYTES` → `413 profile.avatar_too_large`; storage down → `502
+  storage_unavailable`; media disabled → the routes stay `501`. Replacing or deleting an
+  avatar soft-deletes the previous asset when this user uploaded it.
+- **Email change:** request body `{ new_email, password_proof }` → `202` with
+  `{ new_email, expires_at }` (`auth.email.taken` 409, `password.current_mismatch` 403).
+  Confirm body `{ token }` → `200` with the new email; every session is revoked, so the
+  client must log in again. Token errors: `auth.email.change_token_{invalid,used,expired}`.
+  A new request supersedes the pending one. Reset and email-change tokens are not
+  interchangeable. Until the Phase 1 mailer lands, the notifier logs a masked address and
+  never the token.
+- **Public profile:** `404` for private profiles unless the caller is the owner or holds
+  `user.profile.read`, and for inactive users. The email is shown only when
+  `visibility_email` is on, and contact fields only when `visibility_contact` is on.
+  `X-Robots-Tag: noindex` is sent when indexing is disallowed or the profile is not public.
+  `followers_only`, `include=`, and the `/me/privacy` endpoints are not implemented yet.
+- **Not yet enforced:** 2FA or password step-up on admin patch and avatar delete, CSRF (all
+  routes use bearer tokens), and audit or outbox events for profile changes.
+
+### Media
+
+- `public.media.transform` stays `501`; see the decision in [media.md](media.md#transform-decision-phase-2).
+- Upload checks and residual risks: [upload-security.md](upload-security.md).
 
 ## Main API Areas
 

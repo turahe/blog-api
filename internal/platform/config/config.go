@@ -85,6 +85,13 @@ type Config struct {
 	CommentsFlagThreshold         int
 	CommentsCreatePerMinute       int
 	CommentsActionsPerMinute      int
+	CacheEnabled                  bool
+	CacheBypassHeader             bool
+	CacheTTLPosts                 time.Duration
+	CacheTTLCategories            time.Duration
+	CacheTTLTags                  time.Duration
+	CacheTTLUsers                 time.Duration
+	AvatarMaxBytes                int64
 	SwaggerEnabled                bool
 	SentryDSN                     string
 	SentryEnvironment             string
@@ -149,6 +156,10 @@ func (c Config) ValidateMedia() error {
 
 	if c.MediaPresignTTL <= 0 {
 		return errors.New("MEDIA_PRESIGN_TTL must be positive")
+	}
+
+	if c.AvatarMaxBytes < 1 {
+		return errors.New("AVATAR_MAX_BYTES must be positive")
 	}
 
 	return nil
@@ -272,6 +283,22 @@ func (c Config) ValidateDatabase() error {
 
 		if c.Environment == "production" && sslmode == "disable" {
 			return errors.New("DB_SSLMODE cannot be disable in production")
+		}
+	}
+
+	return nil
+}
+
+// ValidateCache rejects negative public-read cache TTLs; zero disables a family.
+func (c Config) ValidateCache() error {
+	for name, ttl := range map[string]time.Duration{
+		"CACHE_TTL_POSTS":      c.CacheTTLPosts,
+		"CACHE_TTL_CATEGORIES": c.CacheTTLCategories,
+		"CACHE_TTL_TAGS":       c.CacheTTLTags,
+		"CACHE_TTL_USERS":      c.CacheTTLUsers,
+	} {
+		if ttl < 0 {
+			return fmt.Errorf("%s must be zero or greater (got %s)", name, ttl)
 		}
 	}
 
@@ -426,6 +453,13 @@ func Load() (Config, error) {
 		CommentsFlagThreshold:         integer("COMMENTS_FLAG_THRESHOLD", 3),
 		CommentsCreatePerMinute:       integer("COMMENTS_CREATE_PER_MINUTE", 6),
 		CommentsActionsPerMinute:      integer("COMMENTS_ACTIONS_PER_MINUTE", 30),
+		CacheEnabled:                  boolEnv("CACHE_ENABLED", true),
+		CacheBypassHeader:             boolEnv("CACHE_BYPASS_HEADER", false),
+		CacheTTLPosts:                 duration("CACHE_TTL_POSTS", time.Minute),
+		CacheTTLCategories:            duration("CACHE_TTL_CATEGORIES", 10*time.Minute),
+		CacheTTLTags:                  duration("CACHE_TTL_TAGS", 10*time.Minute),
+		CacheTTLUsers:                 duration("CACHE_TTL_USERS", 15*time.Minute),
+		AvatarMaxBytes:                int64(integer("AVATAR_MAX_BYTES", 5<<20)),
 		SentryDSN:                     env("SENTRY_DSN", ""),
 		SentryTracesSampleRate:        float("SENTRY_TRACES_SAMPLE_RATE", 0.1),
 	}
@@ -479,7 +513,7 @@ func (c *Config) validate() error {
 		return fmt.Errorf("invalid database pool limits: idle=%d open=%d", c.DBMaxIdle, c.DBMaxOpen)
 	}
 
-	for _, check := range []func() error{c.ValidateRedis, c.ValidateMessaging, c.ValidateMedia, c.ValidateSentry} {
+	for _, check := range []func() error{c.ValidateRedis, c.ValidateMessaging, c.ValidateMedia, c.ValidateSentry, c.ValidateCache} {
 		if err := check(); err != nil {
 			return err
 		}

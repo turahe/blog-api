@@ -188,6 +188,20 @@ escaping and IPv6 host formatting included). `REDIS_URL` is no longer consumed.
 Redis/Valkey is ephemeral infrastructure, not a source of truth. Restrict network access and
 use authentication outside local development.
 
+### Public read cache
+
+Public post, category, tag and user-profile reads are cached in Redis. The contract (keys,
+generations, invalidation) is in [services.md](../backend/services.md#public-read-caching).
+
+| Variable | Default | Required | Purpose |
+| --- | --- | --- | --- |
+| `CACHE_ENABLED` | `true` | No | `false` removes the cache everywhere; every read hits the database. |
+| `CACHE_BYPASS_HEADER` | `false` | No | `true` lets a request skip the cache with `Cache-Control: no-cache`. Debugging only. |
+| `CACHE_TTL_POSTS` | `1m` | No | Public post list and detail. `0` disables the family. |
+| `CACHE_TTL_CATEGORIES` | `10m` | No | Public category list and detail. |
+| `CACHE_TTL_TAGS` | `10m` | No | Public tag list. |
+| `CACHE_TTL_USERS` | `15m` | No | Public user profiles (`GET /api/v1/users/{username}`). |
+
 ## Messaging
 
 Leave `MESSAGE_BROKER` empty to disable application messaging. `app worker` requires a
@@ -230,7 +244,7 @@ delivery semantics are in [events.md](../backend/events.md).
 ## Media storage
 
 `config.Load` consumes the media variables below. `S3_*` configure the storage backend, and
-`MEDIA_*` define the upload policy used by the future media adapter.
+`MEDIA_*` define the upload policy enforced by the media service.
 
 | Variable | Default | Required | Purpose |
 | --- | --- | --- | --- |
@@ -245,6 +259,10 @@ delivery semantics are in [events.md](../backend/events.md).
 | `MEDIA_ALLOWED_MIME_TYPES` | `image/jpeg,image/png,image/webp,image/gif` | No | Comma-separated MIME allowlist for uploads. |
 | `MEDIA_MAX_UPLOAD_BYTES` | `10485760` | No | Maximum declared upload size in bytes. |
 | `MEDIA_PRESIGN_TTL` | `15m` | No | Presigned URL lifetime. |
+| `AVATAR_MAX_BYTES` | `5242880` | No | Maximum avatar upload size (`POST /api/v1/me/avatar`); the smaller of this and `MEDIA_MAX_UPLOAD_BYTES` applies. Must be positive. |
+
+The bucket must already exist; the API never creates it. Avatar upload is available only
+when media is enabled.
 
 Media is enabled only when `S3_BUCKET`, `S3_ACCESS_KEY`, and `S3_SECRET_KEY` are all set.
 In that mode, `S3_DISK` must be one of the supported values, the allowlist must not be

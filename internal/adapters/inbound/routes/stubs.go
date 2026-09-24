@@ -21,7 +21,6 @@ func registerContractStubs(v1 *gin.RouterGroup, auth AuthMiddleware, c Controlle
 	get(none, "/media/:param1/transform", "public.media.transform", pub, n, c, nil)
 	get(none, "/newsletter/preferences/:param1", "public.newsletter.preferences.get", pub, n, c, nil)
 	get(none, "/posts/:param1/seo-meta", "public.posts.seo_meta", pub, n, c, nil)
-	get(none, "/users/:param1", "public.users.profile", pub, n, c, nil)
 	patch(none, "/newsletter/preferences/:param1", "public.newsletter.preferences.patch", pub, n, c, nil)
 	post(none, "/newsletter/confirm", "public.newsletter.confirm", pub, n, c, nil)
 	post(none, "/newsletter/confirm/resend", "public.newsletter.confirm_resend", pub, n, c, nil)
@@ -37,12 +36,7 @@ func registerContractStubs(v1 *gin.RouterGroup, auth AuthMiddleware, c Controlle
 	get(required, "/me/notifications", "me.notifications.list", self, req, c, nil)
 	get(required, "/me/notifications/stream", "me.notifications.stream", self, req, c, nil)
 	get(required, "/me/privacy", "me.privacy.get", self, req, c, nil)
-	del(required, "/me/avatar", "me.avatar.delete", self, req, c, nil)
-	patch(required, "/me/profile", "me.profile.patch", self, req, c, nil)
 	post(required, "/me/activity/erase", "me.activity.erase", self, req, c, nil)
-	post(required, "/me/avatar", "me.avatar.upload", self, req, c, nil)
-	post(required, "/me/email/confirm-change", "me.email.confirm_change", self, req, c, nil)
-	post(required, "/me/email/request-change", "me.email.request_change", self, req, c, nil)
 	post(required, "/me/newsletter/subscribe", "me.newsletter.subscribe", self, req, c, nil)
 	post(required, "/me/newsletter/unsubscribe", "me.newsletter.unsubscribe", self, req, c, nil)
 	post(required, "/me/notifications/:param1/read", "me.notifications.read", self, req, c, nil)
@@ -55,13 +49,6 @@ func registerContractStubs(v1 *gin.RouterGroup, auth AuthMiddleware, c Controlle
 	get(admin, "/analytics/retention", "admin.analytics.retention", ag, ar, c, nil)
 	get(admin, "/analytics/search", "admin.analytics.search", ag, ar, c, nil)
 	post(admin, "/analytics/export", "admin.analytics.export", ag, ar, c, nil)
-
-	get(admin, "/comments", "admin.comments.list", ag, ar, c, nil)
-	get(admin, "/comments/:param1", "admin.comments.get", ag, ar, c, nil)
-	get(admin, "/comments/stats", "admin.comments.stats", ag, ar, c, nil)
-	del(admin, "/comments/:param1", "admin.comments.delete", ag, ar, c, nil)
-	post(admin, "/comments/:param1/moderate", "admin.comments.moderate", ag, ar, c, nil)
-	post(admin, "/comments/bulk-moderate", "admin.comments.bulk_moderate", ag, ar, c, nil)
 
 	get(admin, "/impersonation/current", "admin.impersonation.current", ag, ar, c, nil)
 	post(admin, "/impersonation/start", "admin.impersonation.start", ag, ar, c, nil)
@@ -89,8 +76,6 @@ func registerContractStubs(v1 *gin.RouterGroup, auth AuthMiddleware, c Controlle
 	put(admin, "/settings", "admin.settings.put", ag, ar, c, nil)
 
 	get(admin, "/users/:param1/activity", "admin.users.activity.list", ag, ar, c, nil)
-	get(admin, "/users/:param1/profile", "admin.users.profile.get", ag, ar, c, nil)
-	patch(admin, "/users/:param1/profile", "admin.users.profile.patch", ag, ar, c, nil)
 	post(admin, "/users", "admin.users.create", ag, ar, c, nil)
 	post(admin, "/users/:param1/password/admin-reset", "admin.users.password.admin_reset", ag, ar, c, nil)
 }

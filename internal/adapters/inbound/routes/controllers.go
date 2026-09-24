@@ -42,8 +42,16 @@ type Auth struct {
 
 // Users self-service and admin handlers.
 type Users struct {
-	MeGet          gin.HandlerFunc
-	AdminUsersList gin.HandlerFunc
+	MeGet                gin.HandlerFunc
+	MeProfilePatch       gin.HandlerFunc
+	MeAvatarUpload       gin.HandlerFunc
+	MeAvatarDelete       gin.HandlerFunc
+	MeEmailRequestChange gin.HandlerFunc
+	MeEmailConfirmChange gin.HandlerFunc
+	PublicProfile        gin.HandlerFunc
+	AdminUsersList       gin.HandlerFunc
+	AdminProfileGet      gin.HandlerFunc
+	AdminProfilePatch    gin.HandlerFunc
 }
 
 // Posts public and admin handlers.
@@ -53,8 +61,12 @@ type Posts struct {
 	AdminList         gin.HandlerFunc
 	AdminCreate       gin.HandlerFunc
 	AdminPublish      gin.HandlerFunc
+	AdminUnpublish    gin.HandlerFunc
+	AdminArchive      gin.HandlerFunc
 	AdminUpdate       gin.HandlerFunc
 	AdminMediaReplace gin.HandlerFunc
+	AdminDelete       gin.HandlerFunc
+	AdminRestore      gin.HandlerFunc
 }
 
 // Categories public and admin handlers.
@@ -87,16 +99,22 @@ type Media struct {
 	AdminDelete    gin.HandlerFunc
 }
 
-// Comments public and self-service handlers.
+// Comments public, self-service, and moderation handlers.
 type Comments struct {
-	PostList   gin.HandlerFunc
-	PostCreate gin.HandlerFunc
-	Get        gin.HandlerFunc
-	Flag       gin.HandlerFunc
-	MeList     gin.HandlerFunc
-	Patch      gin.HandlerFunc
-	Delete     gin.HandlerFunc
-	Upvote     gin.HandlerFunc
+	PostList          gin.HandlerFunc
+	PostCreate        gin.HandlerFunc
+	Get               gin.HandlerFunc
+	Flag              gin.HandlerFunc
+	MeList            gin.HandlerFunc
+	Patch             gin.HandlerFunc
+	Delete            gin.HandlerFunc
+	Upvote            gin.HandlerFunc
+	AdminList         gin.HandlerFunc
+	AdminGet          gin.HandlerFunc
+	AdminStats        gin.HandlerFunc
+	AdminModerate     gin.HandlerFunc
+	AdminBulkModerate gin.HandlerFunc
+	AdminHardDelete   gin.HandlerFunc
 }
 
 // NotImplemented is the fallback for registered but unwired operations.

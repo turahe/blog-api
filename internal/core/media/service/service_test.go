@@ -115,6 +115,7 @@ func TestCompleteUploadMarksReadyAfterHeadOK(t *testing.T) {
 		ContentType: "image/webp",
 		ETag:        "etag-1",
 	}
+	storage.objects[asset.StorageKey] = mustBase64(t, tinyWebP)
 
 	got, err := svc.CompleteUpload(context.Background(), asset.UUID)
 	if err != nil {
@@ -250,6 +251,37 @@ type fakeObjectStorage struct {
 	headInfo       map[string]ports.ObjectInfo
 	headErr        error
 	headCalls      int
+	putErr         error
+	puts           map[string]string
+	objects        map[string][]byte
+	readErr        error
+}
+
+func (s *fakeObjectStorage) ReadPrefix(_ context.Context, key string, n int64) ([]byte, error) {
+	if s.readErr != nil {
+		return nil, s.readErr
+	}
+
+	body, ok := s.objects[key]
+	if !ok {
+		return nil, ports.ErrObjectNotFound
+	}
+
+	return body[:min(int64(len(body)), n)], nil
+}
+
+func (s *fakeObjectStorage) PutObject(_ context.Context, key, contentType string, _ []byte) error {
+	if s.putErr != nil {
+		return s.putErr
+	}
+
+	if s.puts == nil {
+		s.puts = map[string]string{}
+	}
+
+	s.puts[key] = contentType
+
+	return nil
 }
 
 func newFakeObjectStorage() *fakeObjectStorage {
@@ -259,6 +291,7 @@ func newFakeObjectStorage() *fakeObjectStorage {
 			"Content-Type": "image/png",
 		},
 		headInfo: make(map[string]ports.ObjectInfo),
+		objects:  make(map[string][]byte),
 	}
 }
 

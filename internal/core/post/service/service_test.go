@@ -2,6 +2,7 @@ package service
 
 import (
 	"context"
+	"strings"
 	"testing"
 	"time"
 
@@ -40,6 +41,9 @@ type fakePostRepo struct {
 	updatedPost      postdomain.Post
 	setCoverImageErr error
 	bumpAfterRead    bool
+	restoreCalls     int
+	restoreConflicts int
+	publicReads      int
 }
 
 type fakeTagLinker struct {
@@ -66,8 +70,20 @@ func newFakePostRepo(posts ...postdomain.Post) *fakePostRepo {
 	}
 }
 
-func (f *fakePostRepo) ListPublished(context.Context, postdomain.ListFilter) (postdomain.ListResult, error) {
-	return postdomain.ListResult{}, nil
+func (f *fakePostRepo) ListPublished(_ context.Context, filter postdomain.ListFilter) (postdomain.ListResult, error) {
+	f.publicReads++
+
+	result := postdomain.ListResult{Page: filter.Page, PerPage: filter.PerPage}
+
+	for _, post := range f.posts {
+		if post.Status == postdomain.StatusPublished && post.DeletedAt == nil {
+			result.Items = append(result.Items, post)
+		}
+	}
+
+	result.Total = int64(len(result.Items))
+
+	return result, nil
 }
 
 func (f *fakePostRepo) ListAdmin(_ context.Context, filter postdomain.AdminListFilter) (postdomain.ListResult, error) {
@@ -75,7 +91,15 @@ func (f *fakePostRepo) ListAdmin(_ context.Context, filter postdomain.AdminListF
 	return f.listAdminResult, f.listAdminErr
 }
 
-func (f *fakePostRepo) GetPublishedBySlug(context.Context, string) (postdomain.Post, error) {
+func (f *fakePostRepo) GetPublishedBySlug(_ context.Context, slug string) (postdomain.Post, error) {
+	f.publicReads++
+
+	for _, post := range f.posts {
+		if post.Slug == slug && post.Status == postdomain.StatusPublished && post.DeletedAt == nil {
+			return post, nil
+		}
+	}
+
 	return postdomain.Post{}, postdomain.ErrNotFound
 }
 
@@ -124,6 +148,64 @@ func (f *fakePostRepo) SlugTaken(_ context.Context, slug string, excludeID uuid.
 	}
 
 	return f.slugTakenBySlug[slug], nil
+}
+
+func (f *fakePostRepo) GetDeletedByID(_ context.Context, id uuid.UUID) (postdomain.Post, error) {
+	post, ok := f.posts[id]
+	if !ok || post.DeletedAt == nil {
+		return postdomain.Post{}, postdomain.ErrNotFound
+	}
+
+	return post, nil
+}
+
+func (f *fakePostRepo) SoftDelete(_ context.Context, post postdomain.Post) error {
+	stored, ok := f.posts[post.UUID]
+	if !ok || stored.DeletedAt != nil {
+		return postdomain.ErrNotFound
+	}
+
+	if stored.Version != post.Version-1 {
+		return postdomain.ErrStaleVersion
+	}
+
+	f.posts[post.UUID] = post
+
+	return nil
+}
+
+func (f *fakePostRepo) Restore(_ context.Context, post postdomain.Post) (postdomain.Post, error) {
+	f.restoreCalls++
+	if f.restoreConflicts > 0 {
+		f.restoreConflicts--
+		f.slugTakenBySlug[post.Slug] = true
+
+		return postdomain.Post{}, postdomain.ErrConflict
+	}
+
+	f.posts[post.UUID] = post
+
+	return post, nil
+}
+
+func (f *fakePostRepo) SlugsWithPrefix(_ context.Context, base string) ([]string, error) {
+	var slugs []string
+
+	matches := func(slug string) bool { return slug == base || strings.HasPrefix(slug, base+"-") }
+
+	for _, post := range f.posts {
+		if post.DeletedAt == nil && matches(post.Slug) {
+			slugs = append(slugs, post.Slug)
+		}
+	}
+
+	for slug, taken := range f.slugTakenBySlug {
+		if taken && matches(slug) {
+			slugs = append(slugs, slug)
+		}
+	}
+
+	return slugs, nil
 }
 
 func (f *fakePostRepo) SetCoverImage(context.Context, uuid.UUID, *uuid.UUID, time.Time) error {

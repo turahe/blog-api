@@ -19,6 +19,9 @@ type ObjectInfo struct {
 type ObjectStorage interface {
 	PresignPut(ctx context.Context, key, contentType string, ttl time.Duration) (url string, headers map[string]string, err error)
 	HeadObject(ctx context.Context, key string) (ObjectInfo, error)
+	PutObject(ctx context.Context, key, contentType string, body []byte) error
+	// ReadPrefix returns at most n leading bytes of the object.
+	ReadPrefix(ctx context.Context, key string, n int64) ([]byte, error)
 }
 
 // Repository stores media assets.
@@ -46,4 +49,5 @@ type Service interface {
 	GetReady(ctx context.Context, id uuid.UUID) (mediadomain.MediaAsset, error)
 	Delete(ctx context.Context, id uuid.UUID) error
 	UpdateTags(ctx context.Context, id uuid.UUID, tags []string) (mediadomain.MediaAsset, error)
+	UploadImage(ctx context.Context, input mediadomain.ImageUpload) (mediadomain.MediaAsset, error)
 }

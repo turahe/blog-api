@@ -59,3 +59,79 @@
 - `PostSEOService` must participate in the same transaction as post updates and revision creation so SEO snapshot, post row, and revision row all agree; slug changes additionally emit `blog.post.slug_changed` through outbox
 - self-service profile caches: `user:me:{user_id}:include:{mask}` TTL 30s invalidated on profile/privacy/avatar/password/email events; `user:public:{name}` TTL 900s invalidated on profile/privacy events
 - profile endpoints must apply CSRF, rate limit, step-up, and audit before the service is called; middleware composition: auth → impersonation → csrf → rate limit → step-up → audit; service re-checks ownership and permissions defensively
+
+## Public Read Caching
+
+Public post, category, and tag reads are cached in Redis. The port is
+`internal/core/readcache` (`Cache`, `Through`, `Key`, `WithBypass`); the adapter is
+`internal/adapters/outbound/cache.Redis`, wired in `internal/bootstrap`. Services own
+both sides of the contract: their public read methods read through the cache and their
+write methods invalidate it, so every caller (HTTP, CLI, a future worker) gets the same
+behaviour.
+
+### What is cached
+
+| Family | Service method | Key | Default TTL (`env`) |
+| --- | --- | --- | --- |
+| `posts` | `PostService.ListPublished` | `list:page={n}:per_page={n}:category={uuid\|-}:tag={uuid\|-}` | 1m (`CACHE_TTL_POSTS`) |
+| `posts` | `PostService.GetPublishedBySlug` | `get:slug={slug}` | 1m |
+| `categories` | `CategoryService.List` | `list` | 10m (`CACHE_TTL_CATEGORIES`) |
+| `categories` | `CategoryService.GetBySlug` | `get:slug={slug}` | 10m |
+| `tags` | `TagService.List` | `list` | 10m (`CACHE_TTL_TAGS`) |
+| `users` | `ProfileService.Public` | `get:ref={lowercased username or uuid}` | 15m (`CACHE_TTL_USERS`) |
+
+- Keys are built **after** input normalisation (page clamped to ≥ 1, `per_page` to
+  1–100 else 20, slug trimmed), so equivalent requests share one entry.
+- Only successful results are stored; not-found and errors always reach the database.
+- Cached values are domain results, not HTTP bodies: handlers still build a fresh
+  envelope, so `meta.request_id` and pagination `links` are per request.
+- A family TTL of `0` disables caching for that family.
+- The admin category list shares `CategoryService.List` and always bypasses the cache.
+- The `users` entry is the full profile view with the password hash stripped. Privacy
+  (private profiles, hidden email and contact) is applied per request after the cache,
+  so owners, admins and anonymous callers share one entry. Inactive users are cached
+  but always answered with `404`. Any future write to user status, username or
+  deletion (admin user management is still a stub) must invalidate `users`, or a
+  suspended profile stays visible for up to `CACHE_TTL_USERS`.
+
+### Key layout and invalidation
+
+Full keys are `cache:public:v{SchemaVersion}:{family}:g{generation}:{key}`.
+
+- `SchemaVersion` (in the adapter) is bumped whenever a cached domain type changes shape;
+  entries under the old version are simply never read again and expire by TTL.
+- Each family has a generation key `cache:public:v{N}:{family}:gen` with no TTL.
+  Invalidation moves the family to a new generation, which orphans every list and
+  detail key at once. Old entries expire by TTL — no `SCAN`/`DEL`.
+- A missing generation is seeded from the clock, so a flushed or evicted generation key
+  never reuses a number whose entries are still alive. Prefer a `volatile-*` eviction
+  policy so the TTL-less generation keys are not evicted first.
+- A read captures the generation before loading from the database and fills under that
+  generation, so a value loaded before a concurrent write is never served after it.
+
+| Write | Families invalidated |
+| --- | --- |
+| Post update, publish, unpublish, archive, delete, restore, media replace | `posts` |
+| Post re-tagging (`ReplacePostTags`) | `posts` |
+| Category create, update, move, delete, startup tree rebuild | `categories` |
+| Tag create, update, delete | `tags` |
+| Tag merge | `tags`, `posts` |
+| Media delete (clears post covers, category images and avatars) | `posts`, `categories`, `users` |
+| Profile patch (self or admin), avatar upload or delete | `users` |
+| Email change confirmed | `users` |
+
+Draft creation does not invalidate `posts` (drafts are not public); tags it creates
+invalidate `tags` through `TagService.Create`.
+
+### Failure mode and bypass
+
+- The cache fails open: Redis errors are logged at `WARN` and the request is served
+  from the database. A failed invalidation leaves entries to expire by TTL.
+- `CACHE_ENABLED=false` removes the cache entirely (services get a nil port).
+- `CACHE_BYPASS_HEADER=true` lets a request skip the cache with
+  `Cache-Control: no-cache` (no lookup, no fill). Debugging only — each such request
+  hits the database.
+- `app doctor` probes the cache with a throwaway key and prints the per-family TTLs, or
+  `cache: bypassed (CACHE_ENABLED=false)`.
+- Writes made outside the services (manual SQL, restores from backup) are not seen until
+  the TTL expires; bypass with the header or invalidate by deleting the family's `gen` key.

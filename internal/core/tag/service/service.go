@@ -11,6 +11,7 @@ import (
 	"unicode/utf8"
 
 	"github.com/google/uuid"
+	"github.com/turahe/blog-api/internal/core/readcache"
 	tagdomain "github.com/turahe/blog-api/internal/core/tag/domain"
 	"github.com/turahe/blog-api/internal/core/tag/ports"
 )
@@ -37,6 +38,7 @@ type Service struct {
 	repo  ports.Repository
 	ids   IDGenerator
 	clock Clock
+	cache readcache.Cache
 }
 
 // New returns a Service.
@@ -44,9 +46,27 @@ func New(repo ports.Repository, ids IDGenerator, clock Clock) *Service {
 	return &Service{repo: repo, ids: ids, clock: clock}
 }
 
+// WithCache caches public reads in cache. Tag writes invalidate the tags family;
+// merges and post re-tagging also invalidate posts, whose tag filter they change.
+func (s *Service) WithCache(cache readcache.Cache) *Service {
+	s.cache = cache
+	return s
+}
+
 // List returns every tag.
 func (s *Service) List(ctx context.Context) ([]tagdomain.Tag, error) {
-	return s.repo.List(ctx)
+	return readcache.Through(ctx, s.cache, readcache.Tags, readcache.Key("list"), func() ([]tagdomain.Tag, error) {
+		return s.repo.List(ctx)
+	})
+}
+
+// written invalidates families when the write succeeded and returns err.
+func (s *Service) written(ctx context.Context, err error, families ...readcache.Family) error {
+	if err == nil {
+		readcache.Invalidate(ctx, s.cache, families...)
+	}
+
+	return err
 }
 
 // Create validates and stores a tag, deriving the slug from the name when blank.
@@ -90,7 +110,9 @@ func (s *Service) Create(ctx context.Context, name, slug string) (tagdomain.Tag,
 		CreatedAt: now,
 	}
 
-	return s.repo.Create(ctx, tag)
+	tag, err = s.repo.Create(ctx, tag)
+
+	return tag, s.written(ctx, err, readcache.Tags)
 }
 
 // Update changes the tag's name and/or slug.
@@ -123,7 +145,9 @@ func (s *Service) Update(ctx context.Context, id uuid.UUID, name, slug *string) 
 		}
 	}
 
-	return s.repo.Update(ctx, tag)
+	tag, err = s.repo.Update(ctx, tag)
+
+	return tag, s.written(ctx, err, readcache.Tags)
 }
 
 // updatedSlug validates a new slug and checks it is free unless unchanged.
@@ -167,7 +191,7 @@ func (s *Service) Merge(ctx context.Context, sourceID, intoID uuid.UUID) error {
 		return err
 	}
 
-	return s.repo.MergeInto(ctx, sourceID, intoID)
+	return s.written(ctx, s.repo.MergeInto(ctx, sourceID, intoID), readcache.Tags, readcache.Posts)
 }
 
 // Delete removes a tag that no post uses.
@@ -181,7 +205,7 @@ func (s *Service) Delete(ctx context.Context, id uuid.UUID) error {
 		return tagdomain.ErrInUse
 	}
 
-	return s.repo.Delete(ctx, id)
+	return s.written(ctx, s.repo.Delete(ctx, id), readcache.Tags)
 }
 
 // ResolveOrCreate returns tags for names, creating missing ones by slug.
@@ -229,7 +253,7 @@ func (s *Service) ResolveOrCreate(ctx context.Context, names []string) ([]tagdom
 
 // ReplacePostTags sets the post's tags to exactly tagIDs.
 func (s *Service) ReplacePostTags(ctx context.Context, postID uuid.UUID, tagIDs []uuid.UUID) error {
-	return s.repo.ReplacePostTags(ctx, postID, tagIDs)
+	return s.written(ctx, s.repo.ReplacePostTags(ctx, postID, tagIDs), readcache.Posts)
 }
 
 // ListByPostID returns the post's tags.

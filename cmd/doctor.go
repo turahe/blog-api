@@ -4,9 +4,11 @@ package cmd
 import (
 	"errors"
 	"fmt"
+	"strings"
 
 	"github.com/spf13/cobra"
 	"github.com/turahe/blog-api/internal/bootstrap"
+	"github.com/turahe/blog-api/internal/core/readcache"
 	"github.com/turahe/blog-api/internal/platform/config"
 	"github.com/turahe/blog-api/internal/platform/messaging"
 )
@@ -40,6 +42,10 @@ func newDoctorCmd() *cobra.Command {
 				return err
 			}
 
+			if err := reportCache(cmd, app); err != nil {
+				return err
+			}
+
 			if !app.Config.MessagingEnabled() {
 				_, err := fmt.Fprintln(out, "messaging: skipped (MESSAGE_BROKER unset)")
 
@@ -60,4 +66,28 @@ func newDoctorCmd() *cobra.Command {
 			return err
 		},
 	}
+}
+
+// reportCache probes the public read cache, or reports that CACHE_ENABLED=false bypasses it.
+func reportCache(cmd *cobra.Command, app *bootstrap.Runtime) error {
+	out := cmd.OutOrStdout()
+	if app.Cache == nil {
+		_, err := fmt.Fprintln(out, "cache: bypassed (CACHE_ENABLED=false)")
+		return err
+	}
+
+	if err := app.Cache.Probe(cmd.Context()); err != nil {
+		return fmt.Errorf("cache: %w", err)
+	}
+
+	ttls := bootstrap.CacheTTLs(app.Config)
+	parts := make([]string, 0, len(readcache.Families))
+
+	for _, family := range readcache.Families {
+		parts = append(parts, fmt.Sprintf("%s=%s", family, ttls[family]))
+	}
+
+	_, err := fmt.Fprintf(out, "cache: ok (ttl %s)\n", strings.Join(parts, " "))
+
+	return err
 }

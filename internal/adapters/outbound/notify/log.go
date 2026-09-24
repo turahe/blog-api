@@ -1,0 +1,58 @@
+// Package notify delivers account notifications. Only a structured-log delivery exists
+// until a mail provider is wired.
+package notify
+
+import (
+	"context"
+	"log/slog"
+	"strings"
+	"time"
+	"unicode/utf8"
+
+	authports "github.com/turahe/blog-api/internal/core/auth/ports"
+	userdomain "github.com/turahe/blog-api/internal/core/user/domain"
+)
+
+// Log records notifications as log events with masked addresses. Tokens are never
+// logged, so flows that need them cannot complete until a mail provider is wired.
+type Log struct {
+	logger *slog.Logger
+}
+
+var _ authports.EmailChangeNotifier = (*Log)(nil)
+
+// NewLog returns a log notifier.
+func NewLog(logger *slog.Logger) *Log {
+	return &Log{logger: logger}
+}
+
+// EmailChangeRequested logs the confirmation meant for the new address and the notice for the old one.
+func (l *Log) EmailChangeRequested(ctx context.Context, user userdomain.User, newEmail, _ string, expiresAt time.Time) {
+	l.logger.InfoContext(ctx, "notify: email change requested",
+		"user_id", user.UUID,
+		"to", MaskEmail(newEmail),
+		"notice_to", MaskEmail(user.Email),
+		"expires_at", expiresAt,
+	)
+}
+
+// EmailChanged logs the completion notice sent to both addresses.
+func (l *Log) EmailChanged(ctx context.Context, user userdomain.User, oldEmail, newEmail string) {
+	l.logger.InfoContext(ctx, "notify: email changed",
+		"user_id", user.UUID,
+		"old", MaskEmail(oldEmail),
+		"new", MaskEmail(newEmail),
+	)
+}
+
+// MaskEmail keeps the first character of the local part and the domain: "j***@example.com".
+func MaskEmail(email string) string {
+	local, domain, ok := strings.Cut(email, "@")
+	if !ok || local == "" {
+		return "***"
+	}
+
+	first, _ := utf8.DecodeRuneInString(local)
+
+	return string(first) + "***@" + domain
+}

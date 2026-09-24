@@ -26,6 +26,9 @@ type Dependencies struct {
 	Health         healthports.Service
 	Auth           authports.Service
 	Users          *userservice.UserService
+	Profiles       *userservice.ProfileService
+	EmailChange    authports.EmailChanger
+	AvatarMaxBytes int64 // > 0 enables avatar routes
 	Roles          handlers.RoleLookup
 	RBAC           rbacports.Enforcer
 	Posts          *postservice.PostService
@@ -38,6 +41,8 @@ type Dependencies struct {
 	Version        string
 	TrustedProxies []string
 	SwaggerEnabled bool
+	// CacheBypassHeader honours `Cache-Control: no-cache` on public reads (debugging only).
+	CacheBypassHeader bool
 }
 
 // NewRouter wires middleware + controllers into routes.NewRouter.
@@ -58,32 +63,44 @@ func NewRouter(deps Dependencies) (*gin.Engine, error) {
 		mountSwagger = swagger.Mount
 	}
 
-	return routes.NewRouter(routes.Dependencies{
+	global := gin.HandlersChain{
+		middleware.RequestID(),
+		middleware.Tracing(),
+		middleware.SecurityHeaders(),
+		middleware.AccessLog(deps.Logger),
+		middleware.Recovery(deps.Logger),
+	}
+	if deps.CacheBypassHeader {
+		global = append(global, middleware.CacheBypass())
+	}
+
+	controllerDeps := handlers.Deps{
 		Logger:         deps.Logger,
-		TrustedProxies: deps.TrustedProxies,
-		GlobalMiddleware: gin.HandlersChain{
-			middleware.RequestID(),
-			middleware.Tracing(),
-			middleware.SecurityHeaders(),
-			middleware.AccessLog(deps.Logger),
-			middleware.Recovery(deps.Logger),
-		},
-		Controllers: handlers.NewControllers(handlers.Deps{
-			Logger:       deps.Logger,
-			Health:       deps.Health,
-			Auth:         deps.Auth,
-			Users:        deps.Users,
-			Roles:        deps.Roles,
-			RBAC:         deps.RBAC,
-			Posts:        deps.Posts,
-			Categories:   deps.Categories,
-			Tags:         deps.Tags,
-			Media:        deps.Media,
-			Comments:     deps.Comments,
-			RateLimiter:  deps.RateLimiter,
-			CommentRates: deps.CommentRates,
-			Version:      deps.Version,
-		}),
+		Health:         deps.Health,
+		Auth:           deps.Auth,
+		Users:          deps.Users,
+		EmailChange:    deps.EmailChange,
+		AvatarMaxBytes: deps.AvatarMaxBytes,
+		Roles:          deps.Roles,
+		RBAC:           deps.RBAC,
+		Posts:          deps.Posts,
+		Categories:     deps.Categories,
+		Tags:           deps.Tags,
+		Media:          deps.Media,
+		Comments:       deps.Comments,
+		RateLimiter:    deps.RateLimiter,
+		CommentRates:   deps.CommentRates,
+		Version:        deps.Version,
+	}
+	if deps.Profiles != nil { // keep a nil service a nil interface
+		controllerDeps.Profiles = deps.Profiles
+	}
+
+	return routes.NewRouter(routes.Dependencies{
+		Logger:           deps.Logger,
+		TrustedProxies:   deps.TrustedProxies,
+		GlobalMiddleware: global,
+		Controllers:      handlers.NewControllers(controllerDeps),
 		Auth: routes.AuthMiddleware{
 			Optional: optional,
 			Required: required,

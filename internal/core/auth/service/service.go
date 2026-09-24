@@ -12,14 +12,16 @@ import (
 	"github.com/google/uuid"
 	authdomain "github.com/turahe/blog-api/internal/core/auth/domain"
 	"github.com/turahe/blog-api/internal/core/auth/ports"
+	"github.com/turahe/blog-api/internal/core/readcache"
 	userdomain "github.com/turahe/blog-api/internal/core/user/domain"
 )
 
 // Config sets token lifetimes.
 type Config struct {
-	AccessTTL     time.Duration
-	RefreshTTL    time.Duration
-	ResetTokenTTL time.Duration
+	AccessTTL      time.Duration
+	RefreshTTL     time.Duration
+	ResetTokenTTL  time.Duration
+	EmailChangeTTL time.Duration
 }
 
 // AuthService implements ports.Service.
@@ -32,6 +34,8 @@ type AuthService struct {
 	clock    ports.Clock
 	ids      ports.IDGenerator
 	sink     ports.ResetTokenSink
+	notifier ports.EmailChangeNotifier
+	cache    readcache.Cache
 	cfg      Config
 }
 
@@ -57,6 +61,10 @@ func New(
 
 	if cfg.ResetTokenTTL <= 0 {
 		cfg.ResetTokenTTL = time.Hour
+	}
+
+	if cfg.EmailChangeTTL <= 0 {
+		cfg.EmailChangeTTL = time.Hour
 	}
 
 	return &AuthService{
@@ -236,7 +244,7 @@ func (s *AuthService) ForgotPassword(ctx context.Context, emailOrUsername string
 
 	token := authdomain.PasswordResetToken{
 		UUID: s.ids.New(), UserUUID: user.UUID, JTI: jti, TokenHash: hash,
-		Purpose: "password_reset", ExpiresAt: now.Add(s.cfg.ResetTokenTTL), CreatedAt: now,
+		Purpose: authdomain.PurposePasswordReset, ExpiresAt: now.Add(s.cfg.ResetTokenTTL), CreatedAt: now,
 	}
 	if err := s.resets.Create(ctx, token); err != nil {
 		return err
@@ -256,7 +264,7 @@ func (s *AuthService) CheckResetToken(ctx context.Context, rawToken string) (aut
 		return authdomain.ResetTokenValidity{}, fmt.Errorf("%w: token required", authdomain.ErrValidation)
 	}
 
-	token, err := s.resets.FindByHash(ctx, s.tokens.HashResetToken(rawToken))
+	token, err := s.passwordResetToken(ctx, rawToken)
 	if errors.Is(err, authdomain.ErrInvalidToken) {
 		return authdomain.ResetTokenValidity{Valid: false}, nil
 	}
@@ -288,7 +296,7 @@ func (s *AuthService) ResetPassword(ctx context.Context, rawToken, newPassword, 
 		return err
 	}
 
-	token, err := s.resets.FindByHash(ctx, s.tokens.HashResetToken(strings.TrimSpace(rawToken)))
+	token, err := s.passwordResetToken(ctx, strings.TrimSpace(rawToken))
 	if err != nil {
 		return err
 	}
@@ -317,6 +325,20 @@ func (s *AuthService) ResetPassword(ctx context.Context, rawToken, newPassword, 
 	}
 
 	return s.sessions.RevokeAllForUser(ctx, token.UserUUID, now)
+}
+
+// passwordResetToken finds a token by its raw value, rejecting tokens issued for other purposes.
+func (s *AuthService) passwordResetToken(ctx context.Context, rawToken string) (authdomain.PasswordResetToken, error) {
+	token, err := s.resets.FindByHash(ctx, s.tokens.HashResetToken(rawToken))
+	if err != nil {
+		return authdomain.PasswordResetToken{}, err
+	}
+
+	if token.Purpose != authdomain.PurposePasswordReset {
+		return authdomain.PasswordResetToken{}, authdomain.ErrInvalidToken
+	}
+
+	return token, nil
 }
 
 // ChangePassword verifies the current password, sets a new one, and revokes
@@ -469,6 +491,8 @@ func MapError(err error) (code, message string, status int) {
 		return "password.current_mismatch", "Current password is incorrect", 403
 	case errors.Is(err, authdomain.ErrPasswordMismatch):
 		return "password.confirm_mismatch", "Password confirmation does not match", 422
+	case errors.Is(err, authdomain.ErrEmailTaken):
+		return "auth.email.taken", "Email address is already in use", 409
 	case errors.Is(err, authdomain.ErrPasswordStrength):
 		return "password.strength", "Password does not meet strength requirements", 422
 	case errors.Is(err, authdomain.ErrTokenUsed):

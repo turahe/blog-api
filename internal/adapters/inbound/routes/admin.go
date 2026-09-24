@@ -15,11 +15,17 @@ func registerAdmin(v1 *gin.RouterGroup, auth AuthMiddleware, c Controllers) {
 	admin.Use(auth.Required...)
 
 	get(admin, "/users", "admin.users.list", g, AuthRequired, c, c.Users.AdminUsersList)
+	get(admin, "/users/:param1/profile", "admin.users.profile.get", g, AuthRequired, c, c.Users.AdminProfileGet)
+	patch(admin, "/users/:param1/profile", "admin.users.profile.patch", g, AuthRequired, c, c.Users.AdminProfilePatch)
 
 	get(admin, "/posts", "admin.posts.list", g, AuthRequired, c, c.Posts.AdminList)
 	post(admin, "/posts", "admin.posts.create", g, AuthRequired, c, c.Posts.AdminCreate)
 	post(admin, "/posts/:param1/publish", "admin.posts.publish", g, AuthRequired, c, c.Posts.AdminPublish)
+	post(admin, "/posts/:param1/unpublish", "admin.posts.unpublish", g, AuthRequired, c, c.Posts.AdminUnpublish)
+	post(admin, "/posts/:param1/archive", "admin.posts.archive", g, AuthRequired, c, c.Posts.AdminArchive)
+	post(admin, "/posts/:param1/restore", "admin.posts.restore", g, AuthRequired, c, c.Posts.AdminRestore)
 	patch(admin, "/posts/:param1", "admin.posts.update", g, AuthRequired, c, c.Posts.AdminUpdate)
+	del(admin, "/posts/:param1", "admin.posts.delete", g, AuthRequired, c, c.Posts.AdminDelete)
 	patch(admin, "/posts/:param1/media", "admin.posts.media.replace", g, AuthRequired, c, c.Posts.AdminMediaReplace)
 
 	get(admin, "/categories", "admin.categories.list", g, AuthRequired, c, c.Cats.AdminList)
@@ -38,4 +44,11 @@ func registerAdmin(v1 *gin.RouterGroup, auth AuthMiddleware, c Controllers) {
 	post(admin, "/media/:param1/complete", "admin.media.complete", g, AuthRequired, c, c.Media.AdminComplete)
 	patch(admin, "/media/:param1/tags", "admin.media.tags.patch", g, AuthRequired, c, c.Media.AdminTagsPatch)
 	del(admin, "/media/:param1", "admin.media.delete", g, AuthRequired, c, c.Media.AdminDelete)
+
+	get(admin, "/comments", "admin.comments.list", g, AuthRequired, c, c.Comments.AdminList)
+	get(admin, "/comments/stats", "admin.comments.stats", g, AuthRequired, c, c.Comments.AdminStats)
+	get(admin, "/comments/:param1", "admin.comments.get", g, AuthRequired, c, c.Comments.AdminGet)
+	post(admin, "/comments/:param1/moderate", "admin.comments.moderate", g, AuthRequired, c, c.Comments.AdminModerate)
+	post(admin, "/comments/bulk-moderate", "admin.comments.bulk_moderate", g, AuthRequired, c, c.Comments.AdminBulkModerate)
+	del(admin, "/comments/:param1", "admin.comments.delete", g, AuthRequired, c, c.Comments.AdminHardDelete)
 }

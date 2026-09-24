@@ -25,6 +25,7 @@ import (
 //	@Param		body	body		requests.PresignMedia	true	"upload metadata"
 //	@Success	201		{object}	responses.Envelope
 //	@Failure	400		{object}	responses.Envelope
+//	@Failure	429		{object}	responses.Envelope
 //	@Security	Bearer
 //	@Router		/api/v1/admin/media [post]
 func adminPresignMediaHandler(media mediaports.Service) gin.HandlerFunc {

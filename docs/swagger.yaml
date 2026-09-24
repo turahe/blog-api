@@ -1,5 +1,27 @@
 basePath: /
 definitions:
+  requests.BulkModerateComments:
+    properties:
+      action:
+        enum:
+        - approve
+        - reject
+        - spam
+        - restore
+        type: string
+      ids:
+        items:
+          type: string
+        maxItems: 500
+        minItems: 1
+        type: array
+      reason:
+        maxLength: 1000
+        type: string
+    required:
+    - action
+    - ids
+    type: object
   requests.ChangePassword:
     properties:
       confirm_password:
@@ -16,6 +38,14 @@ definitions:
     - confirm_password
     - current_password
     - new_password
+    type: object
+  requests.ConfirmEmailChange:
+    properties:
+      token:
+        maxLength: 512
+        type: string
+    required:
+    - token
     type: object
   requests.CreateCategory:
     properties:
@@ -153,6 +183,24 @@ definitions:
     required:
     - into_id
     type: object
+  requests.ModerateComment:
+    properties:
+      action:
+        enum:
+        - approve
+        - reject
+        - spam
+        - restore
+        type: string
+      notify_author:
+        description: Recorded in the moderation log for author notifications.
+        type: boolean
+      reason:
+        maxLength: 1000
+        type: string
+    required:
+    - action
+    type: object
   requests.PatchMediaTags:
     properties:
       tags:
@@ -161,6 +209,29 @@ definitions:
         type: array
     required:
     - tags
+    type: object
+  requests.PatchProfile:
+    properties:
+      bio:
+        type: string
+      contact_location:
+        type: string
+      contact_website:
+        type: string
+      display_name:
+        type: string
+      full_name:
+        type: string
+      locale:
+        example: en_US
+        type: string
+      marketing_consent:
+        type: boolean
+      social_links:
+        $ref: '#/definitions/requests.SocialLinks'
+      timezone:
+        example: Asia/Jakarta
+        type: string
     type: object
   requests.PostMediaItem:
     properties:
@@ -212,6 +283,18 @@ definitions:
     required:
     - items
     type: object
+  requests.RequestEmailChange:
+    properties:
+      new_email:
+        maxLength: 254
+        type: string
+      password_proof:
+        maxLength: 128
+        type: string
+    required:
+    - new_email
+    - password_proof
+    type: object
   requests.ResetPassword:
     properties:
       confirm_password:
@@ -226,6 +309,15 @@ definitions:
     - confirm_password
     - new_password
     - token
+    type: object
+  requests.SocialLinks:
+    properties:
+      github:
+        type: string
+      linkedin:
+        type: string
+      twitter:
+        type: string
     type: object
   requests.UpdateComment:
     properties:
@@ -416,6 +508,261 @@ paths:
       summary: Move category in tree
       tags:
       - admin
+  /api/v1/admin/comments:
+    get:
+      description: Comments in any status across posts. Defaults to the moderation
+        queue (pending and flagged), oldest first.
+      parameters:
+      - description: 'comma-separated statuses: pending, approved, flagged, spam,
+          rejected, deleted'
+        in: query
+        name: status
+        type: string
+      - description: post UUID
+        in: query
+        name: post_id
+        type: string
+      - default: oldest
+        description: oldest or newest
+        enum:
+        - oldest
+        - newest
+        in: query
+        name: sort
+        type: string
+      - default: 1
+        description: page
+        in: query
+        name: page
+        type: integer
+      - default: 20
+        description: per page
+        in: query
+        name: per_page
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/responses.Envelope'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/responses.Envelope'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/responses.Envelope'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/responses.Envelope'
+      security:
+      - Bearer: []
+      summary: List comments for moderation
+      tags:
+      - admin
+  /api/v1/admin/comments/{param1}:
+    delete:
+      description: Removes the comment row. A comment with replies is scrubbed instead
+        (content and author erased, kept as a deleted placeholder) so its replies
+        survive; outcome reports which happened. The action is recorded in the moderation
+        log.
+      parameters:
+      - description: comment UUID
+        in: path
+        name: param1
+        required: true
+        type: string
+      - description: moderation reason, up to 1000 characters
+        in: query
+        name: reason
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/responses.Envelope'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/responses.Envelope'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/responses.Envelope'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/responses.Envelope'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/responses.Envelope'
+      security:
+      - Bearer: []
+      summary: Permanently delete a comment
+      tags:
+      - admin
+    get:
+      description: Any status, with author identity, flags, and the moderation log
+        with before/after snapshots.
+      parameters:
+      - description: comment UUID
+        in: path
+        name: param1
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/responses.Envelope'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/responses.Envelope'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/responses.Envelope'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/responses.Envelope'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/responses.Envelope'
+      security:
+      - Bearer: []
+      summary: Get a comment for review
+      tags:
+      - admin
+  /api/v1/admin/comments/{param1}/moderate:
+    post:
+      consumes:
+      - application/json
+      description: approve, reject, or spam a comment, or restore a deleted one. Returns
+        409 when the action is not allowed from the current status.
+      parameters:
+      - description: comment UUID
+        in: path
+        name: param1
+        required: true
+        type: string
+      - description: moderation action
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/requests.ModerateComment'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/responses.Envelope'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/responses.Envelope'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/responses.Envelope'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/responses.Envelope'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/responses.Envelope'
+        "409":
+          description: Conflict
+          schema:
+            $ref: '#/definitions/responses.Envelope'
+      security:
+      - Bearer: []
+      summary: Moderate a comment
+      tags:
+      - admin
+  /api/v1/admin/comments/bulk-moderate:
+    post:
+      consumes:
+      - application/json
+      description: 'Applies one action to up to 500 comments in a single transaction:
+        all change or none do. Unknown ids return 404 and disallowed transitions 409,
+        both listing the offending ids in error.details.ids.'
+      parameters:
+      - description: comment ids and action
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/requests.BulkModerateComments'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/responses.Envelope'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/responses.Envelope'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/responses.Envelope'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/responses.Envelope'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/responses.Envelope'
+        "409":
+          description: Conflict
+          schema:
+            $ref: '#/definitions/responses.Envelope'
+      security:
+      - Bearer: []
+      summary: Bulk moderate comments
+      tags:
+      - admin
+  /api/v1/admin/comments/stats:
+    get:
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/responses.Envelope'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/responses.Envelope'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/responses.Envelope'
+      security:
+      - Bearer: []
+      summary: Comment moderation stats
+      tags:
+      - admin
   /api/v1/admin/media:
     get:
       parameters:
@@ -468,6 +815,10 @@ paths:
             $ref: '#/definitions/responses.Envelope'
         "400":
           description: Bad Request
+          schema:
+            $ref: '#/definitions/responses.Envelope'
+        "429":
+          description: Too Many Requests
           schema:
             $ref: '#/definitions/responses.Envelope'
       security:
@@ -574,6 +925,11 @@ paths:
         in: query
         name: q
         type: string
+      - default: false
+        description: list only soft-deleted posts
+        in: query
+        name: trashed
+        type: boolean
       produces:
       - application/json
       responses:
@@ -613,6 +969,39 @@ paths:
       tags:
       - admin
   /api/v1/admin/posts/{param1}:
+    delete:
+      description: 'Soft delete: the post leaves public and admin reads and releases
+        its slug. List with trashed=true and restore to undo.'
+      parameters:
+      - description: post UUID
+        in: path
+        name: param1
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/responses.Envelope'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/responses.Envelope'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/responses.Envelope'
+        "409":
+          description: Conflict
+          schema:
+            $ref: '#/definitions/responses.Envelope'
+      security:
+      - Bearer: []
+      summary: Delete post
+      tags:
+      - admin
     patch:
       consumes:
       - application/json
@@ -650,6 +1039,40 @@ paths:
       security:
       - Bearer: []
       summary: Update post
+      tags:
+      - admin
+  /api/v1/admin/posts/{param1}/archive:
+    post:
+      description: Hides a draft, scheduled, or published post from public reads;
+        published_at is kept. Publish again to bring it back.
+      parameters:
+      - description: post UUID
+        in: path
+        name: param1
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/responses.Envelope'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/responses.Envelope'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/responses.Envelope'
+        "409":
+          description: Conflict
+          schema:
+            $ref: '#/definitions/responses.Envelope'
+      security:
+      - Bearer: []
+      summary: Archive post
       tags:
       - admin
   /api/v1/admin/posts/{param1}/media:
@@ -690,6 +1113,8 @@ paths:
       - admin
   /api/v1/admin/posts/{param1}/publish:
     post:
+      description: Allowed from draft, scheduled, or archived; sets published_at to
+        now. Returns 409 post.invalid_transition for a post that is already published.
       parameters:
       - description: post UUID
         in: path
@@ -703,6 +1128,10 @@ paths:
           description: OK
           schema:
             $ref: '#/definitions/responses.Envelope'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/responses.Envelope'
         "404":
           description: Not Found
           schema:
@@ -714,6 +1143,74 @@ paths:
       security:
       - Bearer: []
       summary: Publish post
+      tags:
+      - admin
+  /api/v1/admin/posts/{param1}/restore:
+    post:
+      description: Brings a soft-deleted post back as a draft. If a live post took
+        its slug meanwhile, the slug gets the lowest free numeric suffix (-2, -3,
+        …).
+      parameters:
+      - description: post UUID
+        in: path
+        name: param1
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/responses.Envelope'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/responses.Envelope'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/responses.Envelope'
+        "409":
+          description: Conflict
+          schema:
+            $ref: '#/definitions/responses.Envelope'
+      security:
+      - Bearer: []
+      summary: Restore deleted post
+      tags:
+      - admin
+  /api/v1/admin/posts/{param1}/unpublish:
+    post:
+      description: Returns a published or scheduled post to draft and clears published_at.
+      parameters:
+      - description: post UUID
+        in: path
+        name: param1
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/responses.Envelope'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/responses.Envelope'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/responses.Envelope'
+        "409":
+          description: Conflict
+          schema:
+            $ref: '#/definitions/responses.Envelope'
+      security:
+      - Bearer: []
+      summary: Unpublish post
       tags:
       - admin
   /api/v1/admin/tags:
@@ -847,6 +1344,69 @@ paths:
       security:
       - Bearer: []
       summary: List users
+      tags:
+      - admin
+  /api/v1/admin/users/{param1}/profile:
+    get:
+      parameters:
+      - description: user UUID
+        in: path
+        name: param1
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/responses.Envelope'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/responses.Envelope'
+      security:
+      - Bearer: []
+      summary: Get a user's profile
+      tags:
+      - admin
+    patch:
+      consumes:
+      - application/json
+      parameters:
+      - description: user UUID
+        in: path
+        name: param1
+        required: true
+        type: string
+      - description: profile fields
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/requests.PatchProfile'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/responses.Envelope'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/responses.Envelope'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/responses.Envelope'
+        "409":
+          description: Conflict
+          schema:
+            $ref: '#/definitions/responses.Envelope'
+      security:
+      - Bearer: []
+      summary: Update a user's profile
       tags:
       - admin
   /api/v1/auth/login:
@@ -1231,6 +1791,71 @@ paths:
       summary: Current user
       tags:
       - self-service
+  /api/v1/me/avatar:
+    delete:
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/responses.Envelope'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/responses.Envelope'
+        "429":
+          description: Too Many Requests
+          schema:
+            $ref: '#/definitions/responses.Envelope'
+      security:
+      - Bearer: []
+      summary: Remove my avatar
+      tags:
+      - self-service
+    post:
+      consumes:
+      - multipart/form-data
+      description: Multipart field "file". JPEG, PNG, WebP, or GIF identified by content
+        (not the declared type), at most 8192x8192.
+      parameters:
+      - description: image
+        in: formData
+        name: file
+        required: true
+        type: file
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            $ref: '#/definitions/responses.Envelope'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/responses.Envelope'
+        "413":
+          description: Request Entity Too Large
+          schema:
+            $ref: '#/definitions/responses.Envelope'
+        "429":
+          description: Too Many Requests
+          schema:
+            $ref: '#/definitions/responses.Envelope'
+        "502":
+          description: Bad Gateway
+          schema:
+            $ref: '#/definitions/responses.Envelope'
+        "503":
+          description: Service Unavailable
+          schema:
+            $ref: '#/definitions/responses.Envelope'
+      security:
+      - Bearer: []
+      summary: Upload my avatar
+      tags:
+      - self-service
   /api/v1/me/comments:
     get:
       description: All of the caller's comments except deleted ones, newest first,
@@ -1262,6 +1887,80 @@ paths:
       summary: List my comments
       tags:
       - self-service
+  /api/v1/me/email/confirm-change:
+    post:
+      consumes:
+      - application/json
+      description: Consumes the token sent to the new address, marks it verified,
+        and revokes every session.
+      parameters:
+      - description: confirmation token
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/requests.ConfirmEmailChange'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/responses.Envelope'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/responses.Envelope'
+        "409":
+          description: Conflict
+          schema:
+            $ref: '#/definitions/responses.Envelope'
+      security:
+      - Bearer: []
+      summary: Confirm an email change
+      tags:
+      - self-service
+  /api/v1/me/email/request-change:
+    post:
+      consumes:
+      - application/json
+      description: Verifies the password and sends a confirmation token to the new
+        address; the current address gets a notice.
+      parameters:
+      - description: new address and password
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/requests.RequestEmailChange'
+      produces:
+      - application/json
+      responses:
+        "202":
+          description: Accepted
+          schema:
+            $ref: '#/definitions/responses.Envelope'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/responses.Envelope'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/responses.Envelope'
+        "409":
+          description: Conflict
+          schema:
+            $ref: '#/definitions/responses.Envelope'
+        "429":
+          description: Too Many Requests
+          schema:
+            $ref: '#/definitions/responses.Envelope'
+      security:
+      - Bearer: []
+      summary: Request an email change
+      tags:
+      - self-service
   /api/v1/me/password:
     put:
       consumes:
@@ -1291,6 +1990,47 @@ paths:
       security:
       - Bearer: []
       summary: Change own password
+      tags:
+      - self-service
+  /api/v1/me/profile:
+    patch:
+      consumes:
+      - application/json
+      description: Allowlisted fields only; omitted keys are kept, null clears, unknown
+        keys are rejected.
+      parameters:
+      - description: profile fields
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/requests.PatchProfile'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/responses.Envelope'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/responses.Envelope'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/responses.Envelope'
+        "409":
+          description: Conflict
+          schema:
+            $ref: '#/definitions/responses.Envelope'
+        "429":
+          description: Too Many Requests
+          schema:
+            $ref: '#/definitions/responses.Envelope'
+      security:
+      - Bearer: []
+      summary: Update my profile
       tags:
       - self-service
   /api/v1/media/{param1}:
@@ -1473,6 +2213,30 @@ paths:
           schema:
             $ref: '#/definitions/responses.Envelope'
       summary: List tags
+      tags:
+      - public
+  /api/v1/users/{param1}:
+    get:
+      description: Looked up by username or user UUID. Private profiles are 404 except
+        for the owner and admins.
+      parameters:
+      - description: username or user UUID
+        in: path
+        name: param1
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/responses.Envelope'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/responses.Envelope'
+      summary: Public user profile
       tags:
       - public
   /health/live:

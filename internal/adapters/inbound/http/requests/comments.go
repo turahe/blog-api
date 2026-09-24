@@ -17,6 +17,21 @@ type UpdateComment struct {
 	Content string `json:"content" binding:"required,max=10000"`
 }
 
+// ModerateComment is POST /api/v1/admin/comments/:id/moderate.
+type ModerateComment struct {
+	Action string `json:"action" binding:"required,oneof=approve reject spam restore" enums:"approve,reject,spam,restore"`
+	Reason string `json:"reason" binding:"omitempty,max=1000"`
+	// Recorded in the moderation log for author notifications.
+	NotifyAuthor bool `json:"notify_author"`
+}
+
+// BulkModerateComments is POST /api/v1/admin/comments/bulk-moderate. All comments change or none do.
+type BulkModerateComments struct {
+	IDs    []string `json:"ids" binding:"required,min=1,max=500,dive,uuid"`
+	Action string   `json:"action" binding:"required,oneof=approve reject spam restore" enums:"approve,reject,spam,restore"`
+	Reason string   `json:"reason" binding:"omitempty,max=1000"`
+}
+
 // FlagComment is POST /api/v1/comments/:id/flag.
 type FlagComment struct {
 	ReasonCode string `json:"reason_code" binding:"required,oneof=spam abuse hate harassment doxx self_harm copyright impersonation illegal other"`

@@ -1,5 +1,47 @@
 # Changelog
 
+## 2026-09-25 — Content core: post lifecycle, read cache, profiles
+
+### Added
+
+- `admin.posts.unpublish`, `admin.posts.archive`, `admin.posts.delete` (soft), `admin.posts.restore`; `admin.posts.list?trashed=true`
+- Deterministic slug suffixes (`-2`, `-3`, …) on post create and restore; migration `00011_post_slug_live_unique.sql` makes slugs unique among live posts only
+- Redis cache for public post, category, tag, and user-profile reads: generation-keyed invalidation, per-family TTLs (`CACHE_TTL_*`), `CACHE_ENABLED`, `CACHE_BYPASS_HEADER`, and a probe in `app doctor`
+- `me.profile.patch`, `me.avatar.upload`, `me.avatar.delete`, `me.email.request_change`, `me.email.confirm_change`, `public.users.profile`, `admin.users.profile.get`, `admin.users.profile.patch`
+- Migration `00012_user_profiles.sql` adds `user_profiles`, `user_privacy_settings`, and `password_reset_tokens.new_email`
+- Server-side image upload for avatars: type from magic bytes, extension rewritten to match, header-only dimension check (max 8192 px), `AVATAR_MAX_BYTES`
+- RBAC permissions `user.profile.read` and `user.profile.edit` (admin)
+- Upload security review: [upload-security.md](docs/backend/upload-security.md)
+
+### Security
+
+- Presigned uploads are sniffed on `admin.media.complete`; content that contradicts the declared type is rejected
+- Password-reset endpoints accept only password-reset tokens, so an email-change token cannot reset a password
+- Confirming an email change revokes every session; the notifier never logs the token
+- Rate limits: `media.presign` 60/min, `profile.update` 30/min, `profile.avatar` 10/min, `email.change.request` 3/hour, `email.change.confirm` 10/min
+
+### Notes
+
+- Run migrations and re-seed so the new permissions exist
+- The `S3_BUCKET` bucket must exist before the first avatar upload
+- `public.media.transform` stays `501` by decision; see [media.md](docs/backend/media.md#transform-decision-phase-2)
+- Email change delivers through a logging notifier until the Phase 1 mailer lands
+
+## 2026-09-24 — Comment moderation
+
+### Added
+
+- `admin.comments.list`, `admin.comments.get`, `admin.comments.stats`, `admin.comments.moderate`, `admin.comments.bulk_moderate`, `admin.comments.delete`
+- Moderation state machine: `approve` / `reject` / `spam` / `restore`, with `409 comment.invalid_transition` for disallowed or concurrently changed comments
+- Bulk moderation of up to 500 comments in one all-or-nothing transaction
+- Hard delete removes the row, or scrubs content and author when the comment has replies
+- Migration `00010_comment_moderation.sql` adds `moderated_by`, `moderation_reason`, `moderated_at`, and the append-only `comment_moderation_log`
+- RBAC permissions `comment.moderate` (admin, editor, moderator) and `comment.delete` (admin, moderator)
+
+### Notes
+
+- Re-seed existing deployments so the new permissions exist; `00010` removes the unused `comments.moderate` policy
+
 ## 2026-08-02 — JWT RS256
 
 ### Changed

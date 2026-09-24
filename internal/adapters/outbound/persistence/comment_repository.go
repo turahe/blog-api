@@ -17,31 +17,35 @@ var _ ports.Repository = (*CommentRepository)(nil)
 // CommentModel keeps DeletedAt as a plain pointer: soft-deleted comments stay readable
 // as thread placeholders, so GORM's automatic soft-delete scope must not apply.
 type CommentModel struct {
-	ID             int64     `gorm:"primaryKey"`
-	UUID           uuid.UUID `gorm:"type:uuid;column:uuid;default:gen_random_uuid()"`
-	PostID         int64
-	ParentID       *int64
-	AuthorID       *int64
-	AuthorName     *string
-	AuthorEmail    *string
-	IPHash         *string
-	UserAgent      *string
-	Content        string
-	Status         string
-	Depth          int
-	UpvoteCount    int
-	FlagCount      int
-	EditedAt       *time.Time
-	CreatedAt      time.Time
-	UpdatedAt      time.Time
-	DeletedAt      *time.Time
-	DeletedBy      *int64
-	PostUUID       uuid.UUID  `gorm:"column:post_uuid;->"`
-	ParentUUID     *uuid.UUID `gorm:"column:parent_uuid;->"`
-	AuthorUUID     *uuid.UUID `gorm:"column:author_uuid;->"`
-	AuthorUsername *string    `gorm:"column:author_username;->"`
-	DeletedByUUID  *uuid.UUID `gorm:"column:deleted_by_uuid;->"`
-	ReplyCount     int        `gorm:"column:reply_count;->"`
+	ID               int64     `gorm:"primaryKey"`
+	UUID             uuid.UUID `gorm:"type:uuid;column:uuid;default:gen_random_uuid()"`
+	PostID           int64
+	ParentID         *int64
+	AuthorID         *int64
+	AuthorName       *string
+	AuthorEmail      *string
+	IPHash           *string
+	UserAgent        *string
+	Content          string
+	Status           string
+	Depth            int
+	UpvoteCount      int
+	FlagCount        int
+	EditedAt         *time.Time
+	CreatedAt        time.Time
+	UpdatedAt        time.Time
+	DeletedAt        *time.Time
+	DeletedBy        *int64
+	ModeratedBy      *int64
+	ModerationReason *string
+	ModeratedAt      *time.Time
+	PostUUID         uuid.UUID  `gorm:"column:post_uuid;->"`
+	ParentUUID       *uuid.UUID `gorm:"column:parent_uuid;->"`
+	AuthorUUID       *uuid.UUID `gorm:"column:author_uuid;->"`
+	AuthorUsername   *string    `gorm:"column:author_username;->"`
+	DeletedByUUID    *uuid.UUID `gorm:"column:deleted_by_uuid;->"`
+	ModeratedByUUID  *uuid.UUID `gorm:"column:moderated_by_uuid;->"`
+	ReplyCount       int        `gorm:"column:reply_count;->"`
 }
 
 // TableName returns the comments table name for GORM.
@@ -53,6 +57,7 @@ var commentColumns = withRefs("comments",
 	uuidRef("users", "comments.author_id", "author_uuid"),
 	"(SELECT ref.username FROM users ref WHERE ref.id = comments.author_id) AS author_username",
 	uuidRef("users", "comments.deleted_by", "deleted_by_uuid"),
+	uuidRef("users", "comments.moderated_by", "moderated_by_uuid"),
 	"(SELECT count(*) FROM comments ref WHERE ref.parent_id = comments.id AND ref.status IN ('approved', 'deleted')) AS reply_count",
 )
 
@@ -351,5 +356,9 @@ func mapComment(model CommentModel) commentdomain.Comment {
 		UpdatedAt:      model.UpdatedAt,
 		DeletedAt:      model.DeletedAt,
 		DeletedByUUID:  model.DeletedByUUID,
+
+		ModeratedByUUID:  model.ModeratedByUUID,
+		ModerationReason: derefString(model.ModerationReason),
+		ModeratedAt:      model.ModeratedAt,
 	}
 }
