@@ -8,6 +8,7 @@ import (
 	"github.com/spf13/cobra"
 	"github.com/turahe/blog-api/internal/bootstrap"
 	"github.com/turahe/blog-api/internal/platform/config"
+	"github.com/turahe/blog-api/internal/platform/logging"
 	"github.com/turahe/blog-api/internal/platform/messaging"
 )
 
@@ -22,7 +23,7 @@ func newDoctorCmd() *cobra.Command {
 				return err
 			}
 
-			logger := newLogger(cfg.Environment)
+			logger := logging.New(cfg.Environment)
 
 			app, err := bootstrap.NewRuntime(cmd.Context(), cfg, logger, version)
 			if err != nil {

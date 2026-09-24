@@ -501,6 +501,7 @@ func env(key, fallback string) string {
 func pemFromEnvOrFile(inlineKey, pathKey string) (string, error) {
 	path := strings.TrimSpace(os.Getenv(pathKey))
 	if path != "" {
+		// bearer:disable go_gosec_filesystem_filereadtaint
 		raw, err := os.ReadFile(path) //nolint:gosec // G304: path comes from operator-controlled *_PATH env config
 		if err != nil {
 			return "", fmt.Errorf("read %s (%s): %w", pathKey, path, err)

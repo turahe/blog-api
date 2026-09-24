@@ -1,4 +1,5 @@
-package cmd
+// Package dotenv loads KEY=VALUE env files into the process environment.
+package dotenv
 
 import (
 	"bufio"
@@ -8,10 +9,11 @@ import (
 	"strings"
 )
 
-// loadEnvFile reads KEY=VALUE lines into the process environment. Existing
+// Load reads KEY=VALUE lines into the process environment. Existing
 // variables win so Docker/K8s/shell exports are never overridden. Blank lines
 // and # comments are ignored. Values may be single- or double-quoted.
-func loadEnvFile(path string) error {
+func Load(path string) error {
+	// bearer:disable go_gosec_filesystem_filereadtaint
 	file, err := os.Open(path) //nolint:gosec // G304: path is the operator-supplied --env-file flag
 	if err != nil {
 		return err
@@ -25,7 +27,7 @@ func loadEnvFile(path string) error {
 	for scanner.Scan() {
 		lineNo++
 
-		key, value, skip, err := parseEnvLine(scanner.Text())
+		key, value, skip, err := parseLine(scanner.Text())
 		if err != nil {
 			return fmt.Errorf("%q:%d: %w", path, lineNo, err)
 		}
@@ -46,52 +48,10 @@ func loadEnvFile(path string) error {
 	return scanner.Err()
 }
 
-// parseEnvLine returns key/value for an assignment line. skip is true for
-// blanks and comments. The error is a short reason without path/line context.
-func parseEnvLine(raw string) (key, value string, skip bool, err error) {
-	line := strings.TrimSpace(raw)
-	if line == "" || strings.HasPrefix(line, "#") {
-		return "", "", true, nil
-	}
-
-	if after, ok := strings.CutPrefix(line, "export "); ok {
-		line = strings.TrimSpace(after)
-	}
-
-	key, value, ok := strings.Cut(line, "=")
-	if !ok {
-		return "", "", false, errors.New("expected KEY=VALUE")
-	}
-
-	key = strings.TrimSpace(key)
-	if key == "" {
-		return "", "", false, errors.New("empty key")
-	}
-
-	value = unquoteEnvValue(strings.TrimSpace(value))
-
-	return key, value, false, nil
-}
-
-func unquoteEnvValue(value string) string {
-	if len(value) < 2 {
-		return value
-	}
-
-	doubleQuoted := value[0] == '"' && value[len(value)-1] == '"'
-
-	singleQuoted := value[0] == '\'' && value[len(value)-1] == '\''
-	if doubleQuoted || singleQuoted {
-		return value[1 : len(value)-1]
-	}
-
-	return value
-}
-
-// resolveEnvFile picks the dotenv path. Explicit --env-file must exist.
+// Resolve picks the dotenv path. An explicit path must exist.
 // Pass "-" to disable loading. With the default (empty), load .env when
 // present; otherwise skip.
-func resolveEnvFile(flag string) (string, error) {
+func Resolve(flag string) (string, error) {
 	switch flag {
 	case "-":
 		return "", nil
@@ -113,4 +73,46 @@ func resolveEnvFile(flag string) (string, error) {
 
 		return flag, nil
 	}
+}
+
+// parseLine returns key/value for an assignment line. skip is true for
+// blanks and comments. The error is a short reason without path/line context.
+func parseLine(raw string) (key, value string, skip bool, err error) {
+	line := strings.TrimSpace(raw)
+	if line == "" || strings.HasPrefix(line, "#") {
+		return "", "", true, nil
+	}
+
+	if after, ok := strings.CutPrefix(line, "export "); ok {
+		line = strings.TrimSpace(after)
+	}
+
+	key, value, ok := strings.Cut(line, "=")
+	if !ok {
+		return "", "", false, errors.New("expected KEY=VALUE")
+	}
+
+	key = strings.TrimSpace(key)
+	if key == "" {
+		return "", "", false, errors.New("empty key")
+	}
+
+	value = unquote(strings.TrimSpace(value))
+
+	return key, value, false, nil
+}
+
+func unquote(value string) string {
+	if len(value) < 2 {
+		return value
+	}
+
+	doubleQuoted := value[0] == '"' && value[len(value)-1] == '"'
+
+	singleQuoted := value[0] == '\'' && value[len(value)-1] == '\''
+	if doubleQuoted || singleQuoted {
+		return value[1 : len(value)-1]
+	}
+
+	return value
 }

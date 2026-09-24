@@ -1,4 +1,5 @@
-package cmd
+// Package logging builds the application's structured JSON logger.
+package logging
 
 import (
 	"io"
@@ -9,11 +10,13 @@ import (
 
 const redacted = "[REDACTED]"
 
-func newLogger(environment string) *slog.Logger {
-	return newLoggerTo(os.Stdout, environment)
+// New returns a JSON logger on stdout; debug level when environment is "local".
+func New(environment string) *slog.Logger {
+	return NewTo(os.Stdout, environment)
 }
 
-func newLoggerTo(w io.Writer, environment string) *slog.Logger {
+// NewTo is New with an explicit destination writer.
+func NewTo(w io.Writer, environment string) *slog.Logger {
 	level := slog.LevelInfo
 
 	if environment == "local" {

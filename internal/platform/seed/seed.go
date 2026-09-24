@@ -103,6 +103,7 @@ func (o Options) withDefaults() Options {
 	}
 
 	if o.AdminPassword == "" {
+		// bearer:disable go_gosec_secrets_secrets
 		o.AdminPassword = "ChangeMeNow!123"
 	}
 

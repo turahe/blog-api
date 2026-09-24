@@ -2,6 +2,7 @@ package cmd
 
 import (
 	"github.com/spf13/cobra"
+	"github.com/turahe/blog-api/internal/platform/dotenv"
 )
 
 const (
@@ -38,7 +39,7 @@ func newRootCmd() *cobra.Command {
 				return nil
 			}
 
-			path, err := resolveEnvFile(envFile)
+			path, err := dotenv.Resolve(envFile)
 			if err != nil {
 				return err
 			}
@@ -47,7 +48,7 @@ func newRootCmd() *cobra.Command {
 				return nil
 			}
 
-			return loadEnvFile(path)
+			return dotenv.Load(path)
 		},
 	}
 	cmd.AddGroup(
