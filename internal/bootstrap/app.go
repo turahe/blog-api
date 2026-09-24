@@ -108,7 +108,7 @@ func NewRuntime(ctx context.Context, cfg config.Config, logger *slog.Logger, ver
 	auth := authservice.New(users, sessions, resets, hasher, tokenService, clock, ids, authservice.Config{
 		AccessTTL:  cfg.AccessTokenTTL,
 		RefreshTTL: cfg.RefreshTokenTTL,
-	}, nil).WithEmailChange(newNotifier(cfg, logger), cacheOrNil)
+	}, nil).WithEmailChange(newNotifier(cfg, logger, persistence.NewNotificationTemplateRepository(db.GORM)), cacheOrNil)
 
 	posts := postservice.New(postsRepo, ids, clock).WithCache(cacheOrNil)
 	userSvc := userservice.New(users)
@@ -256,7 +256,7 @@ func CacheTTLs(cfg config.Config) map[readcache.Family]time.Duration {
 	}
 }
 
-func newNotifier(cfg config.Config, logger *slog.Logger) authports.EmailChangeNotifier {
+func newNotifier(cfg config.Config, logger *slog.Logger, templates *persistence.NotificationTemplateRepository) authports.EmailChangeNotifier {
 	if strings.TrimSpace(cfg.SMTPHost) == "" {
 		return notify.NewLog(logger)
 	}
@@ -270,7 +270,7 @@ func newNotifier(cfg config.Config, logger *slog.Logger) authports.EmailChangeNo
 
 	logger.Info("email notifications via smtp", "host", cfg.SMTPHost, "port", cfg.SMTPPort)
 
-	return notificationservice.New(mailer, logger, cfg.AppPublicURL)
+	return notificationservice.New(mailer, logger, cfg.AppPublicURL).WithTemplates(templates)
 }
 
 func healthCheckers(db *database.Database, redisClient *redis.Client) []healthports.Checker {

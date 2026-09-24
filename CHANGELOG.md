@@ -1,5 +1,21 @@
 # Changelog
 
+## 2026-09-25 — Notification templates in the database
+
+### Added
+
+- Migration `00013_notification_templates.sql` adds `notification_templates`, one row per `(type, channel)` for `email`, `web`, and `sse`
+- `app seed` inserts the built-in templates without overwriting edited rows
+- Emails render from the stored template, falling back to the built-in copy when a row is missing
+
+### Security
+
+- Saved templates are validated; `{{.Token}}` is allowed only in email bodies and is blanked for every other field at render time
+
+### Notes
+
+- Run migrations and re-seed so the template rows exist
+
 ## 2026-09-25 — Mailpit and email notifications
 
 ### Added

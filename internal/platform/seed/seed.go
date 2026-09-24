@@ -1,4 +1,5 @@
-// Package seed idempotently creates default roles, permissions, and the initial administrator.
+// Package seed idempotently creates default roles, permissions, the initial administrator,
+// and the default notification templates.
 package seed
 
 import (
@@ -11,6 +12,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/turahe/blog-api/internal/adapters/outbound/persistence"
 	outboundrbac "github.com/turahe/blog-api/internal/adapters/outbound/rbac"
+	notificationtemplate "github.com/turahe/blog-api/internal/core/notification/template"
 	userdomain "github.com/turahe/blog-api/internal/core/user/domain"
 	"github.com/turahe/blog-api/internal/platform/security/password"
 	"gorm.io/gorm"
@@ -91,6 +93,10 @@ func Run(ctx context.Context, db *gorm.DB, opts Options) error {
 
 	if err := enforcer.AddRoleForUser(ctx, admin.UUID, roleAdmin); err != nil {
 		return err
+	}
+
+	if err := persistence.NewNotificationTemplateRepository(db).SeedDefaults(ctx, notificationtemplate.Defaults()); err != nil {
+		return fmt.Errorf("seed notification templates: %w", err)
 	}
 
 	return enforcer.Save()

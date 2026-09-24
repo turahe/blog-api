@@ -18,8 +18,42 @@
 
 ## Channels
 
-- `email`: reliable, asynchronous delivery
-- `sse`: near-real-time browser push over `GET /api/v1/me/notifications/stream`
+- `email`: reliable delivery over SMTP. This is the only channel that may contain a secret token.
+- `web`: in-app inbox copy (title and body) for the signed-in user. No secret tokens.
+- `sse`: near-real-time browser push over `GET /api/v1/me/notifications/stream`. Event name `notification.created`, with a title and a short preview. No secret tokens.
+
+## Templates
+
+Templates are stored in the `notification_templates` table (migration `00013`), one row per `(type, channel)`. `app seed` inserts the built-in catalogue from `internal/core/notification/template` and never overwrites rows that already exist, so edits survive a re-seed. When a row is missing or the database is unavailable, the built-in copy is used.
+
+Rows are validated before they are saved: the channel must be `email`, `web`, or `sse`; email needs a subject, web and SSE need a title, and SSE needs an event name; and only the fields listed below may be used. `{{.Token}}` is rejected everywhere except the email body, and at render time the token is blanked for every other field, so a stored template cannot expose it on web or SSE.
+
+Values are inserted as plain text. Newlines in values are collapsed so they cannot break headers.
+
+| Variable | Used for |
+| --- | --- |
+| `{{.Name}}` | Greeting (full name, otherwise username) |
+| `{{.Email}}` | Current account address |
+| `{{.NewEmail}}` | Address being confirmed |
+| `{{.Token}}` | Email body only |
+| `{{.ExpiresAt}}` | UTC expiry, RFC3339 |
+| `{{.PublicURL}}` | API origin |
+| `{{.PostTitle}}` / `{{.PostURL}}` | Publication or moderation target |
+| `{{.Reason}}` | Moderation reason |
+| `{{.ActorName}}` | Person who triggered a moderation alert |
+
+| Type | Email subject | Web title | SSE preview |
+| --- | --- | --- | --- |
+| `account.verify` | Verify your email address | Verify your email | Check your email to confirm this account. |
+| `password.reset` | Reset your password | Reset your password | Check your email for the reset token. |
+| `password.changed` | Your password was changed | Your password was changed | If this was not you, reset your password. |
+| `email.change.confirm` | Confirm your new email address | Confirm your new email | Check the new address for the confirmation token. |
+| `email.change.notice` | Email change requested | Email change requested | Confirm it from the new address, or change your password if this was not you. |
+| `email.changed` | Your email address was changed | Your email address was changed | All sessions were signed out. |
+| `moderation.alert` | Moderation alert: `{{.PostTitle}}` | Moderation alert | `{{.PostTitle}}` needs review. |
+| `publication.published` | Published: `{{.PostTitle}}` | Your post is published | `{{.PostTitle}}` |
+
+SSE frames use `event: notification.created`. The `data` object carries `type`, `title`, and `preview`. Web uses the same `type` and `title`, plus the longer `body`. Email uses `subject` and the plain-text `body`, which is the only place a reset or confirmation token appears.
 
 ## SSE Rules
 
