@@ -38,6 +38,7 @@ type Dependencies struct {
 	Comments       *commentservice.Service
 	RateLimiter    middleware.Limiter
 	CommentRates   handlers.CommentRates
+	LoginPerMinute int
 	Version        string
 	TrustedProxies []string
 	SwaggerEnabled bool
@@ -90,6 +91,7 @@ func NewRouter(deps Dependencies) (*gin.Engine, error) {
 		Comments:       deps.Comments,
 		RateLimiter:    deps.RateLimiter,
 		CommentRates:   deps.CommentRates,
+		LoginPerMinute: deps.LoginPerMinute,
 		Version:        deps.Version,
 	}
 	if deps.Profiles != nil { // keep a nil service a nil interface

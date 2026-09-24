@@ -86,6 +86,17 @@ type IDGenerator interface {
 	New() uuid.UUID
 }
 
+// LoginAttempts tracks failed logins per account key and locks the key after
+// too many failures. Implementations decide the thresholds.
+type LoginAttempts interface {
+	// Locked returns how long key stays locked; zero when it is not locked.
+	Locked(ctx context.Context, key string) (time.Duration, error)
+	// Fail records a failed attempt and returns the lock duration when this failure locked key.
+	Fail(ctx context.Context, key string) (time.Duration, error)
+	// Reset clears the failure count after a successful login.
+	Reset(ctx context.Context, key string) error
+}
+
 // ResetTokenSink optionally captures newly issued reset tokens (tests / local tooling only).
 type ResetTokenSink interface {
 	Capture(rawToken string)

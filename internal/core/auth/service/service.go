@@ -35,8 +35,16 @@ type AuthService struct {
 	ids      ports.IDGenerator
 	sink     ports.ResetTokenSink
 	notifier ports.EmailChangeNotifier
+	attempts ports.LoginAttempts
 	cache    readcache.Cache
 	cfg      Config
+}
+
+// WithLoginAttempts enables account lockout after repeated failed logins.
+// Tracker errors never block a login: lockout fails open like rate limiting.
+func (s *AuthService) WithLoginAttempts(attempts ports.LoginAttempts) *AuthService {
+	s.attempts = attempts
+	return s
 }
 
 // New returns an AuthService; sink, when non-nil, receives raw reset tokens (dev/test delivery).
@@ -80,9 +88,13 @@ func (s *AuthService) Login(ctx context.Context, email, password, userAgent, ip 
 		return authdomain.TokenPair{}, fmt.Errorf("%w: email and password required", authdomain.ErrValidation)
 	}
 
+	if err := s.checkLocked(ctx, email); err != nil {
+		return authdomain.TokenPair{}, err
+	}
+
 	user, err := s.users.FindByEmail(ctx, email)
 	if errors.Is(err, userdomain.ErrNotFound) {
-		return authdomain.TokenPair{}, authdomain.ErrInvalidCredentials
+		return authdomain.TokenPair{}, s.loginFailed(ctx, email)
 	}
 
 	if err != nil {
@@ -94,7 +106,11 @@ func (s *AuthService) Login(ctx context.Context, email, password, userAgent, ip 
 	}
 
 	if user.PasswordHash == "" || !s.hasher.Compare(user.PasswordHash, password) {
-		return authdomain.TokenPair{}, authdomain.ErrInvalidCredentials
+		return authdomain.TokenPair{}, s.loginFailed(ctx, email)
+	}
+
+	if s.attempts != nil {
+		_ = s.attempts.Reset(ctx, loginAttemptKey(email))
 	}
 
 	now := s.clock.Now()
@@ -108,6 +124,39 @@ func (s *AuthService) Login(ctx context.Context, email, password, userAgent, ip 
 	}
 
 	return s.issuePair(ctx, user.UUID, user.Email, user.Username, userAgent, ip, ttl)
+}
+
+// loginAttemptKey keys lockout by account identity. Unknown emails are tracked
+// too, so a lockout response does not reveal whether an account exists.
+func loginAttemptKey(email string) string {
+	return "email:" + email
+}
+
+func (s *AuthService) checkLocked(ctx context.Context, email string) error {
+	if s.attempts == nil {
+		return nil
+	}
+
+	remaining, err := s.attempts.Locked(ctx, loginAttemptKey(email))
+	if err != nil || remaining <= 0 {
+		return nil
+	}
+
+	return authdomain.LockedError{RetryAfter: remaining}
+}
+
+// loginFailed records the failure and returns the error the caller should see.
+func (s *AuthService) loginFailed(ctx context.Context, email string) error {
+	if s.attempts == nil {
+		return authdomain.ErrInvalidCredentials
+	}
+
+	lockedFor, err := s.attempts.Fail(ctx, loginAttemptKey(email))
+	if err == nil && lockedFor > 0 {
+		return authdomain.LockedError{RetryAfter: lockedFor}
+	}
+
+	return authdomain.ErrInvalidCredentials
 }
 
 // Refresh rotates the refresh token; reusing a revoked token revokes its whole family.
@@ -495,6 +544,8 @@ func MapError(err error) (code, message string, status int) {
 		return "unauthorized", "Invalid email or password", 401
 	case errors.Is(err, authdomain.ErrUserInactive):
 		return "unauthorized", "Account is not active", 401
+	case errors.Is(err, authdomain.ErrAccountLocked):
+		return "auth.login.locked", "Too many failed login attempts, try again later", 429
 	case errors.Is(err, authdomain.ErrCurrentPassword):
 		return "password.current_mismatch", "Current password is incorrect", 403
 	case errors.Is(err, authdomain.ErrPasswordMismatch):

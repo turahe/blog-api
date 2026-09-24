@@ -4,7 +4,9 @@ package handlers
 import (
 	"errors"
 	"io"
+	"math"
 	nethttp "net/http"
+	"strconv"
 	"strings"
 	"time"
 
@@ -12,6 +14,7 @@ import (
 	"github.com/turahe/blog-api/internal/adapters/inbound/http/middleware"
 	"github.com/turahe/blog-api/internal/adapters/inbound/http/requests"
 	"github.com/turahe/blog-api/internal/adapters/inbound/http/responses"
+	authdomain "github.com/turahe/blog-api/internal/core/auth/domain"
 	authports "github.com/turahe/blog-api/internal/core/auth/ports"
 	authservice "github.com/turahe/blog-api/internal/core/auth/service"
 )
@@ -33,6 +36,13 @@ func writeAuthError(c *gin.Context, err error, mapErr func(error) (code, message
 	})
 }
 
+func setLockedRetryAfter(c *gin.Context, err error) {
+	var locked authdomain.LockedError
+	if errors.As(err, &locked) {
+		c.Header("Retry-After", strconv.Itoa(max(int(math.Ceil(locked.RetryAfter.Seconds())), 1)))
+	}
+}
+
 // loginHandler godoc
 //
 //	@Summary	Login
@@ -43,6 +53,7 @@ func writeAuthError(c *gin.Context, err error, mapErr func(error) (code, message
 //	@Success	200		{object}	responses.Envelope
 //	@Failure	400		{object}	responses.Envelope
 //	@Failure	401		{object}	responses.Envelope
+//	@Failure	429		{object}	responses.Envelope	"rate limited or account locked; see Retry-After"
 //	@Router		/api/v1/auth/login [post]
 func loginHandler(auth authports.Service) gin.HandlerFunc {
 	return func(c *gin.Context) {
@@ -53,6 +64,7 @@ func loginHandler(auth authports.Service) gin.HandlerFunc {
 
 		pair, err := auth.Login(c.Request.Context(), req.Email, req.Password, c.Request.UserAgent(), c.ClientIP(), req.Remember)
 		if err != nil {
+			setLockedRetryAfter(c, err)
 			writeAuthError(c, err, authservice.MapError)
 
 			return

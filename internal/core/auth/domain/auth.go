@@ -21,7 +21,16 @@ var (
 	ErrPasswordMismatch   = errors.New("password confirm mismatch")
 	ErrCurrentPassword    = errors.New("current password mismatch")
 	ErrEmailTaken         = errors.New("email already in use")
+	ErrAccountLocked      = errors.New("account temporarily locked")
 )
+
+// LockedError is ErrAccountLocked with the time left until login is allowed again.
+type LockedError struct {
+	RetryAfter time.Duration
+}
+
+func (e LockedError) Error() string        { return ErrAccountLocked.Error() }
+func (e LockedError) Is(target error) bool { return target == ErrAccountLocked }
 
 // Single-use token purposes.
 const (

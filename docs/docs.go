@@ -1630,6 +1630,12 @@ const docTemplate = `{
                         "schema": {
                             "$ref": "#/definitions/responses.Envelope"
                         }
+                    },
+                    "429": {
+                        "description": "rate limited or account locked; see Retry-After",
+                        "schema": {
+                            "$ref": "#/definitions/responses.Envelope"
+                        }
                     }
                 }
             }

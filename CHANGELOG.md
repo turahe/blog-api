@@ -1,5 +1,13 @@
 # Changelog
 
+## 2026-09-25 — Login throttling and lockout
+
+### Security
+
+- `POST /api/v1/auth/login` is rate limited per IP (`AUTH_LOGIN_PER_MINUTE`, default 10/min)
+- After `AUTH_LOGIN_MAX_FAILURES` (default 5) failed logins for an email within `AUTH_LOGIN_LOCKOUT` (default 15m), that email is locked for the same period; unknown emails are tracked too so lockout does not reveal which accounts exist
+- Locked logins return `429` `auth.login.locked` with `Retry-After`; a successful login clears the failure count
+
 ## 2026-09-25 — PostgreSQL only
 
 ### Removed

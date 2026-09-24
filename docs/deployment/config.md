@@ -72,6 +72,13 @@ Do not use `0.0.0.0/0`, `*`, or arbitrary client-controlled addresses in
 | `APP_JWT_ISSUER` | `blog-api` | No | JWT issuer claim. |
 | `APP_ACCESS_TOKEN_TTL` | `15m` | No | Access-token lifetime. |
 | `APP_REFRESH_TOKEN_TTL` | `720h` | No | Refresh-session lifetime. |
+| `AUTH_LOGIN_PER_MINUTE` | `10` | No | Per-IP request budget for `POST /api/v1/auth/login`; `0` disables it. |
+| `AUTH_LOGIN_MAX_FAILURES` | `5` | No | Failed logins per email (known or unknown) before a lockout; `0` disables lockout. |
+| `AUTH_LOGIN_LOCKOUT` | `15m` | No | Lockout length, and the window in which failures are counted. |
+
+A locked or throttled login answers `429` with `Retry-After`. Lockout is keyed by email, so
+a correct password is refused until the lock expires; both limits are stored in Redis and fail
+open when Redis is unavailable.
 
 Use independent random values for each secret. Never log or commit production PEMs.
 Local development can point at [`configs/dev/`](../../configs/dev/README.md). Rotating the ES256

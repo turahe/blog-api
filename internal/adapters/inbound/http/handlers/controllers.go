@@ -37,6 +37,8 @@ type Deps struct {
 	Comments       *commentservice.Service
 	RateLimiter    middleware.Limiter
 	CommentRates   CommentRates
+	// LoginPerMinute is the per-IP budget for auth.login; zero disables the limit.
+	LoginPerMinute int
 	Version        string
 }
 
@@ -80,7 +82,7 @@ func NewControllers(deps Deps) routes.Controllers {
 
 	if deps.Auth != nil {
 		c.Auth = routes.Auth{
-			Login:                 loginHandler(deps.Auth),
+			Login:                 chain(middleware.RateLimit(deps.RateLimiter, deps.Logger, "auth.login", deps.LoginPerMinute, time.Minute), loginHandler(deps.Auth)),
 			Refresh:               refreshHandler(deps.Auth),
 			Logout:                logoutHandler(deps.Auth),
 			PasswordForgot:        forgotPasswordHandler(deps.Auth),

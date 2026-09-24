@@ -58,6 +58,9 @@ type Config struct {
 	JWTIssuer                     string
 	AccessTokenTTL                time.Duration
 	RefreshTokenTTL               time.Duration
+	AuthLoginPerMinute            int
+	AuthLoginMaxFailures          int
+	AuthLoginLockout              time.Duration
 	MessageBroker                 string
 	KafkaBrokers                  []string
 	KafkaConsumerGroup            string
@@ -393,6 +396,9 @@ func Load() (Config, error) {
 		JWTIssuer:                     env("APP_JWT_ISSUER", "blog-api"),
 		AccessTokenTTL:                duration("APP_ACCESS_TOKEN_TTL", 15*time.Minute),
 		RefreshTokenTTL:               duration("APP_REFRESH_TOKEN_TTL", 30*24*time.Hour),
+		AuthLoginPerMinute:            integer("AUTH_LOGIN_PER_MINUTE", 10),
+		AuthLoginMaxFailures:          integer("AUTH_LOGIN_MAX_FAILURES", 5),
+		AuthLoginLockout:              duration("AUTH_LOGIN_LOCKOUT", 15*time.Minute),
 		MessageBroker:                 strings.ToLower(env("MESSAGE_BROKER", "")),
 		KafkaBrokers:                  splitCSV(os.Getenv("KAFKA_BROKERS")),
 		KafkaConsumerGroup:            env("KAFKA_CONSUMER_GROUP", "blog-api"),

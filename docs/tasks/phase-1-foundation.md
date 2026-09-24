@@ -70,7 +70,8 @@ real mailer are still open.
 - [ ] `auth.oauth.callback` — `POST /api/v1/auth/oauth/{provider}/callback`
 - [ ] Replace the reset-token log stub with a real mailer per [email.md](../backend/email.md)
 - [x] Refresh-token rotation with reuse detection revoking the whole session family
-- [ ] Add login throttling and lockout on repeated failures
+- [x] Add login throttling and lockout on repeated failures (`AUTH_LOGIN_*`; per-IP limit plus
+      per-email Redis lockout, `429` with `Retry-After`)
 
 Spec: [authentication.md](../features/authentication.md)
 

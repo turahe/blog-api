@@ -110,6 +110,9 @@ func NewRuntime(ctx context.Context, cfg config.Config, logger *slog.Logger, ver
 		AccessTTL:  cfg.AccessTokenTTL,
 		RefreshTTL: cfg.RefreshTokenTTL,
 	}, nil).WithEmailChange(newNotifier(cfg, logger, persistence.NewNotificationTemplateRepository(db.GORM)), cacheOrNil)
+	if cfg.AuthLoginMaxFailures > 0 {
+		auth.WithLoginAttempts(ratelimit.NewLoginLockout(redisClient, cfg.AuthLoginMaxFailures, cfg.AuthLoginLockout))
+	}
 
 	posts := postservice.New(postsRepo, ids, clock).WithCache(cacheOrNil)
 	userSvc := userservice.New(users)
@@ -165,6 +168,7 @@ func NewRuntime(ctx context.Context, cfg config.Config, logger *slog.Logger, ver
 			CreatePerMinute:  cfg.CommentsCreatePerMinute,
 			ActionsPerMinute: cfg.CommentsActionsPerMinute,
 		},
+		LoginPerMinute:    cfg.AuthLoginPerMinute,
 		Version:           version,
 		TrustedProxies:    cfg.TrustedProxies,
 		SwaggerEnabled:    cfg.SwaggerEnabled,
