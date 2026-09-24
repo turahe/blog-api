@@ -1,5 +1,26 @@
 # Changelog
 
+## 2026-09-25 — TOTP two-factor authentication
+
+### Added
+
+- TOTP 2FA (RFC 6238, ±1 step). Enrollment is at `GET|DELETE /api/v1/me/2fa`,
+  `POST /api/v1/me/2fa/setup`, `POST /api/v1/me/2fa/confirm` (returns 10 single-use backup
+  codes) and `POST /api/v1/me/2fa/backup-codes`
+- For enrolled accounts, `POST /api/v1/auth/login` returns `two_factor_required` and a
+  5-minute challenge token instead of tokens. `POST /api/v1/auth/2fa/challenge` exchanges it,
+  with a TOTP or backup code, for the token pair. The challenge is rate limited, allows
+  5 attempts and is single use
+- TOTP secrets are encrypted with AES-256-GCM under the new `APP_ENCRYPTION_KEY`, and backup
+  codes are stored as keyed HMACs (migration `00014_two_factor.sql`). Each time step is
+  accepted only once, so codes cannot be replayed
+- `AUTH_2FA_ISSUER` sets the authenticator app label
+
+### Security
+
+- Without `APP_ENCRYPTION_KEY`, enrollment is disabled and already-enrolled accounts fail
+  closed at login (`503 auth.2fa.unavailable`) instead of skipping the second factor
+
 ## 2026-09-25 — Casbin policy reload without restart
 
 ### Added

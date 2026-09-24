@@ -37,24 +37,27 @@ func writeAuthError(c *gin.Context, err error, mapErr func(error) (code, message
 }
 
 func setLockedRetryAfter(c *gin.Context, err error) {
-	var locked authdomain.LockedError
-	if errors.As(err, &locked) {
+	if locked, ok := errors.AsType[authdomain.LockedError](err); ok {
 		c.Header("Retry-After", strconv.Itoa(max(int(math.Ceil(locked.RetryAfter.Seconds())), 1)))
 	}
 }
 
 // loginHandler godoc
 //
-//	@Summary	Login
-//	@Tags		auth
-//	@Accept		json
-//	@Produce	json
-//	@Param		body	body		requests.Login	true	"credentials"
-//	@Success	200		{object}	responses.Envelope
-//	@Failure	400		{object}	responses.Envelope
-//	@Failure	401		{object}	responses.Envelope
-//	@Failure	429		{object}	responses.Envelope	"rate limited or account locked; see Retry-After"
-//	@Router		/api/v1/auth/login [post]
+//	@Summary		Login
+//	@Tags			auth
+//	@Accept			json
+//	@Produce		json
+//	@Description	Returns a token pair, or for accounts with two-factor enabled
+//	@Description	`{"two_factor_required": true, "challenge_token", "expires_at", "expires_in"}`
+//	@Description	to complete at POST /api/v1/auth/2fa/challenge.
+//	@Param			body	body		requests.Login	true	"credentials"
+//	@Success		200		{object}	responses.Envelope
+//	@Failure		400		{object}	responses.Envelope
+//	@Failure		401		{object}	responses.Envelope
+//	@Failure		429		{object}	responses.Envelope	"rate limited or account locked; see Retry-After"
+//	@Failure		503		{object}	responses.Envelope	"two-factor account but 2FA is not configured"
+//	@Router			/api/v1/auth/login [post]
 func loginHandler(auth authports.Service) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		var req requests.Login
@@ -62,7 +65,7 @@ func loginHandler(auth authports.Service) gin.HandlerFunc {
 			return
 		}
 
-		pair, err := auth.Login(c.Request.Context(), req.Email, req.Password, c.Request.UserAgent(), c.ClientIP(), req.Remember)
+		result, err := auth.Login(c.Request.Context(), req.Email, req.Password, c.Request.UserAgent(), c.ClientIP(), req.Remember)
 		if err != nil {
 			setLockedRetryAfter(c, err)
 			writeAuthError(c, err, authservice.MapError)
@@ -70,7 +73,14 @@ func loginHandler(auth authports.Service) gin.HandlerFunc {
 			return
 		}
 
-		responses.SuccessFor(c, nethttp.StatusOK, responses.ServiceAuth, responses.CaseSuccess, responses.TokenPair(pair))
+		if result.Challenge != nil {
+			responses.SuccessFor(c, nethttp.StatusOK, responses.ServiceAuth, responses.CaseSuccess,
+				responses.TwoFactorChallenge(*result.Challenge, time.Now()))
+
+			return
+		}
+
+		responses.SuccessFor(c, nethttp.StatusOK, responses.ServiceAuth, responses.CaseSuccess, responses.TokenPair(result.Tokens))
 	}
 }
 

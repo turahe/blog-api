@@ -41,6 +41,7 @@ type AuthService struct {
 	roles    rbacports.RoleAssigner
 	cache    readcache.Cache
 	cfg      Config
+	mfa      twoFactorDeps
 }
 
 // WithLoginAttempts enables account lockout after repeated failed logins.
@@ -84,38 +85,53 @@ func New(
 	}
 }
 
-// Login verifies credentials and issues a token pair; remember extends the refresh lifetime.
-func (s *AuthService) Login(ctx context.Context, email, password, userAgent, ip string, remember bool) (authdomain.TokenPair, error) {
+// Login verifies credentials and issues a token pair; remember extends the refresh
+// lifetime. Accounts with two-factor enabled get a challenge instead of tokens.
+func (s *AuthService) Login(ctx context.Context, email, password, userAgent, ip string, remember bool) (authdomain.LoginResult, error) {
 	email = strings.TrimSpace(strings.ToLower(email))
 	if email == "" || password == "" {
-		return authdomain.TokenPair{}, fmt.Errorf("%w: email and password required", authdomain.ErrValidation)
+		return authdomain.LoginResult{}, fmt.Errorf("%w: email and password required", authdomain.ErrValidation)
 	}
 
 	if err := s.checkLocked(ctx, email); err != nil {
-		return authdomain.TokenPair{}, err
+		return authdomain.LoginResult{}, err
 	}
 
 	user, err := s.users.FindByEmail(ctx, email)
 	if errors.Is(err, userdomain.ErrNotFound) {
-		return authdomain.TokenPair{}, s.loginFailed(ctx, email)
+		return authdomain.LoginResult{}, s.loginFailed(ctx, email)
 	}
 
 	if err != nil {
-		return authdomain.TokenPair{}, err
+		return authdomain.LoginResult{}, err
 	}
 
 	if !user.IsActive() {
-		return authdomain.TokenPair{}, authdomain.ErrUserInactive
+		return authdomain.LoginResult{}, authdomain.ErrUserInactive
 	}
 
 	if user.PasswordHash == "" || !s.hasher.Compare(user.PasswordHash, password) {
-		return authdomain.TokenPair{}, s.loginFailed(ctx, email)
+		return authdomain.LoginResult{}, s.loginFailed(ctx, email)
 	}
 
 	if s.attempts != nil {
 		_ = s.attempts.Reset(ctx, loginAttemptKey(email))
 	}
 
+	challenge, err := s.startTwoFactor(ctx, user.UUID, authdomain.PendingLogin{
+		UserUUID: user.UUID, Remember: remember, UserAgent: userAgent, IPAddress: ip,
+	})
+	if err != nil || challenge != nil {
+		return authdomain.LoginResult{Challenge: challenge}, err
+	}
+
+	pair, err := s.completeLogin(ctx, user, userAgent, ip, remember)
+
+	return authdomain.LoginResult{Tokens: pair}, err
+}
+
+// completeLogin records the login and issues the session for a fully authenticated user.
+func (s *AuthService) completeLogin(ctx context.Context, user userdomain.User, userAgent, ip string, remember bool) (authdomain.TokenPair, error) {
 	now := s.clock.Now()
 	if err := s.users.RecordLogin(ctx, user.UUID, now); err != nil {
 		return authdomain.TokenPair{}, fmt.Errorf("record login: %w", err)
@@ -141,7 +157,11 @@ func (s *AuthService) checkLocked(ctx context.Context, email string) error {
 	}
 
 	remaining, err := s.attempts.Locked(ctx, loginAttemptKey(email))
-	if err != nil || remaining <= 0 {
+	if err != nil {
+		return nil //nolint:nilerr // lockout fails open so a Redis outage cannot block every login
+	}
+
+	if remaining <= 0 {
 		return nil
 	}
 
@@ -545,43 +565,55 @@ func validatePasswordStrength(password string) error {
 	return nil
 }
 
+const codeUnauthorized = "unauthorized"
+
+// errorMapping is one MapError row; an empty message means err.Error().
+type errorMapping struct {
+	err     error
+	code    string
+	message string
+	status  int
+}
+
+// errorMappings is checked in order; the first errors.Is match wins.
+var errorMappings = []errorMapping{
+	{authdomain.ErrValidation, "validation_error", "", 400},
+	{authdomain.ErrInvalidCredentials, codeUnauthorized, "Invalid email or password", 401},
+	{authdomain.ErrUserInactive, codeUnauthorized, "Account is not active", 401},
+	{authdomain.ErrAccountLocked, "auth.login.locked", "Too many failed login attempts, try again later", 429},
+	{authdomain.ErrCurrentPassword, "password.current_mismatch", "Current password is incorrect", 403},
+	{authdomain.ErrPasswordMismatch, "password.confirm_mismatch", "Password confirmation does not match", 422},
+	{authdomain.ErrEmailTaken, "auth.email.taken", "Email address is already in use", 409},
+	{userdomain.ErrUsernameTaken, "user.username.taken", "Username is already in use", 409},
+	{userdomain.ErrNotFound, "user.not_found", "User not found", 404},
+	{authdomain.ErrTargetInactive, "user.inactive", "User account is not active", 409},
+	{authdomain.ErrTwoFactorInvalidCode, "auth.2fa.invalid_code", "Invalid or already used code", 401},
+	{authdomain.ErrChallengeInvalid, "auth.2fa.challenge_invalid", "The login challenge is invalid or expired; sign in again", 401},
+	{authdomain.ErrTwoFactorAlreadyEnabled, "auth.2fa.already_enabled", "Two-factor authentication is already enabled", 409},
+	{authdomain.ErrTwoFactorNotEnrolled, "auth.2fa.not_enabled", "Two-factor authentication is not enabled", 409},
+	{authdomain.ErrTwoFactorPending, "auth.2fa.not_started", "Start two-factor setup first", 409},
+	{authdomain.ErrTwoFactorUnavailable, "auth.2fa.unavailable", "Two-factor authentication is not configured on this server", 503},
+	{rbacdomain.ErrRoleNotFound, "rbac.role.not_found", "", 422},
+	{authdomain.ErrPasswordStrength, "password.strength", "Password does not meet strength requirements", 422},
+	{authdomain.ErrTokenUsed, "auth.password.reset_token_used", "Reset token already used", 400},
+	{authdomain.ErrTokenExpired, "auth.password.reset_token_expired", "Reset token expired", 400},
+	{authdomain.ErrInvalidToken, codeUnauthorized, "Invalid or expired token", 401},
+	{authdomain.ErrTokenRevoked, codeUnauthorized, "Invalid or expired token", 401},
+}
+
 // MapError maps auth errors to an error code, message, and HTTP status.
 func MapError(err error) (code, message string, status int) {
-	switch {
-	case errors.Is(err, authdomain.ErrValidation):
-		return "validation_error", err.Error(), 400
-	case errors.Is(err, authdomain.ErrInvalidCredentials):
-		return "unauthorized", "Invalid email or password", 401
-	case errors.Is(err, authdomain.ErrUserInactive):
-		return "unauthorized", "Account is not active", 401
-	case errors.Is(err, authdomain.ErrAccountLocked):
-		return "auth.login.locked", "Too many failed login attempts, try again later", 429
-	case errors.Is(err, authdomain.ErrCurrentPassword):
-		return "password.current_mismatch", "Current password is incorrect", 403
-	case errors.Is(err, authdomain.ErrPasswordMismatch):
-		return "password.confirm_mismatch", "Password confirmation does not match", 422
-	case errors.Is(err, authdomain.ErrEmailTaken):
-		return "auth.email.taken", "Email address is already in use", 409
-	case errors.Is(err, userdomain.ErrUsernameTaken):
-		return "user.username.taken", "Username is already in use", 409
-	case errors.Is(err, userdomain.ErrNotFound):
-		return "user.not_found", "User not found", 404
-	case errors.Is(err, authdomain.ErrTargetInactive):
-		return "user.inactive", "User account is not active", 409
-	case errors.Is(err, rbacdomain.ErrRoleNotFound):
-		return "rbac.role.not_found", err.Error(), 422
-	case errors.Is(err, authdomain.ErrPasswordStrength):
-		return "password.strength", "Password does not meet strength requirements", 422
-	case errors.Is(err, authdomain.ErrTokenUsed):
-		return "auth.password.reset_token_used", "Reset token already used", 400
-	case errors.Is(err, authdomain.ErrTokenExpired):
-		return "auth.password.reset_token_expired", "Reset token expired", 400
-	case errors.Is(err, authdomain.ErrInvalidToken),
-		errors.Is(err, authdomain.ErrTokenRevoked):
-		return "unauthorized", "Invalid or expired token", 401
-	default:
-		return "internal_error", "An unexpected error occurred", 500
+	for _, m := range errorMappings {
+		if errors.Is(err, m.err) {
+			if m.message == "" {
+				return m.code, err.Error(), m.status
+			}
+
+			return m.code, m.message, m.status
+		}
 	}
+
+	return "internal_error", "An unexpected error occurred", 500
 }
 
 // MapResetError maps password reset errors to an error code, message, and HTTP status.

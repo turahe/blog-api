@@ -10,6 +10,8 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/turahe/blog-api/internal/platform/security/secretbox"
 )
 
 // DBDriverPostgres is the only supported DB_DRIVER; the migrations use
@@ -62,6 +64,8 @@ type Config struct {
 	AuthLoginMaxFailures          int
 	AuthLoginLockout              time.Duration
 	RBACPolicyReloadInterval      time.Duration
+	EncryptionKey                 string
+	TwoFactorIssuer               string
 	MessageBroker                 string
 	KafkaBrokers                  []string
 	KafkaConsumerGroup            string
@@ -402,6 +406,8 @@ func Load() (Config, error) {
 		AuthLoginMaxFailures:          integer("AUTH_LOGIN_MAX_FAILURES", 5),
 		AuthLoginLockout:              duration("AUTH_LOGIN_LOCKOUT", 15*time.Minute),
 		RBACPolicyReloadInterval:      duration("RBAC_POLICY_RELOAD_INTERVAL", 30*time.Second),
+		EncryptionKey:                 env("APP_ENCRYPTION_KEY", ""),
+		TwoFactorIssuer:               env("AUTH_2FA_ISSUER", "Blog"),
 		MessageBroker:                 strings.ToLower(env("MESSAGE_BROKER", "")),
 		KafkaBrokers:                  splitCSV(os.Getenv("KAFKA_BROKERS")),
 		KafkaConsumerGroup:            env("KAFKA_CONSUMER_GROUP", "blog-api"),
@@ -517,6 +523,12 @@ func (c *Config) validateSecrets() error {
 
 	if c.JWTPrivateKey == "" || c.JWTPublicKey == "" {
 		return errors.New("JWT ES256 keys are required: set APP_JWT_PRIVATE_KEY or APP_JWT_PRIVATE_KEY_PATH, and APP_JWT_PUBLIC_KEY or APP_JWT_PUBLIC_KEY_PATH")
+	}
+
+	if c.EncryptionKey != "" {
+		if _, err := secretbox.ParseKey(c.EncryptionKey); err != nil {
+			return fmt.Errorf("APP_ENCRYPTION_KEY: %w", err)
+		}
 	}
 
 	return nil

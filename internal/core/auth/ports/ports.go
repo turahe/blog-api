@@ -102,9 +102,46 @@ type ResetTokenSink interface {
 	Capture(rawToken string)
 }
 
+// TwoFactorRepository stores TOTP enrollments and backup codes.
+type TwoFactorRepository interface {
+	// Find returns authdomain.ErrTwoFactorNotEnrolled when the user has no enrollment.
+	Find(ctx context.Context, userID uuid.UUID) (authdomain.TwoFactor, error)
+	// SavePending starts or restarts an unconfirmed enrollment, discarding backup codes.
+	SavePending(ctx context.Context, userID uuid.UUID, secretCiphertext string, at time.Time) error
+	// Confirm enables the enrollment, records step as used, and stores the backup code hashes.
+	Confirm(ctx context.Context, userID uuid.UUID, step int64, codeHashes []string, at time.Time) error
+	// UseStep records step as used; false when it (or a later step) was already used.
+	UseStep(ctx context.Context, userID uuid.UUID, step int64) (bool, error)
+	// UseBackupCode spends an unused code; false when no unused code matches.
+	UseBackupCode(ctx context.Context, userID uuid.UUID, codeHash string, at time.Time) (bool, error)
+	// ReplaceBackupCodes discards every code and stores new hashes.
+	ReplaceBackupCodes(ctx context.Context, userID uuid.UUID, codeHashes []string, at time.Time) error
+	// Delete removes the enrollment and its backup codes.
+	Delete(ctx context.Context, userID uuid.UUID) error
+}
+
+// SecretBox encrypts TOTP secrets at rest and hashes backup codes with a server key.
+type SecretBox interface {
+	Encrypt(plaintext []byte) (string, error)
+	Decrypt(ciphertext string) ([]byte, error)
+	MAC(value string) string
+}
+
+// ChallengeStore holds pending two-factor logins keyed by the hash of their token.
+type ChallengeStore interface {
+	Save(ctx context.Context, tokenHash string, login authdomain.PendingLogin, ttl time.Duration) error
+	// Get returns authdomain.ErrChallengeInvalid for an unknown or expired token.
+	Get(ctx context.Context, tokenHash string) (authdomain.PendingLogin, error)
+	// Attempt counts one code attempt and returns the attempts so far, this one included.
+	Attempt(ctx context.Context, tokenHash string) (int, error)
+	// Consume deletes the challenge; false when it was already gone.
+	Consume(ctx context.Context, tokenHash string) (bool, error)
+}
+
 // Service is the auth use-case API consumed by HTTP handlers.
 type Service interface {
-	Login(ctx context.Context, email, password, userAgent, ip string, remember bool) (authdomain.TokenPair, error)
+	// Login returns a challenge instead of tokens when the account has two-factor enabled.
+	Login(ctx context.Context, email, password, userAgent, ip string, remember bool) (authdomain.LoginResult, error)
 	Refresh(ctx context.Context, refreshToken, userAgent, ip string) (authdomain.TokenPair, error)
 	Logout(ctx context.Context, userID uuid.UUID, refreshToken string) error
 	ParseAccessToken(token string) (authdomain.AccessClaims, error)

@@ -28,7 +28,6 @@ func registerContractStubs(v1 *gin.RouterGroup, auth AuthMiddleware, c Controlle
 	post(none, "/newsletter/unsubscribe", "public.newsletter.unsubscribe", pub, n, c, nil)
 
 	post(none, "/auth/oauth/:param1/callback", "auth.oauth.callback", authG, n, c, nil)
-	post(required, "/auth/2fa/challenge", "auth.2fa.challenge", authG, req, c, nil)
 
 	get(required, "/me/activity", "me.activity.list", self, req, c, nil)
 	get(required, "/me/activity/export", "me.activity.export", self, req, c, nil)

@@ -259,10 +259,11 @@ func TestLoginIssuesTokenPair(t *testing.T) {
 	resets := &memResets{byHash: map[string]authdomain.PasswordResetToken{}, byID: map[uuid.UUID]authdomain.PasswordResetToken{}}
 	svc := newService(users, sessions, resets, nil)
 
-	pair, err := svc.Login(context.Background(), "a@example.com", "secret", "ua", "127.0.0.1", true)
+	res, err := svc.Login(context.Background(), "a@example.com", "secret", "ua", "127.0.0.1", true)
 	require.NoError(t, err)
-	require.NotEmpty(t, pair.AccessToken)
-	require.NotEmpty(t, pair.RefreshToken)
+	require.Nil(t, res.Challenge)
+	require.NotEmpty(t, res.Tokens.AccessToken)
+	require.NotEmpty(t, res.Tokens.RefreshToken)
 }
 
 func TestLoginRejectsBadPassword(t *testing.T) {

@@ -13,8 +13,8 @@ type fakeAuthService struct {
 	parseAccessFn func(token string) (authdomain.AccessClaims, error)
 }
 
-func (f fakeAuthService) Login(context.Context, string, string, string, string, bool) (authdomain.TokenPair, error) {
-	return authdomain.TokenPair{}, nil
+func (f fakeAuthService) Login(context.Context, string, string, string, string, bool) (authdomain.LoginResult, error) {
+	return authdomain.LoginResult{}, nil
 }
 
 func (f fakeAuthService) Refresh(context.Context, string, string, string) (authdomain.TokenPair, error) {

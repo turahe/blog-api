@@ -15,6 +15,7 @@ import (
 	"github.com/turahe/blog-api/internal/adapters/inbound/http/handlers"
 	"github.com/turahe/blog-api/internal/adapters/inbound/http/middleware"
 	"github.com/turahe/blog-api/internal/adapters/outbound/cache"
+	"github.com/turahe/blog-api/internal/adapters/outbound/challenge"
 	"github.com/turahe/blog-api/internal/adapters/outbound/mail"
 	"github.com/turahe/blog-api/internal/adapters/outbound/notify"
 	"github.com/turahe/blog-api/internal/adapters/outbound/persistence"
@@ -42,6 +43,7 @@ import (
 	redisplatform "github.com/turahe/blog-api/internal/platform/redis"
 	jwttoken "github.com/turahe/blog-api/internal/platform/security/jwt"
 	"github.com/turahe/blog-api/internal/platform/security/password"
+	"github.com/turahe/blog-api/internal/platform/security/secretbox"
 	"github.com/turahe/blog-api/internal/platform/system"
 )
 
@@ -56,12 +58,12 @@ type Runtime struct {
 	MetricsServer *nethttp.Server
 	// PolicySync reloads the Casbin policy on peer announcements and on an interval;
 	// the caller starts it and Close stops it.
-	PolicySync    *outboundrbac.PolicySync
-	Auth          *authservice.AuthService
-	Users         *userservice.UserService
-	Posts         *postservice.PostService
-	Categories    *categoryservice.CategoryService
-	Media         mediaports.Service
+	PolicySync *outboundrbac.PolicySync
+	Auth       *authservice.AuthService
+	Users      *userservice.UserService
+	Posts      *postservice.PostService
+	Categories *categoryservice.CategoryService
+	Media      mediaports.Service
 }
 
 type checker struct {
@@ -90,20 +92,12 @@ func NewRuntime(ctx context.Context, cfg config.Config, logger *slog.Logger, ver
 		_ = db.Close()
 	}
 
-	tokenService, err := jwttoken.New(cfg.JWTPrivateKey, cfg.JWTPublicKey, cfg.SessionKey, cfg.JWTIssuer)
-	if err != nil {
-		closeAll()
-
-		return nil, fmt.Errorf("create token service: %w", err)
-	}
-
 	users := persistence.NewUserRepository(db.GORM)
 	sessions := persistence.NewSessionRepository(db.GORM)
 	resets := persistence.NewResetTokenRepository(db.GORM)
 	postsRepo := persistence.NewPostRepository(db.GORM)
 	categoriesRepo := persistence.NewCategoryRepository(db.GORM)
 	tagsRepo := persistence.NewTagRepository(db.GORM)
-	hasher := password.New()
 	clock := system.Clock{}
 	ids := system.UUIDGenerator{}
 
@@ -114,12 +108,11 @@ func NewRuntime(ctx context.Context, cfg config.Config, logger *slog.Logger, ver
 		cacheOrNil = readCache
 	}
 
-	auth := authservice.New(users, sessions, resets, hasher, tokenService, clock, ids, authservice.Config{
-		AccessTTL:  cfg.AccessTokenTTL,
-		RefreshTTL: cfg.RefreshTokenTTL,
-	}, nil).WithEmailChange(newNotifier(cfg, logger, persistence.NewNotificationTemplateRepository(db.GORM)), cacheOrNil)
-	if cfg.AuthLoginMaxFailures > 0 {
-		auth.WithLoginAttempts(ratelimit.NewLoginLockout(redisClient, cfg.AuthLoginMaxFailures, cfg.AuthLoginLockout))
+	auth, err := newAuthService(cfg, db, redisClient, users, sessions, resets, clock, ids, cacheOrNil, logger)
+	if err != nil {
+		closeAll()
+
+		return nil, err
 	}
 
 	posts := postservice.New(postsRepo, ids, clock).WithCache(cacheOrNil)
@@ -133,12 +126,7 @@ func NewRuntime(ctx context.Context, cfg config.Config, logger *slog.Logger, ver
 	tags := tagservice.New(tagsRepo, ids, clock).WithCache(cacheOrNil)
 	posts.WithTags(tags)
 
-	comments := commentservice.New(persistence.NewCommentRepository(db.GORM), ids, clock, commentservice.Config{
-		GuestEnabled:    cfg.CommentsGuestEnabled,
-		RequireApproval: cfg.CommentsRequireApproval,
-		EditWindow:      cfg.CommentsEditWindow,
-		FlagThreshold:   cfg.CommentsFlagThreshold,
-	})
+	comments := newCommentService(cfg, db, ids, clock)
 
 	media, err := newMediaService(ctx, cfg, db, ids, clock, posts, cacheOrNil)
 	if err != nil {
@@ -160,16 +148,7 @@ func NewRuntime(ctx context.Context, cfg config.Config, logger *slog.Logger, ver
 	roleStore := outboundrbac.NewRoleStore(db.GORM, enforcer).WithNotifier(policySync)
 	auth.WithRoles(roleStore)
 
-	var (
-		appMetrics    *metrics.Metrics
-		metricsServer *nethttp.Server
-		recorder      middleware.MetricsRecorder
-	)
-	if cfg.MetricsAddr != "" {
-		appMetrics = metrics.New(db.SQL, version)
-		metricsServer = appMetrics.NewServer(cfg.MetricsAddr)
-		recorder = appMetrics
-	}
+	metricsServer, recorder := newMetrics(cfg, db, version)
 
 	router, err := httpadapter.NewRouter(httpadapter.Dependencies{
 		Metrics:        recorder,
@@ -179,6 +158,7 @@ func NewRuntime(ctx context.Context, cfg config.Config, logger *slog.Logger, ver
 		AvatarMaxBytes: avatarMaxBytes,
 		Users:          userSvc,
 		AdminUsers:     auth,
+		TwoFactor:      auth,
 		RoleAdmin:      rbacservice.NewRoleService(roleStore),
 		Profiles:       profiles,
 		EmailChange:    auth,
@@ -267,6 +247,76 @@ func newProfileService(
 	}
 
 	return profiles.WithAvatars(media, cfg.AvatarMaxBytes), cfg.AvatarMaxBytes
+}
+
+func newCommentService(cfg config.Config, db *database.Database, ids system.UUIDGenerator, clock system.Clock) *commentservice.Service {
+	return commentservice.New(persistence.NewCommentRepository(db.GORM), ids, clock, commentservice.Config{
+		GuestEnabled:    cfg.CommentsGuestEnabled,
+		RequireApproval: cfg.CommentsRequireApproval,
+		EditWindow:      cfg.CommentsEditWindow,
+		FlagThreshold:   cfg.CommentsFlagThreshold,
+	})
+}
+
+// newMetrics returns the Prometheus server and request recorder, or nils when METRICS_ADDR is empty.
+func newMetrics(cfg config.Config, db *database.Database, version string) (*nethttp.Server, middleware.MetricsRecorder) {
+	if cfg.MetricsAddr == "" {
+		return nil, nil
+	}
+
+	appMetrics := metrics.New(db.SQL, version)
+
+	return appMetrics.NewServer(cfg.MetricsAddr), appMetrics
+}
+
+// newAuthService builds the auth service with lockout, email change, and two-factor wired.
+func newAuthService(
+	cfg config.Config, db *database.Database, redisClient *redis.Client,
+	users *persistence.UserRepository, sessions *persistence.SessionRepository, resets *persistence.ResetTokenRepository,
+	clock system.Clock, ids system.UUIDGenerator, cacheOrNil readcache.Cache, logger *slog.Logger,
+) (*authservice.AuthService, error) {
+	tokens, err := jwttoken.New(cfg.JWTPrivateKey, cfg.JWTPublicKey, cfg.SessionKey, cfg.JWTIssuer)
+	if err != nil {
+		return nil, fmt.Errorf("create token service: %w", err)
+	}
+
+	auth := authservice.New(users, sessions, resets, password.New(), tokens, clock, ids, authservice.Config{
+		AccessTTL:  cfg.AccessTokenTTL,
+		RefreshTTL: cfg.RefreshTokenTTL,
+	}, nil).WithEmailChange(newNotifier(cfg, logger, persistence.NewNotificationTemplateRepository(db.GORM)), cacheOrNil)
+	if cfg.AuthLoginMaxFailures > 0 {
+		auth.WithLoginAttempts(ratelimit.NewLoginLockout(redisClient, cfg.AuthLoginMaxFailures, cfg.AuthLoginLockout))
+	}
+
+	box, err := newSecretBox(cfg, logger)
+	if err != nil {
+		return nil, err
+	}
+
+	// Always wired, even without a key, so enrolled accounts fail closed.
+	auth.WithTwoFactor(persistence.NewTwoFactorRepository(db.GORM), box, challenge.New(redisClient), cfg.TwoFactorIssuer)
+
+	return auth, nil
+}
+
+// newSecretBox returns the APP_ENCRYPTION_KEY box, or a nil interface when the key is unset.
+func newSecretBox(cfg config.Config, logger *slog.Logger) (authports.SecretBox, error) {
+	if cfg.EncryptionKey == "" {
+		logger.Warn("APP_ENCRYPTION_KEY is not set; two-factor enrollment is disabled")
+		return nil, nil
+	}
+
+	key, err := secretbox.ParseKey(cfg.EncryptionKey)
+	if err != nil {
+		return nil, fmt.Errorf("APP_ENCRYPTION_KEY: %w", err)
+	}
+
+	box, err := secretbox.New(key)
+	if err != nil {
+		return nil, fmt.Errorf("create secret box: %w", err)
+	}
+
+	return box, nil
 }
 
 // newReadCache returns the Redis public-read cache, or nil when CACHE_ENABLED=false.

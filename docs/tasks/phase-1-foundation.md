@@ -67,7 +67,8 @@ management, second-factor and OAuth login, and session administration are still 
 - [x] Bearer auth middleware in `internal/adapters/inbound/http/middleware`
 - [x] Transport request validation with `github.com/go-playground/validator/v10` (Laravel-style field errors via `bindJSON`)
 - [ ] `admin.auth.login` — `POST /api/v1/admin/auth/login`
-- [ ] `auth.2fa.challenge` — `POST /api/v1/auth/2fa/challenge`
+- [x] `auth.2fa.challenge` — `POST /api/v1/auth/2fa/challenge` (TOTP + backup codes; enrollment at
+      `/api/v1/me/2fa/*`; secrets encrypted under `APP_ENCRYPTION_KEY`)
 - [ ] `auth.oauth.callback` — `POST /api/v1/auth/oauth/{provider}/callback`
 - [x] Replace the reset-token log stub with a real mailer per [email.md](../backend/email.md)
       (`mail.SMTP` behind `notification/ports.Mailer`; log stub only when `SMTP_HOST` is empty)

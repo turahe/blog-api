@@ -118,6 +118,41 @@ the wired Phase 2 surface and where it deliberately differs from the target.
 - Every write updates `roles`/`role_permissions`/`user_roles` and `casbin_rules` in one
   transaction, then reloads this instance's enforcer, so the change applies without a restart.
 
+### Two-factor authentication (TOTP)
+
+| Operation | Route | Auth | Rate limit |
+| --- | --- | --- | --- |
+| `auth.2fa.challenge` | `POST /api/v1/auth/2fa/challenge` | none | `auth.2fa` = `AUTH_LOGIN_PER_MINUTE` per IP |
+| `me.2fa.get` | `GET /api/v1/me/2fa` | required | — |
+| `me.2fa.setup` | `POST /api/v1/me/2fa/setup` | required | — |
+| `me.2fa.confirm` | `POST /api/v1/me/2fa/confirm` | required | — |
+| `me.2fa.backup_codes` | `POST /api/v1/me/2fa/backup-codes` | required | — |
+| `me.2fa.disable` | `DELETE /api/v1/me/2fa` | required | — |
+
+- **Login.** For an account with 2FA enabled, `POST /auth/login` checks the password as
+  before but answers `200` with `{"two_factor_required": true, "challenge_token",
+  "expires_at", "expires_in"}` instead of tokens. The client posts
+  `{"challenge_token", "code"}` to `/auth/2fa/challenge` and gets the usual token pair.
+  `code` is a 6-digit TOTP code or a backup code (`xxxxx-xxxxx`; case, spaces and the dash
+  are ignored). A challenge lives 5 minutes, is single use, and dies after 5 attempts.
+  It is stored in Redis only as a SHA-256 hash.
+- **Enrollment.** `setup` returns `{"secret", "otpauth_url"}` (base32 secret for manual
+  entry, URL for a QR code) and may be repeated until confirmed. `confirm {code}` enables
+  2FA and returns 10 `backup_codes` once. `backup-codes {code}` replaces them after a TOTP
+  check. `DELETE /me/2fa {password, code}` disables 2FA (the code may be a backup code).
+  Setup, confirm and backup-code responses carry `Cache-Control: no-store`.
+- **Storage.** TOTP secrets are AES-256-GCM encrypted under `APP_ENCRYPTION_KEY`, and backup
+  codes are stored as HMAC-SHA256 under a key derived from it (`user_two_factor_methods`,
+  `user_two_factor_backup_codes`). Each TOTP time step is accepted once (±1 step of clock
+  skew), so a code cannot be replayed. Each backup code works once.
+- **Errors** (service code `1`, Auth): wrong or reused code → `401 auth.2fa.invalid_code`;
+  unknown, expired or exhausted challenge → `401 auth.2fa.challenge_invalid`; setup when
+  already enabled → `409 auth.2fa.already_enabled`; confirm before setup →
+  `409 auth.2fa.not_started`; disable or regenerate when not enabled →
+  `409 auth.2fa.not_enabled`; wrong password on disable → `403 password.current_mismatch`;
+  no `APP_ENCRYPTION_KEY` → `503 auth.2fa.unavailable`. Without the key, enrolled
+  accounts fail closed at login rather than skipping the second factor.
+
 ### Profiles and email change
 
 | Operation | Route | Auth | Rate limit |

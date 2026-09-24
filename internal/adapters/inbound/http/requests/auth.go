@@ -8,6 +8,24 @@ type Login struct {
 	Remember bool   `json:"remember"`
 }
 
+// TwoFactorChallenge is POST /api/v1/auth/2fa/challenge. Code is a 6-digit TOTP
+// code or a backup code.
+type TwoFactorChallenge struct {
+	ChallengeToken string `json:"challenge_token" binding:"required,max=128"`
+	Code           string `json:"code" binding:"required,max=32"`
+}
+
+// TwoFactorCode is POST /api/v1/me/2fa/confirm and /me/2fa/backup-codes.
+type TwoFactorCode struct {
+	Code string `json:"code" binding:"required,max=32"`
+}
+
+// DisableTwoFactor is DELETE /api/v1/me/2fa.
+type DisableTwoFactor struct {
+	Password string `json:"password" binding:"required,max=128"`
+	Code     string `json:"code" binding:"required,max=32"`
+}
+
 // Refresh is POST /api/v1/auth/refresh.
 type Refresh struct {
 	RefreshToken string `json:"refresh_token" binding:"required"`

@@ -2181,8 +2181,61 @@
                 }
             }
         },
+        "/api/v1/auth/2fa/challenge": {
+            "post": {
+                "description": "Exchanges the challenge_token from POST /api/v1/auth/login and a 6-digit TOTP code\nor a backup code for a token pair. A challenge expires after 5 minutes or 5 wrong codes.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "auth"
+                ],
+                "summary": "Complete a two-factor login",
+                "parameters": [
+                    {
+                        "description": "challenge and code",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/requests.TwoFactorChallenge"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/responses.Envelope"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/responses.Envelope"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/responses.Envelope"
+                        }
+                    },
+                    "429": {
+                        "description": "Too Many Requests",
+                        "schema": {
+                            "$ref": "#/definitions/responses.Envelope"
+                        }
+                    }
+                }
+            }
+        },
         "/api/v1/auth/login": {
             "post": {
+                "description": "Returns a token pair, or for accounts with two-factor enabled\n`{\"two_factor_required\": true, \"challenge_token\", \"expires_at\", \"expires_in\"}`\nto complete at POST /api/v1/auth/2fa/challenge.",
                 "consumes": [
                     "application/json"
                 ],
@@ -2225,6 +2278,12 @@
                     },
                     "429": {
                         "description": "rate limited or account locked; see Retry-After",
+                        "schema": {
+                            "$ref": "#/definitions/responses.Envelope"
+                        }
+                    },
+                    "503": {
+                        "description": "two-factor account but 2FA is not configured",
                         "schema": {
                             "$ref": "#/definitions/responses.Envelope"
                         }
@@ -2775,6 +2834,235 @@
                     },
                     "401": {
                         "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/responses.Envelope"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/me/2fa": {
+            "get": {
+                "security": [
+                    {
+                        "Bearer": []
+                    }
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "self-service"
+                ],
+                "summary": "Two-factor status",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/responses.Envelope"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/responses.Envelope"
+                        }
+                    }
+                }
+            },
+            "delete": {
+                "security": [
+                    {
+                        "Bearer": []
+                    }
+                ],
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "self-service"
+                ],
+                "summary": "Disable two-factor",
+                "parameters": [
+                    {
+                        "description": "password and a TOTP or backup code",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/requests.DisableTwoFactor"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/responses.Envelope"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/responses.Envelope"
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden",
+                        "schema": {
+                            "$ref": "#/definitions/responses.Envelope"
+                        }
+                    },
+                    "409": {
+                        "description": "Conflict",
+                        "schema": {
+                            "$ref": "#/definitions/responses.Envelope"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/me/2fa/backup-codes": {
+            "post": {
+                "security": [
+                    {
+                        "Bearer": []
+                    }
+                ],
+                "description": "Replaces every backup code after checking a current TOTP code; the new codes are shown only once.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "self-service"
+                ],
+                "summary": "Regenerate backup codes",
+                "parameters": [
+                    {
+                        "description": "TOTP code",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/requests.TwoFactorCode"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/responses.Envelope"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/responses.Envelope"
+                        }
+                    },
+                    "409": {
+                        "description": "Conflict",
+                        "schema": {
+                            "$ref": "#/definitions/responses.Envelope"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/me/2fa/confirm": {
+            "post": {
+                "security": [
+                    {
+                        "Bearer": []
+                    }
+                ],
+                "description": "Enables two-factor with a code from the authenticator and returns 10 backup codes, shown only once.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "self-service"
+                ],
+                "summary": "Confirm two-factor setup",
+                "parameters": [
+                    {
+                        "description": "TOTP code",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/requests.TwoFactorCode"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/responses.Envelope"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/responses.Envelope"
+                        }
+                    },
+                    "409": {
+                        "description": "Conflict",
+                        "schema": {
+                            "$ref": "#/definitions/responses.Envelope"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/me/2fa/setup": {
+            "post": {
+                "security": [
+                    {
+                        "Bearer": []
+                    }
+                ],
+                "description": "Returns a new TOTP secret and otpauth:// URL. Calling it again replaces an\nunconfirmed secret; it is refused once two-factor is enabled.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "self-service"
+                ],
+                "summary": "Start two-factor setup",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/responses.Envelope"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/responses.Envelope"
+                        }
+                    },
+                    "409": {
+                        "description": "Conflict",
+                        "schema": {
+                            "$ref": "#/definitions/responses.Envelope"
+                        }
+                    },
+                    "503": {
+                        "description": "Service Unavailable",
                         "schema": {
                             "$ref": "#/definitions/responses.Envelope"
                         }
@@ -3800,6 +4088,23 @@
                 }
             }
         },
+        "requests.DisableTwoFactor": {
+            "type": "object",
+            "required": [
+                "code",
+                "password"
+            ],
+            "properties": {
+                "code": {
+                    "type": "string",
+                    "maxLength": 32
+                },
+                "password": {
+                    "type": "string",
+                    "maxLength": 128
+                }
+            }
+        },
         "requests.FlagComment": {
             "type": "object",
             "required": [
@@ -4087,6 +4392,35 @@
                 },
                 "twitter": {
                     "type": "string"
+                }
+            }
+        },
+        "requests.TwoFactorChallenge": {
+            "type": "object",
+            "required": [
+                "challenge_token",
+                "code"
+            ],
+            "properties": {
+                "challenge_token": {
+                    "type": "string",
+                    "maxLength": 128
+                },
+                "code": {
+                    "type": "string",
+                    "maxLength": 32
+                }
+            }
+        },
+        "requests.TwoFactorCode": {
+            "type": "object",
+            "required": [
+                "code"
+            ],
+            "properties": {
+                "code": {
+                    "type": "string",
+                    "maxLength": 32
                 }
             }
         },

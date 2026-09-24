@@ -25,6 +25,7 @@ type Deps struct {
 	Auth        authports.Service
 	Users       *userservice.UserService
 	AdminUsers  adminUserAPI
+	TwoFactor   twoFactorAPI
 	RoleAdmin   roleAPI
 	Profiles    profileAPI
 	EmailChange authports.EmailChanger
@@ -82,17 +83,7 @@ func NewControllers(deps Deps) routes.Controllers {
 		}
 	}
 
-	if deps.Auth != nil {
-		c.Auth = routes.Auth{
-			Login:                 chain(middleware.RateLimit(deps.RateLimiter, deps.Logger, "auth.login", deps.LoginPerMinute, time.Minute), loginHandler(deps.Auth)),
-			Refresh:               refreshHandler(deps.Auth),
-			Logout:                logoutHandler(deps.Auth),
-			PasswordForgot:        forgotPasswordHandler(deps.Auth),
-			PasswordResetValidity: resetTokenValidityHandler(deps.Auth),
-			PasswordReset:         resetPasswordHandler(deps.Auth),
-			MePasswordUpdate:      changePasswordHandler(deps.Auth),
-		}
-	}
+	c.Auth = authControllers(deps)
 
 	if deps.Users != nil {
 		c.Users.MeGet = meGetHandler(deps.Users)
@@ -246,4 +237,33 @@ func chain(handlers ...gin.HandlerFunc) gin.HandlerFunc {
 			}
 		}
 	}
+}
+
+// authControllers wires login, password and two-factor handlers.
+func authControllers(deps Deps) routes.Auth {
+	var a routes.Auth
+	if deps.Auth != nil {
+		a = routes.Auth{
+			Login:                 chain(middleware.RateLimit(deps.RateLimiter, deps.Logger, "auth.login", deps.LoginPerMinute, time.Minute), loginHandler(deps.Auth)),
+			Refresh:               refreshHandler(deps.Auth),
+			Logout:                logoutHandler(deps.Auth),
+			PasswordForgot:        forgotPasswordHandler(deps.Auth),
+			PasswordResetValidity: resetTokenValidityHandler(deps.Auth),
+			PasswordReset:         resetPasswordHandler(deps.Auth),
+			MePasswordUpdate:      changePasswordHandler(deps.Auth),
+		}
+	}
+
+	if mfa := deps.TwoFactor; mfa != nil {
+		a.TwoFactorChallenge = chain(
+			middleware.RateLimit(deps.RateLimiter, deps.Logger, "auth.2fa", deps.LoginPerMinute, time.Minute),
+			twoFactorChallengeHandler(mfa))
+		a.MeTwoFactorGet = meTwoFactorGetHandler(mfa)
+		a.MeTwoFactorSetup = meTwoFactorSetupHandler(mfa)
+		a.MeTwoFactorConfirm = meTwoFactorConfirmHandler(mfa)
+		a.MeTwoFactorDisable = meTwoFactorDisableHandler(mfa)
+		a.MeTwoFactorBackupCodes = meTwoFactorBackupCodesHandler(mfa)
+	}
+
+	return a
 }

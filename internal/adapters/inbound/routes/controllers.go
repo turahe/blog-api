@@ -53,6 +53,13 @@ type Auth struct {
 	PasswordResetValidity gin.HandlerFunc
 	PasswordReset         gin.HandlerFunc
 	MePasswordUpdate      gin.HandlerFunc
+
+	TwoFactorChallenge     gin.HandlerFunc
+	MeTwoFactorGet         gin.HandlerFunc
+	MeTwoFactorSetup       gin.HandlerFunc
+	MeTwoFactorConfirm     gin.HandlerFunc
+	MeTwoFactorDisable     gin.HandlerFunc
+	MeTwoFactorBackupCodes gin.HandlerFunc
 }
 
 // Users self-service and admin handlers.

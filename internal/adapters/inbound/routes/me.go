@@ -17,6 +17,11 @@ func registerMe(v1 *gin.RouterGroup, auth AuthMiddleware, c Controllers) {
 	del(me, "/me/avatar", "me.avatar.delete", g, AuthRequired, c, c.Users.MeAvatarDelete)
 	post(me, "/me/email/request-change", "me.email.request_change", g, AuthRequired, c, c.Users.MeEmailRequestChange)
 	post(me, "/me/email/confirm-change", "me.email.confirm_change", g, AuthRequired, c, c.Users.MeEmailConfirmChange)
+	get(me, "/me/2fa", "me.2fa.get", g, AuthRequired, c, c.Auth.MeTwoFactorGet)
+	del(me, "/me/2fa", "me.2fa.disable", g, AuthRequired, c, c.Auth.MeTwoFactorDisable)
+	post(me, "/me/2fa/setup", "me.2fa.setup", g, AuthRequired, c, c.Auth.MeTwoFactorSetup)
+	post(me, "/me/2fa/confirm", "me.2fa.confirm", g, AuthRequired, c, c.Auth.MeTwoFactorConfirm)
+	post(me, "/me/2fa/backup-codes", "me.2fa.backup_codes", g, AuthRequired, c, c.Auth.MeTwoFactorBackupCodes)
 
 	// Owners and admins may read private profiles, so the public profile accepts an optional token.
 	optional := v1.Group("")
