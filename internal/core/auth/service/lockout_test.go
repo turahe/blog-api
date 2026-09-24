@@ -20,8 +20,8 @@ type memAttempts struct {
 	err      error
 }
 
-func newMemAttempts(max int) *memAttempts {
-	return &memAttempts{max: max, lockFor: time.Minute, failures: map[string]int{}, locked: map[string]bool{}}
+func newMemAttempts(maxFailures int) *memAttempts {
+	return &memAttempts{max: maxFailures, lockFor: time.Minute, failures: map[string]int{}, locked: map[string]bool{}}
 }
 
 func (m *memAttempts) Locked(_ context.Context, key string) (time.Duration, error) {

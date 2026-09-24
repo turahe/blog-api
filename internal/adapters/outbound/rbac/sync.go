@@ -56,7 +56,7 @@ func (s *PolicySync) Start(ctx context.Context) {
 		sub := s.client.Subscribe(ctx, PolicyChannel)
 
 		s.wg.Go(func() {
-			defer sub.Close()
+			defer func() { _ = sub.Close() }()
 
 			messages := sub.Channel()
 

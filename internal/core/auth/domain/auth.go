@@ -30,7 +30,9 @@ type LockedError struct {
 	RetryAfter time.Duration
 }
 
-func (e LockedError) Error() string        { return ErrAccountLocked.Error() }
+func (e LockedError) Error() string { return ErrAccountLocked.Error() }
+
+// Is makes errors.Is(err, ErrAccountLocked) match a LockedError.
 func (e LockedError) Is(target error) bool { return target == ErrAccountLocked }
 
 // Single-use token purposes.

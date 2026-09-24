@@ -17,11 +17,15 @@ import (
 // Channel is a delivery surface.
 type Channel string
 
+// Delivery channels.
 const (
 	ChannelEmail Channel = "email"
 	ChannelWeb   Channel = "web"
 	ChannelSSE   Channel = "sse"
 )
+
+// eventNotificationCreated is the default SSE event name.
+const eventNotificationCreated = "notification.created"
 
 // Types are stable notification identifiers.
 const (
@@ -205,6 +209,11 @@ func Validate(tpl Template) error {
 		return errors.New("sse templates need an event name")
 	}
 
+	return validateContent(tpl)
+}
+
+// validateContent keeps secrets out of non-email surfaces and checks the patterns parse.
+func validateContent(tpl Template) error {
 	for field, value := range map[string]string{
 		"subject": tpl.Subject, "title": tpl.Title, "preview": tpl.Preview,
 	} {
@@ -214,7 +223,7 @@ func Validate(tpl Template) error {
 	}
 
 	if tpl.Channel != ChannelEmail && mentionsToken(tpl.Body) {
-		return fmt.Errorf("{{.Token}} is allowed only in email bodies")
+		return errors.New("{{.Token}} is allowed only in email bodies")
 	}
 
 	for _, pattern := range []string{tpl.Subject, tpl.Title, tpl.Body, tpl.Preview} {
@@ -321,7 +330,7 @@ var catalogue = map[string]map[Channel]spec{
 			body:  "A verification message was sent to your email. It expires at {{.ExpiresAt}}.",
 		},
 		ChannelSSE: {
-			event:   "notification.created",
+			event:   eventNotificationCreated,
 			title:   "Verify your email",
 			preview: "Check your email to confirm this account.",
 		},
@@ -336,7 +345,7 @@ var catalogue = map[string]map[Channel]spec{
 			body:  "A password reset was requested. The token was emailed to you and expires at {{.ExpiresAt}}.",
 		},
 		ChannelSSE: {
-			event:   "notification.created",
+			event:   eventNotificationCreated,
 			title:   "Reset your password",
 			preview: "Check your email for the reset token.",
 		},
@@ -351,7 +360,7 @@ var catalogue = map[string]map[Channel]spec{
 			body:  "The password on your account was just updated. If this was not you, reset it.",
 		},
 		ChannelSSE: {
-			event:   "notification.created",
+			event:   eventNotificationCreated,
 			title:   "Your password was changed",
 			preview: "If this was not you, reset your password.",
 		},
@@ -366,7 +375,7 @@ var catalogue = map[string]map[Channel]spec{
 			body:  "A confirmation message was sent to the new address. It expires at {{.ExpiresAt}}.",
 		},
 		ChannelSSE: {
-			event:   "notification.created",
+			event:   eventNotificationCreated,
 			title:   "Confirm your new email",
 			preview: "Check the new address for the confirmation token.",
 		},
@@ -381,7 +390,7 @@ var catalogue = map[string]map[Channel]spec{
 			body:  "A change to your account email is waiting for confirmation. If this was not you, change your password.",
 		},
 		ChannelSSE: {
-			event:   "notification.created",
+			event:   eventNotificationCreated,
 			title:   "Email change requested",
 			preview: "Confirm it from the new address, or change your password if this was not you.",
 		},
@@ -396,7 +405,7 @@ var catalogue = map[string]map[Channel]spec{
 			body:  "This account now uses {{.NewEmail}}. All sessions were signed out.",
 		},
 		ChannelSSE: {
-			event:   "notification.created",
+			event:   eventNotificationCreated,
 			title:   "Your email address was changed",
 			preview: "All sessions were signed out.",
 		},
@@ -411,7 +420,7 @@ var catalogue = map[string]map[Channel]spec{
 			body:  "{{.ActorName}} flagged \"{{.PostTitle}}\". Reason: {{.Reason}}",
 		},
 		ChannelSSE: {
-			event:   "notification.created",
+			event:   eventNotificationCreated,
 			title:   "Moderation alert",
 			preview: "{{.PostTitle}} needs review.",
 		},
@@ -426,7 +435,7 @@ var catalogue = map[string]map[Channel]spec{
 			body:  "\"{{.PostTitle}}\" is now public.",
 		},
 		ChannelSSE: {
-			event:   "notification.created",
+			event:   eventNotificationCreated,
 			title:   "Your post is published",
 			preview: "{{.PostTitle}}",
 		},

@@ -3,6 +3,7 @@ package mail
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"net"
 	"net/mail"
@@ -33,11 +34,11 @@ func NewSMTP(host string, port int, username, password, from string) (*SMTP, err
 	from = strings.TrimSpace(from)
 
 	if host == "" {
-		return nil, fmt.Errorf("smtp host is required")
+		return nil, errors.New("smtp host is required")
 	}
 
 	if port < 1 || port > 65535 {
-		return nil, fmt.Errorf("smtp port out of range")
+		return nil, errors.New("smtp port out of range")
 	}
 
 	parsed, err := mail.ParseAddress(from)
@@ -53,25 +54,14 @@ func NewSMTP(host string, port int, username, password, from string) (*SMTP, err
 
 // Send delivers one plain-text message. It returns when the server accepts the data.
 func (s *SMTP) Send(ctx context.Context, msg ports.Message) error {
-	recipient, err := mail.ParseAddress(strings.TrimSpace(msg.To))
+	recipient, body, err := s.compose(msg)
 	if err != nil {
-		return fmt.Errorf("recipient: %w", err)
+		return err
 	}
 
-	subject := strings.TrimSpace(msg.Subject)
-	if subject == "" || strings.ContainsAny(subject, "\r\n") || strings.ContainsAny(recipient.Address, "\r\n") {
-		return fmt.Errorf("refusing email header with line breaks or an empty subject")
-	}
-
-	body := []byte(fmt.Sprintf(
-		"From: %s\r\nTo: %s\r\nSubject: %s\r\nMIME-Version: 1.0\r\nContent-Type: text/plain; charset=UTF-8\r\n\r\n%s",
-		s.from, recipient.Address, subject, msg.Text,
-	))
-
-	addr := net.JoinHostPort(s.host, strconv.Itoa(s.port))
 	dialer := &net.Dialer{Timeout: s.timeout}
 
-	conn, err := dialer.DialContext(ctx, "tcp", addr)
+	conn, err := dialer.DialContext(ctx, "tcp", net.JoinHostPort(s.host, strconv.Itoa(s.port)))
 	if err != nil {
 		return fmt.Errorf("smtp dial: %w", err)
 	}
@@ -87,6 +77,30 @@ func (s *SMTP) Send(ctx context.Context, msg ports.Message) error {
 
 	defer func() { _ = client.Close() }()
 
+	return s.deliver(client, recipient, body)
+}
+
+// compose validates the headers and renders the message.
+func (s *SMTP) compose(msg ports.Message) (recipient string, body []byte, err error) {
+	parsed, err := mail.ParseAddress(strings.TrimSpace(msg.To))
+	if err != nil {
+		return "", nil, fmt.Errorf("recipient: %w", err)
+	}
+
+	subject := strings.TrimSpace(msg.Subject)
+	if subject == "" || strings.ContainsAny(subject, "\r\n") || strings.ContainsAny(parsed.Address, "\r\n") {
+		return "", nil, errors.New("refusing email header with line breaks or an empty subject")
+	}
+
+	body = []byte(fmt.Sprintf(
+		"From: %s\r\nTo: %s\r\nSubject: %s\r\nMIME-Version: 1.0\r\nContent-Type: text/plain; charset=UTF-8\r\n\r\n%s",
+		s.from, parsed.Address, subject, msg.Text,
+	))
+
+	return parsed.Address, body, nil
+}
+
+func (s *SMTP) deliver(client *smtp.Client, recipient string, body []byte) error {
 	if s.username != "" {
 		if err := client.Auth(smtp.PlainAuth("", s.username, s.password, s.host)); err != nil {
 			return fmt.Errorf("smtp auth: %w", err)
@@ -97,7 +111,7 @@ func (s *SMTP) Send(ctx context.Context, msg ports.Message) error {
 		return fmt.Errorf("smtp mail from: %w", err)
 	}
 
-	if err := client.Rcpt(recipient.Address); err != nil {
+	if err := client.Rcpt(recipient); err != nil {
 		return fmt.Errorf("smtp rcpt: %w", err)
 	}
 

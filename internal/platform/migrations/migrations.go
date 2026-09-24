@@ -35,7 +35,7 @@ func Up(db *sql.DB) error {
 	if err != nil {
 		return fmt.Errorf("migration lock connection: %w", err)
 	}
-	defer conn.Close()
+	defer func() { _ = conn.Close() }()
 
 	if _, err := conn.ExecContext(ctx, "SELECT pg_advisory_lock($1)", upLockKey); err != nil {
 		return fmt.Errorf("acquire migration lock: %w", err)

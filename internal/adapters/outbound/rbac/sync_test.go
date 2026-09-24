@@ -2,7 +2,6 @@ package rbac
 
 import (
 	"context"
-	"io"
 	"log/slog"
 	"testing"
 	"time"
@@ -15,7 +14,7 @@ import (
 func TestPolicySyncNotifyWithoutRedisIsNoop(t *testing.T) {
 	t.Parallel()
 
-	s := NewPolicySync(nil, nil, 0, slog.New(slog.NewTextHandler(io.Discard, nil)))
+	s := NewPolicySync(nil, nil, 0, slog.New(slog.DiscardHandler))
 	s.Notify(context.Background())
 	s.Start(context.Background())
 	s.Stop()
@@ -26,15 +25,18 @@ func TestPolicySyncPublishesInstanceAndIgnoresOwnMessages(t *testing.T) {
 
 	mr := miniredis.RunT(t)
 	client := redis.NewClient(&redis.Options{Addr: mr.Addr()})
+
 	t.Cleanup(func() { _ = client.Close() })
 
-	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
+	logger := slog.New(slog.DiscardHandler)
 	a := NewPolicySync(nil, client, 0, logger)
 	b := NewPolicySync(nil, client, 0, logger)
 	require.NotEqual(t, a.instance, b.instance)
 
 	sub := client.Subscribe(context.Background(), PolicyChannel)
+
 	t.Cleanup(func() { _ = sub.Close() })
+
 	_, err := sub.Receive(context.Background())
 	require.NoError(t, err)
 
@@ -53,12 +55,14 @@ func TestPolicySyncStopReturnsPromptly(t *testing.T) {
 
 	mr := miniredis.RunT(t)
 	client := redis.NewClient(&redis.Options{Addr: mr.Addr()})
+
 	t.Cleanup(func() { _ = client.Close() })
 
-	s := NewPolicySync(nil, client, time.Hour, slog.New(slog.NewTextHandler(io.Discard, nil)))
+	s := NewPolicySync(nil, client, time.Hour, slog.New(slog.DiscardHandler))
 	s.Start(context.Background())
 
 	done := make(chan struct{})
+
 	go func() { s.Stop(); close(done) }()
 
 	select {

@@ -14,6 +14,7 @@ func newTestLockout(t *testing.T, maxFailures int) (*LoginLockout, *miniredis.Mi
 
 	server := miniredis.RunT(t)
 	client := goredis.NewClient(&goredis.Options{Addr: server.Addr()})
+
 	t.Cleanup(func() { _ = client.Close() })
 
 	return NewLoginLockout(client, maxFailures, 10*time.Minute), server

@@ -16,7 +16,7 @@ import (
 func TestSend(t *testing.T) {
 	t.Parallel()
 
-	ln, err := net.Listen("tcp", "127.0.0.1:0")
+	ln, err := (&net.ListenConfig{}).Listen(t.Context(), "tcp", "127.0.0.1:0")
 	require.NoError(t, err)
 	t.Cleanup(func() { _ = ln.Close() })
 
@@ -59,12 +59,13 @@ func serveSMTP(ln net.Listener, got chan<- string) {
 	if err != nil {
 		return
 	}
-	defer conn.Close()
+	defer func() { _ = conn.Close() }()
 
 	reader := bufio.NewReader(conn)
 	_, _ = conn.Write([]byte("220 mailpit test\r\n"))
 
 	var data strings.Builder
+
 	for {
 		line, err := reader.ReadString('\n')
 		if err != nil {
@@ -79,17 +80,22 @@ func serveSMTP(ln net.Listener, got chan<- string) {
 			_, _ = conn.Write([]byte("250 ok\r\n"))
 		case cmd == "DATA":
 			_, _ = conn.Write([]byte("354 go\r\n"))
+
 			for {
 				row, err := reader.ReadString('\n')
 				if err != nil {
 					return
 				}
+
 				if strings.TrimRight(row, "\r\n") == "." {
 					break
 				}
+
 				data.WriteString(row)
 			}
+
 			_, _ = conn.Write([]byte("250 queued\r\n"))
+
 			got <- data.String()
 		case cmd == "QUIT":
 			_, _ = conn.Write([]byte("221 bye\r\n"))

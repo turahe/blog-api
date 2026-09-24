@@ -9,6 +9,8 @@ import (
 )
 
 func TestNotificationTemplateRepository(t *testing.T) {
+	t.Parallel()
+
 	tx := integrationTx(t)
 	ctx := context.Background()
 	repo := NewNotificationTemplateRepository(tx)

@@ -3,7 +3,6 @@ package rbac
 import (
 	"context"
 	"database/sql"
-	"io"
 	"log/slog"
 	"os"
 	"strings"
@@ -68,6 +67,7 @@ func suffix() string { return strings.ReplaceAll(uuid.NewString()[:8], "-", "") 
 // The peer reloads concurrently with the writer, which a single transaction's
 // connection cannot serve, so this test commits its rows and deletes them after.
 func TestPolicySyncPropagatesWritesToPeers(t *testing.T) {
+	t.Parallel()
 	integrationTx(t)
 
 	db := integrationGorm
@@ -90,9 +90,10 @@ func TestPolicySyncPropagatesWritesToPeers(t *testing.T) {
 
 	mr := miniredis.RunT(t)
 	client := redis.NewClient(&redis.Options{Addr: mr.Addr()})
+
 	t.Cleanup(func() { _ = client.Close() })
 
-	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
+	logger := slog.New(slog.DiscardHandler)
 
 	writer, err := NewEnforcer(db)
 	require.NoError(t, err)
@@ -118,6 +119,8 @@ func TestPolicySyncPropagatesWritesToPeers(t *testing.T) {
 }
 
 func TestRoleStoreLifecycleSyncsEnforcer(t *testing.T) {
+	t.Parallel()
+
 	tx := integrationTx(t)
 	ctx := context.Background()
 

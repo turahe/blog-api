@@ -270,6 +270,7 @@ func (s *RoleStore) UserRoles(ctx context.Context, userID uuid.UUID) ([]string, 
 	}
 
 	names := []string{}
+
 	err = db.Table("roles").
 		Joins("INNER JOIN user_roles ON user_roles.role_id = roles.id").
 		Where("user_roles.user_id = ?", uid).

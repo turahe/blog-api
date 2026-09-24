@@ -2,6 +2,7 @@ package service_test
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"slices"
 	"testing"
@@ -277,7 +278,7 @@ func TestMapError(t *testing.T) {
 		domain.ErrRoleExists:         409,
 		domain.ErrRoleProtected:      403,
 		domain.ErrSelfRevoke:         403,
-		fmt.Errorf("boom"):           500,
+		errors.New("boom"):           500,
 	}
 
 	for err, want := range cases {

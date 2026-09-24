@@ -50,45 +50,60 @@ func (h *Hasher) Hash(password string) (string, error) {
 
 // Compare reports whether password matches a PHC-encoded Argon2id hash.
 func (h *Hasher) Compare(encoded, password string) bool {
-	salt, sum, timeCost, memory, threads, err := decode(encoded)
+	salt, sum, params, err := decode(encoded)
 	if err != nil {
 		return false
 	}
 
-	got := argon2.IDKey([]byte(password), salt, timeCost, memory, threads, uint32(len(sum)))
+	got := argon2.IDKey([]byte(password), salt, params.time, params.memory, params.threads, argonKeyLen)
 
 	return subtle.ConstantTimeCompare(got, sum) == 1
 }
 
-func decode(encoded string) (salt, sum []byte, timeCost, memory uint32, threads uint8, err error) {
+type argonParams struct {
+	time, memory uint32
+	threads      uint8
+}
+
+func decode(encoded string) (salt, sum []byte, params argonParams, err error) {
 	parts := strings.Split(encoded, "$")
 	if len(parts) != 6 || parts[1] != "argon2id" {
-		return nil, nil, 0, 0, 0, errors.New("invalid argon2id hash")
+		return nil, nil, params, errors.New("invalid argon2id hash")
 	}
 
-	var version int
-	if _, err = fmt.Sscanf(parts[2], "v=%d", &version); err != nil || version != argon2.Version {
-		return nil, nil, 0, 0, 0, errors.New("unsupported argon2 version")
-	}
-
-	var threadsParsed uint32
-	if _, err = fmt.Sscanf(parts[3], "m=%d,t=%d,p=%d", &memory, &timeCost, &threadsParsed); err != nil {
-		return nil, nil, 0, 0, 0, errors.New("invalid argon2 parameters")
-	}
-
-	if timeCost < 1 || timeCost > 10 || memory < 8*1024 || memory > 256*1024 || threadsParsed < 1 || threadsParsed > 4 {
-		return nil, nil, 0, 0, 0, errors.New("argon2 parameters out of range")
+	if params, err = parseParams(parts[2], parts[3]); err != nil {
+		return nil, nil, params, err
 	}
 
 	salt, err = base64.RawStdEncoding.DecodeString(parts[4])
 	if err != nil || len(salt) < 8 || len(salt) > 64 {
-		return nil, nil, 0, 0, 0, errors.New("invalid argon2 salt")
+		return nil, nil, params, errors.New("invalid argon2 salt")
 	}
 
 	sum, err = base64.RawStdEncoding.DecodeString(parts[5])
 	if err != nil || len(sum) != int(argonKeyLen) {
-		return nil, nil, 0, 0, 0, errors.New("invalid argon2 hash")
+		return nil, nil, params, errors.New("invalid argon2 hash")
 	}
 
-	return salt, sum, timeCost, memory, uint8(threadsParsed), nil
+	return salt, sum, params, nil
+}
+
+// parseParams reads the "v=" and "m=,t=,p=" segments, bounding cost so a stored
+// hash cannot make verification arbitrarily expensive.
+func parseParams(versionPart, costPart string) (argonParams, error) {
+	var version int
+	if _, err := fmt.Sscanf(versionPart, "v=%d", &version); err != nil || version != argon2.Version {
+		return argonParams{}, errors.New("unsupported argon2 version")
+	}
+
+	var memory, timeCost, threads uint32
+	if _, err := fmt.Sscanf(costPart, "m=%d,t=%d,p=%d", &memory, &timeCost, &threads); err != nil {
+		return argonParams{}, errors.New("invalid argon2 parameters")
+	}
+
+	if timeCost < 1 || timeCost > 10 || memory < 8*1024 || memory > 256*1024 || threads < 1 || threads > 4 {
+		return argonParams{}, errors.New("argon2 parameters out of range")
+	}
+
+	return argonParams{time: timeCost, memory: memory, threads: uint8(threads)}, nil
 }
