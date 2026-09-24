@@ -74,7 +74,7 @@ JSON names come from `json` tags registered on the shared validator engine.
   - RFC 5322 section 3.4.1 grammar + TLD existence check against known TLD list + MX DNS lookups optional
   - no change without verification flow token (jti) + old address warning sent
 - reset/email tokens:
-  - JWT RS256 signature valid; aud claim matches `blog:password_reset` or `blog:email_change`
+  - JWT ES256 signature valid; aud claim matches `blog:password_reset` or `blog:email_change`
   - jti not consumed via Redis SETNX and not in password_reset_tokens.consumed_at
   - expires_at not passed; nbf if present respected
   - email_hash salted HMAC in payload matches the stored hash or user's current email HMAC (for email change, matches old+new pair)

@@ -58,8 +58,7 @@ real mailer are still open.
 - [x] `auth.password.reset_token_validity` — `GET /api/v1/auth/password/reset/{token}`
 - [x] `auth.password.reset` — `POST /api/v1/auth/password/reset`
 - [x] `me.password.update` — `PUT /api/v1/me/password`
-- [x] bcrypt password hashing in `internal/platform/security/password`
-- [ ] Reject passwords over bcrypt's 72-byte input limit (DTOs currently allow `max=128`)
+- [x] Argon2id password hashing in `internal/platform/security/password`
 - [x] JWT issue and verify in `internal/platform/security/jwt`
 - [x] Bearer auth middleware in `internal/adapters/inbound/http/middleware`
 - [x] Transport request validation with `github.com/go-playground/validator/v10` (Laravel-style field errors via `bindJSON`)

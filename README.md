@@ -97,7 +97,7 @@ differentiators are tagged with **★**.
 
 ### Authentication & Identity
 
-- Email/password login with Argon2id (or bcrypt) password hashing.
+- Email/password login with Argon2id password hashing and ES256 access tokens.
 - Secure server-managed sessions + HTTP-only cookies; bearer-token fallback for
 non-browser clients.
 - **TOTP 2FA** with encrypted-at-rest secrets and hashed backup codes.
@@ -338,8 +338,8 @@ APP_ADDR=0.0.0.0:8080                # listen address for `app serve`
 APP_SESSION_KEY=replace_me_with_32b_random
 APP_CSRF_KEY=replace_me_with_32b_random
 APP_PEPPER=replace_me_for_hmac_lookups
-APP_JWT_PRIVATE_KEY_PATH=configs/dev/jwt-rsa-private.pem
-APP_JWT_PUBLIC_KEY_PATH=configs/dev/jwt-rsa-public.pem
+APP_JWT_PRIVATE_KEY_PATH=configs/dev/jwt-es256-private.pem
+APP_JWT_PUBLIC_KEY_PATH=configs/dev/jwt-es256-public.pem
 
 # ---------- PostgreSQL ----------
 DB_DRIVER=postgres

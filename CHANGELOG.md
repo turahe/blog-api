@@ -1,5 +1,19 @@
 # Changelog
 
+## 2026-09-25 — ES256 access tokens and Argon2id passwords
+
+### Changed
+
+- Access tokens are signed and verified with ES256 (P-256 PEM) instead of RS256
+- Passwords are hashed with Argon2id (t=3, m=64 MiB, p=2) instead of bcrypt
+- Local-dev key paths are `configs/dev/jwt-es256-private.pem` and `configs/dev/jwt-es256-public.pem`
+
+### Notes
+
+- Existing RS256 access tokens are invalid after restart; clients must log in again
+- Existing bcrypt password hashes no longer verify; re-seed or reset those passwords
+- Regenerate local keys with `make dev-keys` if the ES256 PEMs are missing
+
 ## 2026-09-25 — Content core: post lifecycle, read cache, profiles
 
 ### Added

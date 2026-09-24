@@ -192,7 +192,7 @@ Activity tab with category filter chips, date from/to pickers, pagination. Each 
 2. **Data encryption:**
    - Passwords: bcrypt (cost ≥ 12) or Argon2id (t=3, m=64MB, p=2) with unique per-user salt; constant-time verify.
    - Sensitive contact fields: AES-256-GCM envelope encryption with ENV/KMS key; distinct data key per row; never decrypt in logs.
-   - Tokens: reset/verify/change-email JWTs with jti, Redis single-use; signed with RS256 asymmetric; stored server secret rotation schedule.
+   - Tokens: reset/verify/change-email JWTs with jti, Redis single-use; signed with ES256 asymmetric; stored server secret rotation schedule.
 3. **Authentication checks:** every endpoint re-verifies JWT/session; self-service endpoints validate `sub == target_user_id`; admin overrides require explicit permissions. Password change / email change / avatar delete require re-verification password or recent (≤ 5 min) 2FA challenge success.
 4. **CSRF + CORS + SameSite cookies / token CSRF patterns:** browser state changes require `X-CSRF-Token`; origins allowed via whitelist; cookies (if used) `HttpOnly; Secure; SameSite=Lax`.
 5. **Rate limiting & account lockout:** tiered rate limits as above; progressive delay; brute force attempt logging; account lockout after N failed auth events.

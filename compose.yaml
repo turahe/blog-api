@@ -11,8 +11,8 @@ services:
       S3_PUBLIC_BASE_URL: http://127.0.0.1:9000/blog-media
       # Brokers are optional (profile messaging); disable bus unless that profile is up.
       MESSAGE_BROKER: ""
-      APP_JWT_PRIVATE_KEY_PATH: /configs/dev/jwt-rsa-private.pem
-      APP_JWT_PUBLIC_KEY_PATH: /configs/dev/jwt-rsa-public.pem
+      APP_JWT_PRIVATE_KEY_PATH: /configs/dev/jwt-es256-private.pem
+      APP_JWT_PUBLIC_KEY_PATH: /configs/dev/jwt-es256-public.pem
     volumes:
       - ./configs/dev:/configs/dev:ro
     command: ["migrate", "up"]

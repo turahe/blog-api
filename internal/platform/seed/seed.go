@@ -164,7 +164,7 @@ func ensureAdmin(ctx context.Context, db *gorm.DB, opts Options) (userdomain.Use
 		return userdomain.User{}, fmt.Errorf("lookup admin: %w", err)
 	}
 
-	hash, err := password.New(0).Hash(opts.AdminPassword)
+	hash, err := password.New().Hash(opts.AdminPassword)
 	if err != nil {
 		return userdomain.User{}, err
 	}

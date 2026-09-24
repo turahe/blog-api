@@ -10,7 +10,7 @@
 ```bash
 cp .env.example .env
 # edit APP_SESSION_KEY, APP_CSRF_KEY, APP_PEPPER to random values (≥32 chars for session key)
-# JWT RS256: .env.example already points at configs/dev/*.pem
+# JWT ES256: .env.example already points at configs/dev/*.pem
 
 make dev-keys          # generate configs/dev/*.pem if missing; chmod 644 (containers run as nonroot)
 make docker-up         # build + postgres/redis/rustfs + migrate + api

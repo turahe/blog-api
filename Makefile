@@ -66,17 +66,17 @@ swagger:
 		go run github.com/swaggo/swag/cmd/swag@$(SWAG_VERSION) init -g main.go -o docs --parseDependency --parseInternal && \
 		chown -R $(HOST_UID_GID) docs'
 
-# Dev-only RS256 key pair for configs/dev. The container runs as distroless nonroot (uid 65532),
+# Dev-only ES256 (P-256) key pair for configs/dev. The container runs as distroless nonroot (uid 65532),
 # so the bind-mounted keys must be world-readable; never reuse these keys outside local dev.
 dev-keys:
 	@mkdir -p configs/dev
 	@docker run --rm -v "$(CURDIR)/configs/dev":/keys -w /keys alpine:3.20 sh -c '\
-		if [ ! -f jwt-rsa-private.pem ] || [ ! -f jwt-rsa-public.pem ]; then \
+		if [ ! -f jwt-es256-private.pem ] || [ ! -f jwt-es256-public.pem ]; then \
 			apk add --no-cache -q openssl && \
-			{ [ -f jwt-rsa-private.pem ] || openssl genpkey -algorithm RSA -pkeyopt rsa_keygen_bits:2048 -out jwt-rsa-private.pem; } && \
-			openssl pkey -in jwt-rsa-private.pem -pubout -out jwt-rsa-public.pem; \
-		fi && chmod 644 jwt-rsa-private.pem jwt-rsa-public.pem && \
-		chown $(HOST_UID_GID) jwt-rsa-private.pem jwt-rsa-public.pem'
+			{ [ -f jwt-es256-private.pem ] || openssl genpkey -algorithm EC -pkeyopt ec_paramgen_curve:P-256 -out jwt-es256-private.pem; } && \
+			openssl pkey -in jwt-es256-private.pem -pubout -out jwt-es256-public.pem; \
+		fi && chmod 644 jwt-es256-private.pem jwt-es256-public.pem && \
+		chown $(HOST_UID_GID) jwt-es256-private.pem jwt-es256-public.pem'
 
 # Full local stack: postgres, redis, rustfs, migrate, api (http://localhost:8080).
 docker-up: dev-keys

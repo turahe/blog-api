@@ -57,7 +57,7 @@ Snapshot of the tree these files were written against:
   plus list indexes. Entity tables key on `id bigint` identity with a
   unique public `uuid`; only the UUID leaves the persistence adapters.
 - **Platform** — PostgreSQL (plus Cloud SQL connector), Redis (fixed-window rate limits and
-  the generation-keyed public read cache), JWT, bcrypt, Casbin enforcer,
+  the generation-keyed public read cache), ES256 JWT, Argon2id, Casbin enforcer,
   S3-compatible object storage, and multi-broker Watermill messaging (`MESSAGE_BROKER`) with an
   `app worker` scaffold.
 - **Schema-only** — `audit_logs` and `outbox_events` tables exist with no service or HTTP layer.

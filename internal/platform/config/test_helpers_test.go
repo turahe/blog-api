@@ -1,8 +1,9 @@
 package config
 
 import (
+	"crypto/ecdsa"
+	"crypto/elliptic"
 	"crypto/rand"
-	"crypto/rsa"
 	"crypto/x509"
 	"encoding/pem"
 	"os"
@@ -10,14 +11,14 @@ import (
 	"testing"
 )
 
-// setJWTKeys points Load() at a throwaway RSA keypair written to a temp dir, so
+// setJWTKeys points Load() at a throwaway P-256 keypair written to a temp dir, so
 // tests do not depend on the untracked configs/dev keys from `make dev-keys`.
 func setJWTKeys(t *testing.T) {
 	t.Helper()
 
-	key, err := rsa.GenerateKey(rand.Reader, 2048)
+	key, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
 	if err != nil {
-		t.Fatalf("generate RSA key: %v", err)
+		t.Fatalf("generate P-256 key: %v", err)
 	}
 
 	privateDER, err := x509.MarshalPKCS8PrivateKey(key)
@@ -31,8 +32,8 @@ func setJWTKeys(t *testing.T) {
 	}
 
 	dir := t.TempDir()
-	t.Setenv("APP_JWT_PRIVATE_KEY_PATH", writePEM(t, dir, "jwt-rsa-private.pem", "PRIVATE KEY", privateDER))
-	t.Setenv("APP_JWT_PUBLIC_KEY_PATH", writePEM(t, dir, "jwt-rsa-public.pem", "PUBLIC KEY", publicDER))
+	t.Setenv("APP_JWT_PRIVATE_KEY_PATH", writePEM(t, dir, "jwt-es256-private.pem", "PRIVATE KEY", privateDER))
+	t.Setenv("APP_JWT_PUBLIC_KEY_PATH", writePEM(t, dir, "jwt-es256-public.pem", "PUBLIC KEY", publicDER))
 }
 
 func writePEM(t *testing.T, dir, name, blockType string, der []byte) string {

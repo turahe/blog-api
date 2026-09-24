@@ -1,35 +1,94 @@
-// Package password hashes and verifies passwords with bcrypt.
+// Package password hashes and verifies passwords with Argon2id.
 package password
 
 import (
-	"golang.org/x/crypto/bcrypt"
+	"crypto/rand"
+	"crypto/subtle"
+	"encoding/base64"
+	"errors"
+	"fmt"
+	"strings"
+
+	"golang.org/x/crypto/argon2"
 )
 
-// Hasher implements authports.PasswordHasher with bcrypt.
-type Hasher struct {
-	cost int
+const (
+	argonTime    uint32 = 3
+	argonMemory  uint32 = 64 * 1024 // KiB (64 MiB)
+	argonThreads uint8  = 2
+	argonKeyLen  uint32 = 32
+	argonSaltLen        = 16
+)
+
+// Hasher implements authports.PasswordHasher with Argon2id.
+type Hasher struct{}
+
+// New returns a Hasher using Argon2id (t=3, m=64 MiB, p=2).
+func New() *Hasher {
+	return &Hasher{}
 }
 
-// New returns a Hasher; a cost outside bcrypt's valid range uses bcrypt.DefaultCost.
-func New(cost int) *Hasher {
-	if cost < bcrypt.MinCost || cost > bcrypt.MaxCost {
-		cost = bcrypt.DefaultCost
-	}
-
-	return &Hasher{cost: cost}
-}
-
-// Hash returns the bcrypt hash of the password.
+// Hash returns the PHC-encoded Argon2id hash of the password.
 func (h *Hasher) Hash(password string) (string, error) {
-	bytes, err := bcrypt.GenerateFromPassword([]byte(password), h.cost)
-	if err != nil {
+	salt := make([]byte, argonSaltLen)
+	if _, err := rand.Read(salt); err != nil {
 		return "", err
 	}
 
-	return string(bytes), nil
+	sum := argon2.IDKey([]byte(password), salt, argonTime, argonMemory, argonThreads, argonKeyLen)
+
+	return fmt.Sprintf(
+		"$argon2id$v=%d$m=%d,t=%d,p=%d$%s$%s",
+		argon2.Version,
+		argonMemory,
+		argonTime,
+		argonThreads,
+		base64.RawStdEncoding.EncodeToString(salt),
+		base64.RawStdEncoding.EncodeToString(sum),
+	), nil
 }
 
-// Compare reports whether password matches hash.
-func (h *Hasher) Compare(hash, password string) bool {
-	return bcrypt.CompareHashAndPassword([]byte(hash), []byte(password)) == nil
+// Compare reports whether password matches a PHC-encoded Argon2id hash.
+func (h *Hasher) Compare(encoded, password string) bool {
+	salt, sum, timeCost, memory, threads, err := decode(encoded)
+	if err != nil {
+		return false
+	}
+
+	got := argon2.IDKey([]byte(password), salt, timeCost, memory, threads, uint32(len(sum)))
+
+	return subtle.ConstantTimeCompare(got, sum) == 1
+}
+
+func decode(encoded string) (salt, sum []byte, timeCost, memory uint32, threads uint8, err error) {
+	parts := strings.Split(encoded, "$")
+	if len(parts) != 6 || parts[1] != "argon2id" {
+		return nil, nil, 0, 0, 0, errors.New("invalid argon2id hash")
+	}
+
+	var version int
+	if _, err = fmt.Sscanf(parts[2], "v=%d", &version); err != nil || version != argon2.Version {
+		return nil, nil, 0, 0, 0, errors.New("unsupported argon2 version")
+	}
+
+	var threadsParsed uint32
+	if _, err = fmt.Sscanf(parts[3], "m=%d,t=%d,p=%d", &memory, &timeCost, &threadsParsed); err != nil {
+		return nil, nil, 0, 0, 0, errors.New("invalid argon2 parameters")
+	}
+
+	if timeCost < 1 || timeCost > 10 || memory < 8*1024 || memory > 256*1024 || threadsParsed < 1 || threadsParsed > 4 {
+		return nil, nil, 0, 0, 0, errors.New("argon2 parameters out of range")
+	}
+
+	salt, err = base64.RawStdEncoding.DecodeString(parts[4])
+	if err != nil || len(salt) < 8 || len(salt) > 64 {
+		return nil, nil, 0, 0, 0, errors.New("invalid argon2 salt")
+	}
+
+	sum, err = base64.RawStdEncoding.DecodeString(parts[5])
+	if err != nil || len(sum) != int(argonKeyLen) {
+		return nil, nil, 0, 0, 0, errors.New("invalid argon2 hash")
+	}
+
+	return salt, sum, timeCost, memory, uint8(threadsParsed), nil
 }

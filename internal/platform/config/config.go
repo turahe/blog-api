@@ -536,7 +536,7 @@ func (c *Config) validateSecrets() error {
 	}
 
 	if c.JWTPrivateKey == "" || c.JWTPublicKey == "" {
-		return errors.New("JWT RSA keys are required: set APP_JWT_PRIVATE_KEY or APP_JWT_PRIVATE_KEY_PATH, and APP_JWT_PUBLIC_KEY or APP_JWT_PUBLIC_KEY_PATH")
+		return errors.New("JWT ES256 keys are required: set APP_JWT_PRIVATE_KEY or APP_JWT_PRIVATE_KEY_PATH, and APP_JWT_PUBLIC_KEY or APP_JWT_PUBLIC_KEY_PATH")
 	}
 
 	return nil

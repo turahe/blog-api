@@ -90,7 +90,7 @@ func NewRuntime(ctx context.Context, cfg config.Config, logger *slog.Logger, ver
 	postsRepo := persistence.NewPostRepository(db.GORM)
 	categoriesRepo := persistence.NewCategoryRepository(db.GORM)
 	tagsRepo := persistence.NewTagRepository(db.GORM)
-	hasher := password.New(0)
+	hasher := password.New()
 	clock := system.Clock{}
 	ids := system.UUIDGenerator{}
 

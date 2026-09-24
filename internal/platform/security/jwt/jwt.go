@@ -1,9 +1,10 @@
-// Package jwt issues and verifies RS256 access tokens and opaque refresh/reset tokens.
+// Package jwt issues and verifies ES256 access tokens and opaque refresh/reset tokens.
 package jwt
 
 import (
+	"crypto/ecdsa"
+	"crypto/elliptic"
 	"crypto/rand"
-	"crypto/rsa"
 	"crypto/sha256"
 	"crypto/x509"
 	"encoding/base64"
@@ -20,31 +21,39 @@ import (
 
 // Service implements authports.TokenService.
 type Service struct {
-	privateKey *rsa.PrivateKey
-	publicKey  *rsa.PublicKey
+	privateKey *ecdsa.PrivateKey
+	publicKey  *ecdsa.PublicKey
 	hashKey    []byte
 	issuer     string
 }
 
-// New builds an RS256 token service.
-// privatePEM / publicPEM are PKCS#1 or PKCS#8 / PKIX PEM blocks.
+// New builds an ES256 token service.
+// privatePEM is PKCS#8 or SEC1; publicPEM is PKIX. Both keys must be P-256.
 // hashKey peppers opaque refresh and reset token hashes (APP_SESSION_KEY).
 func New(privatePEM, publicPEM, hashKey, issuer string) (*Service, error) {
 	if len(hashKey) < 32 {
 		return nil, errors.New("JWT hash key must be at least 32 bytes")
 	}
 
-	privateKey, err := parseRSAPrivateKey([]byte(privatePEM))
+	privateKey, err := parseECPrivateKey([]byte(privatePEM))
 	if err != nil {
 		return nil, fmt.Errorf("parse JWT private key: %w", err)
 	}
 
-	publicKey, err := parseRSAPublicKey([]byte(publicPEM))
+	publicKey, err := parseECPublicKey([]byte(publicPEM))
 	if err != nil {
 		return nil, fmt.Errorf("parse JWT public key: %w", err)
 	}
 
-	if privateKey.N.Cmp(publicKey.N) != 0 || privateKey.E != publicKey.E {
+	if err := requireP256(privateKey.Curve); err != nil {
+		return nil, err
+	}
+
+	if err := requireP256(publicKey.Curve); err != nil {
+		return nil, err
+	}
+
+	if !privateKey.PublicKey.Equal(publicKey) {
 		return nil, errors.New("JWT public key does not match private key")
 	}
 
@@ -66,9 +75,9 @@ type accessClaims struct {
 	jwtlib.RegisteredClaims
 }
 
-// IssueAccess signs an RS256 access token for the user.
+// IssueAccess signs an ES256 access token for the user.
 func (s *Service) IssueAccess(claims authdomain.AccessClaims) (string, error) {
-	token := jwtlib.NewWithClaims(jwtlib.SigningMethodRS256, accessClaims{
+	token := jwtlib.NewWithClaims(jwtlib.SigningMethodES256, accessClaims{
 		Email:    claims.Email,
 		Username: claims.Username,
 		RegisteredClaims: jwtlib.RegisteredClaims{
@@ -86,7 +95,7 @@ func (s *Service) IssueAccess(claims authdomain.AccessClaims) (string, error) {
 // ParseAccess verifies an access token's signature, issuer, and expiry.
 func (s *Service) ParseAccess(token string) (authdomain.AccessClaims, error) {
 	parsed, err := jwtlib.ParseWithClaims(token, &accessClaims{}, func(t *jwtlib.Token) (any, error) {
-		if t.Method != jwtlib.SigningMethodRS256 {
+		if t.Method != jwtlib.SigningMethodES256 {
 			return nil, errors.New("unexpected signing method")
 		}
 
@@ -167,39 +176,51 @@ func (s *Service) HashResetToken(raw string) string {
 	return hex.EncodeToString(sum[:])
 }
 
-func parseRSAPrivateKey(pemBytes []byte) (*rsa.PrivateKey, error) {
-	return parseRSAKey(pemBytes, "private", x509.ParsePKCS8PrivateKey, x509.ParsePKCS1PrivateKey)
-}
-
-func parseRSAPublicKey(pemBytes []byte) (*rsa.PublicKey, error) {
-	return parseRSAKey(pemBytes, "public", x509.ParsePKIXPublicKey, x509.ParsePKCS1PublicKey)
-}
-
-// parseRSAKey decodes the first PEM block, trying the generic container
-// (PKCS#8 / PKIX) before the RSA-only PKCS#1 encoding.
-func parseRSAKey[K *rsa.PrivateKey | *rsa.PublicKey](
-	pemBytes []byte,
-	kind string,
-	generic func([]byte) (any, error),
-	pkcs1 func([]byte) (K, error),
-) (K, error) {
+func parseECPrivateKey(pemBytes []byte) (*ecdsa.PrivateKey, error) {
 	block, _ := pem.Decode(pemBytes)
 	if block == nil {
 		return nil, errors.New("no PEM block found")
 	}
 
-	if key, err := generic(block.Bytes); err == nil {
-		rsaKey, ok := key.(K)
+	if key, err := x509.ParsePKCS8PrivateKey(block.Bytes); err == nil {
+		ecKey, ok := key.(*ecdsa.PrivateKey)
 		if !ok {
-			return nil, fmt.Errorf("not an RSA %s key", kind)
+			return nil, errors.New("not an ECDSA private key")
 		}
 
-		return rsaKey, nil
+		return ecKey, nil
 	}
 
-	if key, err := pkcs1(block.Bytes); err == nil {
+	if key, err := x509.ParseECPrivateKey(block.Bytes); err == nil {
 		return key, nil
 	}
 
-	return nil, fmt.Errorf("unsupported %s key encoding", kind)
+	return nil, errors.New("unsupported private key encoding")
+}
+
+func parseECPublicKey(pemBytes []byte) (*ecdsa.PublicKey, error) {
+	block, _ := pem.Decode(pemBytes)
+	if block == nil {
+		return nil, errors.New("no PEM block found")
+	}
+
+	key, err := x509.ParsePKIXPublicKey(block.Bytes)
+	if err != nil {
+		return nil, errors.New("unsupported public key encoding")
+	}
+
+	ecKey, ok := key.(*ecdsa.PublicKey)
+	if !ok {
+		return nil, errors.New("not an ECDSA public key")
+	}
+
+	return ecKey, nil
+}
+
+func requireP256(curve elliptic.Curve) error {
+	if curve != elliptic.P256() {
+		return errors.New("JWT key must use P-256 for ES256")
+	}
+
+	return nil
 }
