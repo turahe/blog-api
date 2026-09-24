@@ -15,9 +15,6 @@ var (
 	version   = "0.1.0-dev"
 	commit    = "unknown"
 	buildTime = "unknown"
-
-	// envFile is bound to --env-file on the root command.
-	envFile string
 )
 
 // Execute runs the root command tree. The repo-root main package calls this;
@@ -27,7 +24,8 @@ func Execute() error {
 }
 
 func newRootCmd() *cobra.Command {
-	envFile = ""
+	var envFile string
+
 	cmd := &cobra.Command{
 		Use:           "app",
 		Short:         "Blog Platform API",

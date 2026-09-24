@@ -28,6 +28,7 @@ Makefile
 tests/
 **/testdata/
 coverage.out
+coverage.html
 reports/
 
 # Graphify / local data / build artefacts

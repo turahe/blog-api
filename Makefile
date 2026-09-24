@@ -1,10 +1,13 @@
-.PHONY: test lint routes-check swagger dev-keys infra-up infra-down infra-up-messaging infra-down-messaging docker-up docker-down docker-build docker-logs docker-seed docker-migrate
+.PHONY: test test-race coverage lint routes-check swagger dev-keys infra-up infra-down infra-up-messaging infra-down-messaging docker-up docker-down docker-build docker-logs docker-seed docker-migrate
 
 MODULE := github.com/turahe/blog-api
+TEST_PKGS := ./cmd/... ./internal/... ./docs/...
 
 # Every target runs in Docker; only Docker (with Compose) is required on the host.
 # Go module and build caches live in named volumes so repeat runs stay fast.
 GO_IMAGE ?= golang:1.26.5-alpine
+# -race needs cgo and a C toolchain; the Debian image ships gcc, alpine does not.
+GO_RACE_IMAGE ?= golang:1.26.5
 GOLANGCI_LINT_IMAGE ?= golangci/golangci-lint:v2.14.0
 SWAG_VERSION ?= v1.16.6
 # Containers run as root; files they write are chowned back to the host user.
@@ -17,7 +20,18 @@ DOCKER_GO = docker run --rm $(DOCKER_GIT_ENV) \
 	-v blog-api-go-build-cache:/root/.cache/go-build
 
 test:
-	$(DOCKER_GO) $(GO_IMAGE) go test -count=1 ./cmd/... ./internal/... ./docs/...
+	$(DOCKER_GO) $(GO_IMAGE) go test -count=1 $(TEST_PKGS)
+
+test-race:
+	$(DOCKER_GO) -e CGO_ENABLED=1 $(GO_RACE_IMAGE) go test -race -shuffle=on -count=1 $(TEST_PKGS)
+
+# Writes coverage.out and coverage.html (open in a browser), and prints total coverage.
+coverage:
+	$(DOCKER_GO) -e CGO_ENABLED=1 $(GO_RACE_IMAGE) sh -c '\
+		go test -race -shuffle=on -count=1 -covermode=atomic -coverprofile=coverage.out $(TEST_PKGS) && \
+		go tool cover -html=coverage.out -o coverage.html && \
+		go tool cover -func=coverage.out | tail -n 1; \
+		status=$$?; chown $(HOST_UID_GID) coverage.out coverage.html 2>/dev/null; exit $$status'
 
 # Compile + smoke-test the Gin route registration.
 routes-check:
