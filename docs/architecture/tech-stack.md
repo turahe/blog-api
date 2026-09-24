@@ -5,7 +5,7 @@
 - Language: Go
 - HTTP framework: Gin
 - ORM: GORM
-- Database: PostgreSQL, MySQL, and Microsoft SQL Server (dialect selected via `DB_DRIVER`; production preferred path is Google Cloud SQL via `cloud.google.com/go/cloudsqlconn`)
+- Database: PostgreSQL only (production preferred path is Google Cloud SQL via `cloud.google.com/go/cloudsqlconn`)
 - Cache: Redis
 - Event bus: Watermill with selectable transports — Apache Kafka, RabbitMQ (AMQP), and Google Cloud Pub/Sub (`MESSAGE_BROKER`)
 - Object storage: Cloudflare R2 and S3-compatible providers
@@ -27,15 +27,13 @@
 ## Data and Async
 
 - Relational store holds users, roles, permissions, posts, comments, audit logs, and outbox data
-- Supported dialects (local split `DB_*` settings or Cloud SQL):
+- Supported dialect (local split `DB_*` settings or Cloud SQL); MySQL and SQL Server are not supported:
   | `DB_DRIVER` | Engine | GORM driver | Notes |
   |-------------|--------|-------------|-------|
   | `postgres` (default) | PostgreSQL 15+ | `gorm.io/driver/postgres` + `jackc/pgx/v5` | Source-of-truth schema and Goose migrations |
-  | `mysql` | MySQL 8.0+ / Cloud SQL MySQL | `gorm.io/driver/mysql` | Secondary / portable deployments |
-  | `sqlserver` | Microsoft SQL Server / Cloud SQL SQL Server | `gorm.io/driver/sqlserver` | Secondary / portable deployments |
 - Google Cloud SQL is the managed relational data plane in production deployments
-  - managed connectivity via **`cloud.google.com/go/cloudsqlconn`** for **PostgreSQL**, **MySQL**, and **SQL Server**
-  - IAM Database Authentication where the engine supports it (Postgres / MySQL), ephemeral mTLS certificate auto-rotation, Private Service Connect private IP (`DB_PRIVATE_IP_ENABLED=true`)
+  - managed connectivity via **`cloud.google.com/go/cloudsqlconn`** for **PostgreSQL**
+  - IAM Database Authentication, ephemeral mTLS certificate auto-rotation, Private Service Connect private IP (`DB_PRIVATE_IP_ENABLED=true`)
   - instance targeting via `DB_INSTANCE_CONNECTION_NAME` (`project:region:instance`); see [backend/database.md Cloud SQL Connectivity](../backend/database.md#google-cloud-sql-connectivity-cloudgooglecomgocloudsqlconn)
   - platform wiring: `internal/platform/database` (replaces dialect-specific open packages)
 - Redis stores cache entries, rate-limit counters, and short-lived session/security state

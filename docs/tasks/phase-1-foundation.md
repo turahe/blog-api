@@ -29,15 +29,16 @@ real mailer are still open.
 
 ## Epic: persistence and cache
 
-- [x] Multi-dialect database open in `internal/platform/database` (`postgres`, `mysql`, `sqlserver`)
+- [x] Database open in `internal/platform/database` (PostgreSQL; MySQL and SQL Server dropped)
 - [x] Google Cloud SQL connectivity via `cloud.google.com/go/cloudsqlconn` with IAM auth and private IP
 - [x] Connection pool tuning from config (`DB_MAX_OPEN`, `DB_MAX_IDLE`, lifetimes)
 - [x] Goose SQL migrations `00001`–`00009` under `internal/platform/migrations/sql`
 - [x] Every entity table keys on `id bigint` identity with a unique public `uuid`; foreign keys are bigint
 - [x] Redis client in `internal/platform/redis`
 - [x] Seeder in `internal/platform/seed` for baseline roles
-- [ ] Port the migrations to MySQL and SQL Server (they use PostgreSQL identity columns,
+- [x] Port the migrations to MySQL and SQL Server (they use PostgreSQL identity columns,
       `gen_random_uuid()`, and partial indexes) or drop those drivers from `internal/platform/database`
+      (dropped: PostgreSQL only)
 - [x] `app migrate down` rollback path, documented in [database.md](../backend/database.md)
 - [x] Seeder covers permissions and Casbin policy rows, not just roles
 

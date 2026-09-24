@@ -12,12 +12,9 @@ import (
 	"time"
 )
 
-// Canonical DB_DRIVER values returned by NormalizeDBDriver.
-const (
-	DBDriverPostgres  = "postgres"
-	DBDriverMySQL     = "mysql"
-	DBDriverSQLServer = "sqlserver"
-)
+// DBDriverPostgres is the only supported DB_DRIVER; the migrations use
+// PostgreSQL identity columns, gen_random_uuid(), and partial indexes.
+const DBDriverPostgres = "postgres"
 
 const (
 	defaultAddress  = "0.0.0.0:8080"
@@ -176,76 +173,41 @@ func NormalizeDBDriver(raw string) (string, error) {
 	switch strings.ToLower(strings.TrimSpace(raw)) {
 	case "", DBDriverPostgres, "postgresql", "pg":
 		return DBDriverPostgres, nil
-	case DBDriverMySQL, "mariadb":
-		return DBDriverMySQL, nil
-	case DBDriverSQLServer, "mssql":
-		return DBDriverSQLServer, nil
 	default:
-		return "", fmt.Errorf("unsupported DB_DRIVER %q (want postgres, mysql, or sqlserver)", raw)
+		return "", fmt.Errorf("unsupported DB_DRIVER %q (only postgres is supported)", raw)
 	}
 }
 
-func defaultDBPort(driver string) int {
-	switch driver {
-	case DBDriverMySQL:
-		return 3306
-	case DBDriverSQLServer:
-		return 1433
-	default:
-		return 5432
-	}
-}
+const defaultDBPort = 5432
 
-// DatabaseDSN builds a driver-specific DSN from split DB_* settings.
+// DatabaseDSN builds a PostgreSQL DSN from split DB_* settings.
 func (c Config) DatabaseDSN() (string, error) {
-	driver, err := NormalizeDBDriver(c.DBDriver)
-	if err != nil {
+	if _, err := NormalizeDBDriver(c.DBDriver); err != nil {
 		return "", err
 	}
 
 	port := c.DBPort
 	if port == 0 {
-		port = defaultDBPort(driver)
+		port = defaultDBPort
 	}
 
-	hostPort := net.JoinHostPort(c.DBHost, strconv.Itoa(port))
-
-	switch driver {
-	case DBDriverPostgres:
-		u := &url.URL{
-			Scheme: "postgres",
-			User:   url.UserPassword(c.DBUser, c.DBPassword),
-			Host:   hostPort,
-			Path:   "/" + c.DBName,
-		}
-		q := u.Query()
-
-		sslmode := c.DBSSLMode
-		if sslmode == "" {
-			sslmode = "disable"
-		}
-
-		q.Set("sslmode", sslmode)
-		u.RawQuery = q.Encode()
-
-		return u.String(), nil
-	case DBDriverMySQL:
-		userInfo := url.UserPassword(c.DBUser, c.DBPassword)
-		return fmt.Sprintf("%s@tcp(%s)/%s?parseTime=true", userInfo.String(), hostPort, c.DBName), nil
-	case DBDriverSQLServer:
-		u := &url.URL{
-			Scheme: "sqlserver",
-			User:   url.UserPassword(c.DBUser, c.DBPassword),
-			Host:   hostPort,
-		}
-		q := u.Query()
-		q.Set("database", c.DBName)
-		u.RawQuery = q.Encode()
-
-		return u.String(), nil
-	default:
-		return "", fmt.Errorf("unsupported DB_DRIVER %q", driver)
+	u := &url.URL{
+		Scheme: "postgres",
+		User:   url.UserPassword(c.DBUser, c.DBPassword),
+		Host:   net.JoinHostPort(c.DBHost, strconv.Itoa(port)),
+		Path:   "/" + c.DBName,
 	}
+	q := u.Query()
+
+	sslmode := c.DBSSLMode
+	if sslmode == "" {
+		sslmode = "disable"
+	}
+
+	q.Set("sslmode", sslmode)
+	u.RawQuery = q.Encode()
+
+	return u.String(), nil
 }
 
 // ValidateDatabase checks split database settings for direct connections.
@@ -255,8 +217,7 @@ func (c Config) ValidateDatabase() error {
 		return nil
 	}
 
-	driver, err := NormalizeDBDriver(c.DBDriver)
-	if err != nil {
+	if _, err := NormalizeDBDriver(c.DBDriver); err != nil {
 		return err
 	}
 
@@ -266,7 +227,7 @@ func (c Config) ValidateDatabase() error {
 
 	port := c.DBPort
 	if port == 0 {
-		port = defaultDBPort(driver)
+		port = defaultDBPort
 	}
 
 	if port < 1 || port > 65535 {
@@ -281,15 +242,13 @@ func (c Config) ValidateDatabase() error {
 		return errors.New("DB_NAME must not be empty")
 	}
 
-	if driver == DBDriverPostgres {
-		sslmode := strings.ToLower(strings.TrimSpace(c.DBSSLMode))
-		if sslmode == "" {
-			sslmode = "disable"
-		}
+	sslmode := strings.ToLower(strings.TrimSpace(c.DBSSLMode))
+	if sslmode == "" {
+		sslmode = "disable"
+	}
 
-		if c.Environment == "production" && sslmode == "disable" {
-			return errors.New("DB_SSLMODE cannot be disable in production")
-		}
+	if c.Environment == "production" && sslmode == "disable" {
+		return errors.New("DB_SSLMODE cannot be disable in production")
 	}
 
 	return nil
@@ -394,11 +353,10 @@ func (c Config) ValidateMessaging() error {
 // Load reads the environment, loads the JWT keys, and validates the result.
 func Load() (Config, error) {
 	driver := env("DB_DRIVER", defaultDBDriver)
-	normalized, _ := NormalizeDBDriver(driver)
 
 	port := integer("DB_PORT", 0)
 	if port == 0 {
-		port = defaultDBPort(normalized)
+		port = defaultDBPort
 	}
 
 	cfg := Config{

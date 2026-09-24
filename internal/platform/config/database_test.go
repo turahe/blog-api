@@ -26,49 +26,18 @@ func TestDatabaseDSNPostgres(t *testing.T) {
 	}
 }
 
-func TestDatabaseDSNMySQL(t *testing.T) {
+func TestDatabaseRejectsNonPostgresDrivers(t *testing.T) {
 	t.Parallel()
 
-	cfg := Config{
-		DBDriver:   "mysql",
-		DBHost:     "db.example.com",
-		DBPort:     3306,
-		DBUser:     "blog",
-		DBPassword: "secret",
-		DBName:     "blog",
-	}
+	for _, driver := range []string{"mysql", "sqlserver"} {
+		cfg := Config{DBDriver: driver, DBHost: "db", DBUser: "blog", DBName: "blog"}
+		if _, err := cfg.DatabaseDSN(); err == nil {
+			t.Fatalf("DatabaseDSN(%s): expected error", driver)
+		}
 
-	got, err := cfg.DatabaseDSN()
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	want := "blog:secret@tcp(db.example.com:3306)/blog?parseTime=true"
-	if got != want {
-		t.Fatalf("DatabaseDSN()=%q want %q", got, want)
-	}
-}
-
-func TestDatabaseDSNSQLServer(t *testing.T) {
-	t.Parallel()
-
-	cfg := Config{
-		DBDriver:   "sqlserver",
-		DBHost:     "db.example.com",
-		DBPort:     1433,
-		DBUser:     "blog",
-		DBPassword: "secret",
-		DBName:     "blog",
-	}
-
-	got, err := cfg.DatabaseDSN()
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	want := "sqlserver://blog:secret@db.example.com:1433?database=blog"
-	if got != want {
-		t.Fatalf("DatabaseDSN()=%q want %q", got, want)
+		if err := cfg.ValidateDatabase(); err == nil {
+			t.Fatalf("ValidateDatabase(%s): expected error", driver)
+		}
 	}
 }
 

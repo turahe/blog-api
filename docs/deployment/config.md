@@ -103,9 +103,9 @@ The connection mode is selected by `DB_INSTANCE_CONNECTION_NAME`:
 
 | Variable | Default | Required | Purpose |
 | --- | --- | --- | --- |
-| `DB_DRIVER` | `postgres` | No | `postgres`, `mysql`, or `sqlserver`. Aliases `pg`, `postgresql`, `mariadb`, and `mssql` are accepted. |
+| `DB_DRIVER` | `postgres` | No | Only `postgres` (aliases `pg`, `postgresql`). MySQL and SQL Server were dropped because the migrations are PostgreSQL-specific. |
 | `DB_HOST` | `127.0.0.1` | Non-empty | Database hostname or IP. |
-| `DB_PORT` | driver default | No | Port (`5432` postgres, `3306` mysql, `1433` sqlserver when unset). |
+| `DB_PORT` | `5432` | No | Port. |
 | `DB_USER` | `blog` | Non-empty | Database user. |
 | `DB_PASSWORD` | `blog` | No | Database password. |
 | `DB_NAME` | `blog` | Non-empty | Database name. |
@@ -122,27 +122,10 @@ DB_USER=blog
 DB_PASSWORD=secret
 DB_NAME=blog
 DB_SSLMODE=require
-
-# MySQL
-DB_DRIVER=mysql
-DB_HOST=db.example.com
-DB_PORT=3306
-DB_USER=blog
-DB_PASSWORD=secret
-DB_NAME=blog
-
-# Microsoft SQL Server
-DB_DRIVER=sqlserver
-DB_HOST=db.example.com
-DB_PORT=1433
-DB_USER=blog
-DB_PASSWORD=secret
-DB_NAME=blog
 ```
 
-The application builds a driver-specific DSN from these fields. `DATABASE_URL` is no longer
-consumed. When `APP_ENV=production` and the dialect is PostgreSQL, `DB_SSLMODE=disable` is
-rejected.
+The application builds a PostgreSQL DSN from these fields. `DATABASE_URL` is no longer
+consumed. When `APP_ENV=production`, `DB_SSLMODE=disable` is rejected.
 
 ### Google Cloud SQL
 
@@ -150,9 +133,9 @@ rejected.
 | --- | --- | --- | --- |
 | `DB_INSTANCE_CONNECTION_NAME` | empty | To enable Cloud SQL | Instance name in `project:region:instance` form. |
 | `DB_USER` | empty | Yes | Database or IAM database user. |
-| `DB_PASSWORD` | empty | Conditional | Required when IAM DB authentication is off and always required for SQL Server. |
+| `DB_PASSWORD` | empty | Conditional | Required when IAM DB authentication is off. |
 | `DB_NAME` | empty | Yes | Database name inside the instance. |
-| `DB_IAM_AUTH_ENABLED` | `false` | No | Enables IAM DB authentication for PostgreSQL/MySQL. It is not used for SQL Server. |
+| `DB_IAM_AUTH_ENABLED` | `false` | No | Enables IAM DB authentication. |
 | `DB_PRIVATE_IP_ENABLED` | `true` | No | Routes connector traffic through the instance's private IP. |
 | `DB_GOOGLE_CREDENTIALS_SOURCE` | `workload-identity` | No | `workload-identity`, `adc`, or `path:/absolute/key.json`. |
 

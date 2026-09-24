@@ -8,24 +8,16 @@ import (
 	"strings"
 	"time"
 
-	// database/sql drivers registered for the raw *sql.DB pool (migrations, health).
-	_ "github.com/go-sql-driver/mysql"
+	// database/sql driver registered for the raw *sql.DB pool (migrations, health).
 	_ "github.com/jackc/pgx/v5/stdlib"
-	_ "github.com/microsoft/go-mssqldb"
 	"github.com/turahe/blog-api/internal/platform/config"
-	"gorm.io/driver/mysql"
 	"gorm.io/driver/postgres"
-	"gorm.io/driver/sqlserver"
 	"gorm.io/gorm"
 	"gorm.io/gorm/logger"
 )
 
-// Driver names accepted by DB_DRIVER.
-const (
-	DriverPostgres  = config.DBDriverPostgres
-	DriverMySQL     = config.DBDriverMySQL
-	DriverSQLServer = config.DBDriverSQLServer
-)
+// DriverPostgres is the only driver accepted by DB_DRIVER.
+const DriverPostgres = config.DBDriverPostgres
 
 // Database wraps a GORM handle and the underlying sql.DB pool.
 type Database struct {
@@ -48,14 +40,14 @@ func Open(ctx context.Context, cfg config.Config) (*Database, error) {
 		cleanup func() error
 	)
 	if cfg.UsesCloudSQL() {
-		sqlDB, cleanup, err = openCloudSQL(ctx, driver, cfg)
+		sqlDB, cleanup, err = openCloudSQL(ctx, cfg)
 	} else {
 		dsn, dsnErr := cfg.DatabaseDSN()
 		if dsnErr != nil {
 			return nil, dsnErr
 		}
 
-		sqlDB, err = openDSN(driver, dsn)
+		sqlDB, err = openDSN(dsn)
 	}
 
 	if err != nil {
@@ -67,40 +59,29 @@ func Open(ctx context.Context, cfg config.Config) (*Database, error) {
 	sqlDB.SetConnMaxLifetime(cfg.DBMaxLifetime)
 	sqlDB.SetConnMaxIdleTime(cfg.DBMaxIdleTime)
 
+	closeAll := func() {
+		_ = sqlDB.Close()
+
+		if cleanup != nil {
+			_ = cleanup()
+		}
+	}
+
 	pingCtx, cancel := context.WithTimeout(ctx, 5*time.Second)
 	defer cancel()
 
 	if err := sqlDB.PingContext(pingCtx); err != nil {
-		_ = sqlDB.Close()
-
-		if cleanup != nil {
-			_ = cleanup()
-		}
+		closeAll()
 
 		return nil, fmt.Errorf("ping %s: %w", driver, err)
 	}
 
-	dialector, err := gormDialector(driver, sqlDB)
-	if err != nil {
-		_ = sqlDB.Close()
-
-		if cleanup != nil {
-			_ = cleanup()
-		}
-
-		return nil, err
-	}
-
-	gdb, err := gorm.Open(dialector, &gorm.Config{
+	gdb, err := gorm.Open(postgres.New(postgres.Config{Conn: sqlDB}), &gorm.Config{
 		Logger:                                   logger.Default.LogMode(logger.Silent),
 		DisableForeignKeyConstraintWhenMigrating: true,
 	})
 	if err != nil {
-		_ = sqlDB.Close()
-
-		if cleanup != nil {
-			_ = cleanup()
-		}
+		closeAll()
 
 		return nil, fmt.Errorf("open gorm (%s): %w", driver, err)
 	}
@@ -131,69 +112,20 @@ func (db *Database) Close() error {
 	return errors.Join(errs...)
 }
 
-// NormalizeDriver maps aliases to canonical driver names.
+// NormalizeDriver maps aliases to the canonical driver name.
 func NormalizeDriver(raw string) (string, error) {
-	switch strings.ToLower(strings.TrimSpace(raw)) {
-	case "", DriverPostgres, "postgresql", "pg":
-		return DriverPostgres, nil
-	case DriverMySQL, "mariadb":
-		return DriverMySQL, nil
-	case DriverSQLServer, "mssql":
-		return DriverSQLServer, nil
-	default:
-		return "", fmt.Errorf("unsupported DB_DRIVER %q (want postgres, mysql, or sqlserver)", raw)
-	}
+	return config.NormalizeDBDriver(raw)
 }
 
-func openDSN(driver, dsn string) (*sql.DB, error) {
+func openDSN(dsn string) (*sql.DB, error) {
 	if strings.TrimSpace(dsn) == "" {
 		return nil, errors.New("database DSN is empty when DB_INSTANCE_CONNECTION_NAME is empty")
 	}
 
-	var (
-		sqlDriver string
-		openDSN   string
-	)
-
-	switch driver {
-	case DriverPostgres:
-		sqlDriver = "pgx"
-		openDSN = dsn
-	case DriverMySQL:
-		sqlDriver = "mysql"
-		openDSN = normalizeMySQLDSN(dsn)
-	case DriverSQLServer:
-		sqlDriver = "sqlserver"
-		openDSN = dsn
-	default:
-		return nil, fmt.Errorf("unsupported driver %q", driver)
-	}
-
-	db, err := sql.Open(sqlDriver, openDSN)
+	db, err := sql.Open("pgx", dsn)
 	if err != nil {
-		return nil, fmt.Errorf("open %s: %w", driver, err)
+		return nil, fmt.Errorf("open postgres: %w", err)
 	}
 
 	return db, nil
-}
-
-func normalizeMySQLDSN(dsn string) string {
-	if after, ok := strings.CutPrefix(dsn, "mysql://"); ok {
-		return after
-	}
-
-	return dsn
-}
-
-func gormDialector(driver string, sqlDB *sql.DB) (gorm.Dialector, error) {
-	switch driver {
-	case DriverPostgres:
-		return postgres.New(postgres.Config{Conn: sqlDB}), nil
-	case DriverMySQL:
-		return mysql.New(mysql.Config{Conn: sqlDB}), nil
-	case DriverSQLServer:
-		return sqlserver.New(sqlserver.Config{Conn: sqlDB}), nil
-	default:
-		return nil, fmt.Errorf("unsupported driver %q", driver)
-	}
 }

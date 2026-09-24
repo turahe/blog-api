@@ -67,21 +67,21 @@ Redis is not the source of truth. Use it for:
 ## Google Cloud SQL Connectivity (`cloud.google.com/go/cloudsqlconn`)
 
 This project targets Google Cloud SQL for managed relational data in production deployments.
-All database connections (PostgreSQL source-of-truth, MySQL for any future MySQL-backed
-modules) use the **`cloud.google.com/go/cloudsqlconn`** Go connector (v1.x / v2+) to handle
+All database connections (PostgreSQL only) use the **`cloud.google.com/go/cloudsqlconn`** Go connector (v1.x / v2+) to handle
 IAM authentication, certificate rotation, private IP peering, and short-lived TLS
 credentials without ever putting static database passwords into environment variables or
 secrets manager entries. The canonical connector package and latest usage guidance lives at
 <https://pkg.go.dev/cloud.google.com/go/cloudsqlconn> and
 <https://cloud.google.com/sql/docs/postgres/connect-connectors#go_1>.
 
-### Supported Database Dialects
+### Supported Database Dialect
+
+Only PostgreSQL is supported. MySQL and SQL Server drivers were removed because the goose
+migrations use identity columns, `gen_random_uuid()`, and partial indexes.
 
 | Dialect (`DB_DRIVER`) | Driver | GORM driver package | Cloud SQL connector integration |
 |-----------------------|--------|---------------------|---------------------------------|
 | `postgres` — PostgreSQL 15+ (source of truth) | `github.com/jackc/pgx/v5/stdlib` | `gorm.io/driver/postgres` | `cloud.google.com/go/cloudsqlconn/postgres/pgxv5` — `RegisterDriver("cloudsql-postgres", WithIAMAuthN(), WithPrivateIP())` then `sql.Open` + GORM `Conn`. |
-| `mysql` — MySQL 8.0+ | `github.com/go-sql-driver/mysql` | `gorm.io/driver/mysql` | `cloud.google.com/go/cloudsqlconn/mysql/mysql` — register `cloudsql-mysql`; private IP on connector port **3307**. |
-| `sqlserver` — Microsoft SQL Server | `github.com/microsoft/go-mssqldb` | `gorm.io/driver/sqlserver` | `cloud.google.com/go/cloudsqlconn/sqlserver/mssql` — register `cloudsql-sqlserver`; DSN includes `cloudsql=project:region:instance`. SQL Server uses user/password (IAM DB auth is not used the same way as Postgres/MySQL). |
 
 Local / non-Cloud-SQL: set split `DB_*` fields (`DB_DRIVER`, `DB_HOST`, `DB_PORT`, `DB_USER`,
 `DB_PASSWORD`, `DB_NAME`, and for PostgreSQL `DB_SSLMODE`). Cloud SQL: set
@@ -92,10 +92,7 @@ Reference docs:
 
 - Cloud SQL Go connector overview: <https://cloud.google.com/sql/docs/postgres/connect-connectors>
 - PostgreSQL connector guide: <https://cloud.google.com/sql/docs/postgres/samples/cloud-sql-postgres-databasesql-connect-connector>
-- MySQL connector guide: <https://cloud.google.com/sql/docs/mysql/samples/cloud-sql-mysql-databasesql-connect-connector>
-- SQL Server connector guide: <https://cloud.google.com/sql/docs/sqlserver/samples/cloud-sql-sqlserver-databasesql-connect-connector>
 - IAM database authentication for PostgreSQL: <https://cloud.google.com/sql/docs/postgres/iam-logins>
-- IAM database authentication for MySQL: <https://cloud.google.com/sql/docs/mysql/iam-logins>
 - Private IP setup overview: <https://cloud.google.com/sql/docs/postgres/private-ip>
 
 ### Connection via Private IP (Production Default)
@@ -111,14 +108,14 @@ secrets or passwords.
 
 | Variable | Example | Purpose |
 |----------|---------|---------|
-| `DB_DRIVER` | `postgres`, `mysql`, or `sqlserver` | Dialect selector (default: `postgres`) |
+| `DB_DRIVER` | `postgres` | Only `postgres` is accepted (default) |
 | `DB_HOST` | `127.0.0.1` | Direct-mode hostname (ignored when Cloud SQL is enabled) |
-| `DB_PORT` | `5432` / `3306` / `1433` | Direct-mode port; defaults by dialect when unset |
+| `DB_PORT` | `5432` | Direct-mode port; defaults to 5432 |
 | `DB_USER` | `blog-iam@my-project.iam` | IAM service account or database user |
-| `DB_PASSWORD` | *(secret)* | Required for `sqlserver` and when IAM auth is disabled |
+| `DB_PASSWORD` | *(secret)* | Required when IAM auth is disabled |
 | `DB_NAME` | `blog` | Database name inside the Cloud SQL instance |
 | `DB_SSLMODE` | `disable` | PostgreSQL SSL mode for direct connections only |
-| `DB_IAM_AUTH_ENABLED` | `true` | Enables IAM DB auth for Postgres/MySQL; do NOT set `DB_PASSWORD`. Prefer `true` in prod for those engines. Ignored for `sqlserver` (password required). |
+| `DB_IAM_AUTH_ENABLED` | `true` | Enables IAM DB auth; do NOT set `DB_PASSWORD`. Prefer `true` in prod. |
 | `DB_INSTANCE_CONNECTION_NAME` | `my-project:us-central1:blog-pg-01` | Fully qualified Cloud SQL instance name: `project:region:instance`. When set, opens via `cloudsqlconn` instead of direct `DB_HOST`/`DB_PORT`. |
 | `DB_PRIVATE_IP_ENABLED` | `true` | When true, passes `cloudsqlconn.WithPrivateIP()` to the Dialer so all connections route over private VPC IP — **never falls back to public IP**. |
 | `DB_GOOGLE_CREDENTIALS_SOURCE` | `workload-identity` (default) or `adc` or `path:/secrets/sa-key.json` | How cloudsqlconn resolves its Google credentials. In GKE we use Workload Identity; in Cloud Run, the runtime service account (ADC); locally, developer ADC via `gcloud auth application-default login`. |
@@ -135,8 +132,7 @@ secrets or passwords.
   using a reserved `/16` (or larger) address range allocated for Private Service Connect.
   <https://cloud.google.com/vpc/docs/configure-private-services-access>
 - **Firewall (VPC firewall rules / GCP firewall)**:
-  - Allow **egress TCP 5432** (PostgreSQL) / **egress TCP 3307** (MySQL — note the MySQL
-    Cloud SQL connector uses port 3307, **not 3306**) from the workload subnet CIDR to the
+  - Allow **egress TCP 5432** (PostgreSQL) from the workload subnet CIDR to the
     `servicenetworking` peered range. Cloud SQL inbound allows the same from the workload
     service account via the database IAM binding.
 - **Workload identity (GKE) / Runtime service account (Cloud Run)**: the workload service
@@ -144,7 +140,7 @@ secrets or passwords.
   private IP connects) **and** `roles/cloudsql.client` on the project. Separate bindings are
   needed for the IAM database login (see §Authentication).
 - **Connectivity test**: use the GCP console `Network Intelligence → Connectivity Tests`
-  (or `gcloud network-management connectivity-tests create`) to validate `TCP 5432` / `TCP 3307`
+  (or `gcloud network-management connectivity-tests create`) to validate `TCP 5432`
   reachability from the workload instance to the Cloud SQL private IP before deploying.
 
 #### Private IP connection process step-by-step
@@ -152,7 +148,7 @@ secrets or passwords.
 1. **Startup**: `app serve` / `app migrate up` entrypoint invokes
    `internal/platform/database.Open`, which:
    1. Resolves `DB_DRIVER` and either split direct `DB_*` fields or Cloud SQL env (`DB_INSTANCE_CONNECTION_NAME`, …).
-   2. For Cloud SQL: registers the dialect driver via `cloudsqlconn` helpers (`pgxv5` / `mysql` / `mssql`) with `WithIAMAuthN()` (Postgres/MySQL) and `WithDefaultDialOptions(WithPrivateIP())` when private IP is enabled.
+   2. For Cloud SQL: registers the driver via the `cloudsqlconn` `pgxv5` helper with `WithIAMAuthN()` and `WithDefaultDialOptions(WithPrivateIP())` when private IP is enabled.
    3. Hands `*sql.DB` to the matching GORM dialector.
 2. **IAM token acquisition**: On the first `Dial()`, cloudsqlconn exchanges the workload
    service account token for a short-lived (1 hour) X.509 ephemeral client certificate,
@@ -177,14 +173,10 @@ secrets or passwords.
 require (
     cloud.google.com/go/cloudsqlconn v1.22.x            # Go connector
     github.com/jackc/pgx/v5                            # PostgreSQL
-    github.com/go-sql-driver/mysql                     # MySQL
-    github.com/microsoft/go-mssqldb                    # SQL Server
     gorm.io/driver/postgres
-    gorm.io/driver/mysql
-    gorm.io/driver/sqlserver
     gorm.io/gorm
 )
-# helpers (same module): cloudsqlconn/postgres/pgxv5, cloudsqlconn/mysql/mysql, cloudsqlconn/sqlserver/mssql
+# helper (same module): cloudsqlconn/postgres/pgxv5
 ```
 
 Notes:
@@ -203,7 +195,7 @@ Notes:
 
 | Method | When to use | Setup |
 |--------|-------------|-------|
-| **IAM Database Authentication (default, required for prod)** | All Cloud Run / GKE / GCE workloads | 1. Grant the workload service account `roles/cloudsql.instanceUser` on the instance. 2. Create an IAM database user inside Postgres: `CREATE USER "blog-iam@my-project.iam" WITH LOGIN; GRANT CONNECT ON DATABASE blog TO "blog-iam@my-project.iam"; GRANT ALL PRIVILEGES ON ALL TABLES IN SCHEMA public TO "blog-iam@my-project.iam"; GRANT ALL PRIVILEGES ON ALL SEQUENCES IN SCHEMA public TO "blog-iam@my-project.iam";` (MySQL equivalent: `CREATE USER 'blog-iam'@'%' IDENTIFIED WITH authentication_iam AS 'blog-iam@my-project.iam'; GRANT ALL PRIVILEGES ON blog.* TO 'blog-iam'@'%';`) 3. Pass `cloudsqlconn.WithIAMAuthN()` when creating the Dialer. |
+| **IAM Database Authentication (default, required for prod)** | All Cloud Run / GKE / GCE workloads | 1. Grant the workload service account `roles/cloudsql.instanceUser` on the instance. 2. Create an IAM database user inside Postgres: `CREATE USER "blog-iam@my-project.iam" WITH LOGIN; GRANT CONNECT ON DATABASE blog TO "blog-iam@my-project.iam"; GRANT ALL PRIVILEGES ON ALL TABLES IN SCHEMA public TO "blog-iam@my-project.iam"; GRANT ALL PRIVILEGES ON ALL SEQUENCES IN SCHEMA public TO "blog-iam@my-project.iam";` 3. Pass `cloudsqlconn.WithIAMAuthN()` when creating the Dialer. |
 | **Application Default Credentials (local dev)** | Developer laptops connecting to a **dedicated dev** Cloud SQL instance (never prod) | Developer runs `gcloud auth application-default login` once, sets `DB_GOOGLE_CREDENTIALS_SOURCE=adc`; still uses IAM DB auth — no password needed. |
 | **Build-in service account key via secrets manager (strict fallback)** | Legacy edge cases; strictly forbidden for prod workload service accounts unless Workload Identity is unavailable | Store the JSON key payload in Secret Manager, reference via `GOOGLE_APPLICATION_CREDENTIALS=/secrets/sa-key.json`; rotate keys every 90 days. Audit with `gcloud asset search-all-iam-policies` periodically. |
 | **Built-in database username/password** | **Never in prod**; only local Docker-compose Postgres without cloudsqlconn | Set `DB_HOST=127.0.0.1`, `DB_USER`/`DB_PASSWORD`/`DB_NAME`, `DB_SSLMODE=disable`; the bootstrap layer detects when `DB_INSTANCE_CONNECTION_NAME` is unset and skips the cloudsqlconn Dialer entirely, falling back to direct `libpq`/`pgx`. |
@@ -254,7 +246,7 @@ Notes:
 | **Network path** | Workload VPC → Private Service Connect peering → Google-managed Cloud SQL VPC (public internet never traversed). MTLS end-to-end inside Google network fabric. | Workload → public internet → Google Cloud edge → Cloud SQL SQLproxy / connector-managed MTLS. |
 | **IP exposure** | Cloud SQL instance has no public IP at all; no `Authorized Networks` list to manage. Attacker from outside Google's network cannot even resolve the instance IP. | Cloud SQL instance has a public IPv4; must maintain `Authorized Networks` list (0.0.0.0/0 forbidden). Cloud Armor + WAF recommended on top. |
 | **cloudsqlconn Dialer option** | `cloudsqlconn.WithPrivateIP()` (required) + `WithIAMAuthN()`. | `cloudsqlconn.WithPublicIP()` (default behaviour when PrivateIP is not requested) + `WithIAMAuthN()`. |
-| **Firewall rules** | VPC egress TCP 5432 (PostgreSQL) / 3307 (MySQL) to `servicenetworking` range only; no ingress needed to the workload subnet since cloudsqlconn always dials outbound. | Workload egress to `35.0.0.0/8` + Google published Cloud SQL ranges TCP 5432/3307; Cloud SQL Authorized Networks must include the workload's NAT egress IP(s). |
+| **Firewall rules** | VPC egress TCP 5432 (PostgreSQL) to `servicenetworking` range only; no ingress needed to the workload subnet since cloudsqlconn always dials outbound. | Workload egress to `35.0.0.0/8` + Google published Cloud SQL ranges TCP 5432; Cloud SQL Authorized Networks must include the workload's NAT egress IP(s). |
 | **Cost and latency** | No public IP charge; Private Service Connect has a small hourly charge per peered range. Latency ~1–2 ms inside region. | Public IPv4 hourly charge starting October 2025 GCP pricing; Cloud SQL egress charges. Latency 10–25 ms depending on path. |
 | **Security config requirements** | Workload Identity (GKE) / runtime service account + `cloudsql.instanceUser` + IAM DB user; no static credentials. Workload on VPC must have private IP (not public-only GKE autopilot default). Authorized Networks list MUST be empty. | Workload identity still strongly recommended; but it is tempting to add a `DB_PASSWORD` + `Authorized Networks 0.0.0.0/0` — both are audit findings. Enforce policy: `constraints/sql.restrictPublicIp` at org policy level for prod projects. |
 | **Connectivity verification (quick)** | 1. SSH/exec to workload pod; run `gcloud sql instances describe blog-pg-01 --format="value(ipAddresses)"` → should only show `PRIVATE` line. 2. `nc -zv <private-ip-of-sql> 5432` → succeeds. 3. From pod that does NOT have IAM binding, `nc` works but IAM login fails with `pg_hba.conf rejects IAM` error, proving network path is open but auth still enforced. | 1. Run `dig blog-pg-01.us-central1.sql.goog` (or use Cloud SQL proxy `hostaddr`). 2. `nc -zv <public-ip> 5432` from a whitelisted source succeeds; from a non-whitelisted source, `timeout`. 3. IAM login verification same as private IP. |
@@ -274,7 +266,7 @@ Notes:
    `connection_type`, and `workload_sa`.
 3. **Cross-reference with GCP console**:
    - Cloud SQL → instance → **Operations** to see recent restarts / failovers / maintenance windows.
-   - Cloud SQL → instance → **Logs** for database-level errors (PostgreSQL `FATAL:` lines, MySQL `Access denied`).
+   - Cloud SQL → instance → **Logs** for database-level errors (PostgreSQL `FATAL:` lines).
    - IAM → Policy Analyzer → `cloudsql.instanceUser`, `cloudsql.client` bindings to confirm the workload SA is present.
    - Logs Explorer → query `resource.type="cloudsql_database" AND severity>=ERROR`.
 
@@ -311,12 +303,10 @@ Below are the most common failure modes with step-by-step fixes.
    ```bash
    # PostgreSQL
    nc -zv 10.123.45.67 5432
-   # MySQL (note 3307 not 3306)
-   nc -zv 10.123.45.67 3307
    ```
    If this times out, check VPC firewall egress rules and the Private Service Connect peering
    firewall. 90% of the time the fix is: add an egress rule `allow-blog-to-cloudsql-private`
-   targeting the workload service account with TCP destination port 5432 / 3307 to the
+   targeting the workload service account with TCP destination port 5432 to the
    `servicenetworking` range.
 5. **Confirm the workload uses `cloudsqlconn.WithPrivateIP()`**: set
    `DB_PRIVATE_IP_ENABLED=true`; `app doctor` reports `connection_type: PRIVATE`. If you see
@@ -333,7 +323,7 @@ Below are the most common failure modes with step-by-step fixes.
 #### T2. Database permission configuration (login OK but SQL queries fail with permission denied)
 
 **Symptoms**: connection opens, `db.PingContext` returns nil, but migrations fail with
-`pq: permission denied for table schema_migrations` / `ERROR 1142 (42000): CREATE command denied`.
+`pq: permission denied for table schema_migrations`.
 
 **Step-by-step**:
 
@@ -341,8 +331,6 @@ Below are the most common failure modes with step-by-step fixes.
    ```sql
    -- PostgreSQL
    SELECT rolname FROM pg_roles WHERE rolname = 'blog-iam@my-project.iam';
-   -- MySQL
-   SELECT user, host FROM mysql.user WHERE user = 'blog-iam';
    ```
    If the row is missing, create the user (see §Authentication → IAM DB Auth).
 2. **Confirm schema grants**: the fastest remediation is to re-run the GRANT block:

@@ -1,4 +1,4 @@
-// Package database opens GORM and database/sql pools for Postgres, MySQL, SQL Server, and Cloud SQL.
+// Package database opens GORM and database/sql pools for PostgreSQL, directly or via Cloud SQL.
 package database
 
 import (
@@ -6,24 +6,17 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
-	"net/url"
 	"os"
 	"strings"
 
 	"cloud.google.com/go/cloudsqlconn"
-	cloudmysql "cloud.google.com/go/cloudsqlconn/mysql/mysql"
 	"cloud.google.com/go/cloudsqlconn/postgres/pgxv5"
-	cloudmssql "cloud.google.com/go/cloudsqlconn/sqlserver/mssql"
 	"github.com/turahe/blog-api/internal/platform/config"
 )
 
-const (
-	cloudSQLPostgresDriver  = "cloudsql-postgres"
-	cloudSQLMySQLDriver     = "cloudsql-mysql"
-	cloudSQLSQLServerDriver = "cloudsql-sqlserver"
-)
+const cloudSQLPostgresDriver = "cloudsql-postgres"
 
-func openCloudSQL(_ context.Context, driver string, cfg config.Config) (*sql.DB, func() error, error) {
+func openCloudSQL(_ context.Context, cfg config.Config) (*sql.DB, func() error, error) {
 	if cfg.DBInstanceConnectionName == "" {
 		return nil, nil, errors.New("DB_INSTANCE_CONNECTION_NAME is required for Cloud SQL")
 	}
@@ -41,16 +34,7 @@ func openCloudSQL(_ context.Context, driver string, cfg config.Config) (*sql.DB,
 		return nil, nil, err
 	}
 
-	switch driver {
-	case DriverPostgres:
-		return openCloudSQLPostgres(cfg, opts)
-	case DriverMySQL:
-		return openCloudSQLMySQL(cfg, opts)
-	case DriverSQLServer:
-		return openCloudSQLSQLServer(cfg, opts)
-	default:
-		return nil, nil, fmt.Errorf("unsupported Cloud SQL driver %q", driver)
-	}
+	return openCloudSQLPostgres(cfg, opts)
 }
 
 func dialerOptions(cfg config.Config) ([]cloudsqlconn.Option, error) {
@@ -59,12 +43,7 @@ func dialerOptions(cfg config.Config) ([]cloudsqlconn.Option, error) {
 		opts = append(opts, cloudsqlconn.WithDefaultDialOptions(cloudsqlconn.WithPrivateIP()))
 	}
 
-	normalized, err := NormalizeDriver(cfg.DBDriver)
-	if err != nil {
-		return nil, err
-	}
-
-	if cfg.DBIAMAuthEnabled && normalized != DriverSQLServer {
+	if cfg.DBIAMAuthEnabled {
 		opts = append(opts, cloudsqlconn.WithIAMAuthN())
 	}
 
@@ -115,58 +94,6 @@ func openCloudSQLPostgres(cfg config.Config, opts []cloudsqlconn.Option) (*sql.D
 	if err != nil {
 		_ = cleanup()
 		return nil, nil, fmt.Errorf("open cloudsql postgres: %w", err)
-	}
-
-	return db, cleanup, nil
-}
-
-func openCloudSQLMySQL(cfg config.Config, opts []cloudsqlconn.Option) (*sql.DB, func() error, error) {
-	cleanup, err := cloudmysql.RegisterDriver(cloudSQLMySQLDriver, opts...)
-	if err != nil {
-		return nil, nil, fmt.Errorf("register cloudsql mysql driver: %w", err)
-	}
-
-	userInfo := url.User(cfg.DBUser)
-	if !cfg.DBIAMAuthEnabled {
-		userInfo = url.UserPassword(cfg.DBUser, cfg.DBPassword)
-	}
-
-	dsn := fmt.Sprintf("%s@%s(%s)/%s?parseTime=true&allowCleartextPasswords=true",
-		userInfo.String(), cloudSQLMySQLDriver, cfg.DBInstanceConnectionName, cfg.DBName)
-
-	db, err := sql.Open(cloudSQLMySQLDriver, dsn)
-	if err != nil {
-		_ = cleanup()
-		return nil, nil, fmt.Errorf("open cloudsql mysql: %w", err)
-	}
-
-	return db, cleanup, nil
-}
-
-func openCloudSQLSQLServer(cfg config.Config, opts []cloudsqlconn.Option) (*sql.DB, func() error, error) {
-	if cfg.DBPassword == "" {
-		return nil, nil, errors.New("DB_PASSWORD is required for SQL Server on Cloud SQL")
-	}
-
-	cleanup, err := cloudmssql.RegisterDriver(cloudSQLSQLServerDriver, opts...)
-	if err != nil {
-		return nil, nil, fmt.Errorf("register cloudsql sqlserver driver: %w", err)
-	}
-
-	u := &url.URL{
-		Scheme: "sqlserver",
-		User:   url.UserPassword(cfg.DBUser, cfg.DBPassword),
-		Host:   "localhost",
-	}
-	q := u.Query()
-	q.Set("database", cfg.DBName)
-	q.Set("cloudsql", cfg.DBInstanceConnectionName)
-	u.RawQuery = q.Encode()
-
-	db, err := sql.Open(cloudSQLSQLServerDriver, u.String())
-	if err != nil {
-		_ = cleanup()
-		return nil, nil, fmt.Errorf("open cloudsql sqlserver: %w", err)
 	}
 
 	return db, cleanup, nil

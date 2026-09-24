@@ -1,5 +1,15 @@
 # Changelog
 
+## 2026-09-25 — PostgreSQL only
+
+### Removed
+
+- MySQL and SQL Server support (`DB_DRIVER=mysql|sqlserver`, their GORM drivers, and Cloud SQL connectors); the migrations are PostgreSQL-specific, so those drivers could never run them
+
+### Notes
+
+- `DB_DRIVER` now accepts only `postgres` (aliases `pg`, `postgresql`); anything else fails at startup
+
 ## 2026-09-25 — Messaging readiness check
 
 ### Added
