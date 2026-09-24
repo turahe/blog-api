@@ -39,6 +39,7 @@ type fakePostRepo struct {
 	updateCalls      int
 	updatedPost      postdomain.Post
 	setCoverImageErr error
+	bumpAfterRead    bool
 }
 
 type fakeTagLinker struct {
@@ -82,6 +83,11 @@ func (f *fakePostRepo) GetByID(_ context.Context, id uuid.UUID) (postdomain.Post
 	if !ok {
 		return postdomain.Post{}, postdomain.ErrNotFound
 	}
+	if f.bumpAfterRead {
+		stored := post
+		stored.Version++
+		f.posts[id] = stored
+	}
 	return post, nil
 }
 
@@ -93,6 +99,9 @@ func (f *fakePostRepo) Create(_ context.Context, post postdomain.Post) (postdoma
 
 func (f *fakePostRepo) Update(_ context.Context, post postdomain.Post) (postdomain.Post, error) {
 	f.updateCalls++
+	if stored, ok := f.posts[post.ID]; ok && stored.Version != post.Version-1 {
+		return postdomain.Post{}, postdomain.ErrStaleVersion
+	}
 	f.updatedPost = post
 	f.posts[post.ID] = post
 	return post, nil
@@ -155,6 +164,45 @@ func TestPostServiceListAdminClampsAndScopesAuthorFilter(t *testing.T) {
 	require.Equal(t, "published", repo.listAdminFilter.Status)
 	require.Equal(t, "hello world", repo.listAdminFilter.Query)
 	require.Equal(t, &scopeAuthorID, repo.listAdminFilter.AuthorID)
+}
+
+func TestPostServiceWritesRejectConcurrentModification(t *testing.T) {
+	t.Parallel()
+
+	now := time.Date(2026, 7, 31, 21, 0, 0, 0, time.UTC)
+	title := "New title"
+	writes := map[string]func(*PostService, uuid.UUID, uuid.UUID) error{
+		"update": func(svc *PostService, postID, actorID uuid.UUID) error {
+			_, _, err := svc.Update(context.Background(), postID, actorID, true, postdomain.UpdateInput{Title: &title})
+			return err
+		},
+		"publish": func(svc *PostService, postID, _ uuid.UUID) error {
+			_, err := svc.Publish(context.Background(), postID)
+			return err
+		},
+	}
+
+	for name, write := range writes {
+		t.Run(name, func(t *testing.T) {
+			t.Parallel()
+
+			postID := uuid.New()
+			actorID := uuid.New()
+			repo := newFakePostRepo(postdomain.Post{
+				ID: postID, AuthorID: actorID, Title: "Old", Slug: "old",
+				Status: postdomain.StatusDraft, Version: 1,
+			})
+			repo.bumpAfterRead = true
+			svc := New(repo, nil, fixedClock{now: now})
+
+			err := write(svc, postID, actorID)
+
+			require.ErrorIs(t, err, postdomain.ErrStaleVersion)
+			require.ErrorIs(t, err, ErrConflict)
+			require.Equal(t, "Old", repo.posts[postID].Title)
+			require.Equal(t, postdomain.StatusDraft, repo.posts[postID].Status)
+		})
+	}
 }
 
 func TestPostServiceUpdateOwnPostRestrictedActorSucceedsAndIncrementsVersion(t *testing.T) {

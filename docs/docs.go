@@ -554,6 +554,12 @@ const docTemplate = `{
                         "schema": {
                             "$ref": "#/definitions/responses.Envelope"
                         }
+                    },
+                    "409": {
+                        "description": "Conflict",
+                        "schema": {
+                            "$ref": "#/definitions/responses.Envelope"
+                        }
                     }
                 }
             }
@@ -647,6 +653,12 @@ const docTemplate = `{
                     },
                     "404": {
                         "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/responses.Envelope"
+                        }
+                    },
+                    "409": {
+                        "description": "Conflict",
                         "schema": {
                             "$ref": "#/definitions/responses.Envelope"
                         }
@@ -1715,10 +1727,9 @@ const docTemplate = `{
             "type": "object",
             "properties": {
                 "category_id": {
-                    "type": "array",
-                    "items": {
-                        "type": "integer"
-                    }
+                    "description": "Category UUID; null clears the category, omitting the field keeps it.",
+                    "type": "string",
+                    "format": "uuid"
                 },
                 "content": {
                     "type": "string"

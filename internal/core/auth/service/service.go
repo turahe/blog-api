@@ -59,7 +59,6 @@ func New(
 
 func (s *AuthService) Login(ctx context.Context, email, password, userAgent, ip string, remember bool) (authdomain.TokenPair, error) {
 	email = strings.TrimSpace(strings.ToLower(email))
-	password = strings.TrimSpace(password)
 	if email == "" || password == "" {
 		return authdomain.TokenPair{}, fmt.Errorf("%w: email and password required", authdomain.ErrValidation)
 	}

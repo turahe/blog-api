@@ -186,9 +186,10 @@ definitions:
   requests.UpdatePost:
     properties:
       category_id:
-        items:
-          type: integer
-        type: array
+        description: Category UUID; null clears the category, omitting the field keeps
+          it.
+        format: uuid
+        type: string
       content:
         type: string
       excerpt:
@@ -590,6 +591,10 @@ paths:
           description: Not Found
           schema:
             $ref: '#/definitions/responses.Envelope'
+        "409":
+          description: Conflict
+          schema:
+            $ref: '#/definitions/responses.Envelope'
       security:
       - Bearer: []
       summary: Update post
@@ -648,6 +653,10 @@ paths:
             $ref: '#/definitions/responses.Envelope'
         "404":
           description: Not Found
+          schema:
+            $ref: '#/definitions/responses.Envelope'
+        "409":
+          description: Conflict
           schema:
             $ref: '#/definitions/responses.Envelope'
       security:

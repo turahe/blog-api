@@ -206,6 +206,29 @@ func TestLoginRejectsBadPassword(t *testing.T) {
 	require.ErrorIs(t, err, authdomain.ErrInvalidCredentials)
 }
 
+func TestLoginAfterResetWithSurroundingWhitespace(t *testing.T) {
+	id := uuid.New()
+	user := userdomain.User{
+		ID: id, Email: "a@example.com", Username: "a", FullName: "A",
+		PasswordHash: "hash:OldPassword1!", Status: userdomain.StatusActive,
+	}
+	users := &memUsers{byEmail: map[string]userdomain.User{user.Email: user}, byID: map[uuid.UUID]userdomain.User{user.ID: user}}
+	sessions := &memSessions{byHash: map[string]authdomain.RefreshSession{}, byID: map[uuid.UUID]authdomain.RefreshSession{}}
+	resets := &memResets{byHash: map[string]authdomain.PasswordResetToken{}, byID: map[uuid.UUID]authdomain.PasswordResetToken{}}
+	sink := &capturingSink{}
+	svc := newService(users, sessions, resets, sink)
+
+	const spaced = " NewPassword12! "
+	require.NoError(t, svc.ForgotPassword(context.Background(), "a@example.com"))
+	require.NoError(t, svc.ResetPassword(context.Background(), sink.raw, spaced, spaced))
+
+	_, err := svc.Login(context.Background(), "a@example.com", spaced, "ua", "127.0.0.1", false)
+	require.NoError(t, err)
+
+	_, err = svc.Login(context.Background(), "a@example.com", "NewPassword12!", "ua", "127.0.0.1", false)
+	require.ErrorIs(t, err, authdomain.ErrInvalidCredentials)
+}
+
 func TestForgotAndResetPassword(t *testing.T) {
 	id := uuid.New()
 	user := userdomain.User{

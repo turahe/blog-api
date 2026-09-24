@@ -253,11 +253,11 @@ func mapMediaError(c *gin.Context, err error) bool {
 			Details: nil,
 		})
 	default:
-		responses.FailureFor(c, nethttp.StatusBadGateway, responses.FailureOpts{
+		responses.FailureFor(c, nethttp.StatusInternalServerError, responses.FailureOpts{
 			Service: responses.ServiceMedia,
 			Case:    responses.CaseInternalError,
-			Code:    "storage_unavailable",
-			Message: "Storage unavailable",
+			Code:    "internal_error",
+			Message: "Failed to process media",
 			Details: nil,
 		})
 	}

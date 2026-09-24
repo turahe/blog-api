@@ -83,6 +83,7 @@ func adminCreatePostHandler(posts postAdminAPI) gin.HandlerFunc {
 //	@Param		param1	path		string	true	"post UUID"
 //	@Success	200		{object}	responses.Envelope
 //	@Failure	404		{object}	responses.Envelope
+//	@Failure	409		{object}	responses.Envelope
 //	@Security	Bearer
 //	@Router		/api/v1/admin/posts/{param1}/publish [post]
 func adminPublishPostHandler(posts *postservice.PostService) gin.HandlerFunc {
@@ -93,12 +94,7 @@ func adminPublishPostHandler(posts *postservice.PostService) gin.HandlerFunc {
 			return
 		}
 		post, err := posts.Publish(c.Request.Context(), id)
-		if errors.Is(err, postdomain.ErrNotFound) {
-			responses.Failure(c, nethttp.StatusNotFound, "not_found", "Post not found")
-			return
-		}
-		if err != nil {
-			responses.Failure(c, nethttp.StatusInternalServerError, "internal_error", "Failed to publish post")
+		if mapPostError(c, err) {
 			return
 		}
 		responses.Success(c, nethttp.StatusOK, responses.Post(post))
@@ -192,6 +188,7 @@ func adminListPostsHandlerWithDeps(posts postAdminAPI, roles RoleLookup) gin.Han
 //	@Success	200		{object}	responses.Envelope
 //	@Failure	400		{object}	responses.Envelope
 //	@Failure	404		{object}	responses.Envelope
+//	@Failure	409		{object}	responses.Envelope
 //	@Security	Bearer
 //	@Router		/api/v1/admin/posts/{param1} [patch]
 func adminUpdatePostHandler(posts *postservice.PostService, roles RoleLookup) gin.HandlerFunc {
@@ -230,9 +227,9 @@ func adminUpdatePostHandlerWithDeps(posts postAdminAPI, roles RoleLookup) gin.Ha
 			Content: req.Content,
 			Tags:    req.Tags,
 		}
-		if req.CategoryID != nil {
+		if len(req.CategoryID) > 0 {
 			in.CategoryID.Present = true
-			categoryID, ok := parseNullableUUID(c, *req.CategoryID, "category_id")
+			categoryID, ok := parseNullableUUID(c, req.CategoryID, "category_id")
 			if !ok {
 				return
 			}
@@ -396,6 +393,14 @@ func mapPostError(c *gin.Context, err error) bool {
 			Case:    responses.CaseNotFound,
 			Code:    "not_found",
 			Message: "Tag not found",
+			Details: nil,
+		})
+	case errors.Is(err, postdomain.ErrStaleVersion):
+		responses.FailureFor(c, nethttp.StatusConflict, responses.FailureOpts{
+			Service: responses.ServicePosts,
+			Case:    responses.CaseConflict,
+			Code:    "post.version_conflict",
+			Message: "Post was modified by another request; reload and retry",
 			Details: nil,
 		})
 	case errors.Is(err, postservice.ErrConflict):

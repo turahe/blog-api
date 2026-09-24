@@ -22,6 +22,8 @@ type Repository interface {
 	GetPublishedBySlug(ctx context.Context, slug string) (postdomain.Post, error)
 	GetByID(ctx context.Context, id uuid.UUID) (postdomain.Post, error)
 	Create(ctx context.Context, post postdomain.Post) (postdomain.Post, error)
+	// Update persists post only while the stored version is post.Version-1;
+	// otherwise it returns postdomain.ErrStaleVersion.
 	Update(ctx context.Context, post postdomain.Post) (postdomain.Post, error)
 	SlugTaken(ctx context.Context, slug string, excludeID uuid.UUID) (bool, error)
 	SetCoverImage(ctx context.Context, postID uuid.UUID, mediaID *uuid.UUID, updatedAt time.Time) error

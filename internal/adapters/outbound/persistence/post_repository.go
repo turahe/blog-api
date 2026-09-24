@@ -141,8 +141,17 @@ func (r *PostRepository) Update(ctx context.Context, post postdomain.Post) (post
 	} else {
 		updates["excerpt"] = post.Excerpt
 	}
-	if err := r.db.WithContext(ctx).Model(&PostModel{}).Where("id = ?", post.ID).Updates(updates).Error; err != nil {
-		return postdomain.Post{}, err
+	res := r.db.WithContext(ctx).Model(&PostModel{}).
+		Where("id = ? AND version = ?", post.ID, post.Version-1).
+		Updates(updates)
+	if res.Error != nil {
+		return postdomain.Post{}, res.Error
+	}
+	if res.RowsAffected == 0 {
+		if _, err := r.GetByID(ctx, post.ID); err != nil {
+			return postdomain.Post{}, err
+		}
+		return postdomain.Post{}, postdomain.ErrStaleVersion
 	}
 	return r.GetByID(ctx, post.ID)
 }

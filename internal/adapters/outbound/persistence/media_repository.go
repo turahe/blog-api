@@ -202,9 +202,9 @@ func mapMediaAsset(model MediaAssetModel) mediadomain.MediaAsset {
 	return asset
 }
 
+// mediaTags never returns nil: pq encodes a nil array as NULL, which the NOT NULL tags column rejects.
 func mediaTags(tags []string) pq.StringArray {
-	if tags == nil {
-		return pq.StringArray{}
-	}
-	return pq.StringArray(append([]string(nil), tags...))
+	out := make(pq.StringArray, len(tags))
+	copy(out, tags)
+	return out
 }

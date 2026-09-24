@@ -14,12 +14,13 @@ type CreatePost struct {
 
 // UpdatePost is PATCH /api/v1/admin/posts/:id.
 type UpdatePost struct {
-	Title      *string          `json:"title"`
-	Slug       *string          `json:"slug"`
-	Excerpt    *string          `json:"excerpt"`
-	Content    *string          `json:"content"`
-	CategoryID *json.RawMessage `json:"category_id"`
-	Tags       *[]string        `json:"tags"`
+	Title   *string `json:"title"`
+	Slug    *string `json:"slug"`
+	Excerpt *string `json:"excerpt"`
+	Content *string `json:"content"`
+	// Category UUID; null clears the category, omitting the field keeps it.
+	CategoryID json.RawMessage `json:"category_id" swaggertype:"string" format:"uuid"`
+	Tags       *[]string       `json:"tags"`
 }
 
 // ReplacePostMedia is PATCH /api/v1/admin/posts/:id/media.

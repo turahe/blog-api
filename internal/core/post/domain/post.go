@@ -2,14 +2,16 @@ package domain
 
 import (
 	"errors"
+	"fmt"
 	"time"
 
 	"github.com/google/uuid"
 )
 
 var (
-	ErrNotFound = errors.New("post not found")
-	ErrConflict = errors.New("conflict")
+	ErrNotFound     = errors.New("post not found")
+	ErrConflict     = errors.New("conflict")
+	ErrStaleVersion = fmt.Errorf("%w: stale version", ErrConflict)
 )
 
 type Status string

@@ -403,3 +403,74 @@ func TestAdminUpdatePostHandlerMapsTagNotFound(t *testing.T) {
 	require.False(t, envelope.OK)
 	require.Equal(t, "not_found", envelope.Error.Code)
 }
+
+func TestAdminUpdatePostHandlerCategoryIDPresence(t *testing.T) {
+	t.Parallel()
+	gin.SetMode(gin.TestMode)
+
+	categoryID := uuid.MustParse("34343434-3434-3434-3434-343434343434")
+	tests := map[string]struct {
+		body        string
+		wantPresent bool
+		wantValue   *uuid.UUID
+	}{
+		"null clears":   {body: `{"category_id":null}`, wantPresent: true},
+		"uuid sets":     {body: `{"category_id":"` + categoryID.String() + `"}`, wantPresent: true, wantValue: &categoryID},
+		"omitted skips": {body: `{"title":"T"}`},
+	}
+
+	for name, tc := range tests {
+		t.Run(name, func(t *testing.T) {
+			t.Parallel()
+
+			postID := uuid.New()
+			var got postdomain.UpdateInput
+			svc := &fakePostAdminService{
+				updateFn: func(_ context.Context, _, _ uuid.UUID, _ bool, in postdomain.UpdateInput) (postdomain.Post, []tagdomain.Tag, error) {
+					got = in
+					return postdomain.Post{ID: postID}, nil, nil
+				},
+			}
+
+			w := httptest.NewRecorder()
+			c, _ := gin.CreateTestContext(w)
+			c.Params = gin.Params{{Key: "param1", Value: postID.String()}}
+			c.Request = httptest.NewRequest(nethttp.MethodPatch, "/api/v1/admin/posts/"+postID.String(), bytes.NewBufferString(tc.body))
+			c.Request.Header.Set("Content-Type", "application/json")
+			c.Set(middleware.ContextUserIDKey, uuid.New())
+
+			adminUpdatePostHandlerWithDeps(svc, fakeRoleLookup{names: []string{"editor"}})(c)
+
+			require.Equal(t, nethttp.StatusOK, w.Code, w.Body.String())
+			require.Equal(t, tc.wantPresent, got.CategoryID.Present)
+			require.Equal(t, tc.wantValue, got.CategoryID.Value)
+		})
+	}
+}
+
+func TestAdminUpdatePostHandlerMapsStaleVersion(t *testing.T) {
+	t.Parallel()
+	gin.SetMode(gin.TestMode)
+
+	postID := uuid.New()
+	svc := &fakePostAdminService{
+		updateFn: func(context.Context, uuid.UUID, uuid.UUID, bool, postdomain.UpdateInput) (postdomain.Post, []tagdomain.Tag, error) {
+			return postdomain.Post{}, nil, postdomain.ErrStaleVersion
+		},
+	}
+
+	w := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(w)
+	c.Params = gin.Params{{Key: "param1", Value: postID.String()}}
+	c.Request = httptest.NewRequest(nethttp.MethodPatch, "/api/v1/admin/posts/"+postID.String(), bytes.NewBufferString(`{"title":"T"}`))
+	c.Request.Header.Set("Content-Type", "application/json")
+	c.Set(middleware.ContextUserIDKey, uuid.New())
+
+	adminUpdatePostHandlerWithDeps(svc, fakeRoleLookup{names: []string{"editor"}})(c)
+
+	require.Equal(t, nethttp.StatusConflict, w.Code)
+	var envelope responses.Envelope
+	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &envelope))
+	require.False(t, envelope.OK)
+	require.Equal(t, "post.version_conflict", envelope.Error.Code)
+}
