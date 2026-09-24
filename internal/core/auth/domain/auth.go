@@ -21,8 +21,9 @@ var (
 )
 
 type PasswordResetToken struct {
-	ID        uuid.UUID
-	UserID    uuid.UUID
+	ID        int64
+	UUID      uuid.UUID
+	UserUUID  uuid.UUID
 	JTI       string
 	TokenHash string
 	Purpose   string
@@ -48,16 +49,17 @@ type TokenPair struct {
 }
 
 type RefreshSession struct {
-	ID         uuid.UUID
-	UserID     uuid.UUID
-	FamilyID   uuid.UUID
-	TokenHash  string
-	ExpiresAt  time.Time
-	RevokedAt  *time.Time
-	ReplacedBy *uuid.UUID
-	UserAgent  string
-	IPAddress  string
-	CreatedAt  time.Time
+	ID             int64
+	UUID           uuid.UUID
+	UserUUID       uuid.UUID
+	FamilyID       uuid.UUID
+	TokenHash      string
+	ExpiresAt      time.Time
+	RevokedAt      *time.Time
+	ReplacedByUUID *uuid.UUID
+	UserAgent      string
+	IPAddress      string
+	CreatedAt      time.Time
 }
 
 func (s RefreshSession) Active(now time.Time) bool {

@@ -58,7 +58,7 @@ func TestListCategoriesHandlerReturnsItemsEnvelope(t *testing.T) {
 		listFn: func(context.Context) ([]categorydomain.Category, error) {
 			return []categorydomain.Category{
 				{
-					ID: uuid.MustParse("11111111-1111-1111-1111-111111111111"), Name: "Tech", Slug: "tech",
+					UUID: uuid.MustParse("11111111-1111-1111-1111-111111111111"), Name: "Tech", Slug: "tech",
 					Lft: 1, Rgt: 2, Depth: 0, SortOrder: 0, CreatedAt: now, UpdatedAt: now,
 				},
 			}, nil
@@ -97,7 +97,7 @@ func TestAdminCreateCategoryHandlerCreatesCategory(t *testing.T) {
 			require.Equal(t, "Technology", in.Name)
 			require.Equal(t, "technology", in.Slug)
 			return categorydomain.Category{
-				ID: catID, Name: in.Name, Slug: in.Slug,
+				UUID: catID, Name: in.Name, Slug: in.Slug,
 				Lft: 1, Rgt: 2, Depth: 0, SortOrder: 0, CreatedAt: now, UpdatedAt: now,
 			}, nil
 		},

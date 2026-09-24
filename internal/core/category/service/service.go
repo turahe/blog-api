@@ -70,12 +70,12 @@ func (s *CategoryService) Create(ctx context.Context, in ports.CreateInput) (cat
 		}
 		now := s.clock.Now()
 		cat := categorydomain.Category{
-			ID:          s.ids.New(),
+			UUID:        s.ids.New(),
 			Name:        name,
 			Slug:        slug,
 			Description: desc,
-			ParentID:    in.ParentID,
-			ImageID:     in.ImageID,
+			ParentUUID:  in.ParentID,
+			ImageUUID:   in.ImageID,
 			CreatedAt:   now,
 			UpdatedAt:   now,
 		}
@@ -83,7 +83,7 @@ func (s *CategoryService) Create(ctx context.Context, in ports.CreateInput) (cat
 			return err
 		}
 		all = append(all, cat)
-		all, err = applyBefore(all, cat.ID, in.ParentID, in.BeforeID)
+		all, err = applyBefore(all, cat.UUID, in.ParentID, in.BeforeID)
 		if err != nil {
 			return err
 		}
@@ -91,7 +91,7 @@ func (s *CategoryService) Create(ctx context.Context, in ports.CreateInput) (cat
 		if err := r.ReplaceTreeBounds(ctx, all); err != nil {
 			return err
 		}
-		out = findByID(all, cat.ID)
+		out = findByID(all, cat.UUID)
 		return nil
 	})
 	return out, err
@@ -127,7 +127,7 @@ func (s *CategoryService) Update(ctx context.Context, id uuid.UUID, in ports.Upd
 			return categorydomain.Category{}, fmt.Errorf("%w: invalid slug", ErrValidation)
 		}
 		if slugVal != cat.Slug {
-			taken, err := s.repo.SlugTaken(ctx, slugVal, cat.ID)
+			taken, err := s.repo.SlugTaken(ctx, slugVal, cat.UUID)
 			if err != nil {
 				return categorydomain.Category{}, err
 			}
@@ -143,7 +143,7 @@ func (s *CategoryService) Update(ctx context.Context, id uuid.UUID, in ports.Upd
 	}
 
 	if in.ImageIDProvided {
-		cat.ImageID = in.ImageID
+		cat.ImageUUID = in.ImageID
 	}
 
 	cat.UpdatedAt = s.clock.Now()
@@ -202,7 +202,7 @@ func (s *CategoryService) Move(ctx context.Context, id uuid.UUID, parentID *uuid
 				return fmt.Errorf("%w: cannot move category under its descendant", ErrValidation)
 			}
 		}
-		node.ParentID = parentID
+		node.ParentUUID = parentID
 		node.UpdatedAt = s.clock.Now()
 		all = replace(all, node)
 		all, err = applyBefore(all, id, parentID, beforeID)
@@ -286,7 +286,7 @@ func (s *CategoryService) validateParentAndBefore(ctx context.Context, parentID,
 			}
 			return err
 		}
-		if !sameParent(before.ParentID, parentID) {
+		if !sameParent(before.ParentUUID, parentID) {
 			return fmt.Errorf("%w: before_id must share parent", ErrValidation)
 		}
 	}
@@ -301,10 +301,10 @@ func rebuildBounds(cats []categorydomain.Category) []categorydomain.Category {
 	children := make(map[uuid.UUID][]categorydomain.Category)
 	var roots []categorydomain.Category
 	for _, cat := range cats {
-		if cat.ParentID == nil {
+		if cat.ParentUUID == nil {
 			roots = append(roots, cat)
 		} else {
-			pid := *cat.ParentID
+			pid := *cat.ParentUUID
 			children[pid] = append(children[pid], cat)
 		}
 	}
@@ -317,7 +317,7 @@ func rebuildBounds(cats []categorydomain.Category) []categorydomain.Category {
 			if s[i].Name != s[j].Name {
 				return s[i].Name < s[j].Name
 			}
-			return s[i].ID.String() < s[j].ID.String()
+			return s[i].UUID.String() < s[j].UUID.String()
 		})
 	}
 
@@ -332,7 +332,7 @@ func rebuildBounds(cats []categorydomain.Category) []categorydomain.Category {
 		cat.Lft = counter
 		counter++
 
-		kids := children[cat.ID]
+		kids := children[cat.UUID]
 		sortSiblings(kids)
 		for i := range kids {
 			kids[i].SortOrder = i
@@ -357,19 +357,19 @@ func applyBefore(cats []categorydomain.Category, id uuid.UUID, parentID, beforeI
 		if !ok {
 			return nil, fmt.Errorf("%w: before_id not found", ErrValidation)
 		}
-		if !sameParent(before.ParentID, parentID) {
+		if !sameParent(before.ParentUUID, parentID) {
 			return nil, fmt.Errorf("%w: before_id must share parent", ErrValidation)
 		}
 	}
 
 	var siblings []categorydomain.Category
 	for _, cat := range cats {
-		if cat.ID == id {
-			cat.ParentID = parentID
+		if cat.UUID == id {
+			cat.ParentUUID = parentID
 			siblings = append(siblings, cat)
 			continue
 		}
-		if sameParent(cat.ParentID, parentID) {
+		if sameParent(cat.ParentUUID, parentID) {
 			siblings = append(siblings, cat)
 		}
 	}
@@ -381,15 +381,15 @@ func applyBefore(cats []categorydomain.Category, id uuid.UUID, parentID, beforeI
 		if siblings[i].Name != siblings[j].Name {
 			return siblings[i].Name < siblings[j].Name
 		}
-		return siblings[i].ID.String() < siblings[j].ID.String()
+		return siblings[i].UUID.String() < siblings[j].UUID.String()
 	})
 
 	ordered := make([]uuid.UUID, 0, len(siblings))
 	for _, sib := range siblings {
-		if sib.ID == id {
+		if sib.UUID == id {
 			continue
 		}
-		ordered = append(ordered, sib.ID)
+		ordered = append(ordered, sib.UUID)
 	}
 
 	if beforeID == nil {
@@ -411,7 +411,7 @@ func applyBefore(cats []categorydomain.Category, id uuid.UUID, parentID, beforeI
 	for i, sid := range ordered {
 		cat := findByID(cats, sid)
 		cat.SortOrder = i
-		cat.ParentID = parentID
+		cat.ParentUUID = parentID
 		cats = replace(cats, cat)
 	}
 	return cats, nil
@@ -422,11 +422,11 @@ func isDescendant(cats []categorydomain.Category, ancestorID, candidateID uuid.U
 	if !ok {
 		return false
 	}
-	for current.ParentID != nil {
-		if *current.ParentID == ancestorID {
+	for current.ParentUUID != nil {
+		if *current.ParentUUID == ancestorID {
 			return true
 		}
-		current, ok = findByIDOptional(cats, *current.ParentID)
+		current, ok = findByIDOptional(cats, *current.ParentUUID)
 		if !ok {
 			return false
 		}
@@ -454,7 +454,7 @@ func findByID(cats []categorydomain.Category, id uuid.UUID) categorydomain.Categ
 
 func findByIDOptional(cats []categorydomain.Category, id uuid.UUID) (categorydomain.Category, bool) {
 	for _, cat := range cats {
-		if cat.ID == id {
+		if cat.UUID == id {
 			return cat, true
 		}
 	}
@@ -463,7 +463,7 @@ func findByIDOptional(cats []categorydomain.Category, id uuid.UUID) (categorydom
 
 func replace(cats []categorydomain.Category, updated categorydomain.Category) []categorydomain.Category {
 	for i, cat := range cats {
-		if cat.ID == updated.ID {
+		if cat.UUID == updated.UUID {
 			cats[i] = updated
 			return cats
 		}

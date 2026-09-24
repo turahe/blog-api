@@ -13,19 +13,27 @@ import (
 
 var _ categoryports.Repository = (*CategoryRepository)(nil)
 
+var categoryColumns = withRefs("categories",
+	uuidRef("categories", "categories.parent_id", "parent_uuid"),
+	uuidRef("media_assets", "categories.image_id", "image_uuid"),
+)
+
 type CategoryModel struct {
-	ID          uuid.UUID `gorm:"type:uuid;primaryKey"`
+	ID          int64     `gorm:"primaryKey"`
+	UUID        uuid.UUID `gorm:"type:uuid;column:uuid;default:gen_random_uuid()"`
 	Name        string
 	Slug        string
 	Description *string
-	ParentID    *uuid.UUID `gorm:"type:uuid;column:parent_id"`
-	ImageID     *uuid.UUID `gorm:"type:uuid;column:image_id"`
-	Lft         int        `gorm:"column:lft"`
-	Rgt         int        `gorm:"column:rgt"`
-	Depth       int        `gorm:"column:depth"`
-	SortOrder   int        `gorm:"column:sort_order"`
+	ParentID    *int64 `gorm:"column:parent_id"`
+	ImageID     *int64 `gorm:"column:image_id"`
+	Lft         int    `gorm:"column:lft"`
+	Rgt         int    `gorm:"column:rgt"`
+	Depth       int    `gorm:"column:depth"`
+	SortOrder   int    `gorm:"column:sort_order"`
 	CreatedAt   time.Time
 	UpdatedAt   time.Time
+	ParentUUID  *uuid.UUID `gorm:"column:parent_uuid;->"`
+	ImageUUID   *uuid.UUID `gorm:"column:image_uuid;->"`
 }
 
 func (CategoryModel) TableName() string { return "categories" }
@@ -40,7 +48,7 @@ func NewCategoryRepository(db *gorm.DB) *CategoryRepository {
 
 func (r *CategoryRepository) List(ctx context.Context) ([]categorydomain.Category, error) {
 	var models []CategoryModel
-	if err := r.db.WithContext(ctx).Order("lft ASC").Find(&models).Error; err != nil {
+	if err := r.db.WithContext(ctx).Select(categoryColumns).Order("lft ASC").Find(&models).Error; err != nil {
 		return nil, err
 	}
 	out := make([]categorydomain.Category, 0, len(models))
@@ -52,7 +60,7 @@ func (r *CategoryRepository) List(ctx context.Context) ([]categorydomain.Categor
 
 func (r *CategoryRepository) GetByID(ctx context.Context, id uuid.UUID) (categorydomain.Category, error) {
 	var model CategoryModel
-	err := r.db.WithContext(ctx).Where("id = ?", id).First(&model).Error
+	err := r.db.WithContext(ctx).Select(categoryColumns).Where("uuid = ?", id).First(&model).Error
 	if errors.Is(err, gorm.ErrRecordNotFound) {
 		return categorydomain.Category{}, categorydomain.ErrNotFound
 	}
@@ -64,7 +72,7 @@ func (r *CategoryRepository) GetByID(ctx context.Context, id uuid.UUID) (categor
 
 func (r *CategoryRepository) GetBySlug(ctx context.Context, slug string) (categorydomain.Category, error) {
 	var model CategoryModel
-	err := r.db.WithContext(ctx).Where("slug = ?", slug).First(&model).Error
+	err := r.db.WithContext(ctx).Select(categoryColumns).Where("slug = ?", slug).First(&model).Error
 	if errors.Is(err, gorm.ErrRecordNotFound) {
 		return categorydomain.Category{}, categorydomain.ErrNotFound
 	}
@@ -75,21 +83,43 @@ func (r *CategoryRepository) GetBySlug(ctx context.Context, slug string) (catego
 }
 
 func (r *CategoryRepository) Create(ctx context.Context, cat categorydomain.Category) (categorydomain.Category, error) {
-	model := categoryToModel(cat)
-	if err := r.db.WithContext(ctx).Create(&model).Error; err != nil {
+	db := r.db.WithContext(ctx)
+	parentID, err := optionalIDByUUID(db, "categories", cat.ParentUUID)
+	if err != nil {
 		return categorydomain.Category{}, err
 	}
+	imageID, err := optionalIDByUUID(db, "media_assets", cat.ImageUUID)
+	if err != nil {
+		return categorydomain.Category{}, err
+	}
+	model := categoryToModel(cat)
+	model.ParentID = parentID
+	model.ImageID = imageID
+	if err := db.Create(&model).Error; err != nil {
+		return categorydomain.Category{}, err
+	}
+	model.ParentUUID = cat.ParentUUID
+	model.ImageUUID = cat.ImageUUID
 	return mapCategory(model), nil
 }
 
 func (r *CategoryRepository) Update(ctx context.Context, cat categorydomain.Category) (categorydomain.Category, error) {
-	res := r.db.WithContext(ctx).Model(&CategoryModel{}).Where("id = ?", cat.ID).
+	db := r.db.WithContext(ctx)
+	parentID, err := optionalIDByUUID(db, "categories", cat.ParentUUID)
+	if err != nil {
+		return categorydomain.Category{}, err
+	}
+	imageID, err := optionalIDByUUID(db, "media_assets", cat.ImageUUID)
+	if err != nil {
+		return categorydomain.Category{}, err
+	}
+	res := db.Model(&CategoryModel{}).Where("uuid = ?", cat.UUID).
 		Updates(map[string]any{
 			"name":        cat.Name,
 			"slug":        cat.Slug,
 			"description": nullableString(cat.Description),
-			"parent_id":   cat.ParentID,
-			"image_id":    cat.ImageID,
+			"parent_id":   parentID,
+			"image_id":    imageID,
 			"updated_at":  cat.UpdatedAt,
 		})
 	if res.Error != nil {
@@ -98,11 +128,11 @@ func (r *CategoryRepository) Update(ctx context.Context, cat categorydomain.Cate
 	if res.RowsAffected == 0 {
 		return categorydomain.Category{}, categorydomain.ErrNotFound
 	}
-	return r.GetByID(ctx, cat.ID)
+	return r.GetByID(ctx, cat.UUID)
 }
 
 func (r *CategoryRepository) Delete(ctx context.Context, id uuid.UUID) error {
-	res := r.db.WithContext(ctx).Where("id = ?", id).Delete(&CategoryModel{})
+	res := r.db.WithContext(ctx).Where("uuid = ?", id).Delete(&CategoryModel{})
 	if res.Error != nil {
 		return res.Error
 	}
@@ -115,33 +145,33 @@ func (r *CategoryRepository) Delete(ctx context.Context, id uuid.UUID) error {
 func (r *CategoryRepository) SlugTaken(ctx context.Context, slug string, excludeID uuid.UUID) (bool, error) {
 	var n int64
 	err := r.db.WithContext(ctx).Model(&CategoryModel{}).
-		Where("slug = ? AND id <> ?", slug, excludeID).
+		Where("slug = ? AND uuid <> ?", slug, excludeID).
 		Count(&n).Error
 	return n > 0, err
 }
 
 func (r *CategoryRepository) CountPosts(ctx context.Context, categoryID uuid.UUID) (int64, error) {
 	var n int64
-	err := r.db.WithContext(ctx).Table("posts").Where("category_id = ?", categoryID).Count(&n).Error
+	err := r.db.WithContext(ctx).Table("posts").Where("category_id = "+idOf("categories"), categoryID).Count(&n).Error
 	return n, err
 }
 
 func (r *CategoryRepository) CountChildren(ctx context.Context, categoryID uuid.UUID) (int64, error) {
 	var n int64
-	err := r.db.WithContext(ctx).Model(&CategoryModel{}).Where("parent_id = ?", categoryID).Count(&n).Error
+	err := r.db.WithContext(ctx).Model(&CategoryModel{}).Where("parent_id = "+idOf("categories"), categoryID).Count(&n).Error
 	return n, err
 }
 
 func (r *CategoryRepository) ReplaceTreeBounds(ctx context.Context, cats []categorydomain.Category) error {
 	for _, cat := range cats {
 		if err := r.db.WithContext(ctx).Model(&CategoryModel{}).
-			Where("id = ?", cat.ID).
+			Where("uuid = ?", cat.UUID).
 			Updates(map[string]any{
 				"lft":        cat.Lft,
 				"rgt":        cat.Rgt,
 				"depth":      cat.Depth,
 				"sort_order": cat.SortOrder,
-				"parent_id":  cat.ParentID,
+				"parent_id":  parentIDExpr(cat.ParentUUID),
 				"updated_at": cat.UpdatedAt,
 			}).Error; err != nil {
 			return err
@@ -158,17 +188,18 @@ func (r *CategoryRepository) WithinTx(ctx context.Context, fn func(ctx context.C
 
 func mapCategory(model CategoryModel) categorydomain.Category {
 	cat := categorydomain.Category{
-		ID:        model.ID,
-		Name:      model.Name,
-		Slug:      model.Slug,
-		ParentID:  model.ParentID,
-		ImageID:   model.ImageID,
-		Lft:       model.Lft,
-		Rgt:       model.Rgt,
-		Depth:     model.Depth,
-		SortOrder: model.SortOrder,
-		CreatedAt: model.CreatedAt,
-		UpdatedAt: model.UpdatedAt,
+		ID:         model.ID,
+		UUID:       model.UUID,
+		Name:       model.Name,
+		Slug:       model.Slug,
+		ParentUUID: model.ParentUUID,
+		ImageUUID:  model.ImageUUID,
+		Lft:        model.Lft,
+		Rgt:        model.Rgt,
+		Depth:      model.Depth,
+		SortOrder:  model.SortOrder,
+		CreatedAt:  model.CreatedAt,
+		UpdatedAt:  model.UpdatedAt,
 	}
 	if model.Description != nil {
 		cat.Description = *model.Description
@@ -179,11 +210,10 @@ func mapCategory(model CategoryModel) categorydomain.Category {
 func categoryToModel(cat categorydomain.Category) CategoryModel {
 	return CategoryModel{
 		ID:          cat.ID,
+		UUID:        cat.UUID,
 		Name:        cat.Name,
 		Slug:        cat.Slug,
 		Description: nullableString(cat.Description),
-		ParentID:    cat.ParentID,
-		ImageID:     cat.ImageID,
 		Lft:         cat.Lft,
 		Rgt:         cat.Rgt,
 		Depth:       cat.Depth,
@@ -191,6 +221,14 @@ func categoryToModel(cat categorydomain.Category) CategoryModel {
 		CreatedAt:   cat.CreatedAt,
 		UpdatedAt:   cat.UpdatedAt,
 	}
+}
+
+// parentIDExpr resolves the parent uuid inside the UPDATE, avoiding a lookup per row during tree rebuilds.
+func parentIDExpr(parent *uuid.UUID) any {
+	if parent == nil {
+		return nil
+	}
+	return gorm.Expr(idOf("categories"), *parent)
 }
 
 func nullableString(s string) *string {

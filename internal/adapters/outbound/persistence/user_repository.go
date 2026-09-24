@@ -36,7 +36,7 @@ func (r *UserRepository) FindByEmail(ctx context.Context, email string) (userdom
 
 func (r *UserRepository) FindByID(ctx context.Context, id uuid.UUID) (userdomain.User, error) {
 	var model UserModel
-	err := r.db.WithContext(ctx).First(&model, "id = ?", id).Error
+	err := r.db.WithContext(ctx).First(&model, "uuid = ?", id).Error
 	if err != nil {
 		return userdomain.User{}, err
 	}
@@ -56,7 +56,7 @@ func (r *UserRepository) FindByUsernameOrEmail(ctx context.Context, identity str
 }
 
 func (r *UserRepository) RecordLogin(ctx context.Context, id uuid.UUID, at time.Time) error {
-	return r.db.WithContext(ctx).Model(&UserModel{}).Where("id = ?", id).Updates(map[string]any{
+	return r.db.WithContext(ctx).Model(&UserModel{}).Where("uuid = ?", id).Updates(map[string]any{
 		"last_login_at": at,
 		"login_count":   gorm.Expr("login_count + 1"),
 		"updated_at":    at,
@@ -65,7 +65,7 @@ func (r *UserRepository) RecordLogin(ctx context.Context, id uuid.UUID, at time.
 
 func (r *UserRepository) Create(ctx context.Context, user userdomain.User) (userdomain.User, error) {
 	model := UserModel{
-		ID:        user.ID,
+		UUID:      user.UUID,
 		Email:     user.Email,
 		Username:  user.Username,
 		FullName:  user.FullName,
@@ -83,7 +83,7 @@ func (r *UserRepository) Create(ctx context.Context, user userdomain.User) (user
 }
 
 func (r *UserRepository) UpdatePassword(ctx context.Context, id uuid.UUID, hash string, changedAt time.Time) error {
-	return r.db.WithContext(ctx).Model(&UserModel{}).Where("id = ?", id).Updates(map[string]any{
+	return r.db.WithContext(ctx).Model(&UserModel{}).Where("uuid = ?", id).Updates(map[string]any{
 		"password_hash":       hash,
 		"password_changed_at": changedAt,
 		"updated_at":          changedAt,
@@ -114,7 +114,7 @@ func (r *UserRepository) ListRoleNames(ctx context.Context, userID uuid.UUID) ([
 		Table("roles").
 		Select("roles.name").
 		Joins("INNER JOIN user_roles ON user_roles.role_id = roles.id").
-		Where("user_roles.user_id = ?", userID).
+		Where("user_roles.user_id = "+idOf("users"), userID).
 		Pluck("roles.name", &names).Error
 	return names, err
 }
@@ -122,6 +122,7 @@ func (r *UserRepository) ListRoleNames(ctx context.Context, userID uuid.UUID) ([
 func mapUser(model UserModel) userdomain.User {
 	user := userdomain.User{
 		ID:                model.ID,
+		UUID:              model.UUID,
 		Email:             model.Email,
 		Username:          model.Username,
 		FullName:          model.FullName,
@@ -152,9 +153,13 @@ func NewSessionRepository(db *gorm.DB) *SessionRepository {
 }
 
 func (r *SessionRepository) Create(ctx context.Context, session authdomain.RefreshSession) (authdomain.RefreshSession, error) {
+	userID, err := idByUUID(r.db.WithContext(ctx), "users", session.UserUUID)
+	if err != nil {
+		return authdomain.RefreshSession{}, err
+	}
 	model := RefreshSessionModel{
-		ID:        session.ID,
-		UserID:    session.UserID,
+		UUID:      session.UUID,
+		UserID:    userID,
 		FamilyID:  session.FamilyID,
 		TokenHash: session.TokenHash,
 		ExpiresAt: session.ExpiresAt,
@@ -169,51 +174,60 @@ func (r *SessionRepository) Create(ctx context.Context, session authdomain.Refre
 	if err := r.db.WithContext(ctx).Create(&model).Error; err != nil {
 		return authdomain.RefreshSession{}, err
 	}
+	session.ID = model.ID
+	session.UUID = model.UUID
 	return session, nil
 }
 
 func (r *SessionRepository) FindByTokenHash(ctx context.Context, hash string) (authdomain.RefreshSession, error) {
 	var model RefreshSessionModel
-	if err := r.db.WithContext(ctx).Where("token_hash = ?", hash).First(&model).Error; err != nil {
+	err := r.db.WithContext(ctx).
+		Select(withRefs("refresh_sessions",
+			uuidRef("users", "refresh_sessions.user_id", "user_uuid"),
+			uuidRef("refresh_sessions", "refresh_sessions.replaced_by", "replaced_by_uuid"),
+		)).
+		Where("token_hash = ?", hash).First(&model).Error
+	if err != nil {
 		return authdomain.RefreshSession{}, err
 	}
 	return mapSession(model), nil
 }
 
 func (r *SessionRepository) Revoke(ctx context.Context, id uuid.UUID, at time.Time) error {
-	return r.db.WithContext(ctx).Model(&RefreshSessionModel{}).Where("id = ?", id).
+	return r.db.WithContext(ctx).Model(&RefreshSessionModel{}).Where("uuid = ?", id).
 		Update("revoked_at", at).Error
 }
 
 func (r *SessionRepository) RevokeFamily(ctx context.Context, userID, familyID uuid.UUID, at time.Time) error {
 	return r.db.WithContext(ctx).Model(&RefreshSessionModel{}).
-		Where("user_id = ? AND family_id = ? AND revoked_at IS NULL", userID, familyID).
+		Where("user_id = "+idOf("users")+" AND family_id = ? AND revoked_at IS NULL", userID, familyID).
 		Update("revoked_at", at).Error
 }
 
 func (r *SessionRepository) Replace(ctx context.Context, oldID, newID uuid.UUID, at time.Time) error {
-	return r.db.WithContext(ctx).Model(&RefreshSessionModel{}).Where("id = ?", oldID).Updates(map[string]any{
+	return r.db.WithContext(ctx).Model(&RefreshSessionModel{}).Where("uuid = ?", oldID).Updates(map[string]any{
 		"revoked_at":  at,
-		"replaced_by": newID,
+		"replaced_by": gorm.Expr(idOf("refresh_sessions"), newID),
 	}).Error
 }
 
 func (r *SessionRepository) RevokeAllForUser(ctx context.Context, userID uuid.UUID, at time.Time) error {
 	return r.db.WithContext(ctx).Model(&RefreshSessionModel{}).
-		Where("user_id = ? AND revoked_at IS NULL", userID).
+		Where("user_id = "+idOf("users")+" AND revoked_at IS NULL", userID).
 		Update("revoked_at", at).Error
 }
 
 func mapSession(model RefreshSessionModel) authdomain.RefreshSession {
 	session := authdomain.RefreshSession{
-		ID:         model.ID,
-		UserID:     model.UserID,
-		FamilyID:   model.FamilyID,
-		TokenHash:  model.TokenHash,
-		ExpiresAt:  model.ExpiresAt,
-		RevokedAt:  model.RevokedAt,
-		ReplacedBy: model.ReplacedBy,
-		CreatedAt:  model.CreatedAt,
+		ID:             model.ID,
+		UUID:           model.UUID,
+		UserUUID:       model.UserUUID,
+		FamilyID:       model.FamilyID,
+		TokenHash:      model.TokenHash,
+		ExpiresAt:      model.ExpiresAt,
+		RevokedAt:      model.RevokedAt,
+		ReplacedByUUID: model.ReplacedByUUID,
+		CreatedAt:      model.CreatedAt,
 	}
 	if model.UserAgent != nil {
 		session.UserAgent = *model.UserAgent

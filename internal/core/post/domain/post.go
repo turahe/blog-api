@@ -24,37 +24,38 @@ const (
 )
 
 type Post struct {
-	ID                uuid.UUID
-	AuthorID          uuid.UUID
-	CategoryID        *uuid.UUID
-	Title             string
-	Slug              string
-	Excerpt           string
-	Content           string
-	CoverImageMediaID *uuid.UUID
-	Status            Status
-	Version           int64
-	PublishedAt       *time.Time
-	CreatedAt         time.Time
-	UpdatedAt         time.Time
-	DeletedAt         *time.Time
+	ID                  int64
+	UUID                uuid.UUID
+	AuthorUUID          uuid.UUID
+	CategoryUUID        *uuid.UUID
+	Title               string
+	Slug                string
+	Excerpt             string
+	Content             string
+	CoverImageMediaUUID *uuid.UUID
+	Status              Status
+	Version             int64
+	PublishedAt         *time.Time
+	CreatedAt           time.Time
+	UpdatedAt           time.Time
+	DeletedAt           *time.Time
 }
 
 type ListFilter struct {
-	Page       int
-	PerPage    int
-	CategoryID *uuid.UUID
-	TagID      *uuid.UUID
+	Page         int
+	PerPage      int
+	CategoryUUID *uuid.UUID
+	TagUUID      *uuid.UUID
 }
 
 type AdminListFilter struct {
-	Page          int
-	PerPage       int
-	Status        string
-	AuthorID      *uuid.UUID
-	CategoryID    *uuid.UUID
-	Query         string
-	ScopeAuthorID *uuid.UUID
+	Page            int
+	PerPage         int
+	Status          string
+	AuthorUUID      *uuid.UUID
+	CategoryUUID    *uuid.UUID
+	Query           string
+	ScopeAuthorUUID *uuid.UUID
 }
 
 // Present=false means omit; Present=true applies Value (nil clears).
@@ -64,12 +65,12 @@ type OptionalCategoryID struct {
 }
 
 type UpdateInput struct {
-	Title      *string
-	Slug       *string
-	Excerpt    *string
-	Content    *string
-	CategoryID OptionalCategoryID
-	Tags       *[]string
+	Title        *string
+	Slug         *string
+	Excerpt      *string
+	Content      *string
+	CategoryUUID OptionalCategoryID
+	Tags         *[]string
 }
 
 type ListResult struct {

@@ -38,7 +38,7 @@ func newFakeRepo(tags ...tagdomain.Tag) *fakeRepo {
 	byID := make(map[uuid.UUID]tagdomain.Tag, len(tags))
 	bySlug := make(map[string]tagdomain.Tag, len(tags))
 	for _, tag := range tags {
-		byID[tag.ID] = tag
+		byID[tag.UUID] = tag
 		bySlug[tag.Slug] = tag
 	}
 	return &fakeRepo{
@@ -73,17 +73,17 @@ func (f *fakeRepo) GetBySlug(_ context.Context, slug string) (tagdomain.Tag, err
 }
 
 func (f *fakeRepo) Create(_ context.Context, tag tagdomain.Tag) (tagdomain.Tag, error) {
-	f.byID[tag.ID] = tag
+	f.byID[tag.UUID] = tag
 	f.bySlug[tag.Slug] = tag
 	return tag, nil
 }
 
 func (f *fakeRepo) Update(_ context.Context, tag tagdomain.Tag) (tagdomain.Tag, error) {
-	old, ok := f.byID[tag.ID]
+	old, ok := f.byID[tag.UUID]
 	if ok && old.Slug != tag.Slug {
 		delete(f.bySlug, old.Slug)
 	}
-	f.byID[tag.ID] = tag
+	f.byID[tag.UUID] = tag
 	f.bySlug[tag.Slug] = tag
 	return tag, nil
 }
@@ -93,7 +93,7 @@ func (f *fakeRepo) SlugTaken(_ context.Context, slug string, excludeID uuid.UUID
 	if !ok {
 		return false, nil
 	}
-	return tag.ID != excludeID, nil
+	return tag.UUID != excludeID, nil
 }
 
 func (f *fakeRepo) CountPosts(_ context.Context, tagID uuid.UUID) (int64, error) {
@@ -141,7 +141,7 @@ func TestCreateSlugifiesNameAndRejectsEmptyName(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, "Hello World", got.Name)
 	require.Equal(t, "hello-world", got.Slug)
-	require.Equal(t, newID, got.ID)
+	require.Equal(t, newID, got.UUID)
 	require.Equal(t, now, got.CreatedAt)
 
 	_, err = svc.Create(context.Background(), "   ", "")
@@ -162,7 +162,7 @@ func TestUpdateRejectsInvalidExplicitSlug(t *testing.T) {
 	t.Parallel()
 
 	tagID := uuid.New()
-	repo := newFakeRepo(tagdomain.Tag{ID: tagID, Name: "Tag", Slug: "tag"})
+	repo := newFakeRepo(tagdomain.Tag{UUID: tagID, Name: "Tag", Slug: "tag"})
 	svc := New(repo, fixedIDs{next: uuid.New()}, fixedClock{now: time.Now()})
 
 	slug := "bad_slug"
@@ -175,7 +175,7 @@ func TestCreateReturnsConflictWhenSlugTaken(t *testing.T) {
 
 	existingID := uuid.New()
 	repo := newFakeRepo(tagdomain.Tag{
-		ID:   existingID,
+		UUID: existingID,
 		Name: "Taken",
 		Slug: "taken-slug",
 	})
@@ -191,8 +191,8 @@ func TestUpdateReturnsConflictWhenSlugTaken(t *testing.T) {
 	tagID := uuid.New()
 	otherID := uuid.New()
 	repo := newFakeRepo(
-		tagdomain.Tag{ID: tagID, Name: "Mine", Slug: "mine"},
-		tagdomain.Tag{ID: otherID, Name: "Other", Slug: "other-slug"},
+		tagdomain.Tag{UUID: tagID, Name: "Mine", Slug: "mine"},
+		tagdomain.Tag{UUID: otherID, Name: "Other", Slug: "other-slug"},
 	)
 	svc := New(repo, fixedIDs{next: uuid.New()}, fixedClock{now: time.Now()})
 
@@ -205,7 +205,7 @@ func TestDeleteReturnsInUseWhenPostsAttached(t *testing.T) {
 	t.Parallel()
 
 	tagID := uuid.New()
-	repo := newFakeRepo(tagdomain.Tag{ID: tagID, Name: "Used", Slug: "used"})
+	repo := newFakeRepo(tagdomain.Tag{UUID: tagID, Name: "Used", Slug: "used"})
 	repo.counts[tagID] = 2
 	svc := New(repo, fixedIDs{next: uuid.New()}, fixedClock{now: time.Now()})
 
@@ -218,7 +218,7 @@ func TestDeleteCallsRepoWhenNoPostsAttached(t *testing.T) {
 	t.Parallel()
 
 	tagID := uuid.New()
-	repo := newFakeRepo(tagdomain.Tag{ID: tagID, Name: "Free", Slug: "free"})
+	repo := newFakeRepo(tagdomain.Tag{UUID: tagID, Name: "Free", Slug: "free"})
 	svc := New(repo, fixedIDs{next: uuid.New()}, fixedClock{now: time.Now()})
 
 	err := svc.Delete(context.Background(), tagID)
@@ -230,7 +230,7 @@ func TestMergeSameIDReturnsValidationError(t *testing.T) {
 	t.Parallel()
 
 	tagID := uuid.New()
-	repo := newFakeRepo(tagdomain.Tag{ID: tagID, Name: "Tag", Slug: "tag"})
+	repo := newFakeRepo(tagdomain.Tag{UUID: tagID, Name: "Tag", Slug: "tag"})
 	svc := New(repo, fixedIDs{next: uuid.New()}, fixedClock{now: time.Now()})
 
 	err := svc.Merge(context.Background(), tagID, tagID)
@@ -244,8 +244,8 @@ func TestMergeSuccessCallsMergeInto(t *testing.T) {
 	sourceID := uuid.New()
 	targetID := uuid.New()
 	repo := newFakeRepo(
-		tagdomain.Tag{ID: sourceID, Name: "Source", Slug: "source"},
-		tagdomain.Tag{ID: targetID, Name: "Target", Slug: "target"},
+		tagdomain.Tag{UUID: sourceID, Name: "Source", Slug: "source"},
+		tagdomain.Tag{UUID: targetID, Name: "Target", Slug: "target"},
 	)
 	svc := New(repo, fixedIDs{next: uuid.New()}, fixedClock{now: time.Now()})
 
@@ -261,7 +261,7 @@ func TestResolveOrCreateDedupesCreatesMissingReturnsExisting(t *testing.T) {
 	existingID := uuid.MustParse("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa")
 	newID := uuid.MustParse("bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb")
 	repo := newFakeRepo(tagdomain.Tag{
-		ID:        existingID,
+		UUID:      existingID,
 		Name:      "Go",
 		Slug:      "go",
 		CreatedAt: now,
@@ -275,9 +275,9 @@ func TestResolveOrCreateDedupesCreatesMissingReturnsExisting(t *testing.T) {
 	})
 	require.NoError(t, err)
 	require.Len(t, got, 2)
-	require.Equal(t, existingID, got[0].ID)
+	require.Equal(t, existingID, got[0].UUID)
 	require.Equal(t, "go", got[0].Slug)
-	require.Equal(t, newID, got[1].ID)
+	require.Equal(t, newID, got[1].UUID)
 	require.Equal(t, "Rust Lang", got[1].Name)
 	require.Equal(t, "rust-lang", got[1].Slug)
 }

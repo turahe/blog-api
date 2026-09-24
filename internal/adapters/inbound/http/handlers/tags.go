@@ -135,7 +135,7 @@ func adminMergeTagHandler(tags tagAPI) gin.HandlerFunc {
 			return
 		}
 		for _, tag := range items {
-			if tag.ID == intoID {
+			if tag.UUID == intoID {
 				responses.Success(c, nethttp.StatusOK, responses.Tag(tag))
 				return
 			}

@@ -16,7 +16,8 @@ const (
 )
 
 type User struct {
-	ID                uuid.UUID
+	ID                int64
+	UUID              uuid.UUID
 	Email             string
 	Username          string
 	FullName          string

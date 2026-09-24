@@ -62,21 +62,21 @@ func TestAdminListPostsHandlerReturnsMetaTotalAndScopesRestrictedAuthors(t *test
 			require.Equal(t, 10, filter.PerPage)
 			require.Equal(t, "draft", filter.Status)
 			require.Equal(t, "hello", filter.Query)
-			require.NotNil(t, filter.ScopeAuthorID)
-			require.Equal(t, userID, *filter.ScopeAuthorID)
+			require.NotNil(t, filter.ScopeAuthorUUID)
+			require.Equal(t, userID, *filter.ScopeAuthorUUID)
 			return postdomain.ListResult{
 				Items: []postdomain.Post{{
-					ID:         postID,
-					AuthorID:   userID,
-					CategoryID: &categoryID,
-					Title:      "Draft post",
-					Slug:       "draft-post",
-					Excerpt:    "Excerpt",
-					Content:    "Content",
-					Status:     postdomain.StatusDraft,
-					Version:    1,
-					CreatedAt:  now,
-					UpdatedAt:  now,
+					UUID:         postID,
+					AuthorUUID:   userID,
+					CategoryUUID: &categoryID,
+					Title:        "Draft post",
+					Slug:         "draft-post",
+					Excerpt:      "Excerpt",
+					Content:      "Content",
+					Status:       postdomain.StatusDraft,
+					Version:      1,
+					CreatedAt:    now,
+					UpdatedAt:    now,
 				}},
 				Total:   7,
 				Page:    2,
@@ -220,17 +220,17 @@ func TestAdminCreatePostHandlerReturnsTags(t *testing.T) {
 			require.NotNil(t, tags)
 			require.Equal(t, []string{"Go"}, *tags)
 			return postdomain.Post{
-				ID:        postID,
-				AuthorID:  authorID,
-				Title:     title,
-				Slug:      slug,
-				Excerpt:   excerpt,
-				Content:   content,
-				Status:    postdomain.StatusDraft,
-				Version:   1,
-				CreatedAt: now,
-				UpdatedAt: now,
-			}, []tagdomain.Tag{{ID: tagID, Name: "Go", Slug: "go", CreatedAt: now}}, nil
+				UUID:       postID,
+				AuthorUUID: authorID,
+				Title:      title,
+				Slug:       slug,
+				Excerpt:    excerpt,
+				Content:    content,
+				Status:     postdomain.StatusDraft,
+				Version:    1,
+				CreatedAt:  now,
+				UpdatedAt:  now,
+			}, []tagdomain.Tag{{UUID: tagID, Name: "Go", Slug: "go", CreatedAt: now}}, nil
 		},
 		updateFn: func(context.Context, uuid.UUID, uuid.UUID, bool, postdomain.UpdateInput) (postdomain.Post, []tagdomain.Tag, error) {
 			t.Fatal("unexpected update call")
@@ -280,15 +280,15 @@ func TestAdminUpdatePostHandlerAllowsTagsOnlyPatch(t *testing.T) {
 			require.NotNil(t, in.Tags)
 			require.Equal(t, []string{"Go"}, *in.Tags)
 			return postdomain.Post{
-				ID:        postID,
-				AuthorID:  userID,
-				Title:     "Title",
-				Slug:      "title",
-				Status:    postdomain.StatusDraft,
-				Version:   2,
-				CreatedAt: now.Add(-time.Hour),
-				UpdatedAt: now,
-			}, []tagdomain.Tag{{ID: tagID, Name: "Go", Slug: "go", CreatedAt: now}}, nil
+				UUID:       postID,
+				AuthorUUID: userID,
+				Title:      "Title",
+				Slug:       "title",
+				Status:     postdomain.StatusDraft,
+				Version:    2,
+				CreatedAt:  now.Add(-time.Hour),
+				UpdatedAt:  now,
+			}, []tagdomain.Tag{{UUID: tagID, Name: "Go", Slug: "go", CreatedAt: now}}, nil
 		},
 	}
 
@@ -428,7 +428,7 @@ func TestAdminUpdatePostHandlerCategoryIDPresence(t *testing.T) {
 			svc := &fakePostAdminService{
 				updateFn: func(_ context.Context, _, _ uuid.UUID, _ bool, in postdomain.UpdateInput) (postdomain.Post, []tagdomain.Tag, error) {
 					got = in
-					return postdomain.Post{ID: postID}, nil, nil
+					return postdomain.Post{UUID: postID}, nil, nil
 				},
 			}
 
@@ -442,8 +442,8 @@ func TestAdminUpdatePostHandlerCategoryIDPresence(t *testing.T) {
 			adminUpdatePostHandlerWithDeps(svc, fakeRoleLookup{names: []string{"editor"}})(c)
 
 			require.Equal(t, nethttp.StatusOK, w.Code, w.Body.String())
-			require.Equal(t, tc.wantPresent, got.CategoryID.Present)
-			require.Equal(t, tc.wantValue, got.CategoryID.Value)
+			require.Equal(t, tc.wantPresent, got.CategoryUUID.Present)
+			require.Equal(t, tc.wantValue, got.CategoryUUID.Value)
 		})
 	}
 }

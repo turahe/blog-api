@@ -57,7 +57,7 @@ type fakeTagLinker struct {
 func newFakePostRepo(posts ...postdomain.Post) *fakePostRepo {
 	items := make(map[uuid.UUID]postdomain.Post, len(posts))
 	for _, post := range posts {
-		items[post.ID] = post
+		items[post.UUID] = post
 	}
 	return &fakePostRepo{
 		posts:           items,
@@ -93,17 +93,17 @@ func (f *fakePostRepo) GetByID(_ context.Context, id uuid.UUID) (postdomain.Post
 
 func (f *fakePostRepo) Create(_ context.Context, post postdomain.Post) (postdomain.Post, error) {
 	f.createCalls++
-	f.posts[post.ID] = post
+	f.posts[post.UUID] = post
 	return post, nil
 }
 
 func (f *fakePostRepo) Update(_ context.Context, post postdomain.Post) (postdomain.Post, error) {
 	f.updateCalls++
-	if stored, ok := f.posts[post.ID]; ok && stored.Version != post.Version-1 {
+	if stored, ok := f.posts[post.UUID]; ok && stored.Version != post.Version-1 {
 		return postdomain.Post{}, postdomain.ErrStaleVersion
 	}
 	f.updatedPost = post
-	f.posts[post.ID] = post
+	f.posts[post.UUID] = post
 	return post, nil
 }
 
@@ -149,12 +149,12 @@ func TestPostServiceListAdminClampsAndScopesAuthorFilter(t *testing.T) {
 	svc := New(repo, nil, fixedClock{})
 
 	got, err := svc.ListAdmin(context.Background(), postdomain.AdminListFilter{
-		Page:          0,
-		PerPage:       101,
-		Status:        "  PUBLISHED  ",
-		AuthorID:      &authorID,
-		Query:         "  hello world  ",
-		ScopeAuthorID: &scopeAuthorID,
+		Page:            0,
+		PerPage:         101,
+		Status:          "  PUBLISHED  ",
+		AuthorUUID:      &authorID,
+		Query:           "  hello world  ",
+		ScopeAuthorUUID: &scopeAuthorID,
 	})
 
 	require.NoError(t, err)
@@ -163,7 +163,7 @@ func TestPostServiceListAdminClampsAndScopesAuthorFilter(t *testing.T) {
 	require.Equal(t, 20, repo.listAdminFilter.PerPage)
 	require.Equal(t, "published", repo.listAdminFilter.Status)
 	require.Equal(t, "hello world", repo.listAdminFilter.Query)
-	require.Equal(t, &scopeAuthorID, repo.listAdminFilter.AuthorID)
+	require.Equal(t, &scopeAuthorID, repo.listAdminFilter.AuthorUUID)
 }
 
 func TestPostServiceWritesRejectConcurrentModification(t *testing.T) {
@@ -189,7 +189,7 @@ func TestPostServiceWritesRejectConcurrentModification(t *testing.T) {
 			postID := uuid.New()
 			actorID := uuid.New()
 			repo := newFakePostRepo(postdomain.Post{
-				ID: postID, AuthorID: actorID, Title: "Old", Slug: "old",
+				UUID: postID, AuthorUUID: actorID, Title: "Old", Slug: "old",
 				Status: postdomain.StatusDraft, Version: 1,
 			})
 			repo.bumpAfterRead = true
@@ -213,17 +213,17 @@ func TestPostServiceUpdateOwnPostRestrictedActorSucceedsAndIncrementsVersion(t *
 	actorID := uuid.New()
 	categoryID := uuid.New()
 	repo := newFakePostRepo(postdomain.Post{
-		ID:         postID,
-		AuthorID:   actorID,
-		CategoryID: &categoryID,
-		Title:      "Old title",
-		Slug:       "old-slug",
-		Excerpt:    "Old excerpt",
-		Content:    "Old content",
-		Status:     postdomain.StatusDraft,
-		Version:    2,
-		CreatedAt:  now.Add(-time.Hour),
-		UpdatedAt:  now.Add(-time.Hour),
+		UUID:         postID,
+		AuthorUUID:   actorID,
+		CategoryUUID: &categoryID,
+		Title:        "Old title",
+		Slug:         "old-slug",
+		Excerpt:      "Old excerpt",
+		Content:      "Old content",
+		Status:       postdomain.StatusDraft,
+		Version:      2,
+		CreatedAt:    now.Add(-time.Hour),
+		UpdatedAt:    now.Add(-time.Hour),
 	})
 	svc := New(repo, nil, fixedClock{now: now})
 
@@ -236,7 +236,7 @@ func TestPostServiceUpdateOwnPostRestrictedActorSucceedsAndIncrementsVersion(t *
 		Slug:    &slug,
 		Excerpt: &excerpt,
 		Content: &content,
-		CategoryID: postdomain.OptionalCategoryID{
+		CategoryUUID: postdomain.OptionalCategoryID{
 			Present: true,
 			Value:   nil,
 		},
@@ -248,7 +248,7 @@ func TestPostServiceUpdateOwnPostRestrictedActorSucceedsAndIncrementsVersion(t *
 	require.Equal(t, "new-slug", got.Slug)
 	require.Equal(t, "New excerpt", got.Excerpt)
 	require.Equal(t, "New content", got.Content)
-	require.Nil(t, got.CategoryID)
+	require.Nil(t, got.CategoryUUID)
 	require.Equal(t, now, got.UpdatedAt)
 	require.Equal(t, 1, repo.updateCalls)
 }
@@ -258,11 +258,11 @@ func TestPostServiceUpdateOtherAuthorsPostRestrictedActorReturnsNotFound(t *test
 
 	postID := uuid.New()
 	repo := newFakePostRepo(postdomain.Post{
-		ID:       postID,
-		AuthorID: uuid.New(),
-		Title:    "Title",
-		Slug:     "slug",
-		Version:  1,
+		UUID:       postID,
+		AuthorUUID: uuid.New(),
+		Title:      "Title",
+		Slug:       "slug",
+		Version:    1,
 	})
 	svc := New(repo, nil, fixedClock{now: time.Now()})
 
@@ -281,11 +281,11 @@ func TestPostServiceUpdateRejectsInvalidSlug(t *testing.T) {
 	postID := uuid.New()
 	actorID := uuid.New()
 	repo := newFakePostRepo(postdomain.Post{
-		ID:       postID,
-		AuthorID: actorID,
-		Title:    "Title",
-		Slug:     "slug",
-		Version:  1,
+		UUID:       postID,
+		AuthorUUID: actorID,
+		Title:      "Title",
+		Slug:       "slug",
+		Version:    1,
 	})
 	svc := New(repo, nil, fixedClock{now: time.Now()})
 
@@ -304,11 +304,11 @@ func TestPostServiceUpdateReturnsConflictWhenSlugTaken(t *testing.T) {
 	postID := uuid.New()
 	actorID := uuid.New()
 	repo := newFakePostRepo(postdomain.Post{
-		ID:       postID,
-		AuthorID: actorID,
-		Title:    "Title",
-		Slug:     "slug",
-		Version:  1,
+		UUID:       postID,
+		AuthorUUID: actorID,
+		Title:      "Title",
+		Slug:       "slug",
+		Version:    1,
 	})
 	repo.slugTakenBySlug["taken-slug"] = true
 	svc := New(repo, nil, fixedClock{now: time.Now()})
@@ -328,11 +328,11 @@ func TestPostServiceUpdateRejectsEmptyUpdate(t *testing.T) {
 	postID := uuid.New()
 	actorID := uuid.New()
 	repo := newFakePostRepo(postdomain.Post{
-		ID:       postID,
-		AuthorID: actorID,
-		Title:    "Title",
-		Slug:     "slug",
-		Version:  1,
+		UUID:       postID,
+		AuthorUUID: actorID,
+		Title:      "Title",
+		Slug:       "slug",
+		Version:    1,
 	})
 	svc := New(repo, nil, fixedClock{now: time.Now()})
 
@@ -349,12 +349,12 @@ func TestPostServiceUpdateSoftDeletedPostReturnsNotFound(t *testing.T) {
 	actorID := uuid.New()
 	deletedAt := time.Now()
 	repo := newFakePostRepo(postdomain.Post{
-		ID:        postID,
-		AuthorID:  actorID,
-		Title:     "Title",
-		Slug:      "slug",
-		Version:   1,
-		DeletedAt: &deletedAt,
+		UUID:       postID,
+		AuthorUUID: actorID,
+		Title:      "Title",
+		Slug:       "slug",
+		Version:    1,
+		DeletedAt:  &deletedAt,
 	})
 	svc := New(repo, nil, fixedClock{now: time.Now()})
 
@@ -375,8 +375,8 @@ func TestPostServiceCreateDraftWithTagsResolvesAndReplaces(t *testing.T) {
 	tagID := uuid.New()
 	repo := newFakePostRepo()
 	tags := &fakeTagLinker{
-		resolveTags: []tagdomain.Tag{{ID: tagID, Name: "Go", Slug: "go"}},
-		listTags:    []tagdomain.Tag{{ID: tagID, Name: "Go", Slug: "go"}},
+		resolveTags: []tagdomain.Tag{{UUID: tagID, Name: "Go", Slug: "go"}},
+		listTags:    []tagdomain.Tag{{UUID: tagID, Name: "Go", Slug: "go"}},
 	}
 	svc := New(repo, fixedIDs{next: postID}, fixedClock{now: now}).WithTags(tags)
 
@@ -384,7 +384,7 @@ func TestPostServiceCreateDraftWithTagsResolvesAndReplaces(t *testing.T) {
 	got, resolved, err := svc.CreateDraft(context.Background(), uuid.New(), "Title", "title", "", "Content", nil, &tagNames)
 
 	require.NoError(t, err)
-	require.Equal(t, postID, got.ID)
+	require.Equal(t, postID, got.UUID)
 	require.Equal(t, []string{"Go"}, tags.resolveNames)
 	require.Equal(t, postID, tags.replacePostID)
 	require.Equal(t, []uuid.UUID{tagID}, tags.replaceTagIDs)
@@ -405,7 +405,7 @@ func TestPostServiceCreateDraftWithoutTagsUsesExistingTagList(t *testing.T) {
 	got, resolved, err := svc.CreateDraft(context.Background(), uuid.New(), "Title", "title", "", "Content", nil, nil)
 
 	require.NoError(t, err)
-	require.Equal(t, postID, got.ID)
+	require.Equal(t, postID, got.UUID)
 	require.Empty(t, resolved)
 	require.Equal(t, postID, tags.listPostID)
 	require.Empty(t, tags.replaceTagIDs)
@@ -419,14 +419,14 @@ func TestPostServiceUpdateWithEmptyTagsClearsTags(t *testing.T) {
 	postID := uuid.New()
 	actorID := uuid.New()
 	repo := newFakePostRepo(postdomain.Post{
-		ID:        postID,
-		AuthorID:  actorID,
-		Title:     "Title",
-		Slug:      "title",
-		Status:    postdomain.StatusDraft,
-		Version:   1,
-		CreatedAt: now.Add(-time.Hour),
-		UpdatedAt: now.Add(-time.Hour),
+		UUID:       postID,
+		AuthorUUID: actorID,
+		Title:      "Title",
+		Slug:       "title",
+		Status:     postdomain.StatusDraft,
+		Version:    1,
+		CreatedAt:  now.Add(-time.Hour),
+		UpdatedAt:  now.Add(-time.Hour),
 	})
 	tags := &fakeTagLinker{
 		resolveTags: []tagdomain.Tag{},
@@ -438,7 +438,7 @@ func TestPostServiceUpdateWithEmptyTagsClearsTags(t *testing.T) {
 	got, resolved, err := svc.Update(context.Background(), postID, actorID, false, postdomain.UpdateInput{Tags: &emptyTags})
 
 	require.NoError(t, err)
-	require.Equal(t, postID, got.ID)
+	require.Equal(t, postID, got.UUID)
 	require.Empty(t, tags.resolveNames)
 	require.Equal(t, postID, tags.replacePostID)
 	require.Empty(t, tags.replaceTagIDs)
@@ -454,17 +454,17 @@ func TestPostServiceUpdateOmitTagsUsesListByPostID(t *testing.T) {
 	actorID := uuid.New()
 	tagID := uuid.New()
 	repo := newFakePostRepo(postdomain.Post{
-		ID:        postID,
-		AuthorID:  actorID,
-		Title:     "Old title",
-		Slug:      "title",
-		Status:    postdomain.StatusDraft,
-		Version:   1,
-		CreatedAt: now.Add(-time.Hour),
-		UpdatedAt: now.Add(-time.Hour),
+		UUID:       postID,
+		AuthorUUID: actorID,
+		Title:      "Old title",
+		Slug:       "title",
+		Status:     postdomain.StatusDraft,
+		Version:    1,
+		CreatedAt:  now.Add(-time.Hour),
+		UpdatedAt:  now.Add(-time.Hour),
 	})
 	tags := &fakeTagLinker{
-		listTags: []tagdomain.Tag{{ID: tagID, Name: "Go", Slug: "go"}},
+		listTags: []tagdomain.Tag{{UUID: tagID, Name: "Go", Slug: "go"}},
 	}
 	svc := New(repo, nil, fixedClock{now: now}).WithTags(tags)
 
@@ -472,7 +472,7 @@ func TestPostServiceUpdateOmitTagsUsesListByPostID(t *testing.T) {
 	got, resolved, err := svc.Update(context.Background(), postID, actorID, false, postdomain.UpdateInput{Title: &title})
 
 	require.NoError(t, err)
-	require.Equal(t, postID, got.ID)
+	require.Equal(t, postID, got.UUID)
 	require.Equal(t, "New title", got.Title)
 	require.Equal(t, postID, tags.listPostID)
 	require.Equal(t, uuid.Nil, tags.replacePostID)
@@ -488,18 +488,18 @@ func TestPostServiceUpdateAllowsTagsOnlyPatch(t *testing.T) {
 	actorID := uuid.New()
 	tagID := uuid.New()
 	repo := newFakePostRepo(postdomain.Post{
-		ID:        postID,
-		AuthorID:  actorID,
-		Title:     "Title",
-		Slug:      "title",
-		Status:    postdomain.StatusDraft,
-		Version:   1,
-		CreatedAt: now.Add(-time.Hour),
-		UpdatedAt: now.Add(-time.Hour),
+		UUID:       postID,
+		AuthorUUID: actorID,
+		Title:      "Title",
+		Slug:       "title",
+		Status:     postdomain.StatusDraft,
+		Version:    1,
+		CreatedAt:  now.Add(-time.Hour),
+		UpdatedAt:  now.Add(-time.Hour),
 	})
 	tags := &fakeTagLinker{
-		resolveTags: []tagdomain.Tag{{ID: tagID, Name: "Go", Slug: "go"}},
-		listTags:    []tagdomain.Tag{{ID: tagID, Name: "Go", Slug: "go"}},
+		resolveTags: []tagdomain.Tag{{UUID: tagID, Name: "Go", Slug: "go"}},
+		listTags:    []tagdomain.Tag{{UUID: tagID, Name: "Go", Slug: "go"}},
 	}
 	svc := New(repo, nil, fixedClock{now: now}).WithTags(tags)
 
@@ -507,7 +507,7 @@ func TestPostServiceUpdateAllowsTagsOnlyPatch(t *testing.T) {
 	got, resolved, err := svc.Update(context.Background(), postID, actorID, false, postdomain.UpdateInput{Tags: &tagNames})
 
 	require.NoError(t, err)
-	require.Equal(t, postID, got.ID)
+	require.Equal(t, postID, got.UUID)
 	require.Equal(t, []uuid.UUID{tagID}, tags.replaceTagIDs)
 	require.Equal(t, resolved, tags.resolveTags)
 	require.Equal(t, 1, repo.updateCalls)
@@ -535,14 +535,14 @@ func TestPostServiceUpdateRejectsInvalidTagsBeforePersistingUpdate(t *testing.T)
 	postID := uuid.New()
 	actorID := uuid.New()
 	repo := newFakePostRepo(postdomain.Post{
-		ID:        postID,
-		AuthorID:  actorID,
-		Title:     "Title",
-		Slug:      "title",
-		Status:    postdomain.StatusDraft,
-		Version:   1,
-		CreatedAt: now.Add(-time.Hour),
-		UpdatedAt: now.Add(-time.Hour),
+		UUID:       postID,
+		AuthorUUID: actorID,
+		Title:      "Title",
+		Slug:       "title",
+		Status:     postdomain.StatusDraft,
+		Version:    1,
+		CreatedAt:  now.Add(-time.Hour),
+		UpdatedAt:  now.Add(-time.Hour),
 	})
 	tags := &fakeTagLinker{resolveErr: tagservice.ErrValidation}
 	svc := New(repo, nil, fixedClock{now: now}).WithTags(tags)

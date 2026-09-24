@@ -53,8 +53,8 @@ func TestListTagsHandlerReturnsItems(t *testing.T) {
 	svc := &fakeTagService{
 		listFn: func(context.Context) ([]tagdomain.Tag, error) {
 			return []tagdomain.Tag{
-				{ID: uuid.MustParse("11111111-1111-1111-1111-111111111111"), Name: "Go", Slug: "go", CreatedAt: now},
-				{ID: uuid.MustParse("22222222-2222-2222-2222-222222222222"), Name: "Rust", Slug: "rust", CreatedAt: now},
+				{UUID: uuid.MustParse("11111111-1111-1111-1111-111111111111"), Name: "Go", Slug: "go", CreatedAt: now},
+				{UUID: uuid.MustParse("22222222-2222-2222-2222-222222222222"), Name: "Rust", Slug: "rust", CreatedAt: now},
 			}, nil
 		},
 	}
@@ -84,7 +84,7 @@ func TestAdminCreateTagHandlerCreatesTag(t *testing.T) {
 		createFn: func(_ context.Context, name, slug string) (tagdomain.Tag, error) {
 			require.Equal(t, "Go", name)
 			require.Equal(t, "go", slug)
-			return tagdomain.Tag{ID: tagID, Name: name, Slug: slug, CreatedAt: now}, nil
+			return tagdomain.Tag{UUID: tagID, Name: name, Slug: slug, CreatedAt: now}, nil
 		},
 	}
 
@@ -140,7 +140,7 @@ func TestAdminMergeTagHandlerReturnsTargetTag(t *testing.T) {
 	svc := &fakeTagService{
 		mergeFn: func(context.Context, uuid.UUID, uuid.UUID) error { return nil },
 		listFn: func(context.Context) ([]tagdomain.Tag, error) {
-			return []tagdomain.Tag{{ID: intoID, Name: "Target", Slug: "target", CreatedAt: now}}, nil
+			return []tagdomain.Tag{{UUID: intoID, Name: "Target", Slug: "target", CreatedAt: now}}, nil
 		},
 	}
 

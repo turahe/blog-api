@@ -108,7 +108,7 @@ func Run(ctx context.Context, db *gorm.DB, opts Options) error {
 		}
 		now := time.Now().UTC()
 		admin, err = users.Create(ctx, userdomain.User{
-			ID: uuid.New(), Email: strings.ToLower(opts.AdminEmail), Username: opts.AdminUsername,
+			UUID: uuid.New(), Email: strings.ToLower(opts.AdminEmail), Username: opts.AdminUsername,
 			FullName: opts.AdminName, PasswordHash: hash, Status: userdomain.StatusActive,
 			CreatedAt: now, UpdatedAt: now,
 		})
@@ -128,7 +128,7 @@ func Run(ctx context.Context, db *gorm.DB, opts Options) error {
 		FirstOrCreate(&assignment).Error; err != nil {
 		return err
 	}
-	if err := enforcer.AddRoleForUser(ctx, admin.ID, "admin"); err != nil {
+	if err := enforcer.AddRoleForUser(ctx, admin.UUID, "admin"); err != nil {
 		return err
 	}
 	return enforcer.Save()
@@ -146,7 +146,7 @@ func ensureRole(ctx context.Context, db *gorm.DB, name, description string) erro
 	now := time.Now().UTC()
 	desc := description
 	return db.WithContext(ctx).Create(&persistence.RoleModel{
-		ID: uuid.New(), Name: name, Description: &desc, CreatedAt: now, UpdatedAt: now,
+		UUID: uuid.New(), Name: name, Description: &desc, CreatedAt: now, UpdatedAt: now,
 	}).Error
 }
 
@@ -160,6 +160,6 @@ func ensurePermission(ctx context.Context, db *gorm.DB, key string) error {
 		return err
 	}
 	return db.WithContext(ctx).Create(&persistence.PermissionModel{
-		ID: uuid.New(), Key: key, CreatedAt: time.Now().UTC(),
+		UUID: uuid.New(), Key: key, CreatedAt: time.Now().UTC(),
 	}).Error
 }

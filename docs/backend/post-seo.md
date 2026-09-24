@@ -28,7 +28,7 @@ Option A: separate `post_seo` table with one-to-one link to posts.
 
 Table: `post_seo`
 
-- id (UUID PK)
+- id (bigint identity PK), uuid (unique public id)
 - post_id (FK -> posts.id, unique, indexed)
 - seo_title
 - seo_description

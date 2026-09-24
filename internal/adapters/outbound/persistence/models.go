@@ -9,7 +9,8 @@ import (
 )
 
 type UserModel struct {
-	ID                uuid.UUID `gorm:"type:uuid;primaryKey"`
+	ID                int64     `gorm:"primaryKey"`
+	UUID              uuid.UUID `gorm:"type:uuid;column:uuid;default:gen_random_uuid()"`
 	Email             string    `gorm:"column:email"`
 	Username          string    `gorm:"column:username"`
 	FullName          string    `gorm:"column:full_name"`
@@ -27,41 +28,49 @@ type UserModel struct {
 func (UserModel) TableName() string { return "users" }
 
 type RefreshSessionModel struct {
-	ID         uuid.UUID  `gorm:"type:uuid;primaryKey"`
-	UserID     uuid.UUID  `gorm:"type:uuid;column:user_id"`
-	FamilyID   uuid.UUID  `gorm:"type:uuid;column:family_id"`
-	TokenHash  string     `gorm:"column:token_hash"`
-	ExpiresAt  time.Time  `gorm:"column:expires_at"`
-	RevokedAt  *time.Time `gorm:"column:revoked_at"`
-	ReplacedBy *uuid.UUID `gorm:"type:uuid;column:replaced_by"`
-	UserAgent  *string    `gorm:"column:user_agent"`
-	IPAddress  *string    `gorm:"column:ip_address"`
-	CreatedAt  time.Time  `gorm:"column:created_at"`
+	ID             int64      `gorm:"primaryKey"`
+	UUID           uuid.UUID  `gorm:"type:uuid;column:uuid;default:gen_random_uuid()"`
+	UserID         int64      `gorm:"column:user_id"`
+	FamilyID       uuid.UUID  `gorm:"type:uuid;column:family_id"`
+	TokenHash      string     `gorm:"column:token_hash"`
+	ExpiresAt      time.Time  `gorm:"column:expires_at"`
+	RevokedAt      *time.Time `gorm:"column:revoked_at"`
+	ReplacedBy     *int64     `gorm:"column:replaced_by"`
+	UserAgent      *string    `gorm:"column:user_agent"`
+	IPAddress      *string    `gorm:"column:ip_address"`
+	CreatedAt      time.Time  `gorm:"column:created_at"`
+	UserUUID       uuid.UUID  `gorm:"column:user_uuid;->"`
+	ReplacedByUUID *uuid.UUID `gorm:"column:replaced_by_uuid;->"`
 }
 
 func (RefreshSessionModel) TableName() string { return "refresh_sessions" }
 
 type PostModel struct {
-	ID                uuid.UUID  `gorm:"type:uuid;primaryKey"`
-	AuthorID          uuid.UUID  `gorm:"type:uuid;column:author_id"`
-	CategoryID        *uuid.UUID `gorm:"type:uuid;column:category_id"`
-	Title             string
-	Slug              string
-	Excerpt           *string
-	Content           string
-	CoverImageMediaID *uuid.UUID `gorm:"type:uuid;column:cover_image_media_id"`
-	Status            string
-	Version           int64
-	PublishedAt       *time.Time
-	CreatedAt         time.Time
-	UpdatedAt         time.Time
-	DeletedAt         gorm.DeletedAt `gorm:"index"`
+	ID                  int64     `gorm:"primaryKey"`
+	UUID                uuid.UUID `gorm:"type:uuid;column:uuid;default:gen_random_uuid()"`
+	AuthorID            int64     `gorm:"column:author_id"`
+	CategoryID          *int64    `gorm:"column:category_id"`
+	Title               string
+	Slug                string
+	Excerpt             *string
+	Content             string
+	CoverImageMediaID   *int64 `gorm:"column:cover_image_media_id"`
+	Status              string
+	Version             int64
+	PublishedAt         *time.Time
+	CreatedAt           time.Time
+	UpdatedAt           time.Time
+	DeletedAt           gorm.DeletedAt `gorm:"index"`
+	AuthorUUID          uuid.UUID      `gorm:"column:author_uuid;->"`
+	CategoryUUID        *uuid.UUID     `gorm:"column:category_uuid;->"`
+	CoverImageMediaUUID *uuid.UUID     `gorm:"column:cover_image_media_uuid;->"`
 }
 
 func (PostModel) TableName() string { return "posts" }
 
 type MediaAssetModel struct {
-	ID               uuid.UUID      `gorm:"type:uuid;primaryKey"`
+	ID               int64          `gorm:"primaryKey"`
+	UUID             uuid.UUID      `gorm:"type:uuid;column:uuid;default:gen_random_uuid()"`
 	StorageKey       string         `gorm:"column:storage_key"`
 	OriginalFilename string         `gorm:"column:original_filename"`
 	ContentType      string         `gorm:"column:content_type"`
@@ -71,18 +80,20 @@ type MediaAssetModel struct {
 	ChecksumSHA256   *string        `gorm:"column:checksum_sha256"`
 	Disk             string         `gorm:"column:disk"`
 	Status           string         `gorm:"column:status"`
-	UploadedBy       *uuid.UUID     `gorm:"type:uuid;column:uploaded_by"`
+	UploadedBy       *int64         `gorm:"column:uploaded_by"`
 	Tags             pq.StringArray `gorm:"type:text[];column:tags"`
 	PresignExpiresAt *time.Time     `gorm:"column:presign_expires_at"`
 	CreatedAt        time.Time      `gorm:"column:created_at"`
 	UpdatedAt        time.Time      `gorm:"column:updated_at"`
 	DeletedAt        gorm.DeletedAt `gorm:"column:deleted_at;index"`
+	UploadedByUUID   *uuid.UUID     `gorm:"column:uploaded_by_uuid;->"`
 }
 
 func (MediaAssetModel) TableName() string { return "media_assets" }
 
 type RoleModel struct {
-	ID          uuid.UUID `gorm:"type:uuid;primaryKey"`
+	ID          int64     `gorm:"primaryKey"`
+	UUID        uuid.UUID `gorm:"type:uuid;column:uuid;default:gen_random_uuid()"`
 	Name        string
 	Description *string
 	CreatedAt   time.Time
@@ -92,7 +103,8 @@ type RoleModel struct {
 func (RoleModel) TableName() string { return "roles" }
 
 type PermissionModel struct {
-	ID          uuid.UUID `gorm:"type:uuid;primaryKey"`
+	ID          int64     `gorm:"primaryKey"`
+	UUID        uuid.UUID `gorm:"type:uuid;column:uuid;default:gen_random_uuid()"`
 	Key         string
 	Description *string
 	CreatedAt   time.Time
@@ -101,8 +113,8 @@ type PermissionModel struct {
 func (PermissionModel) TableName() string { return "permissions" }
 
 type UserRoleModel struct {
-	UserID    uuid.UUID `gorm:"type:uuid;primaryKey;column:user_id"`
-	RoleID    uuid.UUID `gorm:"type:uuid;primaryKey;column:role_id"`
+	UserID    int64 `gorm:"primaryKey;autoIncrement:false;column:user_id"`
+	RoleID    int64 `gorm:"primaryKey;autoIncrement:false;column:role_id"`
 	CreatedAt time.Time
 }
 

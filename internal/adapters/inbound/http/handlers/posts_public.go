@@ -39,7 +39,7 @@ func listPublishedPostsHandler(posts *postservice.PostService) gin.HandlerFunc {
 			return
 		}
 		result, err := posts.ListPublished(c.Request.Context(), postdomain.ListFilter{
-			Page: page, PerPage: perPage, CategoryID: categoryID, TagID: tagID,
+			Page: page, PerPage: perPage, CategoryUUID: categoryID, TagUUID: tagID,
 		})
 		if err != nil {
 			responses.Failure(c, nethttp.StatusInternalServerError, "internal_error", "Failed to list posts")

@@ -11,16 +11,16 @@ import (
 // Post serializes a post resource.
 func Post(post postdomain.Post) gin.H {
 	var categoryID any
-	if post.CategoryID != nil {
-		categoryID = post.CategoryID.String()
+	if post.CategoryUUID != nil {
+		categoryID = post.CategoryUUID.String()
 	}
 	var coverImageMediaID any
-	if post.CoverImageMediaID != nil {
-		coverImageMediaID = post.CoverImageMediaID.String()
+	if post.CoverImageMediaUUID != nil {
+		coverImageMediaID = post.CoverImageMediaUUID.String()
 	}
 	return gin.H{
-		"id":                   post.ID.String(),
-		"author_id":            post.AuthorID.String(),
+		"id":                   post.UUID.String(),
+		"author_id":            post.AuthorUUID.String(),
 		"category_id":          categoryID,
 		"title":                post.Title,
 		"slug":                 post.Slug,

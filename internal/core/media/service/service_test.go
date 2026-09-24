@@ -79,7 +79,7 @@ func TestPresignUploadHappyPath(t *testing.T) {
 	if result.UploadURL != storage.presignURL {
 		t.Fatalf("expected upload URL %q, got %q", storage.presignURL, result.UploadURL)
 	}
-	if got := repo.assets[result.Asset.ID]; got.ID != result.Asset.ID {
+	if got := repo.assets[result.Asset.UUID]; got.UUID != result.Asset.UUID {
 		t.Fatalf("expected asset to be stored in repo")
 	}
 	if storage.lastPresignKey != result.Asset.StorageKey {
@@ -94,7 +94,7 @@ func TestCompleteUploadMissingObject(t *testing.T) {
 	asset := repo.store(makePendingAsset())
 	storage.headErr = ports.ErrObjectNotFound
 
-	_, err := svc.CompleteUpload(context.Background(), asset.ID)
+	_, err := svc.CompleteUpload(context.Background(), asset.UUID)
 	if !errors.Is(err, ErrUploadIncomplete) {
 		t.Fatalf("expected ErrUploadIncomplete, got %v", err)
 	}
@@ -111,7 +111,7 @@ func TestCompleteUploadMarksReadyAfterHeadOK(t *testing.T) {
 		ETag:        "etag-1",
 	}
 
-	got, err := svc.CompleteUpload(context.Background(), asset.ID)
+	got, err := svc.CompleteUpload(context.Background(), asset.UUID)
 	if err != nil {
 		t.Fatalf("CompleteUpload returned error: %v", err)
 	}
@@ -126,7 +126,7 @@ func TestCompleteUploadMarksReadyAfterHeadOK(t *testing.T) {
 		t.Fatalf("expected content type image/webp, got %q", got.ContentType)
 	}
 
-	stored := repo.assets[asset.ID]
+	stored := repo.assets[asset.UUID]
 	if stored.Status != mediadomain.StatusReady {
 		t.Fatalf("expected stored asset to be ready, got %q", stored.Status)
 	}
@@ -144,12 +144,12 @@ func TestCompleteUploadAlreadyReadyIsIdempotent(t *testing.T) {
 	asset.SizeBytes = 256
 	asset = repo.store(asset)
 
-	got, err := svc.CompleteUpload(context.Background(), asset.ID)
+	got, err := svc.CompleteUpload(context.Background(), asset.UUID)
 	if err != nil {
 		t.Fatalf("CompleteUpload returned error: %v", err)
 	}
-	if got.ID != asset.ID {
-		t.Fatalf("expected same asset ID %s, got %s", asset.ID, got.ID)
+	if got.UUID != asset.UUID {
+		t.Fatalf("expected same asset ID %s, got %s", asset.UUID, got.UUID)
 	}
 	if storage.headCalls != 0 {
 		t.Fatalf("expected no storage head calls, got %d", storage.headCalls)
@@ -165,7 +165,7 @@ func TestCompleteUploadExpiredPendingAsset(t *testing.T) {
 	asset.PresignExpiresAt = &expired
 	repo.store(asset)
 
-	_, err := svc.CompleteUpload(context.Background(), asset.ID)
+	_, err := svc.CompleteUpload(context.Background(), asset.UUID)
 	if !errors.Is(err, ErrUploadExpired) {
 		t.Fatalf("expected ErrUploadExpired, got %v", err)
 	}
@@ -223,7 +223,7 @@ func (r *fakeRepo) ClearEntityReferences(_ context.Context, _ uuid.UUID) error {
 
 func (r *fakeRepo) store(asset mediadomain.MediaAsset) mediadomain.MediaAsset {
 	cloned := cloneAsset(asset)
-	r.assets[asset.ID] = cloned
+	r.assets[asset.UUID] = cloned
 	return cloneAsset(cloned)
 }
 
@@ -298,7 +298,7 @@ func newTestService() (*Service, *fakeRepo, *fakeObjectStorage) {
 func makePendingAsset() mediadomain.MediaAsset {
 	expiresAt := baseTime().Add(15 * time.Minute)
 	return mediadomain.MediaAsset{
-		ID:               fixedID(),
+		UUID:             fixedID(),
 		StorageKey:       "media/22222222-2222-2222-2222-222222222222/cover.png",
 		OriginalFilename: "cover.png",
 		ContentType:      "image/png",

@@ -1,8 +1,12 @@
 -- +goose Up
+-- Entity tables use a bigint identity primary key (joins and foreign keys) plus
+-- a unique uuid public identifier (API, JWT subject, events). Pure join tables
+-- keep composite primary keys over bigint foreign keys.
 CREATE EXTENSION IF NOT EXISTS pgcrypto;
 
 CREATE TABLE users (
-    id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+    id bigint GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+    uuid uuid NOT NULL DEFAULT gen_random_uuid() UNIQUE,
     email text NOT NULL,
     username text NOT NULL,
     password_hash text,
@@ -17,7 +21,8 @@ CREATE UNIQUE INDEX users_email_unique ON users (lower(email)) WHERE deleted_at 
 CREATE UNIQUE INDEX users_username_unique ON users (lower(username)) WHERE deleted_at IS NULL;
 
 CREATE TABLE roles (
-    id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+    id bigint GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+    uuid uuid NOT NULL DEFAULT gen_random_uuid() UNIQUE,
     name text NOT NULL UNIQUE,
     description text,
     created_at timestamptz NOT NULL DEFAULT now(),
@@ -25,40 +30,43 @@ CREATE TABLE roles (
 );
 
 CREATE TABLE permissions (
-    id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+    id bigint GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+    uuid uuid NOT NULL DEFAULT gen_random_uuid() UNIQUE,
     key text NOT NULL UNIQUE,
     description text,
     created_at timestamptz NOT NULL DEFAULT now()
 );
 
 CREATE TABLE user_roles (
-    user_id uuid NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-    role_id uuid NOT NULL REFERENCES roles(id) ON DELETE CASCADE,
+    user_id bigint NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    role_id bigint NOT NULL REFERENCES roles(id) ON DELETE CASCADE,
     created_at timestamptz NOT NULL DEFAULT now(),
     PRIMARY KEY (user_id, role_id)
 );
 
 CREATE TABLE role_permissions (
-    role_id uuid NOT NULL REFERENCES roles(id) ON DELETE CASCADE,
-    permission_id uuid NOT NULL REFERENCES permissions(id) ON DELETE CASCADE,
+    role_id bigint NOT NULL REFERENCES roles(id) ON DELETE CASCADE,
+    permission_id bigint NOT NULL REFERENCES permissions(id) ON DELETE CASCADE,
     created_at timestamptz NOT NULL DEFAULT now(),
     PRIMARY KEY (role_id, permission_id)
 );
 
 CREATE TABLE categories (
-    id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+    id bigint GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+    uuid uuid NOT NULL DEFAULT gen_random_uuid() UNIQUE,
     name text NOT NULL,
     slug text NOT NULL UNIQUE,
     description text,
-    parent_id uuid REFERENCES categories(id) ON DELETE SET NULL,
+    parent_id bigint REFERENCES categories(id) ON DELETE SET NULL,
     created_at timestamptz NOT NULL DEFAULT now(),
     updated_at timestamptz NOT NULL DEFAULT now()
 );
 
 CREATE TABLE posts (
-    id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
-    author_id uuid NOT NULL REFERENCES users(id),
-    category_id uuid REFERENCES categories(id) ON DELETE SET NULL,
+    id bigint GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+    uuid uuid NOT NULL DEFAULT gen_random_uuid() UNIQUE,
+    author_id bigint NOT NULL REFERENCES users(id),
+    category_id bigint REFERENCES categories(id) ON DELETE SET NULL,
     title text NOT NULL,
     slug text NOT NULL UNIQUE,
     excerpt text,
@@ -75,23 +83,25 @@ CREATE INDEX posts_author_status_idx ON posts (author_id, status);
 CREATE INDEX posts_published_at_idx ON posts (published_at DESC) WHERE status = 'published';
 
 CREATE TABLE tags (
-    id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+    id bigint GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+    uuid uuid NOT NULL DEFAULT gen_random_uuid() UNIQUE,
     name text NOT NULL,
     slug text NOT NULL UNIQUE,
     created_at timestamptz NOT NULL DEFAULT now()
 );
 
 CREATE TABLE post_tags (
-    post_id uuid NOT NULL REFERENCES posts(id) ON DELETE CASCADE,
-    tag_id uuid NOT NULL REFERENCES tags(id) ON DELETE CASCADE,
+    post_id bigint NOT NULL REFERENCES posts(id) ON DELETE CASCADE,
+    tag_id bigint NOT NULL REFERENCES tags(id) ON DELETE CASCADE,
     PRIMARY KEY (post_id, tag_id)
 );
 
 CREATE TABLE comments (
-    id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
-    post_id uuid NOT NULL REFERENCES posts(id) ON DELETE CASCADE,
-    user_id uuid REFERENCES users(id) ON DELETE SET NULL,
-    parent_id uuid REFERENCES comments(id) ON DELETE CASCADE,
+    id bigint GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+    uuid uuid NOT NULL DEFAULT gen_random_uuid() UNIQUE,
+    post_id bigint NOT NULL REFERENCES posts(id) ON DELETE CASCADE,
+    user_id bigint REFERENCES users(id) ON DELETE SET NULL,
+    parent_id bigint REFERENCES comments(id) ON DELETE CASCADE,
     body text NOT NULL,
     status text NOT NULL DEFAULT 'pending'
         CHECK (status IN ('pending', 'approved', 'spam', 'rejected', 'deleted')),
@@ -101,8 +111,10 @@ CREATE TABLE comments (
 );
 CREATE INDEX comments_post_status_created_idx ON comments (post_id, status, created_at);
 
+-- aggregate_id is the aggregate's public uuid: events leave the database.
 CREATE TABLE outbox_events (
-    id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+    id bigint GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+    uuid uuid NOT NULL DEFAULT gen_random_uuid() UNIQUE,
     topic text NOT NULL,
     aggregate_type text NOT NULL,
     aggregate_id uuid,
@@ -116,10 +128,12 @@ CREATE TABLE outbox_events (
 CREATE INDEX outbox_unpublished_idx ON outbox_events (occurred_at)
     WHERE published_at IS NULL;
 
+-- resource_id is polymorphic (any resource type), so it stores the public uuid.
 CREATE TABLE audit_logs (
-    id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
-    actor_id uuid REFERENCES users(id) ON DELETE SET NULL,
-    impersonator_id uuid REFERENCES users(id) ON DELETE SET NULL,
+    id bigint GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+    uuid uuid NOT NULL DEFAULT gen_random_uuid() UNIQUE,
+    actor_id bigint REFERENCES users(id) ON DELETE SET NULL,
+    impersonator_id bigint REFERENCES users(id) ON DELETE SET NULL,
     action text NOT NULL,
     resource_type text,
     resource_id uuid,

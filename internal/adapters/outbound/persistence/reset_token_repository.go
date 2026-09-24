@@ -11,14 +11,16 @@ import (
 )
 
 type PasswordResetTokenModel struct {
-	ID        uuid.UUID  `gorm:"type:uuid;primaryKey"`
-	UserID    uuid.UUID  `gorm:"type:uuid;column:user_id"`
+	ID        int64      `gorm:"primaryKey"`
+	UUID      uuid.UUID  `gorm:"type:uuid;column:uuid;default:gen_random_uuid()"`
+	UserID    int64      `gorm:"column:user_id"`
 	JTI       string     `gorm:"column:jti"`
 	TokenHash string     `gorm:"column:token_hash"`
 	Purpose   string     `gorm:"column:purpose"`
 	ExpiresAt time.Time  `gorm:"column:expires_at"`
 	UsedAt    *time.Time `gorm:"column:used_at"`
 	CreatedAt time.Time  `gorm:"column:created_at"`
+	UserUUID  uuid.UUID  `gorm:"column:user_uuid;->"`
 }
 
 func (PasswordResetTokenModel) TableName() string { return "password_reset_tokens" }
@@ -32,15 +34,21 @@ func NewResetTokenRepository(db *gorm.DB) *ResetTokenRepository {
 }
 
 func (r *ResetTokenRepository) Create(ctx context.Context, token authdomain.PasswordResetToken) error {
+	userID, err := idByUUID(r.db.WithContext(ctx), "users", token.UserUUID)
+	if err != nil {
+		return err
+	}
 	return r.db.WithContext(ctx).Create(&PasswordResetTokenModel{
-		ID: token.ID, UserID: token.UserID, JTI: token.JTI, TokenHash: token.TokenHash,
+		UUID: token.UUID, UserID: userID, JTI: token.JTI, TokenHash: token.TokenHash,
 		Purpose: token.Purpose, ExpiresAt: token.ExpiresAt, CreatedAt: token.CreatedAt,
 	}).Error
 }
 
 func (r *ResetTokenRepository) FindByHash(ctx context.Context, hash string) (authdomain.PasswordResetToken, error) {
 	var model PasswordResetTokenModel
-	err := r.db.WithContext(ctx).Where("token_hash = ?", hash).First(&model).Error
+	err := r.db.WithContext(ctx).
+		Select(withRefs("password_reset_tokens", uuidRef("users", "password_reset_tokens.user_id", "user_uuid"))).
+		Where("token_hash = ?", hash).First(&model).Error
 	if errors.Is(err, gorm.ErrRecordNotFound) {
 		return authdomain.PasswordResetToken{}, authdomain.ErrInvalidToken
 	}
@@ -48,12 +56,12 @@ func (r *ResetTokenRepository) FindByHash(ctx context.Context, hash string) (aut
 		return authdomain.PasswordResetToken{}, err
 	}
 	return authdomain.PasswordResetToken{
-		ID: model.ID, UserID: model.UserID, JTI: model.JTI, TokenHash: model.TokenHash,
+		ID: model.ID, UUID: model.UUID, UserUUID: model.UserUUID, JTI: model.JTI, TokenHash: model.TokenHash,
 		Purpose: model.Purpose, ExpiresAt: model.ExpiresAt, UsedAt: model.UsedAt, CreatedAt: model.CreatedAt,
 	}, nil
 }
 
 func (r *ResetTokenRepository) MarkUsed(ctx context.Context, id uuid.UUID, at time.Time) error {
-	return r.db.WithContext(ctx).Model(&PasswordResetTokenModel{}).Where("id = ? AND used_at IS NULL", id).
+	return r.db.WithContext(ctx).Model(&PasswordResetTokenModel{}).Where("uuid = ? AND used_at IS NULL", id).
 		Update("used_at", at).Error
 }

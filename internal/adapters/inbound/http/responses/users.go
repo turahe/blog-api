@@ -10,7 +10,7 @@ import (
 // User serializes a user resource.
 func User(user userdomain.User) gin.H {
 	return gin.H{
-		"id":                user.ID.String(),
+		"id":                user.UUID.String(),
 		"email":             user.Email,
 		"username":          user.Username,
 		"full_name":         user.FullName,

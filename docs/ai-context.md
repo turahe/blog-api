@@ -251,7 +251,7 @@ Use PostgreSQL as the source of truth for:
 
 Guidance:
 
-- use UUIDs for external identifiers
+- use the `uuid` column as the only external identifier; `id` is an internal bigint primary key
 - maintain unique indexes for slugs and emails
 - maintain unique indexes for role names and permission keys
 - add `created_at`, `updated_at`, and nullable `deleted_at` where soft delete is useful

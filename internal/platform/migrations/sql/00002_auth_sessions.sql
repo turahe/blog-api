@@ -1,12 +1,13 @@
 -- +goose Up
 CREATE TABLE refresh_sessions (
-    id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
-    user_id uuid NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    id bigint GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+    uuid uuid NOT NULL DEFAULT gen_random_uuid() UNIQUE,
+    user_id bigint NOT NULL REFERENCES users(id) ON DELETE CASCADE,
     family_id uuid NOT NULL,
     token_hash text NOT NULL,
     expires_at timestamptz NOT NULL,
     revoked_at timestamptz,
-    replaced_by uuid REFERENCES refresh_sessions(id) ON DELETE SET NULL,
+    replaced_by bigint REFERENCES refresh_sessions(id) ON DELETE SET NULL,
     user_agent text,
     ip_address text,
     created_at timestamptz NOT NULL DEFAULT now()

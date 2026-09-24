@@ -43,7 +43,7 @@ func (m *memUsers) RecordLogin(_ context.Context, id uuid.UUID, at time.Time) er
 	return nil
 }
 func (m *memUsers) Create(_ context.Context, user userdomain.User) (userdomain.User, error) {
-	m.byID[user.ID] = user
+	m.byID[user.UUID] = user
 	m.byEmail[user.Email] = user
 	return user, nil
 }
@@ -63,7 +63,7 @@ type memSessions struct {
 
 func (m *memSessions) Create(_ context.Context, session authdomain.RefreshSession) (authdomain.RefreshSession, error) {
 	m.byHash[session.TokenHash] = session
-	m.byID[session.ID] = session
+	m.byID[session.UUID] = session
 	return session, nil
 }
 func (m *memSessions) FindByTokenHash(_ context.Context, hash string) (authdomain.RefreshSession, error) {
@@ -82,7 +82,7 @@ func (m *memSessions) Revoke(_ context.Context, id uuid.UUID, at time.Time) erro
 }
 func (m *memSessions) RevokeFamily(_ context.Context, userID, familyID uuid.UUID, at time.Time) error {
 	for id, s := range m.byID {
-		if s.UserID == userID && s.FamilyID == familyID {
+		if s.UserUUID == userID && s.FamilyID == familyID {
 			s.RevokedAt = &at
 			m.byID[id] = s
 			m.byHash[s.TokenHash] = s
@@ -92,7 +92,7 @@ func (m *memSessions) RevokeFamily(_ context.Context, userID, familyID uuid.UUID
 }
 func (m *memSessions) RevokeAllForUser(_ context.Context, userID uuid.UUID, at time.Time) error {
 	for id, s := range m.byID {
-		if s.UserID == userID {
+		if s.UserUUID == userID {
 			s.RevokedAt = &at
 			m.byID[id] = s
 			m.byHash[s.TokenHash] = s
@@ -103,7 +103,7 @@ func (m *memSessions) RevokeAllForUser(_ context.Context, userID uuid.UUID, at t
 func (m *memSessions) Replace(_ context.Context, oldID, newID uuid.UUID, at time.Time) error {
 	s := m.byID[oldID]
 	s.RevokedAt = &at
-	s.ReplacedBy = &newID
+	s.ReplacedByUUID = &newID
 	m.byID[oldID] = s
 	m.byHash[s.TokenHash] = s
 	return nil
@@ -116,7 +116,7 @@ type memResets struct {
 
 func (m *memResets) Create(_ context.Context, token authdomain.PasswordResetToken) error {
 	m.byHash[token.TokenHash] = token
-	m.byID[token.ID] = token
+	m.byID[token.UUID] = token
 	return nil
 }
 func (m *memResets) FindByHash(_ context.Context, hash string) (authdomain.PasswordResetToken, error) {
@@ -177,10 +177,10 @@ func newService(users *memUsers, sessions *memSessions, resets *memResets, sink 
 func TestLoginIssuesTokenPair(t *testing.T) {
 	id := uuid.New()
 	user := userdomain.User{
-		ID: id, Email: "a@example.com", Username: "a", FullName: "A",
+		UUID: id, Email: "a@example.com", Username: "a", FullName: "A",
 		PasswordHash: "hash:secret", Status: userdomain.StatusActive,
 	}
-	users := &memUsers{byEmail: map[string]userdomain.User{user.Email: user}, byID: map[uuid.UUID]userdomain.User{user.ID: user}}
+	users := &memUsers{byEmail: map[string]userdomain.User{user.Email: user}, byID: map[uuid.UUID]userdomain.User{user.UUID: user}}
 	sessions := &memSessions{byHash: map[string]authdomain.RefreshSession{}, byID: map[uuid.UUID]authdomain.RefreshSession{}}
 	resets := &memResets{byHash: map[string]authdomain.PasswordResetToken{}, byID: map[uuid.UUID]authdomain.PasswordResetToken{}}
 	svc := newService(users, sessions, resets, nil)
@@ -194,10 +194,10 @@ func TestLoginIssuesTokenPair(t *testing.T) {
 func TestLoginRejectsBadPassword(t *testing.T) {
 	id := uuid.New()
 	user := userdomain.User{
-		ID: id, Email: "a@example.com", Username: "a", FullName: "A",
+		UUID: id, Email: "a@example.com", Username: "a", FullName: "A",
 		PasswordHash: "hash:secret", Status: userdomain.StatusActive,
 	}
-	users := &memUsers{byEmail: map[string]userdomain.User{user.Email: user}, byID: map[uuid.UUID]userdomain.User{user.ID: user}}
+	users := &memUsers{byEmail: map[string]userdomain.User{user.Email: user}, byID: map[uuid.UUID]userdomain.User{user.UUID: user}}
 	sessions := &memSessions{byHash: map[string]authdomain.RefreshSession{}, byID: map[uuid.UUID]authdomain.RefreshSession{}}
 	resets := &memResets{byHash: map[string]authdomain.PasswordResetToken{}, byID: map[uuid.UUID]authdomain.PasswordResetToken{}}
 	svc := newService(users, sessions, resets, nil)
@@ -209,10 +209,10 @@ func TestLoginRejectsBadPassword(t *testing.T) {
 func TestLoginAfterResetWithSurroundingWhitespace(t *testing.T) {
 	id := uuid.New()
 	user := userdomain.User{
-		ID: id, Email: "a@example.com", Username: "a", FullName: "A",
+		UUID: id, Email: "a@example.com", Username: "a", FullName: "A",
 		PasswordHash: "hash:OldPassword1!", Status: userdomain.StatusActive,
 	}
-	users := &memUsers{byEmail: map[string]userdomain.User{user.Email: user}, byID: map[uuid.UUID]userdomain.User{user.ID: user}}
+	users := &memUsers{byEmail: map[string]userdomain.User{user.Email: user}, byID: map[uuid.UUID]userdomain.User{user.UUID: user}}
 	sessions := &memSessions{byHash: map[string]authdomain.RefreshSession{}, byID: map[uuid.UUID]authdomain.RefreshSession{}}
 	resets := &memResets{byHash: map[string]authdomain.PasswordResetToken{}, byID: map[uuid.UUID]authdomain.PasswordResetToken{}}
 	sink := &capturingSink{}
@@ -232,10 +232,10 @@ func TestLoginAfterResetWithSurroundingWhitespace(t *testing.T) {
 func TestForgotAndResetPassword(t *testing.T) {
 	id := uuid.New()
 	user := userdomain.User{
-		ID: id, Email: "a@example.com", Username: "a", FullName: "A",
+		UUID: id, Email: "a@example.com", Username: "a", FullName: "A",
 		PasswordHash: "hash:OldPassword1!", Status: userdomain.StatusActive,
 	}
-	users := &memUsers{byEmail: map[string]userdomain.User{user.Email: user}, byID: map[uuid.UUID]userdomain.User{user.ID: user}}
+	users := &memUsers{byEmail: map[string]userdomain.User{user.Email: user}, byID: map[uuid.UUID]userdomain.User{user.UUID: user}}
 	sessions := &memSessions{byHash: map[string]authdomain.RefreshSession{}, byID: map[uuid.UUID]authdomain.RefreshSession{}}
 	resets := &memResets{byHash: map[string]authdomain.PasswordResetToken{}, byID: map[uuid.UUID]authdomain.PasswordResetToken{}}
 	sink := &capturingSink{}

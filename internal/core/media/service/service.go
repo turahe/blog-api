@@ -95,14 +95,14 @@ func (s *Service) PresignUpload(
 	expiresAt := now.Add(s.presignTTL)
 	id := s.ids.New()
 	asset := mediadomain.MediaAsset{
-		ID:               id,
+		UUID:             id,
 		StorageKey:       fmt.Sprintf("media/%s/%s", id.String(), sanitized),
 		OriginalFilename: sanitized,
 		ContentType:      contentType,
 		SizeBytes:        0,
 		Disk:             s.disk,
 		Status:           mediadomain.StatusPending,
-		UploadedBy:       uploadedBy,
+		UploadedByUUID:   uploadedBy,
 		Tags:             append([]string(nil), tags...),
 		PresignExpiresAt: &expiresAt,
 		CreatedAt:        now,
@@ -143,7 +143,7 @@ func (s *Service) CompleteUpload(ctx context.Context, id uuid.UUID) (mediadomain
 	}
 
 	if asset.Status == mediadomain.StatusPending && isExpired(s.clock.Now(), asset.PresignExpiresAt) {
-		return mediadomain.MediaAsset{}, fmt.Errorf("%w: presign expired for %s", ErrUploadExpired, asset.ID)
+		return mediadomain.MediaAsset{}, fmt.Errorf("%w: presign expired for %s", ErrUploadExpired, asset.UUID)
 	}
 
 	info, err := s.storage.HeadObject(ctx, asset.StorageKey)

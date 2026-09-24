@@ -1,6 +1,7 @@
 -- +goose Up
 CREATE TABLE media_assets (
-    id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+    id bigint GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+    uuid uuid NOT NULL DEFAULT gen_random_uuid() UNIQUE,
     storage_key text NOT NULL,
     original_filename text NOT NULL,
     content_type text NOT NULL,
@@ -12,7 +13,7 @@ CREATE TABLE media_assets (
         CHECK (disk IN ('s3', 'r2', 'minio', 'do_spaces')),
     status text NOT NULL DEFAULT 'pending'
         CHECK (status IN ('pending', 'ready', 'failed')),
-    uploaded_by uuid REFERENCES users(id) ON DELETE SET NULL,
+    uploaded_by bigint REFERENCES users(id) ON DELETE SET NULL,
     tags text[] NOT NULL DEFAULT '{}',
     presign_expires_at timestamptz,
     created_at timestamptz NOT NULL DEFAULT now(),

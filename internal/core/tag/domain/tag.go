@@ -14,7 +14,8 @@ var (
 )
 
 type Tag struct {
-	ID        uuid.UUID
+	ID        int64
+	UUID      uuid.UUID
 	Name      string
 	Slug      string
 	CreatedAt time.Time

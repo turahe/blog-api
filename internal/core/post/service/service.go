@@ -71,8 +71,8 @@ func (s *PostService) ListAdmin(ctx context.Context, filter postdomain.AdminList
 	if filter.PerPage < 1 || filter.PerPage > 100 {
 		filter.PerPage = 20
 	}
-	if filter.ScopeAuthorID != nil {
-		filter.AuthorID = filter.ScopeAuthorID
+	if filter.ScopeAuthorUUID != nil {
+		filter.AuthorUUID = filter.ScopeAuthorUUID
 	}
 	filter.Status = strings.TrimSpace(strings.ToLower(filter.Status))
 	filter.Query = strings.TrimSpace(filter.Query)
@@ -115,17 +115,17 @@ func (s *PostService) CreateDraft(
 	}
 	now := s.clock.Now()
 	post := postdomain.Post{
-		ID:         s.ids.New(),
-		AuthorID:   authorID,
-		CategoryID: categoryID,
-		Title:      title,
-		Slug:       slug,
-		Excerpt:    strings.TrimSpace(excerpt),
-		Content:    content,
-		Status:     postdomain.StatusDraft,
-		Version:    1,
-		CreatedAt:  now,
-		UpdatedAt:  now,
+		UUID:         s.ids.New(),
+		AuthorUUID:   authorID,
+		CategoryUUID: categoryID,
+		Title:        title,
+		Slug:         slug,
+		Excerpt:      strings.TrimSpace(excerpt),
+		Content:      content,
+		Status:       postdomain.StatusDraft,
+		Version:      1,
+		CreatedAt:    now,
+		UpdatedAt:    now,
 	}
 	post, err = s.repo.Create(ctx, post)
 	if err != nil {
@@ -134,9 +134,9 @@ func (s *PostService) CreateDraft(
 	if tags != nil {
 		tagIDs := make([]uuid.UUID, 0, len(resolvedTags))
 		for _, tag := range resolvedTags {
-			tagIDs = append(tagIDs, tag.ID)
+			tagIDs = append(tagIDs, tag.UUID)
 		}
-		if err := s.tags.ReplacePostTags(ctx, post.ID, tagIDs); err != nil {
+		if err := s.tags.ReplacePostTags(ctx, post.UUID, tagIDs); err != nil {
 			return postdomain.Post{}, nil, err
 		}
 		return post, resolvedTags, nil
@@ -144,7 +144,7 @@ func (s *PostService) CreateDraft(
 	if s.tags == nil {
 		return post, nil, nil
 	}
-	current, err := s.tags.ListByPostID(ctx, post.ID)
+	current, err := s.tags.ListByPostID(ctx, post.UUID)
 	if err != nil {
 		return postdomain.Post{}, nil, err
 	}
@@ -173,7 +173,7 @@ func (s *PostService) Update(
 	unrestricted bool,
 	in postdomain.UpdateInput,
 ) (postdomain.Post, []tagdomain.Tag, error) {
-	if in.Title == nil && in.Slug == nil && in.Excerpt == nil && in.Content == nil && !in.CategoryID.Present && in.Tags == nil {
+	if in.Title == nil && in.Slug == nil && in.Excerpt == nil && in.Content == nil && !in.CategoryUUID.Present && in.Tags == nil {
 		return postdomain.Post{}, nil, fmt.Errorf("%w: no fields to update", ErrValidation)
 	}
 
@@ -184,7 +184,7 @@ func (s *PostService) Update(
 	if post.DeletedAt != nil {
 		return postdomain.Post{}, nil, postdomain.ErrNotFound
 	}
-	if !unrestricted && post.AuthorID != actorID {
+	if !unrestricted && post.AuthorUUID != actorID {
 		return postdomain.Post{}, nil, postdomain.ErrNotFound
 	}
 
@@ -205,7 +205,7 @@ func (s *PostService) Update(
 			return postdomain.Post{}, nil, fmt.Errorf("%w: invalid slug", ErrValidation)
 		}
 		if slug != post.Slug {
-			taken, err := s.repo.SlugTaken(ctx, slug, post.ID)
+			taken, err := s.repo.SlugTaken(ctx, slug, post.UUID)
 			if err != nil {
 				return postdomain.Post{}, nil, err
 			}
@@ -222,8 +222,8 @@ func (s *PostService) Update(
 	if in.Content != nil {
 		post.Content = *in.Content
 	}
-	if in.CategoryID.Present {
-		post.CategoryID = in.CategoryID.Value
+	if in.CategoryUUID.Present {
+		post.CategoryUUID = in.CategoryUUID.Value
 	}
 
 	var resolvedTags []tagdomain.Tag
@@ -246,9 +246,9 @@ func (s *PostService) Update(
 	if in.Tags != nil {
 		tagIDs := make([]uuid.UUID, 0, len(resolvedTags))
 		for _, tag := range resolvedTags {
-			tagIDs = append(tagIDs, tag.ID)
+			tagIDs = append(tagIDs, tag.UUID)
 		}
-		if err := s.tags.ReplacePostTags(ctx, post.ID, tagIDs); err != nil {
+		if err := s.tags.ReplacePostTags(ctx, post.UUID, tagIDs); err != nil {
 			return postdomain.Post{}, nil, err
 		}
 		return post, resolvedTags, nil
@@ -256,7 +256,7 @@ func (s *PostService) Update(
 	if s.tags == nil {
 		return post, nil, nil
 	}
-	current, err := s.tags.ListByPostID(ctx, post.ID)
+	current, err := s.tags.ListByPostID(ctx, post.UUID)
 	if err != nil {
 		return postdomain.Post{}, nil, err
 	}
@@ -295,24 +295,24 @@ func (s *PostService) ReplaceMedia(
 		default:
 			return nil, fmt.Errorf("%w: invalid media kind %q", ErrValidation, item.Kind)
 		}
-		if item.MediaAssetID == uuid.Nil {
+		if item.MediaAssetUUID == uuid.Nil {
 			return nil, fmt.Errorf("%w: media_asset_id required", ErrValidation)
 		}
-		key := item.MediaAssetID.String() + ":" + kind
+		key := item.MediaAssetUUID.String() + ":" + kind
 		if _, ok := seen[key]; ok {
 			return nil, fmt.Errorf("%w: duplicate media item", ErrValidation)
 		}
 		seen[key] = struct{}{}
 
-		asset, err := s.media.GetByID(ctx, item.MediaAssetID)
+		asset, err := s.media.GetByID(ctx, item.MediaAssetUUID)
 		if err != nil {
 			if errors.Is(err, mediadomain.ErrNotFound) {
-				return nil, fmt.Errorf("%w: media %s not found", ErrValidation, item.MediaAssetID)
+				return nil, fmt.Errorf("%w: media %s not found", ErrValidation, item.MediaAssetUUID)
 			}
 			return nil, err
 		}
 		if asset.Status != mediadomain.StatusReady {
-			return nil, fmt.Errorf("%w: media %s is not ready", ErrValidation, item.MediaAssetID)
+			return nil, fmt.Errorf("%w: media %s is not ready", ErrValidation, item.MediaAssetUUID)
 		}
 
 		sortOrder := item.SortOrder
@@ -321,14 +321,14 @@ func (s *PostService) ReplaceMedia(
 		}
 		assetCopy := asset
 		normalized = append(normalized, mediadomain.PostMediaItem{
-			MediaAssetID: item.MediaAssetID,
-			Kind:         kind,
-			SortOrder:    sortOrder,
-			Media:        &assetCopy,
+			MediaAssetUUID: item.MediaAssetUUID,
+			Kind:           kind,
+			SortOrder:      sortOrder,
+			Media:          &assetCopy,
 		})
 		if kind == mediadomain.KindCover {
 			coverCount++
-			id := item.MediaAssetID
+			id := item.MediaAssetUUID
 			coverID = &id
 		}
 	}

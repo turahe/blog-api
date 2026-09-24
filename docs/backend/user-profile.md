@@ -50,7 +50,7 @@ New tables (see also `docs/backend/database.md` for full canonical schema):
 
 Prefer keeping frequently-displayed fields in the users row (full_name, email, avatar_id) and rarely-edited contact/social in user_profiles for cleaner normalization, or treat as same entity 1:1 always-extended pattern per GORM modeler choice. This spec uses the 1:1 extension pattern.
 
-- id UUID PK; user_id UUID FK -> users.id UNIQUE CASCADE on delete
+- id bigint identity PK, uuid unique public id; user_id bigint FK -> users.id UNIQUE CASCADE on delete
 - display_name varchar(60), nullable unique; bio text (max 4000 chars)
 - encrypted_contact_phone bytea (AES-GCM ciphertext)
 - contact_website varchar(2048)
@@ -64,7 +64,7 @@ Indexes: UNIQUE(user_id), UNIQUE(display_name) where display_name is not null; l
 
 ### `user_privacy_settings` (one-to-one)
 
-- id UUID PK; user_id UUID FK unique CASCADE
+- id bigint identity PK, uuid unique public id; user_id bigint FK unique CASCADE
 - visibility_profile enum ('public','unlisted','private','followers_only') default 'public'
 - visibility_email boolean default false; visibility_contact_details boolean default false
 - visibility_activity_timeline boolean default false
@@ -86,7 +86,7 @@ Index: unique(user_id)
 
 ### `user_activity` (append-only engagement trail)
 
-- id UUID PK; user_id FK users CASCADE; session_id nullable; impersonator_id nullable; impersonation_session_id nullable; request_id nullable
+- id bigint identity PK, uuid unique public id; user_id bigint FK users CASCADE; session_id nullable; impersonator_id nullable; impersonation_session_id nullable; request_id nullable
 - activity_type enum (see feature spec)
 - summary varchar(500); detail_jsonb (per-type schema: redacted IP, UA bucket, partial geo, route, referrer, post_id)
 - ip_address (truncated/encrypted: IPv4 /24, IPv6 /64 OR full when `user.activity.read_all` admin needs it)

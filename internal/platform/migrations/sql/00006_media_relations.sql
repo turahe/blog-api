@@ -1,20 +1,21 @@
 -- +goose Up
 ALTER TABLE users
-    ADD COLUMN IF NOT EXISTS avatar_id uuid REFERENCES media_assets(id) ON DELETE SET NULL;
+    ADD COLUMN IF NOT EXISTS avatar_id bigint REFERENCES media_assets(id) ON DELETE SET NULL;
 CREATE INDEX IF NOT EXISTS users_avatar_id_idx ON users (avatar_id);
 
 ALTER TABLE categories
-    ADD COLUMN IF NOT EXISTS image_id uuid REFERENCES media_assets(id) ON DELETE SET NULL;
+    ADD COLUMN IF NOT EXISTS image_id bigint REFERENCES media_assets(id) ON DELETE SET NULL;
 CREATE INDEX IF NOT EXISTS categories_image_id_idx ON categories (image_id);
 
 ALTER TABLE posts
-    ADD COLUMN IF NOT EXISTS cover_image_media_id uuid REFERENCES media_assets(id) ON DELETE SET NULL;
+    ADD COLUMN IF NOT EXISTS cover_image_media_id bigint REFERENCES media_assets(id) ON DELETE SET NULL;
 CREATE INDEX IF NOT EXISTS posts_cover_image_media_id_idx ON posts (cover_image_media_id);
 
 CREATE TABLE post_media (
-    id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
-    post_id uuid NOT NULL REFERENCES posts(id) ON DELETE CASCADE,
-    media_asset_id uuid NOT NULL REFERENCES media_assets(id) ON DELETE CASCADE,
+    id bigint GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+    uuid uuid NOT NULL DEFAULT gen_random_uuid() UNIQUE,
+    post_id bigint NOT NULL REFERENCES posts(id) ON DELETE CASCADE,
+    media_asset_id bigint NOT NULL REFERENCES media_assets(id) ON DELETE CASCADE,
     kind text NOT NULL
         CHECK (kind IN ('cover', 'inline_image', 'attachment')),
     sort_order integer NOT NULL DEFAULT 0,

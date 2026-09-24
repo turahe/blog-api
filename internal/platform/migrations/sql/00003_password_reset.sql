@@ -1,7 +1,8 @@
 -- +goose Up
 CREATE TABLE password_reset_tokens (
-    id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
-    user_id uuid NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    id bigint GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+    uuid uuid NOT NULL DEFAULT gen_random_uuid() UNIQUE,
+    user_id bigint NOT NULL REFERENCES users(id) ON DELETE CASCADE,
     jti text NOT NULL,
     token_hash text NOT NULL,
     purpose text NOT NULL DEFAULT 'password_reset'

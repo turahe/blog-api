@@ -24,7 +24,7 @@ How those tables map to domain / GORM / HTTP models is documented in [model.md](
 
 The schema principles:
 
-- **UUIDs as primary keys everywhere** — no auto-increment ints leak through APIs; opaque external ids.
+- **bigint primary key + uuid public id** — every entity table has `id bigint GENERATED ALWAYS AS IDENTITY` (primary key; all foreign keys reference it) and `uuid uuid UNIQUE DEFAULT gen_random_uuid()` (the only id exposed through APIs, JWT subjects, and events). Pure join tables (`user_roles`, `role_permissions`, `post_tags`) keep composite primary keys over bigint foreign keys.
 - **Lean hot-path rows** — frequently-queried tables (`users`, `casbin_rules`) are kept deliberately narrow; wide payloads live in sidecar one-to-one tables (`user_profiles`, `user_privacy_settings`, `post_seo`).
 - **Append-only for history, security, and event streams** — `post_revisions`, `user_password_history`, `password_reset_tokens`, `user_activity`, `audit_logs`, `rbac_policy_audit_log`, `rbac_enforcement_events`, `outbox_events`, `settings_history` are INSERT-only; no in-place UPDATE of historical rows.
 - **Nested-set trees for hierarchical data** — `categories`, `comments`, and `media_assets` use `(parent_id, lft, rgt, depth)` for efficient subtree queries and descendant traversal.
@@ -48,8 +48,8 @@ The schema principles:
 ### 1.4 Field types used
 | Mermaid label | PostgreSQL type | Notes |
 |---|---|---|
-| `uuid` | `UUID` | All PKs/FKs use RFC 4122 UUID v4 or v7 |
-| `bigserial` | `BIGSERIAL` | Insertion-heavy append-only tables (casbin_rules, audit, outbox, analytics, enforcement_events, policy_audit_log) |
+| `uuid` | `UUID` | Public identifier column `uuid` (RFC 4122 v4) on every entity table; also correlation ids and polymorphic references (`outbox_events.aggregate_id`, `audit_logs.resource_id`) |
+| `bigint` PK/FK | `BIGINT GENERATED ALWAYS AS IDENTITY` | Primary key `id` on every entity table and every foreign key column |
 | `varchar` | `VARCHAR(n)` | Bounded strings (lengths in [database.md](./database.md)); use `TEXT` without limit only when appropriate |
 | `text` | `TEXT` | Unbounded text (bio, content, summaries, diffs) |
 | `char(2)` | `CHAR(2)` | ISO country codes |
@@ -75,7 +75,8 @@ erDiagram
  %% ============================================================
 
  users {
- uuid id PK
+ bigint id PK
+ uuid uuid UK "Public identifier"
  varchar full_name "Required 1-150 chars"
  varchar email "Display preserves original casing"
  varchar email_normalized
@@ -83,7 +84,7 @@ erDiagram
  text password_hash "Never returned over API"
  datetime password_changed_at ""
  boolean require_password_change_next_login "DEFAULT false"
- uuid avatar_id FK
+ bigint avatar_id FK
  varchar status "ENUM: active invited locked suspended soft_deleted"
  int login_count "Monotonic counter"
  datetime last_login_at ""
@@ -98,8 +99,9 @@ erDiagram
  }
 
  user_oauth_accounts {
- uuid id PK
- uuid user_id FK
+ bigint id PK
+ uuid uuid UK "Public identifier"
+ bigint user_id FK
  varchar provider "ENUM: google github etc"
  varchar provider_account_id
  text access_token_encrypted "AES-GCM envelope never plaintext"
@@ -110,8 +112,9 @@ erDiagram
  }
 
  user_two_factor_methods {
- uuid id PK
- uuid user_id FK
+ bigint id PK
+ uuid uuid UK "Public identifier"
+ bigint user_id FK
  varchar method "ENUM: totp webauthn backup_codes sms"
  text secret_or_credential_encrypted "TOTP seed or WebAuthn credential or HMAC backup hashes"
  int priority "Lowest = primary step-up method"
@@ -121,16 +124,18 @@ erDiagram
  }
 
  user_password_history {
- uuid id PK
- uuid user_id FK
+ bigint id PK
+ uuid uuid UK "Public identifier"
+ bigint user_id FK
  tinyint password_hash_version "1=bcrypt 2=argon2id"
  text password_hash "Previous N hashes default N=10"
  datetime created_at "Never updated"
  }
 
  password_reset_tokens {
- uuid id PK
- uuid user_id FK
+ bigint id PK
+ uuid uuid UK "Public identifier"
+ bigint user_id FK
  varchar jti
  varchar scope "ENUM: forgot email_change"
  bytea token_sha256 "Optional SHA-256 of opaque bearer token"
@@ -143,7 +148,8 @@ erDiagram
  }
 
  casbin_rules {
- bigserial id PK
+ bigint id PK
+ uuid uuid UK "Public identifier"
  varchar p_type "Casbin: p=permission g=user-role g2=role-role-inheritance e=explicit-effect"
  varchar v0 "Subject: role/user; for g-type = user or child role"
  varchar v1 "Object: permission-key resource.action.scope OR parent-role/role-name"
@@ -156,24 +162,26 @@ erDiagram
  }
 
  rbac_roles {
- uuid id PK
+ bigint id PK
+ uuid uuid UK "Public identifier"
  varchar name
  varchar display_name "Human-friendly UI label"
  varchar description "500 chars max"
  smallint tier "1=viewer 2=editor 3=admin 4=superadmin tier-gating"
- uuid inherits_from_id FK
+ bigint inherits_from_id FK
  boolean is_system "True for viewer editor admin superadmin never delete"
  boolean is_custom "GENERATED ALWAYS AS NOT is_system STORED"
  boolean hidden_from_ui "Quarantine internal roles hidden from pickers"
  int version "Optimistic lock incremented on every metadata or permission edit"
- uuid created_by FK
+ bigint created_by FK
  datetime created_at ""
  datetime updated_at ""
  datetime deleted_at "Soft delete system rows never NULL here"
  }
 
  rbac_permissions {
- uuid id PK
+ bigint id PK
+ uuid uuid UK "Public identifier"
  varchar key
  varchar resource "First segment rbac.role user post settings media etc"
  varchar action "Second segment read manage update publish export etc"
@@ -188,26 +196,28 @@ erDiagram
  }
 
  user_role_assignments {
- uuid id PK
- uuid user_id FK
- uuid role_id FK
- uuid assigned_by FK
+ bigint id PK
+ uuid uuid UK "Public identifier"
+ bigint user_id FK
+ bigint role_id FK
+ bigint assigned_by FK
  varchar assignment_reason "Admin free-text reason nullable"
  datetime expires_at "Temp grant expiry NULL = permanent"
  varchar source "ENUM: api bulk_import ldap_sync bootstrap_seed self_signup_default"
- uuid impersonation_session_id FK
+ bigint impersonation_session_id FK
  datetime created_at ""
  datetime updated_at ""
  }
 
  rbac_policy_audit_log {
- bigserial id PK
+ bigint id PK
+ uuid uuid UK "Public identifier"
  varchar mutation_type "ENUM catalog: role_created role_updated role_deleted role_permissions_assigned role_permissions_revoked user_role_assigned user_role_revoked policy_force_reload mirror_resync_triggered mirror_drift_repaired"
- uuid actor_user_id FK
- uuid impersonator_id FK
- uuid impersonation_session_id FK
- uuid target_role_id FK
- uuid target_user_id FK
+ bigint actor_user_id FK
+ bigint impersonator_id FK
+ bigint impersonation_session_id FK
+ bigint target_role_id FK
+ bigint target_user_id FK
  jsonb tuples_added_jsonb "Added Casbin tuples array of p_type plus v0 through v5"
  jsonb tuples_removed_jsonb "Removed Casbin tuples array of p_type plus v0 through v5"
  jsonb mirror_delta_jsonb "Before after mirror-row snapshots rbac_roles user_role_assignments"
@@ -220,12 +230,13 @@ erDiagram
  }
 
  rbac_enforcement_events {
- bigserial id PK
+ bigint id PK
+ uuid uuid UK "Public identifier"
  varchar decision "ENUM: allow deny deferred error"
  varchar deny_reason_code "Error catalogue rbac.forbidden rbac.deny_storm etc"
  uuid user_id "Zero-UUID anonymous usually 401 before RBAC"
- uuid impersonator_id FK
- uuid impersonation_session_id FK
+ bigint impersonator_id FK
+ bigint impersonation_session_id FK
  text effective_roles_array "TEXT array snapshot at enforce-time for debugging"
  varchar required_object "Permission string resource action optionally scoped"
  varchar required_action "Explicit action segment redundant debug"
@@ -247,8 +258,9 @@ erDiagram
  %% ============================================================
 
  user_profiles {
- uuid id PK
- uuid user_id FK
+ bigint id PK
+ uuid uuid UK "Public identifier"
+ bigint user_id FK
  varchar display_name
  text bio "4000 chars max sanitized markdown only"
  bytea encrypted_contact_phone "AES-256-GCM envelope never plaintext"
@@ -260,31 +272,33 @@ erDiagram
  varchar timezone "IANA tz name like America-Los-Angeles default UTC"
  boolean marketing_consent "DEFAULT false"
  datetime marketing_consent_updated_at ""
- uuid updated_by FK
+ bigint updated_by FK
  datetime created_at ""
  datetime updated_at ""
  }
 
  user_privacy_settings {
- uuid id PK
- uuid user_id FK
+ bigint id PK
+ uuid uuid UK "Public identifier"
+ bigint user_id FK
  varchar visibility_profile "ENUM: public unlisted private followers_only DEFAULT public"
  boolean visibility_email "DEFAULT false never expose email publicly"
  boolean visibility_contact_details "DEFAULT false applies phone website location public page"
  boolean visibility_activity_timeline "DEFAULT false applies users name activity if ever exposed"
  boolean search_allow_indexing "DEFAULT true drives X-Robots-Tag and meta robots header"
  boolean tracking_personalize_ads "DEFAULT false analytics consent propagation"
- uuid updated_by FK
+ bigint updated_by FK
  datetime created_at ""
  datetime updated_at ""
  }
 
  user_activity {
- uuid id PK
- uuid user_id FK
+ bigint id PK
+ uuid uuid UK "Public identifier"
+ bigint user_id FK
  varchar session_id "JWT jti or opaque session id nullable"
- uuid impersonator_id FK
- uuid impersonation_session_id FK
+ bigint impersonator_id FK
+ bigint impersonation_session_id FK
  uuid request_id "API gateway RPC correlation id"
  varchar activity_type "Full ENUM catalog: login logout profile_edit avatar_update password_change password_reset email_change consent_grant consent_withdraw post_create post_edit post_publish comment_create twofa_enable twofa_disable oauth_link oauth_unlink impersonation_start impersonation_end role_change settings_view privacy_change marketing_consent_grant marketing_consent_withdraw export_requested erasure_requested"
  varchar summary "500 chars human readable safe text no PII no secrets"
@@ -298,7 +312,7 @@ erDiagram
 
  user_activity_daily {
  date day PK
- uuid user_id PK
+ bigint user_id PK
  int login_count "Per-day aggregates"
  int profile_edit_count ""
  int avatar_update_count ""
@@ -315,12 +329,13 @@ erDiagram
  %% ============================================================
 
  categories {
- uuid id PK
- uuid parent_id FK
+ bigint id PK
+ uuid uuid UK "Public identifier"
+ bigint parent_id FK
  varchar name ""
  varchar slug
  text description "Nullable"
- uuid image_id FK
+ bigint image_id FK
  int lft "Nested-set left index"
  int rgt "Nested-set right index"
  int depth "Tree depth root 0 child 1"
@@ -330,7 +345,8 @@ erDiagram
  }
 
  tags {
- uuid id PK
+ bigint id PK
+ uuid uuid UK "Public identifier"
  varchar name ""
  varchar slug
  datetime created_at ""
@@ -338,14 +354,15 @@ erDiagram
  }
 
  posts {
- uuid id PK
- uuid author_id FK
- uuid category_id FK
+ bigint id PK
+ uuid uuid UK "Public identifier"
+ bigint author_id FK
+ bigint category_id FK
  varchar title "Required 1-200 chars"
  varchar slug
  text excerpt "Nullable auto-generated fallback optional"
  text content "Sanitized HTML markdown AST never raw user HTML"
- uuid cover_image_media_id FK
+ bigint cover_image_media_id FK
  varchar status "ENUM: draft review published archived"
  datetime published_at "NULL until first publish"
  datetime created_at ""
@@ -354,15 +371,15 @@ erDiagram
  }
 
  post_tags {
- uuid id PK
- uuid post_id FK
- uuid tag_id FK
+ bigint post_id PK, FK
+ bigint tag_id PK, FK
  datetime created_at ""
  }
 
  post_revisions {
- uuid id PK
- uuid post_id FK
+ bigint id PK
+ uuid uuid UK "Public identifier"
+ bigint post_id FK
  int revision_number "Per-post sequence unique per post_id plus revision_number"
  varchar revision_type "ENUM: create update restore publish archive"
  varchar title "Snapshot"
@@ -370,7 +387,7 @@ erDiagram
  text excerpt "Snapshot"
  text content "Snapshot"
  varchar status "Snapshot"
- uuid author_id FK
+ bigint author_id FK
  uuid category_id_snapshot
  uuid cover_image_media_id_snapshot
  jsonb media_snapshot_jsonb "post_media rows snapshot FKs kind order"
@@ -379,28 +396,29 @@ erDiagram
  jsonb diff_jsonb "Per-field old-new title slug excerpt content status category cover media tags SEO"
  text changelog_text "Auto-generated human readable summary"
  text editor_note "Optional free-text save-time"
- uuid restore_from_revision_id FK
- uuid impersonator_id FK
- uuid impersonation_session_id FK
+ bigint restore_from_revision_id FK
+ bigint impersonator_id FK
+ bigint impersonation_session_id FK
  uuid request_id "Correlation id"
  datetime created_at ""
  datetime updated_at ""
  }
 
  post_seo {
- uuid id PK
- uuid post_id FK
+ bigint id PK
+ uuid uuid UK "Public identifier"
+ bigint post_id FK
  varchar seo_title ""
  text seo_description ""
  jsonb seo_keywords "String array keywords"
  varchar og_title ""
  text og_description ""
- uuid og_image_id FK
+ bigint og_image_id FK
  varchar og_url "Optional canonical override OpenGraph"
  varchar twitter_card "ENUM: summary summary_large_image app player"
  varchar twitter_title ""
  text twitter_description ""
- uuid twitter_image_id FK
+ bigint twitter_image_id FK
  varchar twitter_creator "At-handle format"
  varchar canonical_url "Optional user-specified canonical URL"
  boolean robots_noindex "DEFAULT false"
@@ -410,10 +428,11 @@ erDiagram
  }
 
  comments {
- uuid id PK
- uuid post_id FK
- uuid parent_id FK
- uuid author_id FK "Authenticated commenter SET NULL when account hard-deleted"
+ bigint id PK
+ uuid uuid UK "Public identifier"
+ bigint post_id FK
+ bigint parent_id FK
+ bigint author_id FK "Authenticated commenter SET NULL when account hard-deleted"
  varchar author_name "Guest name NULL if authenticated commenter"
  varchar author_email "Guest email nullable never exposed rendered publicly gravatar md5 if display"
  varchar author_website "Guest website nullable http https format-only validated"
@@ -423,7 +442,7 @@ erDiagram
  text content_html "Cached safe HTML after sanitize null until rendered first time"
  varchar status "ENUM: pending approved rejected spam flagged deleted soft-deleted"
  smallint depth "0 = root reply max depth 5 enforced by trigger and API validator"
- uuid moderation_reviewed_by FK "Admin user who moderated SET NULL when admin removed"
+ bigint moderation_reviewed_by FK "Admin user who moderated SET NULL when admin removed"
  varchar moderation_reason "Moderator free-text note up to 500 chars NULL until reviewed"
  varchar spam_engine "ENUM: akismet mollom internal_ml honeypot rate_limit admin NULL until scored"
  float spam_score "0.00 through 1.00 higher means more spammy NULL until scored"
@@ -435,35 +454,38 @@ erDiagram
  datetime created_at ""
  datetime updated_at ""
  datetime deleted_at "Soft-delete timestamp SET deleted status row retained when not NULL"
- uuid deleted_by FK "User or admin who soft-deleted SET NULL when account removed"
+ bigint deleted_by FK "User or admin who soft-deleted SET NULL when account removed"
  }
 
  comment_flags {
- uuid id PK
- uuid comment_id FK
- uuid reporter_user_id FK "Authenticated reporter SET NULL if account removed NULL for anonymous flags"
+ bigint id PK
+ uuid uuid UK "Public identifier"
+ bigint comment_id FK
+ bigint reporter_user_id FK "Authenticated reporter SET NULL if account removed NULL for anonymous flags"
  varchar reporter_ip_hash "SHA-256 IP hash anonymous flag deduplication"
  varchar reason_code "ENUM: spam abuse hate harassment doxx self_harm copyright impersonation illegal other"
  varchar details "Reporter free-text up to 2000 chars optional"
  datetime created_at ""
  datetime resolved_at "When a moderator closes this flag NULL until then"
- uuid resolved_by FK "Admin user who resolved SET NULL if account removed"
+ bigint resolved_by FK "Admin user who resolved SET NULL if account removed"
  varchar resolution "ENUM: no_action approve_comment reject_comment mark_spam delete_comment"
  varchar resolution_notes "Optional moderator notes up to 500 chars"
  }
 
  comment_upvotes {
- uuid id PK
- uuid comment_id FK
- uuid voter_user_id FK "Authenticated voter NULL if anonymous upvote tracked via IP"
+ bigint id PK
+ uuid uuid UK "Public identifier"
+ bigint comment_id FK
+ bigint voter_user_id FK "Authenticated voter NULL if anonymous upvote tracked via IP"
  varchar voter_ip_hash "Anonymous upvote de-duplication plus session signature"
  datetime created_at ""
  }
 
  comment_moderation_log {
- uuid id PK
- uuid comment_id FK
- uuid moderator_user_id FK "Admin SET NULL if account removed"
+ bigint id PK
+ uuid uuid UK "Public identifier"
+ bigint comment_id FK
+ bigint moderator_user_id FK "Admin SET NULL if account removed"
  varchar action "ENUM: approve reject spam restore unspam flag_resolved hard_delete soft_delete"
  varchar reason "Moderator reason string up to 500 chars"
  boolean notify_author "Whether an email was sent to the comment author"
@@ -477,7 +499,8 @@ erDiagram
  %% ============================================================
 
  newsletter_subscribers {
- uuid id PK
+ bigint id PK
+ uuid uuid UK "Public identifier"
  varchar email "Lowercase RFC 5322 unique per subscriber row UNIQUE"
  varchar email_normalized "RFC plus dot-plus stripped gmail plus outlook variants for dedup"
  varchar display_name "Optional subscriber name up to 120 chars"
@@ -507,15 +530,17 @@ erDiagram
  }
 
  newsletter_list_memberships {
- uuid id PK
- uuid subscriber_id FK
+ bigint id PK
+ uuid uuid UK "Public identifier"
+ bigint subscriber_id FK
  varchar list_id "String list identifier per ESP max 64 chars"
  datetime subscribed_at "Null if never confirmed list join"
  datetime unsubscribed_at "Timestamp of per-list opt-out NULL if active"
  }
 
  newsletter_issues {
- uuid id PK
+ bigint id PK
+ uuid uuid UK "Public identifier"
  varchar slug "Friendly unique issue slug nullable until published"
  varchar subject "Up to 300 chars email subject line"
  varchar preheader "Up to 500 chars inbox preview text"
@@ -533,15 +558,16 @@ erDiagram
  datetime scheduled_at "Null for immediate send otherwise future UTC"
  datetime sending_started_at "Null while draft or scheduled"
  datetime sent_at "Final send complete stamp"
- uuid created_by FK "Admin author SET NULL on admin removal"
+ bigint created_by FK "Admin author SET NULL on admin removal"
  datetime created_at ""
  datetime updated_at ""
  }
 
  newsletter_provider_syncs {
- uuid id PK
- uuid subscriber_id FK "Nullable NULL if sync is a list-level operation"
- uuid issue_id FK "Nullable NULL if sync is subscriber-only change"
+ bigint id PK
+ uuid uuid UK "Public identifier"
+ bigint subscriber_id FK "Nullable NULL if sync is a list-level operation"
+ bigint issue_id FK "Nullable NULL if sync is subscriber-only change"
  varchar provider "ENUM: mailchimp convertkit sendfox brevo mailerlite beehiiv buttondown mailgun ses_smtp custom_http"
  varchar provider_contact_id "Remote contact id 128 chars max NULL until pushed"
  varchar provider_list_id "Remote list id 128 chars max"
@@ -556,13 +582,14 @@ erDiagram
  }
 
  newsletter_consent_audit {
- uuid id PK
- uuid subscriber_id FK
+ bigint id PK
+ uuid uuid UK "Public identifier"
+ bigint subscriber_id FK
  varchar action "ENUM: opted_in resubscribed unsubscribed erasure_request erasure_completed preferences_changed confirm_sent confirm_clicked"
  text declaration "Verbatim consent statement or action reason retained per GDPR 30 59 82"
  varchar ip_hash "SHA-256 user IP at action time NULL if N/A"
  varchar user_agent "UA at action time NULL if N/A"
- uuid actor_admin_id FK "Set only when admin acts NULL if self-serve"
+ bigint actor_admin_id FK "Set only when admin acts NULL if self-serve"
  datetime created_at ""
  }
 
@@ -571,8 +598,9 @@ erDiagram
  %% ============================================================
 
  media_assets {
- uuid id PK
- uuid parent_id FK
+ bigint id PK
+ uuid uuid UK "Public identifier"
+ bigint parent_id FK
  varchar storage_key "Object-storage key unique per disk"
  varchar original_filename "Client-supplied name sanitized"
  varchar content_type "MIME image-png application-pdf etc"
@@ -587,15 +615,16 @@ erDiagram
  int rgt "Nested-set right index"
  int depth "Folder depth root zero"
  int sort_order "Sibling display order"
- uuid uploaded_by FK
+ bigint uploaded_by FK
  datetime created_at ""
  datetime updated_at ""
  datetime deleted_at "Soft delete NULL = active file"
  }
 
  media_transforms {
- uuid id PK
- uuid media_asset_id FK
+ bigint id PK
+ uuid uuid UK "Public identifier"
+ bigint media_asset_id FK
  varchar cache_key "Deterministic hash width height fit format quality plus asset id"
  varchar transform_name "Named preset avatar_s64 hero_1600w optional"
  int width "Pixels NULL = auto"
@@ -613,9 +642,10 @@ erDiagram
  }
 
  post_media {
- uuid id PK
- uuid post_id FK
- uuid media_asset_id FK
+ bigint id PK
+ uuid uuid UK "Public identifier"
+ bigint post_id FK
+ bigint media_asset_id FK
  varchar kind "ENUM: cover inline_image attachment"
  int sort_order "Author-defined ordering within kind"
  datetime created_at ""
@@ -626,24 +656,26 @@ erDiagram
  %% ============================================================
 
  notifications {
- uuid id PK
- uuid user_id FK
+ bigint id PK
+ uuid uuid UK "Public identifier"
+ bigint user_id FK
  varchar type "Registry-backed keys: notification-created comment-replied post-published role-assigned impersonation-started etc"
  varchar title "Human-readable title one line"
  text preview "Short preview plaintext-safe no PII"
  boolean is_read "DEFAULT false"
  jsonb payload "Type-specific: comment_id post_id reason deep_link etc"
  datetime read_at "NULL = unread"
- uuid actor_user_id FK
- uuid impersonator_id FK
+ bigint actor_user_id FK
+ bigint impersonator_id FK
  datetime expires_at "TTL sweep NULL persistent until dismissed"
  datetime created_at ""
  datetime updated_at ""
  }
 
  notification_preferences {
- uuid id PK
- uuid user_id FK
+ bigint id PK
+ uuid uuid UK "Public identifier"
+ bigint user_id FK
  varchar notification_type "Matches notifications.type values"
  boolean in_app_enabled "DEFAULT true"
  boolean email_enabled "DEFAULT true transactional types force regardless"
@@ -658,19 +690,21 @@ erDiagram
  %% ============================================================
 
  analytics_page_views {
- bigserial id PK
+ bigint id PK
+ uuid uuid UK "Public identifier"
  varchar consent_token "Opaque session-bucketed cookie PII-free"
  varchar session_id "Rolling 30-minute session identifier non-PII"
  varchar path "Max 1024 chars full path plus query optionally"
  varchar referrer "Max 1024 chars Referer header"
  char(2) country_code "ISO 3166 alpha-2"
  varchar device_type "ENUM: desktop tablet mobile"
- uuid user_id FK
+ bigint user_id FK
  datetime occurred_at "Client timestamp server skew-window validated"
  }
 
  analytics_time_spent {
- bigserial id PK
+ bigint id PK
+ uuid uuid UK "Public identifier"
  varchar consent_token "Matches analytics_page_views.consent_token"
  varchar session_id "Matches analytics_page_views.session_id"
  varchar path "1024 chars max"
@@ -684,7 +718,8 @@ erDiagram
  %% ============================================================
 
  settings {
- uuid id PK
+ bigint id PK
+ uuid uuid UK "Public identifier"
  varchar key
  jsonb value_jsonb "Actual value typed per value_type"
  varchar value_type "ENUM: string number boolean string_array object"
@@ -692,28 +727,30 @@ erDiagram
  varchar category "Buckets: site content media analytics notifications seo security"
  int version "Optimistic lock counter per-setting"
  text description "What this setting governs admin UI helptext"
- uuid updated_by FK
+ bigint updated_by FK
  datetime created_at ""
  datetime updated_at ""
  }
 
  settings_history {
- uuid id PK
- uuid setting_id FK
+ bigint id PK
+ uuid uuid UK "Public identifier"
+ bigint setting_id FK
  varchar key "Denormalized snapshots settings.key at change time"
  jsonb previous_value_jsonb "Value before change"
  jsonb new_value_jsonb "Value after change"
- uuid changed_by FK
+ bigint changed_by FK
  uuid request_id "Correlation id"
  inet ip_address "Truncated IPv4/24 IPv6/64"
  datetime created_at ""
  }
 
  impersonation_sessions {
- uuid id PK
- uuid impersonator_user_id FK
+ bigint id PK
+ uuid uuid UK "Public identifier"
+ bigint impersonator_user_id FK
  uuid impersonator_session_id "Original JWT jti before impersonation began"
- uuid impersonated_user_id FK
+ bigint impersonated_user_id FK
  varchar state "ENUM: active exited revoked expired"
  datetime started_at ""
  datetime expires_at "Hard expiry default configurable two hours"
@@ -730,8 +767,9 @@ erDiagram
  }
 
  audit_logs {
- uuid id PK
- uuid actor_id FK
+ bigint id PK
+ uuid uuid UK "Public identifier"
+ bigint actor_id FK
  varchar action "Catalog: login-failed settings-view media-upload-denied etc"
  varchar resource_type "Users posts roles settings media_assets etc"
  varchar resource_id "UUID or business key of the target"
@@ -742,7 +780,8 @@ erDiagram
  }
 
  outbox_events {
- bigserial id PK
+ bigint id PK
+ uuid uuid UK "Public identifier"
  varchar aggregate_type "Users posts comments casbin_rules media_assets etc"
  varchar aggregate_id "UUID root entity"
  varchar event_name "User-created post-published comment-created casbin-policy-updated etc"

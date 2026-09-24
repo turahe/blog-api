@@ -14,7 +14,7 @@ func MediaPresign(result mediadomain.PresignResult) gin.H {
 		headers = map[string]string{}
 	}
 	return gin.H{
-		"media_id":         result.Asset.ID.String(),
+		"media_id":         result.Asset.UUID.String(),
 		"storage_key":      result.Asset.StorageKey,
 		"upload_url":       result.UploadURL,
 		"required_headers": headers,
@@ -26,15 +26,15 @@ func MediaPresign(result mediadomain.PresignResult) gin.H {
 // MediaAsset serializes a media asset resource.
 func MediaAsset(asset mediadomain.MediaAsset) gin.H {
 	var uploadedBy any
-	if asset.UploadedBy != nil {
-		uploadedBy = asset.UploadedBy.String()
+	if asset.UploadedByUUID != nil {
+		uploadedBy = asset.UploadedByUUID.String()
 	}
 	tags := asset.Tags
 	if tags == nil {
 		tags = []string{}
 	}
 	return gin.H{
-		"id":                asset.ID.String(),
+		"id":                asset.UUID.String(),
 		"storage_key":       asset.StorageKey,
 		"original_filename": asset.OriginalFilename,
 		"content_type":      asset.ContentType,

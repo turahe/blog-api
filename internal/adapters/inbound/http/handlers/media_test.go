@@ -66,7 +66,7 @@ func TestMediaPresignHappyPath(t *testing.T) {
 			require.Equal(t, int64(1024), sizeBytes)
 			return mediadomain.PresignResult{
 				Asset: mediadomain.MediaAsset{
-					ID:         mediaID,
+					UUID:       mediaID,
 					StorageKey: "media/" + mediaID.String() + "/photo.png",
 					Disk:       "minio",
 					Status:     mediadomain.StatusPending,

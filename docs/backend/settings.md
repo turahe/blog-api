@@ -30,7 +30,7 @@ Follows the same hexagonal modular structure as the rest of the backend.
 
 Recommended fields:
 
-- id (UUID PK)
+- id (bigint identity PK), uuid (unique public id)
 - key (unique, indexed)
 - value_jsonb (JSONB or TEXT depending on type; prefer JSONB for structured types)
 - value_type: `string | number | boolean | string_array | object`
@@ -50,7 +50,7 @@ Unique constraints:
 
 For fast retrieval of changes without scanning only audit logs:
 
-- id (UUID PK)
+- id (bigint identity PK), uuid (unique public id)
 - setting_id
 - key (denormalized copy)
 - previous_value_jsonb

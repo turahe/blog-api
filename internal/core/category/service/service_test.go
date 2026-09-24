@@ -54,7 +54,7 @@ func newFakeRepo(cats ...categorydomain.Category) *fakeRepo {
 }
 
 func (f *fakeRepo) put(cat categorydomain.Category) {
-	f.byID[cat.ID] = cat
+	f.byID[cat.UUID] = cat
 	f.bySlug[cat.Slug] = cat
 }
 
@@ -94,7 +94,7 @@ func (f *fakeRepo) Create(_ context.Context, cat categorydomain.Category) (categ
 }
 
 func (f *fakeRepo) Update(_ context.Context, cat categorydomain.Category) (categorydomain.Category, error) {
-	old, ok := f.byID[cat.ID]
+	old, ok := f.byID[cat.UUID]
 	if ok && old.Slug != cat.Slug {
 		delete(f.bySlug, old.Slug)
 	}
@@ -118,7 +118,7 @@ func (f *fakeRepo) SlugTaken(_ context.Context, slug string, excludeID uuid.UUID
 	if !ok {
 		return false, nil
 	}
-	return cat.ID != excludeID, nil
+	return cat.UUID != excludeID, nil
 }
 
 func (f *fakeRepo) CountPosts(_ context.Context, categoryID uuid.UUID) (int64, error) {
@@ -128,7 +128,7 @@ func (f *fakeRepo) CountPosts(_ context.Context, categoryID uuid.UUID) (int64, e
 func (f *fakeRepo) CountChildren(_ context.Context, categoryID uuid.UUID) (int64, error) {
 	var n int64
 	for _, cat := range f.byID {
-		if cat.ParentID != nil && *cat.ParentID == categoryID {
+		if cat.ParentUUID != nil && *cat.ParentUUID == categoryID {
 			n++
 		}
 	}
@@ -138,7 +138,7 @@ func (f *fakeRepo) CountChildren(_ context.Context, categoryID uuid.UUID) (int64
 func (f *fakeRepo) ReplaceTreeBounds(_ context.Context, cats []categorydomain.Category) error {
 	f.rebuilds++
 	for _, cat := range cats {
-		old, ok := f.byID[cat.ID]
+		old, ok := f.byID[cat.UUID]
 		if ok && old.Slug != cat.Slug {
 			delete(f.bySlug, old.Slug)
 		}
@@ -161,7 +161,7 @@ func TestCreateSlugifiesNameRejectsEmptyAndConflicts(t *testing.T) {
 
 	got, err := svc.Create(ctx, CreateInput{Name: "  Hello World  "})
 	require.NoError(t, err)
-	require.Equal(t, newID, got.ID)
+	require.Equal(t, newID, got.UUID)
 	require.Equal(t, "Hello World", got.Name)
 	require.Equal(t, "hello-world", got.Slug)
 	require.Equal(t, 1, got.Lft)
@@ -185,15 +185,15 @@ func TestCreateWithParentAndBeforePlacesSiblingOrderAndRebuilds(t *testing.T) {
 	secondID := uuid.MustParse("cccccccc-cccc-cccc-cccc-cccccccccccc")
 	newID := uuid.MustParse("dddddddd-dddd-dddd-dddd-dddddddddddd")
 	repo := newFakeRepo(
-		categorydomain.Category{ID: parentID, Name: "Parent", Slug: "parent", Lft: 1, Rgt: 6, SortOrder: 0},
-		categorydomain.Category{ID: firstID, Name: "Apple", Slug: "apple", ParentID: &parentID, Lft: 2, Rgt: 3, Depth: 1, SortOrder: 0},
-		categorydomain.Category{ID: secondID, Name: "Banana", Slug: "banana", ParentID: &parentID, Lft: 4, Rgt: 5, Depth: 1, SortOrder: 1},
+		categorydomain.Category{UUID: parentID, Name: "Parent", Slug: "parent", Lft: 1, Rgt: 6, SortOrder: 0},
+		categorydomain.Category{UUID: firstID, Name: "Apple", Slug: "apple", ParentUUID: &parentID, Lft: 2, Rgt: 3, Depth: 1, SortOrder: 0},
+		categorydomain.Category{UUID: secondID, Name: "Banana", Slug: "banana", ParentUUID: &parentID, Lft: 4, Rgt: 5, Depth: 1, SortOrder: 1},
 	)
 	svc := New(repo, &fixedIDs{next: []uuid.UUID{newID}}, fixedClock{now: now})
 
 	got, err := svc.Create(ctx, CreateInput{Name: "Cherry", ParentID: &parentID, BeforeID: &secondID})
 	require.NoError(t, err)
-	require.Equal(t, newID, got.ID)
+	require.Equal(t, newID, got.UUID)
 	require.Equal(t, 1, got.SortOrder)
 	require.Equal(t, 4, got.Lft)
 	require.Equal(t, 5, got.Rgt)
@@ -217,8 +217,8 @@ func TestUpdateRejectsSlugConflictAndUpdatesMetadataOnly(t *testing.T) {
 	parentID := uuid.MustParse("cccccccc-cccc-cccc-cccc-cccccccccccc")
 	imageID := uuid.MustParse("dddddddd-dddd-dddd-dddd-dddddddddddd")
 	repo := newFakeRepo(
-		categorydomain.Category{ID: catID, Name: "Mine", Slug: "mine", Description: "old", ParentID: &parentID, ImageID: &imageID, Lft: 2, Rgt: 3, Depth: 1, SortOrder: 0},
-		categorydomain.Category{ID: otherID, Name: "Other", Slug: "other"},
+		categorydomain.Category{UUID: catID, Name: "Mine", Slug: "mine", Description: "old", ParentUUID: &parentID, ImageUUID: &imageID, Lft: 2, Rgt: 3, Depth: 1, SortOrder: 0},
+		categorydomain.Category{UUID: otherID, Name: "Other", Slug: "other"},
 	)
 	svc := New(repo, &fixedIDs{}, fixedClock{now: now})
 
@@ -238,8 +238,8 @@ func TestUpdateRejectsSlugConflictAndUpdatesMetadataOnly(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, "Renamed", got.Name)
 	require.Equal(t, "", got.Description)
-	require.Nil(t, got.ImageID)
-	require.Equal(t, &parentID, got.ParentID)
+	require.Nil(t, got.ImageUUID)
+	require.Equal(t, &parentID, got.ParentUUID)
 	require.Equal(t, 2, got.Lft)
 	require.Equal(t, 3, got.Rgt)
 	require.Equal(t, now, got.UpdatedAt)
@@ -253,10 +253,10 @@ func TestMoveRejectsOwnDescendantAndReparentsSuccessfully(t *testing.T) {
 	grandID := uuid.MustParse("cccccccc-cccc-cccc-cccc-cccccccccccc")
 	otherRootID := uuid.MustParse("dddddddd-dddd-dddd-dddd-dddddddddddd")
 	repo := newFakeRepo(rebuildBounds([]categorydomain.Category{
-		{ID: rootID, Name: "Root", Slug: "root", SortOrder: 0},
-		{ID: childID, Name: "Child", Slug: "child", ParentID: &rootID, SortOrder: 0},
-		{ID: grandID, Name: "Grand", Slug: "grand", ParentID: &childID, SortOrder: 0},
-		{ID: otherRootID, Name: "Other", Slug: "other", SortOrder: 1},
+		{UUID: rootID, Name: "Root", Slug: "root", SortOrder: 0},
+		{UUID: childID, Name: "Child", Slug: "child", ParentUUID: &rootID, SortOrder: 0},
+		{UUID: grandID, Name: "Grand", Slug: "grand", ParentUUID: &childID, SortOrder: 0},
+		{UUID: otherRootID, Name: "Other", Slug: "other", SortOrder: 1},
 	})...)
 	svc := New(repo, &fixedIDs{}, fixedClock{now: time.Date(2026, 8, 1, 4, 0, 0, 0, time.UTC)})
 
@@ -265,7 +265,7 @@ func TestMoveRejectsOwnDescendantAndReparentsSuccessfully(t *testing.T) {
 
 	got, err := svc.Move(ctx, childID, &otherRootID, nil)
 	require.NoError(t, err)
-	require.Equal(t, &otherRootID, got.ParentID)
+	require.Equal(t, &otherRootID, got.ParentUUID)
 	require.Equal(t, 1, got.Depth)
 	require.Equal(t, 2, repo.byID[grandID].Depth)
 	require.True(t, repo.byID[otherRootID].Lft < got.Lft)
@@ -279,10 +279,10 @@ func TestDeleteBlocksInUseAndRebuildsAfterDelete(t *testing.T) {
 	usedID := uuid.MustParse("cccccccc-cccc-cccc-cccc-cccccccccccc")
 	freeID := uuid.MustParse("dddddddd-dddd-dddd-dddd-dddddddddddd")
 	repo := newFakeRepo(rebuildBounds([]categorydomain.Category{
-		{ID: rootID, Name: "Root", Slug: "root"},
-		{ID: childID, Name: "Child", Slug: "child", ParentID: &rootID},
-		{ID: usedID, Name: "Used", Slug: "used", SortOrder: 1},
-		{ID: freeID, Name: "Free", Slug: "free", SortOrder: 2},
+		{UUID: rootID, Name: "Root", Slug: "root"},
+		{UUID: childID, Name: "Child", Slug: "child", ParentUUID: &rootID},
+		{UUID: usedID, Name: "Used", Slug: "used", SortOrder: 1},
+		{UUID: freeID, Name: "Free", Slug: "free", SortOrder: 2},
 	})...)
 	repo.posts[usedID] = 1
 	svc := New(repo, &fixedIDs{}, fixedClock{now: time.Now()})
@@ -307,18 +307,18 @@ func TestRebuildAllAssignsStableNestedSetOrder(t *testing.T) {
 	childB := uuid.MustParse("cccccccc-cccc-cccc-cccc-cccccccccccc")
 	childA := uuid.MustParse("dddddddd-dddd-dddd-dddd-dddddddddddd")
 	repo := newFakeRepo(
-		categorydomain.Category{ID: childA, Name: "Alpha", Slug: "alpha", ParentID: &rootA, SortOrder: 10},
-		categorydomain.Category{ID: rootB, Name: "Root B", Slug: "root-b", SortOrder: 1},
-		categorydomain.Category{ID: rootA, Name: "Root A", Slug: "root-a", SortOrder: 0},
-		categorydomain.Category{ID: childB, Name: "Beta", Slug: "beta", ParentID: &rootA, SortOrder: 10},
+		categorydomain.Category{UUID: childA, Name: "Alpha", Slug: "alpha", ParentUUID: &rootA, SortOrder: 10},
+		categorydomain.Category{UUID: rootB, Name: "Root B", Slug: "root-b", SortOrder: 1},
+		categorydomain.Category{UUID: rootA, Name: "Root A", Slug: "root-a", SortOrder: 0},
+		categorydomain.Category{UUID: childB, Name: "Beta", Slug: "beta", ParentUUID: &rootA, SortOrder: 10},
 	)
 	svc := New(repo, &fixedIDs{}, fixedClock{now: time.Now()})
 
 	err := svc.RebuildAll(ctx)
 	require.NoError(t, err)
 
-	require.Equal(t, categorydomain.Category{ID: rootA, Name: "Root A", Slug: "root-a", Lft: 1, Rgt: 6, Depth: 0, SortOrder: 0}, repo.byID[rootA])
-	require.Equal(t, categorydomain.Category{ID: childA, Name: "Alpha", Slug: "alpha", ParentID: &rootA, Lft: 2, Rgt: 3, Depth: 1, SortOrder: 0}, repo.byID[childA])
-	require.Equal(t, categorydomain.Category{ID: childB, Name: "Beta", Slug: "beta", ParentID: &rootA, Lft: 4, Rgt: 5, Depth: 1, SortOrder: 1}, repo.byID[childB])
-	require.Equal(t, categorydomain.Category{ID: rootB, Name: "Root B", Slug: "root-b", Lft: 7, Rgt: 8, Depth: 0, SortOrder: 1}, repo.byID[rootB])
+	require.Equal(t, categorydomain.Category{UUID: rootA, Name: "Root A", Slug: "root-a", Lft: 1, Rgt: 6, Depth: 0, SortOrder: 0}, repo.byID[rootA])
+	require.Equal(t, categorydomain.Category{UUID: childA, Name: "Alpha", Slug: "alpha", ParentUUID: &rootA, Lft: 2, Rgt: 3, Depth: 1, SortOrder: 0}, repo.byID[childA])
+	require.Equal(t, categorydomain.Category{UUID: childB, Name: "Beta", Slug: "beta", ParentUUID: &rootA, Lft: 4, Rgt: 5, Depth: 1, SortOrder: 1}, repo.byID[childB])
+	require.Equal(t, categorydomain.Category{UUID: rootB, Name: "Root B", Slug: "root-b", Lft: 7, Rgt: 8, Depth: 0, SortOrder: 1}, repo.byID[rootB])
 }

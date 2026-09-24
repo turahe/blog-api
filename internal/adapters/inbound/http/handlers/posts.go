@@ -147,15 +147,15 @@ func adminListPostsHandlerWithDeps(posts postAdminAPI, roles RoleLookup) gin.Han
 		}
 
 		filter := postdomain.AdminListFilter{
-			Page:       page,
-			PerPage:    perPage,
-			Status:     c.Query("status"),
-			AuthorID:   authorID,
-			CategoryID: categoryID,
-			Query:      c.Query("q"),
+			Page:         page,
+			PerPage:      perPage,
+			Status:       c.Query("status"),
+			AuthorUUID:   authorID,
+			CategoryUUID: categoryID,
+			Query:        c.Query("q"),
 		}
 		if !unrestricted {
-			filter.ScopeAuthorID = &userID
+			filter.ScopeAuthorUUID = &userID
 		}
 
 		result, err := posts.ListAdmin(c.Request.Context(), filter)
@@ -228,12 +228,12 @@ func adminUpdatePostHandlerWithDeps(posts postAdminAPI, roles RoleLookup) gin.Ha
 			Tags:    req.Tags,
 		}
 		if len(req.CategoryID) > 0 {
-			in.CategoryID.Present = true
+			in.CategoryUUID.Present = true
 			categoryID, ok := parseNullableUUID(c, req.CategoryID, "category_id")
 			if !ok {
 				return
 			}
-			in.CategoryID.Value = categoryID
+			in.CategoryUUID.Value = categoryID
 		}
 
 		post, tags, err := posts.Update(c.Request.Context(), postID, userID, unrestricted, in)
@@ -281,9 +281,9 @@ func adminReplacePostMediaHandler(posts *postservice.PostService) gin.HandlerFun
 				return
 			}
 			items = append(items, mediadomain.PostMediaItem{
-				MediaAssetID: mediaID,
-				Kind:         item.Kind,
-				SortOrder:    item.SortOrder,
+				MediaAssetUUID: mediaID,
+				Kind:           item.Kind,
+				SortOrder:      item.SortOrder,
 			})
 		}
 		out, err := posts.ReplaceMedia(c.Request.Context(), postID, items, enforce)
@@ -302,7 +302,7 @@ func adminReplacePostMediaHandler(posts *postservice.PostService) gin.HandlerFun
 		payload := make([]gin.H, 0, len(out))
 		for _, item := range out {
 			row := gin.H{
-				"media_asset_id": item.MediaAssetID.String(),
+				"media_asset_id": item.MediaAssetUUID.String(),
 				"kind":           item.Kind,
 				"sort_order":     item.SortOrder,
 			}

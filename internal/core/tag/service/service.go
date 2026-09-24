@@ -74,7 +74,7 @@ func (s *Service) Create(ctx context.Context, name, slug string) (tagdomain.Tag,
 
 	now := s.clock.Now()
 	tag := tagdomain.Tag{
-		ID:        s.ids.New(),
+		UUID:      s.ids.New(),
 		Name:      name,
 		Slug:      slug,
 		CreatedAt: now,
@@ -112,7 +112,7 @@ func (s *Service) Update(ctx context.Context, id uuid.UUID, name, slug *string) 
 			return tagdomain.Tag{}, fmt.Errorf("%w: invalid slug", ErrValidation)
 		}
 		if slugVal != tag.Slug {
-			taken, err := s.repo.SlugTaken(ctx, slugVal, tag.ID)
+			taken, err := s.repo.SlugTaken(ctx, slugVal, tag.UUID)
 			if err != nil {
 				return tagdomain.Tag{}, err
 			}

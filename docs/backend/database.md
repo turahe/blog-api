@@ -36,7 +36,9 @@ PostgreSQL is the source of truth for:
 
 ## Design Rules
 
-- use UUIDs for external identifiers
+- every entity table has `id bigint GENERATED ALWAYS AS IDENTITY PRIMARY KEY` and `uuid uuid NOT NULL UNIQUE DEFAULT gen_random_uuid()`; foreign keys are `bigint` and reference `id`
+- only the `uuid` is an external identifier (API, JWT subject, Casbin subject, events); bigint ids stay inside the database and persistence adapters
+- pure join tables (`user_roles`, `role_permissions`, `post_tags`) keep composite primary keys over their bigint foreign keys
 - keep unique indexes on slugs, emails, role names, and permission keys
 - keep indexed lookup fields for media storage key, checksum, and frequently queried tags
 - use timestamps consistently
@@ -721,7 +723,7 @@ so it is never written by hand.
 
 Append-only history table for all post revisions (create/update/restore/publish/archive).
 
-- id (UUID PK)
+- id (bigint identity PK), uuid (unique public id)
 - post_id (FK -> posts.id, indexed, CASCADE on post delete)
 - revision_number (integer per-post sequence; unique(post_id, revision_number))
 - revision_type enum: create, update, restore, publish, archive
@@ -750,7 +752,7 @@ Append-only history table for all post revisions (create/update/restore/publish/
 
 One-to-one SEO configuration for posts. Option A (separate table); fallback Option B is embedding these fields directly on posts.
 
-- id (UUID PK)
+- id (bigint identity PK), uuid (unique public id)
 - post_id (FK -> posts.id, unique, indexed, CASCADE on post delete)
 - seo_title
 - seo_description
@@ -775,7 +777,7 @@ One-to-one SEO configuration for posts. Option A (separate table); fallback Opti
 Sparse one-to-one extension to `users` carrying seldom-edited contact/social/locale payload.
 Kept separate from `users` so the primary auth row stays lean for login hot-path queries.
 
-- id (UUID PK)
+- id (bigint identity PK), uuid (unique public id)
 - user_id (FK -> users.id, UNIQUE, CASCADE on user delete; mandatory NOT NULL)
 - display_name varchar(60) (nullable, application-level case-insensitive unique; non-nulls enforce DB unique partial index)
 - bio text (max 4000 chars sanitized markdown)
@@ -796,7 +798,7 @@ Kept separate from `users` so the primary auth row stays lean for login hot-path
 
 One-to-one per user: controls visibility of public profile and related routes.
 
-- id (UUID PK)
+- id (bigint identity PK), uuid (unique public id)
 - user_id (FK -> users.id, UNIQUE, CASCADE)
 - visibility_profile enum: public, unlisted, private, followers_only — default public
 - visibility_email boolean default false (never show email publicly; admin and owner still see it)
@@ -812,7 +814,7 @@ One-to-one per user: controls visibility of public profile and related routes.
 
 Append-only password hash history used by the N-history reuse policy (default N=10).
 
-- id (UUID PK)
+- id (bigint identity PK), uuid (unique public id)
 - user_id (FK -> users.id CASCADE)
 - password_hash_version tinyint (1=bcrypt, 2=argon2id, …)
 - password_hash text (bcrypt/argon2id output; same hash policy as users.password_hash)
@@ -823,7 +825,7 @@ Append-only password hash history used by the N-history reuse policy (default N=
 Opaque + JWT reset token tracking table for forgot-password AND email-change tokens.
 All tokens are single-use via `consumed_at` and server-side Redis SETNX guard to prevent replay within a window.
 
-- id (UUID PK)
+- id (bigint identity PK), uuid (unique public id)
 - user_id (FK -> users.id CASCADE; nullable when scope=email_change lookup by JTI)
 - jti varchar UNIQUE NOT NULL (matches JWT jti claim)
 - scope enum: forgot, email_change
@@ -840,7 +842,7 @@ All tokens are single-use via `consumed_at` and server-side Redis SETNX guard to
 Append-only engagement trail surfaced via `/me/activity`. This table serves both as the user-visible
 engagement history AND provides audit-grade context for security/trust investigations at admin level.
 
-- id (UUID PK)
+- id (bigint identity PK), uuid (unique public id)
 - user_id (FK -> users.id CASCADE, index)
 - session_id nullable (JWT jti or opaque session id)
 - impersonator_id nullable FK -> users.id
@@ -888,7 +890,7 @@ Generic Casbin policy tuple table. Source of truth for **all** RBAC decisions. F
 
 Role metadata catalog (mirror). Writes are driven by RBACService after Casbin adapter commits; never write to this table directly.
 
-- id (UUID PK)
+- id (bigint identity PK), uuid (unique public id)
 - name varchar(60) UNIQUE — snake_case role name; DB unique index
 - display_name varchar(120) — human-friendly name for UI
 - description varchar(500)
@@ -907,7 +909,7 @@ Role metadata catalog (mirror). Writes are driven by RBACService after Casbin ad
 
 Permission registry catalog (mirror). Source of truth is the code-side typed registry + seed. This table is the readable/searchable mirror used by Admin UI list/search.
 
-- id (UUID PK)
+- id (bigint identity PK), uuid (unique public id)
 - key varchar(180) UNIQUE NOT NULL — `resource:action[:scope]`. Max ~180 chars to accommodate 3 colon segments comfortably
 - resource varchar(64) NOT NULL — first segment (rbac.role, user, post, settings, impersonation, analytics, …)
 - action varchar(64) NOT NULL — second segment (read, manage, update, publish, export, …)
@@ -924,7 +926,7 @@ Permission registry catalog (mirror). Source of truth is the code-side typed reg
 
 Mirror of Casbin `g(user_id, role_id)` grouping tuples. UI-searchable join table with admin metadata (who assigned, when, optional temp grant expiry).
 
-- id (UUID PK)
+- id (bigint identity PK), uuid (unique public id)
 - user_id UUID NOT NULL FK → users.id ON DELETE CASCADE
 - role_id UUID NOT NULL FK → rbac_roles.id ON DELETE CASCADE
 - assigned_by UUID NOT NULL FK → users.id (required; system assignments = bootstrap superadmin id)

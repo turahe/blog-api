@@ -14,12 +14,13 @@ var (
 )
 
 type Category struct {
-	ID          uuid.UUID
+	ID          int64
+	UUID        uuid.UUID
 	Name        string
 	Slug        string
 	Description string
-	ParentID    *uuid.UUID
-	ImageID     *uuid.UUID
+	ParentUUID  *uuid.UUID
+	ImageUUID   *uuid.UUID
 	Lft         int
 	Rgt         int
 	Depth       int

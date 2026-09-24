@@ -16,7 +16,8 @@ const (
 )
 
 type MediaAsset struct {
-	ID               uuid.UUID
+	ID               int64
+	UUID             uuid.UUID
 	StorageKey       string
 	OriginalFilename string
 	ContentType      string
@@ -26,7 +27,7 @@ type MediaAsset struct {
 	ChecksumSHA256   *string
 	Disk             string
 	Status           string
-	UploadedBy       *uuid.UUID
+	UploadedByUUID   *uuid.UUID
 	Tags             []string
 	PresignExpiresAt *time.Time
 	CreatedAt        time.Time
@@ -63,8 +64,8 @@ const (
 )
 
 type PostMediaItem struct {
-	MediaAssetID uuid.UUID
-	Kind         string
-	SortOrder    int
-	Media        *MediaAsset
+	MediaAssetUUID uuid.UUID
+	Kind           string
+	SortOrder      int
+	Media          *MediaAsset
 }

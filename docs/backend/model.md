@@ -48,7 +48,8 @@ repository             --> persistence model  <-->  domain entity
 
 | Concern | Domain | Persistence | HTTP |
 | --- | --- | --- | --- |
-| ID | `uuid.UUID` / typed ID | `uuid` PK | string UUID in JSON |
+| Own ID | `ID int64` (row key, set by the repository) + `UUID uuid.UUID` (public identity) | `id bigint` identity PK + `uuid uuid` UNIQUE | `id` = the UUID string; the bigint never leaves persistence |
+| References | `XxxUUID` fields hold the referenced entity's public UUID (`AuthorUUID`, `CategoryUUID`, …) | `xxx_id bigint` FK; repositories resolve UUID → id on write and join id → uuid on read | `xxx_id` = the referenced UUID string |
 | Timestamps | domain time / clock port | `timestamptz` | RFC3339 strings |
 | Soft delete | usually hidden (`deleted_at` unset ⇒ active) | `DeletedAt` / scoped queries | never expose unless admin contract says so |
 | Secrets | never on entity for API use | `password_hash`, encrypted blobs | never serialized |
@@ -71,7 +72,9 @@ repository             --> persistence model  <-->  domain entity
 ## GORM / Persistence Conventions
 
 - table names: snake_plural matching [database.md](./database.md) (`users`, `post_media`, …)
-- primary keys: UUID (`gen_random_uuid()` / app-generated); no serial IDs in public APIs
+- primary keys: `id bigint GENERATED ALWAYS AS IDENTITY` on every entity table, plus `uuid uuid NOT NULL UNIQUE DEFAULT gen_random_uuid()` (app-generated when known); foreign keys reference `id`; join tables (`user_roles`, `role_permissions`, `post_tags`) keep composite bigint keys
+- GORM models: `ID int64` `primaryKey`, `UUID` with `default:gen_random_uuid()`, `int64` foreign keys, and read-only (`->`) `…UUID` fields filled by the `uuidRef` subqueries in `persistence/ids.go`
+- ports take and return public UUIDs; bigint ids never appear in HTTP DTOs, JWT subjects, Casbin subjects, or events
 - indexes and CHECKs belong in goose migrations, not only in GORM tags
 - soft delete only where product requires restore/tombstone: typically `users`, `posts`, `media_assets`, `comments`
 - append-only tables: no GORM `Updates` on historical rows (`post_revisions`, `audit_logs`, `outbox_events`, `user_activity`, `settings_history`, password history/tokens)

@@ -75,7 +75,7 @@ func (s *AuthService) Login(ctx context.Context, email, password, userAgent, ip 
 	}
 
 	now := s.clock.Now()
-	if err := s.users.RecordLogin(ctx, user.ID, now); err != nil {
+	if err := s.users.RecordLogin(ctx, user.UUID, now); err != nil {
 		return authdomain.TokenPair{}, fmt.Errorf("record login: %w", err)
 	}
 
@@ -83,7 +83,7 @@ func (s *AuthService) Login(ctx context.Context, email, password, userAgent, ip 
 	if !remember {
 		ttl = 7 * 24 * time.Hour
 	}
-	return s.issuePair(ctx, user.ID, user.Email, user.Username, userAgent, ip, ttl)
+	return s.issuePair(ctx, user.UUID, user.Email, user.Username, userAgent, ip, ttl)
 }
 
 func (s *AuthService) Refresh(ctx context.Context, refreshToken, userAgent, ip string) (authdomain.TokenPair, error) {
@@ -98,14 +98,14 @@ func (s *AuthService) Refresh(ctx context.Context, refreshToken, userAgent, ip s
 	}
 	now := s.clock.Now()
 	if session.RevokedAt != nil {
-		_ = s.sessions.RevokeFamily(ctx, session.UserID, session.FamilyID, now)
+		_ = s.sessions.RevokeFamily(ctx, session.UserUUID, session.FamilyID, now)
 		return authdomain.TokenPair{}, authdomain.ErrTokenRevoked
 	}
 	if !session.ExpiresAt.After(now) {
 		return authdomain.TokenPair{}, authdomain.ErrTokenExpired
 	}
 
-	user, err := s.users.FindByID(ctx, session.UserID)
+	user, err := s.users.FindByID(ctx, session.UserUUID)
 	if err != nil || !user.IsActive() {
 		return authdomain.TokenPair{}, authdomain.ErrUserInactive
 	}
@@ -115,8 +115,8 @@ func (s *AuthService) Refresh(ctx context.Context, refreshToken, userAgent, ip s
 		return authdomain.TokenPair{}, err
 	}
 	newSession := authdomain.RefreshSession{
-		ID:        s.ids.New(),
-		UserID:    user.ID,
+		UUID:      s.ids.New(),
+		UserUUID:  user.UUID,
 		FamilyID:  session.FamilyID,
 		TokenHash: newHash,
 		ExpiresAt: now.Add(s.cfg.RefreshTTL),
@@ -127,12 +127,12 @@ func (s *AuthService) Refresh(ctx context.Context, refreshToken, userAgent, ip s
 	if _, err := s.sessions.Create(ctx, newSession); err != nil {
 		return authdomain.TokenPair{}, err
 	}
-	if err := s.sessions.Replace(ctx, session.ID, newSession.ID, now); err != nil {
+	if err := s.sessions.Replace(ctx, session.UUID, newSession.UUID, now); err != nil {
 		return authdomain.TokenPair{}, err
 	}
 
 	access, err := s.tokens.IssueAccess(authdomain.AccessClaims{
-		Subject:   user.ID,
+		Subject:   user.UUID,
 		Email:     user.Email,
 		Username:  user.Username,
 		ExpiresAt: now.Add(s.cfg.AccessTTL),
@@ -160,10 +160,10 @@ func (s *AuthService) Logout(ctx context.Context, userID uuid.UUID, refreshToken
 	if err != nil {
 		return nil
 	}
-	if session.UserID != userID {
+	if session.UserUUID != userID {
 		return authdomain.ErrInvalidToken
 	}
-	return s.sessions.Revoke(ctx, session.ID, s.clock.Now())
+	return s.sessions.Revoke(ctx, session.UUID, s.clock.Now())
 }
 
 func (s *AuthService) ParseAccessToken(token string) (authdomain.AccessClaims, error) {
@@ -185,7 +185,7 @@ func (s *AuthService) ForgotPassword(ctx context.Context, emailOrUsername string
 	}
 	now := s.clock.Now()
 	token := authdomain.PasswordResetToken{
-		ID: s.ids.New(), UserID: user.ID, JTI: jti, TokenHash: hash,
+		UUID: s.ids.New(), UserUUID: user.UUID, JTI: jti, TokenHash: hash,
 		Purpose: "password_reset", ExpiresAt: now.Add(s.cfg.ResetTokenTTL), CreatedAt: now,
 	}
 	if err := s.resets.Create(ctx, token); err != nil {
@@ -238,13 +238,13 @@ func (s *AuthService) ResetPassword(ctx context.Context, rawToken, newPassword, 
 	if err != nil {
 		return err
 	}
-	if err := s.users.UpdatePassword(ctx, token.UserID, hash, now); err != nil {
+	if err := s.users.UpdatePassword(ctx, token.UserUUID, hash, now); err != nil {
 		return err
 	}
-	if err := s.resets.MarkUsed(ctx, token.ID, now); err != nil {
+	if err := s.resets.MarkUsed(ctx, token.UUID, now); err != nil {
 		return err
 	}
-	return s.sessions.RevokeAllForUser(ctx, token.UserID, now)
+	return s.sessions.RevokeAllForUser(ctx, token.UserUUID, now)
 }
 
 func (s *AuthService) ChangePassword(ctx context.Context, userID uuid.UUID, current, newPassword, confirm string, revokeAll bool) (time.Time, bool, error) {
@@ -291,8 +291,8 @@ func (s *AuthService) issuePair(
 		return authdomain.TokenPair{}, err
 	}
 	session := authdomain.RefreshSession{
-		ID:        s.ids.New(),
-		UserID:    userID,
+		UUID:      s.ids.New(),
+		UserUUID:  userID,
 		FamilyID:  s.ids.New(),
 		TokenHash: hash,
 		ExpiresAt: now.Add(refreshTTL),

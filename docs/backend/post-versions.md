@@ -26,7 +26,7 @@
 
 Recommended fields:
 
-- id (UUID PK)
+- id (bigint identity PK), uuid (unique public id)
 - post_id (FK -> posts.id, indexed)
 - revision_number (integer, per-post sequence; unique(post_id, revision_number))
 - revision_type enum: create, update, restore, publish, archive

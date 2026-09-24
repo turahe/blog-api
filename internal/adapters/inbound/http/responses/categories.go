@@ -10,15 +10,15 @@ import (
 // Category serializes a category resource.
 func Category(cat categorydomain.Category) gin.H {
 	var parent any
-	if cat.ParentID != nil {
-		parent = cat.ParentID.String()
+	if cat.ParentUUID != nil {
+		parent = cat.ParentUUID.String()
 	}
 	var image any
-	if cat.ImageID != nil {
-		image = cat.ImageID.String()
+	if cat.ImageUUID != nil {
+		image = cat.ImageUUID.String()
 	}
 	return gin.H{
-		"id":          cat.ID.String(),
+		"id":          cat.UUID.String(),
 		"name":        cat.Name,
 		"slug":        cat.Slug,
 		"description": cat.Description,
