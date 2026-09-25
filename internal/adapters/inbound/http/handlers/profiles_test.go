@@ -148,7 +148,7 @@ func TestMePatchProfileDecodesAllowlistedFields(t *testing.T) {
 
 	w, body := runProfile(t, mePatchProfileHandler(profiles), profileRequest{
 		method: nethttp.MethodPatch, target: "/api/v1/me/profile", user: &user,
-		body: `{"display_name":null,"bio":"hi","social_links":{"github":"ada"},"marketing_consent":true}`,
+		body: `{"displayName":null,"bio":"hi","socialLinks":{"github":"ada"},"marketingConsent":true}`,
 	})
 	require.Equal(t, nethttp.StatusOK, w.Code, w.Body.String())
 	require.Equal(t, user, profiles.actor)
@@ -175,9 +175,9 @@ func TestMePatchProfileRejectsBadBodies(t *testing.T) {
 		body string
 		code string
 	}{
-		"unknown key":        {`{"is_admin":true}`, "profile.unknown_field"},
-		"unknown social key": {`{"social_links":{"myspace":"x"}}`, "profile.unknown_field"},
-		"unsupported phone":  {`{"contact_phone":"+62"}`, "profile.field_unsupported"},
+		"unknown key":        {`{"isAdmin":true}`, "profile.unknown_field"},
+		"unknown social key": {`{"socialLinks":{"myspace":"x"}}`, "profile.unknown_field"},
+		"unsupported phone":  {`{"contactPhone":"+62"}`, "profile.field_unsupported"},
 		"wrong type":         {`{"bio":42}`, responses.ErrorCodeValidation},
 		"not an object":      {`[1,2]`, responses.ErrorCodeValidation},
 		"malformed":          {`{"bio":`, responses.ErrorCodeValidation},
@@ -246,7 +246,7 @@ func TestAdminProfileHandlers(t *testing.T) {
 
 	w, _ = runProfile(t, adminPatchProfileHandler(profiles), profileRequest{
 		method: nethttp.MethodPatch, target: "/api/v1/admin/users/x/profile", param: view.User.UUID.String(),
-		user: &admin, body: `{"full_name":"Ada King"}`,
+		user: &admin, body: `{"fullName":"Ada King"}`,
 	})
 	require.Equal(t, nethttp.StatusOK, w.Code)
 	require.Equal(t, admin, profiles.actor, "the admin is recorded as the editor")
@@ -369,7 +369,7 @@ func TestMeDeleteAvatar(t *testing.T) {
 		method: nethttp.MethodDelete, target: "/api/v1/me/avatar", user: &user,
 	})
 	require.Equal(t, nethttp.StatusOK, w.Code)
-	require.Contains(t, dataOf(body), "avatar_id")
+	require.Contains(t, dataOf(body), "avatarId")
 
 	w, body = runProfile(t, meDeleteAvatarHandler(&fakeProfiles{}), profileRequest{
 		method: nethttp.MethodDelete, target: "/api/v1/me/avatar",
@@ -405,17 +405,17 @@ func TestEmailChangeHandlers(t *testing.T) {
 
 	w, body := runProfile(t, meRequestEmailChangeHandler(changer), profileRequest{
 		method: nethttp.MethodPost, target: "/api/v1/me/email/request-change", user: &user,
-		body: `{"new_email":"new@example.com","password_proof":"Secret123456"}`, contentType: "application/json",
+		body: `{"newEmail":"new@example.com","passwordProof":"Secret123456"}`, contentType: "application/json",
 	})
 	require.Equal(t, nethttp.StatusAccepted, w.Code, w.Body.String())
 	require.Equal(t, "Secret123456", changer.password)
-	require.Equal(t, "new@example.com", dataOf(body)["new_email"])
+	require.Equal(t, "new@example.com", dataOf(body)["newEmail"])
 
 	w, _ = runProfile(t, meRequestEmailChangeHandler(changer), profileRequest{
 		method: nethttp.MethodPost, target: "/api/v1/me/email/request-change", user: &user,
-		body: `{"new_email":"new@example.com"}`, contentType: "application/json",
+		body: `{"newEmail":"new@example.com"}`, contentType: "application/json",
 	})
-	require.Equal(t, nethttp.StatusBadRequest, w.Code, "password_proof is required")
+	require.Equal(t, nethttp.StatusBadRequest, w.Code, "passwordProof is required")
 
 	w, body = runProfile(t, meConfirmEmailChangeHandler(changer), profileRequest{
 		method: nethttp.MethodPost, target: "/api/v1/me/email/confirm-change", user: &user,
@@ -423,7 +423,7 @@ func TestEmailChangeHandlers(t *testing.T) {
 	})
 	require.Equal(t, nethttp.StatusOK, w.Code)
 	require.Equal(t, "abc", changer.token)
-	require.Equal(t, true, dataOf(body)["sessions_revoked"])
+	require.Equal(t, true, dataOf(body)["sessionsRevoked"])
 
 	cases := map[error]struct {
 		status int

@@ -88,14 +88,14 @@ func TestListRevisionsParsesFilters(t *testing.T) {
 
 	w, body := runProfile(t, h, profileRequest{
 		method: nethttp.MethodGet, param: postID.String(), user: &testUserID,
-		target: "/?author_id=" + author.String() + "&from_date=2026-09-01&to_date=2026-09-02&include_diff=false&page=2&per_page=5",
+		target: "/?authorId=" + author.String() + "&fromDate=2026-09-01&toDate=2026-09-02&includeDiff=false&page=2&perPage=5",
 	})
 	require.Equal(t, nethttp.StatusOK, w.Code, w.Body.String())
 
 	assert.Equal(t, postID, svc.filter.PostUUID)
 	assert.Equal(t, &author, svc.filter.AuthorUUID)
 	assert.Equal(t, time.Date(2026, 9, 1, 0, 0, 0, 0, time.UTC), *svc.filter.From)
-	assert.Equal(t, time.Date(2026, 9, 2, 23, 59, 59, 999999999, time.UTC), *svc.filter.To, "a to_date covers the whole day")
+	assert.Equal(t, time.Date(2026, 9, 2, 23, 59, 59, 999999999, time.UTC), *svc.filter.To, "a toDate covers the whole day")
 	assert.Equal(t, 2, svc.filter.Page)
 	assert.Equal(t, 5, svc.filter.PerPage)
 	assert.True(t, svc.unrestricted)
@@ -104,10 +104,10 @@ func TestListRevisionsParsesFilters(t *testing.T) {
 	require.Len(t, items, 1)
 	first, _ := items[0].(map[string]any)
 	assert.Equal(t, "Updated title", first["changelog"])
-	assert.NotContains(t, first, "diff", "include_diff=false drops diffs")
+	assert.NotContains(t, first, "diff", "includeDiff=false drops diffs")
 	assert.NotContains(t, first, "snapshot")
 
-	for _, bad := range []string{"author_id=x", "from_date=yesterday", "to_date=2026-13-01", "include_diff=maybe"} {
+	for _, bad := range []string{"authorId=x", "fromDate=yesterday", "toDate=2026-13-01", "includeDiff=maybe"} {
 		w, body := runProfile(t, h, profileRequest{method: nethttp.MethodGet, param: postID.String(), user: &testUserID, target: "/?" + bad})
 		require.Equal(t, nethttp.StatusBadRequest, w.Code, bad)
 		assert.Equal(t, responses.ErrorCodeValidation, errorCode(body), bad)
@@ -153,7 +153,7 @@ func TestRestoreRevisionPassesNoteAndEditor(t *testing.T) {
 
 	w, body := runProfile(t, h, profileRequest{
 		method: nethttp.MethodPost, target: "/", param: postID, param2: "1", user: &testUserID,
-		contentType: "application/json", body: `{"restore_note":"  undo  "}`,
+		contentType: "application/json", body: `{"restoreNote":"  undo  "}`,
 	})
 	require.Equal(t, nethttp.StatusOK, w.Code, w.Body.String())
 	assert.Equal(t, "undo", svc.note)

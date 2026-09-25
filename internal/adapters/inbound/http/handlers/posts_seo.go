@@ -141,7 +141,7 @@ func adminPreviewPostSEOHandler(posts postSEOAPI, access seoAccess) gin.HandlerF
 			return
 		}
 
-		responses.SuccessFor(c, nethttp.StatusOK, responses.ServicePosts, responses.CaseSuccess, preview)
+		responses.SuccessFor(c, nethttp.StatusOK, responses.ServicePosts, responses.CaseSuccess, responses.SEOPreview(preview))
 	}
 }
 
@@ -166,7 +166,7 @@ func publicPostSEOMetaHandler(posts postSEOAPI) gin.HandlerFunc {
 			c.Header("X-Robots-Tag", meta.Robots)
 		}
 
-		responses.SuccessFor(c, nethttp.StatusOK, responses.ServicePosts, responses.CaseSuccess, meta)
+		responses.SuccessFor(c, nethttp.StatusOK, responses.ServicePosts, responses.CaseSuccess, responses.SEOMeta(meta))
 	}
 }
 
@@ -203,7 +203,7 @@ func mapSEOError(c *gin.Context, err error) bool {
 			Case:    responses.CaseUnprocessable,
 			Code:    responses.ErrorCodeValidation,
 			Message: "Invalid SEO fields",
-			Details: invalid.Violations,
+			Details: responses.FieldViolations(invalid.Violations),
 		})
 
 		return true

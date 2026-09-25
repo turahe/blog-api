@@ -12,23 +12,23 @@ func Profile(view userdomain.ProfileView) gin.H {
 	user, profile, privacy := view.User, view.Profile, view.Privacy
 
 	return gin.H{
-		"id":                           user.UUID.String(),
-		"username":                     user.Username,
-		"email":                        user.Email,
-		"email_verified_at":            RFC3339(user.EmailVerifiedAt),
-		"full_name":                    user.FullName,
-		"display_name":                 profile.DisplayName,
-		"bio":                          profile.Bio,
-		"avatar_id":                    view.AvatarUUID,
-		"contact":                      contact(profile),
-		"social_links":                 socialLinks(profile.Social),
-		"locale":                       profile.Locale,
-		"timezone":                     profile.Timezone,
-		"marketing_consent":            profile.MarketingConsent,
-		"marketing_consent_updated_at": RFC3339(profile.MarketingConsentUpdatedAt),
-		"privacy":                      Privacy(privacy),
-		"created_at":                   user.CreatedAt.UTC().Format(time.RFC3339),
-		"profile_updated_at":           RFC3339(profile.UpdatedAt),
+		"id":                        user.UUID.String(),
+		"username":                  user.Username,
+		"email":                     user.Email,
+		"emailVerifiedAt":           RFC3339(user.EmailVerifiedAt),
+		"fullName":                  user.FullName,
+		"displayName":               profile.DisplayName,
+		"bio":                       profile.Bio,
+		"avatarId":                  view.AvatarUUID,
+		"contact":                   contact(profile),
+		"socialLinks":               socialLinks(profile.Social),
+		"locale":                    profile.Locale,
+		"timezone":                  profile.Timezone,
+		"marketingConsent":          profile.MarketingConsent,
+		"marketingConsentUpdatedAt": RFC3339(profile.MarketingConsentUpdatedAt),
+		"privacy":                   Privacy(privacy),
+		"createdAt":                 user.CreatedAt.UTC().Format(time.RFC3339),
+		"profileUpdatedAt":          RFC3339(profile.UpdatedAt),
 	}
 }
 
@@ -36,8 +36,8 @@ func Profile(view userdomain.ProfileView) gin.H {
 func AdminProfile(view userdomain.ProfileView) gin.H {
 	out := Profile(view)
 	out["status"] = string(view.User.Status)
-	out["last_login_at"] = RFC3339(view.User.LastLoginAt)
-	out["login_count"] = view.User.LoginCount
+	out["lastLoginAt"] = RFC3339(view.User.LastLoginAt)
+	out["loginCount"] = view.User.LoginCount
 
 	return out
 }
@@ -47,14 +47,14 @@ func PublicProfile(view userdomain.ProfileView) gin.H {
 	user, profile, privacy := view.User, view.Profile, view.Privacy
 
 	out := gin.H{
-		"id":           user.UUID.String(),
-		"username":     user.Username,
-		"full_name":    user.FullName,
-		"display_name": profile.DisplayName,
-		"bio":          profile.Bio,
-		"avatar_id":    view.AvatarUUID,
-		"social_links": socialLinks(profile.Social),
-		"joined_at":    user.CreatedAt.UTC().Format(time.RFC3339),
+		"id":          user.UUID.String(),
+		"username":    user.Username,
+		"fullName":    user.FullName,
+		"displayName": profile.DisplayName,
+		"bio":         profile.Bio,
+		"avatarId":    view.AvatarUUID,
+		"socialLinks": socialLinks(profile.Social),
+		"joinedAt":    user.CreatedAt.UTC().Format(time.RFC3339),
 	}
 	if privacy.ShowContact {
 		out["contact"] = contact(profile)
@@ -70,10 +70,10 @@ func PublicProfile(view userdomain.ProfileView) gin.H {
 // Privacy renders a user's privacy settings.
 func Privacy(privacy userdomain.Privacy) gin.H {
 	return gin.H{
-		"visibility_profile":    string(privacy.Visibility),
-		"visibility_email":      privacy.ShowEmail,
-		"visibility_contact":    privacy.ShowContact,
-		"search_allow_indexing": privacy.AllowIndexing,
+		"visibilityProfile":   string(privacy.Visibility),
+		"visibilityEmail":     privacy.ShowEmail,
+		"visibilityContact":   privacy.ShowContact,
+		"searchAllowIndexing": privacy.AllowIndexing,
 	}
 }
 

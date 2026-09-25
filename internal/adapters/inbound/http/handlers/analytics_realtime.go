@@ -86,7 +86,7 @@ func streamLive(c *gin.Context, conn *realtime.Conn, board analyticsLiveBoard, r
 		return
 	}
 
-	opened := gin.H{"stream_id": uuid.New(), "server_ts": time.Now().UTC(), "refresh_seconds": int(refresh / time.Second)}
+	opened := gin.H{"streamId": uuid.New(), "serverTs": time.Now().UTC(), "refreshSeconds": int(refresh / time.Second)}
 	if writeFrame(w, "stream.opened", uuid.NewString(), opened) != nil {
 		return
 	}

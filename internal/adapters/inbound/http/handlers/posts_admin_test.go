@@ -97,7 +97,7 @@ func TestAdminListPostsHandlerReturnsMetaTotalAndScopesRestrictedAuthors(t *test
 
 	w := httptest.NewRecorder()
 	c, _ := gin.CreateTestContext(w)
-	c.Request = httptest.NewRequestWithContext(t.Context(), nethttp.MethodGet, "/api/v1/admin/posts?page=2&per_page=10&status=draft&q=hello", nil)
+	c.Request = httptest.NewRequestWithContext(t.Context(), nethttp.MethodGet, "/api/v1/admin/posts?page=2&perPage=10&status=draft&q=hello", nil)
 	c.Set(middleware.ContextUserIDKey, userID)
 
 	adminListPostsHandlerWithDeps(svc, fakeRoleLookup{names: []string{"author"}})(c)
@@ -410,8 +410,8 @@ func TestAdminUpdatePostHandlerCategoryIDPresence(t *testing.T) {
 		wantPresent bool
 		wantValue   *uuid.UUID
 	}{
-		"null clears":   {body: `{"category_id":null}`, wantPresent: true},
-		"uuid sets":     {body: `{"category_id":"` + categoryID.String() + `"}`, wantPresent: true, wantValue: &categoryID},
+		"null clears":   {body: `{"categoryId":null}`, wantPresent: true},
+		"uuid sets":     {body: `{"categoryId":"` + categoryID.String() + `"}`, wantPresent: true, wantValue: &categoryID},
 		"omitted skips": {body: `{"title":"T"}`},
 	}
 

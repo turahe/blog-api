@@ -47,7 +47,7 @@ func impersonationControllers(deps Deps) routes.Impersonation {
 //
 //	@Summary		Start impersonating a user
 //	@Description	Opens an impersonation session and returns a Bearer token that acts as the target until
-//	@Description	expires_at (IMPERSONATION_TTL, never renewed; no refresh token). Requires impersonation.start,
+//	@Description	expiresAt (IMPERSONATION_TTL, never renewed; no refresh token). Requires impersonation.start,
 //	@Description	the caller's current password, and a TOTP or backup code when the caller has two-factor
 //	@Description	enabled. The target must be active, must not be an administrator or able to impersonate, and
 //	@Description	every permission the target has must be one the caller has. One active session per caller.

@@ -13,17 +13,17 @@ import (
 func AdminComment(comment commentdomain.Comment) gin.H {
 	payload := Comment(comment)
 	payload["content"] = comment.Content
-	payload["content_html"] = comment.ContentHTML
+	payload["contentHtml"] = comment.ContentHTML
 	payload["author"] = commentAuthor(comment)
-	payload["author_email"] = emptyToNil(comment.AuthorEmail)
-	payload["ip_hash"] = emptyToNil(comment.IPHash)
-	payload["user_agent"] = emptyToNil(comment.UserAgent)
-	payload["flag_count"] = comment.FlagCount
-	payload["moderated_by"] = uuidString(comment.ModeratedByUUID)
-	payload["moderation_reason"] = emptyToNil(comment.ModerationReason)
-	payload["moderated_at"] = RFC3339(comment.ModeratedAt)
-	payload["deleted_at"] = RFC3339(comment.DeletedAt)
-	payload["deleted_by"] = uuidString(comment.DeletedByUUID)
+	payload["authorEmail"] = emptyToNil(comment.AuthorEmail)
+	payload["ipHash"] = emptyToNil(comment.IPHash)
+	payload["userAgent"] = emptyToNil(comment.UserAgent)
+	payload["flagCount"] = comment.FlagCount
+	payload["moderatedBy"] = uuidString(comment.ModeratedByUUID)
+	payload["moderationReason"] = emptyToNil(comment.ModerationReason)
+	payload["moderatedAt"] = RFC3339(comment.ModeratedAt)
+	payload["deletedAt"] = RFC3339(comment.DeletedAt)
+	payload["deletedBy"] = uuidString(comment.DeletedByUUID)
 
 	return payload
 }
@@ -35,11 +35,11 @@ func CommentReview(review commentdomain.Review) gin.H {
 	flags := make([]gin.H, 0, len(review.Flags))
 	for _, flag := range review.Flags {
 		flags = append(flags, gin.H{
-			"reporter_id": uuidString(flag.ReporterUUID),
-			"guest":       flag.ReporterUUID == nil,
-			"reason_code": flag.Reason,
-			"details":     emptyToNil(flag.Details),
-			"created_at":  flag.CreatedAt.UTC().Format(time.RFC3339),
+			"reporterId": uuidString(flag.ReporterUUID),
+			"guest":      flag.ReporterUUID == nil,
+			"reasonCode": flag.Reason,
+			"details":    emptyToNil(flag.Details),
+			"createdAt":  flag.CreatedAt.UTC().Format(time.RFC3339),
 		})
 	}
 
@@ -49,7 +49,7 @@ func CommentReview(review commentdomain.Review) gin.H {
 	}
 
 	payload["flags"] = flags
-	payload["moderation_log"] = history
+	payload["moderationLog"] = history
 
 	return payload
 }
@@ -57,17 +57,17 @@ func CommentReview(review commentdomain.Review) gin.H {
 // ModerationEntry serializes one moderation log row.
 func ModerationEntry(entry commentdomain.ModerationEntry) gin.H {
 	return gin.H{
-		"id":            entry.UUID.String(),
-		"comment_id":    entry.CommentUUID.String(),
-		"moderator_id":  uuidString(entry.ModeratorUUID),
-		"action":        string(entry.Action),
-		"from_status":   string(entry.FromStatus),
-		"to_status":     string(entry.ToStatus),
-		"reason":        emptyToNil(entry.Reason),
-		"notify_author": entry.NotifyAuthor,
-		"before":        entry.Before,
-		"after":         entry.After,
-		"created_at":    entry.CreatedAt.UTC().Format(time.RFC3339),
+		"id":           entry.UUID.String(),
+		"commentId":    entry.CommentUUID.String(),
+		"moderatorId":  uuidString(entry.ModeratorUUID),
+		"action":       string(entry.Action),
+		"fromStatus":   string(entry.FromStatus),
+		"toStatus":     string(entry.ToStatus),
+		"reason":       emptyToNil(entry.Reason),
+		"notifyAuthor": entry.NotifyAuthor,
+		"before":       entry.Before,
+		"after":        entry.After,
+		"createdAt":    entry.CreatedAt.UTC().Format(time.RFC3339),
 	}
 }
 
@@ -84,7 +84,7 @@ func CommentStats(stats commentdomain.Stats) gin.H {
 	posts := make([]gin.H, 0, len(stats.TopPosts))
 	for _, post := range stats.TopPosts {
 		posts = append(posts, gin.H{
-			"post_id": post.PostUUID.String(),
+			"postId":  post.PostUUID.String(),
 			"title":   post.PostTitle,
 			"pending": post.Pending,
 			"flagged": post.Flagged,
@@ -92,10 +92,10 @@ func CommentStats(stats commentdomain.Stats) gin.H {
 	}
 
 	return gin.H{
-		"by_status":        byStatus,
-		"queue_depth":      stats.QueueDepth,
-		"oldest_queued_at": RFC3339(stats.OldestQueuedAt),
-		"top_posts":        posts,
+		"byStatus":       byStatus,
+		"queueDepth":     stats.QueueDepth,
+		"oldestQueuedAt": RFC3339(stats.OldestQueuedAt),
+		"topPosts":       posts,
 	}
 }
 

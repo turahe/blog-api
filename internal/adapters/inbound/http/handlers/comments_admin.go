@@ -28,15 +28,15 @@ type commentModerationAPI interface {
 //	@Description	Comments in any status across posts. Defaults to the moderation queue (pending and flagged), oldest first.
 //	@Tags			admin
 //	@Produce		json
-//	@Param			status		query		string	false	"comma-separated statuses: pending, approved, flagged, spam, rejected, deleted"
-//	@Param			post_id		query		string	false	"post UUID"
-//	@Param			sort		query		string	false	"oldest or newest"	Enums(oldest, newest)	default(oldest)
-//	@Param			page		query		int		false	"page"				default(1)
-//	@Param			per_page	query		int		false	"per page"			default(20)
-//	@Success		200			{object}	responses.Envelope
-//	@Failure		400			{object}	responses.Envelope
-//	@Failure		401			{object}	responses.Envelope
-//	@Failure		403			{object}	responses.Envelope
+//	@Param			status	query		string	false	"comma-separated statuses: pending, approved, flagged, spam, rejected, deleted"
+//	@Param			postId	query		string	false	"post UUID"
+//	@Param			sort	query		string	false	"oldest or newest"	Enums(oldest, newest)	default(oldest)
+//	@Param			page	query		int		false	"page"				default(1)
+//	@Param			perPage	query		int		false	"per page"			default(20)
+//	@Success		200		{object}	responses.Envelope
+//	@Failure		400		{object}	responses.Envelope
+//	@Failure		401		{object}	responses.Envelope
+//	@Failure		403		{object}	responses.Envelope
 //	@Security		Bearer
 //	@Router			/api/v1/admin/comments [get]
 func adminListCommentsHandler(comments commentModerationAPI) gin.HandlerFunc {
@@ -51,10 +51,10 @@ func adminListCommentsHandler(comments commentModerationAPI) gin.HandlerFunc {
 			}
 		}
 
-		if raw := strings.TrimSpace(c.Query("post_id")); raw != "" {
+		if raw := strings.TrimSpace(c.Query("postId")); raw != "" {
 			postID, err := uuid.Parse(raw)
 			if err != nil {
-				failCommentValidation(c, "Invalid post_id")
+				failCommentValidation(c, "Invalid postId")
 				return
 			}
 

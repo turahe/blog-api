@@ -49,17 +49,17 @@ func meGetHandler(users *userservice.UserService) gin.HandlerFunc {
 //	@Summary	List users
 //	@Tags		admin
 //	@Produce	json
-//	@Param		page		query		int	false	"page"		default(1)
-//	@Param		per_page	query		int	false	"per page"	default(20)
-//	@Success	200			{object}	responses.Envelope
-//	@Failure	401			{object}	responses.Envelope
-//	@Failure	403			{object}	responses.Envelope
+//	@Param		page	query		int	false	"page"		default(1)
+//	@Param		perPage	query		int	false	"per page"	default(20)
+//	@Success	200		{object}	responses.Envelope
+//	@Failure	401		{object}	responses.Envelope
+//	@Failure	403		{object}	responses.Envelope
 //	@Security	Bearer
 //	@Router		/api/v1/admin/users [get]
 func adminUsersListHandler(users *userservice.UserService) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		page, _ := strconv.Atoi(c.DefaultQuery("page", "1"))
-		perPage, _ := strconv.Atoi(c.DefaultQuery("per_page", "20"))
+		perPage, _ := strconv.Atoi(c.DefaultQuery("perPage", "20"))
 
 		items, total, err := users.List(c.Request.Context(), page, perPage)
 		if err != nil {

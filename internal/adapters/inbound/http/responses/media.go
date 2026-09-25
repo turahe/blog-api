@@ -15,12 +15,12 @@ func MediaPresign(result mediadomain.PresignResult) gin.H {
 	}
 
 	return gin.H{
-		"media_id":         result.Asset.UUID.String(),
-		"storage_key":      result.Asset.StorageKey,
-		"upload_url":       result.UploadURL,
-		"required_headers": headers,
-		"expires_at":       result.ExpiresAt.UTC().Format(time.RFC3339),
-		"disk":             result.Asset.Disk,
+		"mediaId":         result.Asset.UUID.String(),
+		"storageKey":      result.Asset.StorageKey,
+		"uploadUrl":       result.UploadURL,
+		"requiredHeaders": headers,
+		"expiresAt":       result.ExpiresAt.UTC().Format(time.RFC3339),
+		"disk":            result.Asset.Disk,
 	}
 }
 
@@ -53,14 +53,14 @@ func MediaUsage(u mediadomain.Usage) gin.H {
 			id, username = up.UserUUID.String(), up.Username
 		}
 
-		uploaders = append(uploaders, gin.H{"user_id": id, "username": username, "count": up.Count, "bytes": up.Bytes})
+		uploaders = append(uploaders, gin.H{"userId": id, "username": username, "count": up.Count, "bytes": up.Bytes})
 	}
 
 	return gin.H{
-		"total":           gin.H{"count": u.Total.Count, "bytes": u.Total.Bytes},
-		"by_status":       rows(u.ByStatus, "status"),
-		"by_content_type": rows(u.ByContentType, "content_type"),
-		"top_uploaders":   uploaders,
+		"total":         gin.H{"count": u.Total.Count, "bytes": u.Total.Bytes},
+		"byStatus":      rows(u.ByStatus, "status"),
+		"byContentType": rows(u.ByContentType, "contentType"),
+		"topUploaders":  uploaders,
 	}
 }
 
@@ -77,19 +77,19 @@ func MediaAsset(asset mediadomain.MediaAsset) gin.H {
 	}
 
 	return gin.H{
-		"id":                asset.UUID.String(),
-		"storage_key":       asset.StorageKey,
-		"original_filename": asset.OriginalFilename,
-		"content_type":      asset.ContentType,
-		"size_bytes":        asset.SizeBytes,
-		"width":             asset.Width,
-		"height":            asset.Height,
-		"checksum_sha256":   asset.ChecksumSHA256,
-		"disk":              asset.Disk,
-		"status":            asset.Status,
-		"tags":              tags,
-		"uploaded_by":       uploadedBy,
-		"created_at":        asset.CreatedAt.UTC().Format(time.RFC3339),
-		"updated_at":        asset.UpdatedAt.UTC().Format(time.RFC3339),
+		"id":               asset.UUID.String(),
+		"storageKey":       asset.StorageKey,
+		"originalFilename": asset.OriginalFilename,
+		"contentType":      asset.ContentType,
+		"sizeBytes":        asset.SizeBytes,
+		"width":            asset.Width,
+		"height":           asset.Height,
+		"checksumSha256":   asset.ChecksumSHA256,
+		"disk":             asset.Disk,
+		"status":           asset.Status,
+		"tags":             tags,
+		"uploadedBy":       uploadedBy,
+		"createdAt":        asset.CreatedAt.UTC().Format(time.RFC3339),
+		"updatedAt":        asset.UpdatedAt.UTC().Format(time.RFC3339),
 	}
 }

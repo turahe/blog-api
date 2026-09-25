@@ -66,7 +66,7 @@ func ingestPageViewHandler(ingest analyticsIngestAPI, meta ingestMeta) gin.Handl
 // ingestTimeSpentHandler godoc
 //
 //	@Summary		Record time spent on a page
-//	@Description	A heartbeat for page view view_id with the cumulative seconds the page has been in focus (clamped to 4 hours). Send one every 15-30 seconds while the page is visible and one on unload; the highest value is kept. Accepted asynchronously like page views.
+//	@Description	A heartbeat for page view viewId with the cumulative seconds the page has been in focus (clamped to 4 hours). Send one every 15-30 seconds while the page is visible and one on unload; the highest value is kept. Accepted asynchronously like page views.
 //	@Tags			analytics
 //	@Accept			json
 //	@Produce		json
@@ -122,7 +122,7 @@ func ingestNavigationHandler(ingest analyticsIngestAPI, meta ingestMeta) gin.Han
 // ingestSearchHandler godoc
 //
 //	@Summary		Record a search
-//	@Description	A search the visitor ran. The query is lowercased, whitespace-collapsed, and cut to 200 characters. filters may hold category, tag, from, and to. The response id (the client's id when sent) is the search_id to send with result clicks. Accepted asynchronously like page views.
+//	@Description	A search the visitor ran. The query is lowercased, whitespace-collapsed, and cut to 200 characters. filters may hold category, tag, from, and to. The response id (the client's id when sent) is the searchId to send with result clicks. Accepted asynchronously like page views.
 //	@Tags			analytics
 //	@Accept			json
 //	@Produce		json
@@ -150,7 +150,7 @@ func ingestSearchHandler(ingest analyticsIngestAPI, meta ingestMeta) gin.Handler
 // ingestSearchClickHandler godoc
 //
 //	@Summary		Record a search result click
-//	@Description	A click on result position (from 1) of search search_id, pointing at a post, page, category, or tag. Neither id is checked against stored data, so the endpoint reveals nothing about what exists. Accepted asynchronously like page views.
+//	@Description	A click on result position (from 1) of search searchId, pointing at a post, page, category, or tag. Neither id is checked against stored data, so the endpoint reveals nothing about what exists. Accepted asynchronously like page views.
 //	@Tags			analytics
 //	@Accept			json
 //	@Produce		json

@@ -23,8 +23,8 @@ What the server does today (`handlers/notifications_stream.go`, `adapters/inboun
 | Topic | Implemented |
 | --- | --- |
 | Auth | Bearer token only (`AuthRequired`); no cookie or CSRF path |
-| Handshake | `retry: 5000`, then `event: stream.opened` with `stream_id`, `user_id`, `server_ts`, `retry_ms`, `channels`, `replay_applied: false`, `replay_count: 0` |
-| Events | `notification.created` (`id:` is the notification id; `data` has `id`, `type`, `title`, `body`, `preview`, `data`, `actor_id`, `created_at`), `ping` every `SSE_PING_INTERVAL` (default `15s`), `error` with `fanout.buffer_full` and `dropped_count`, `stream.closed` with `code: shutdown` and `retry_ms: 15000`, or with `code: impersonation_ended` (no retry) when the impersonation session behind the token ends |
+| Handshake | `retry: 5000`, then `event: stream.opened` with `streamId`, `userId`, `serverTs`, `retryMs`, `channels`, `replayApplied: false`, `replayCount: 0` |
+| Events | `notification.created` (`id:` is the notification id; `data` has `id`, `type`, `title`, `body`, `preview`, `data`, `actorId`, `createdAt`), `ping` every `SSE_PING_INTERVAL` (default `15s`), `error` with `fanout.buffer_full` and `droppedCount`, `stream.closed` with `code: shutdown` and `retryMs: 15000`, or with `code: impersonation_ended` (no retry) when the impersonation session behind the token ends |
 | Limits | `SSE_MAX_CONCURRENT_PER_USER` (default 3) per API process; the next stream gets `429 notifications.stream_limit` with `Retry-After: 60` |
 | Slow clients | 512 queued events per stream; further events are dropped for that stream only and reported in the next `error` frame |
 | Cleanup | The stream ends when the client disconnects (request context done) or a write fails; `app serve` shutdown sends `stream.closed` to every stream first |
@@ -75,7 +75,7 @@ retry: 5000
 
 event: stream.opened
 id: 0000000000000000001-0001
-data: {"stream_id":"8aa9b3f4-…","user_id":"9c7a48d2-…","server_ts":"2026-07-29T09:12:01Z","retry_ms":5000,"channels":["default"]}
+data: {"streamId":"8aa9b3f4-…","userId":"9c7a48d2-…","serverTs":"2026-07-29T09:12:01Z","retryMs":5000,"channels":["default"]}
 
 event: ping
 id: 0000000000000000001-0002
@@ -83,7 +83,7 @@ data: {"ts":"2026-07-29T09:12:16Z"}
 
 event: notification.created
 id: 0000000000000000001-0003
-data: {"notification_id":"c6c3e1e7-…","type":"comment.reply","title":"Reply to your comment","preview":"Someone just replied to …","read":false,"created_at":"2026-07-29T09:12:33Z","channel":"sse","channels":["default"]}
+data: {"notificationId":"c6c3e1e7-…","type":"comment.reply","title":"Reply to your comment","preview":"Someone just replied to …","read":false,"createdAt":"2026-07-29T09:12:33Z","channel":"sse","channels":["default"]}
 ```
 
 ## 2. Supported Event Formats
@@ -103,14 +103,14 @@ composed of one or more `field: value\n` lines terminated by an empty newline.
 
 | Event name | `id:` present | `data:` shape |
 |------------|---------------|---------------|
-| `stream.opened` | yes | `{ stream_id: uuid, user_id: uuid, server_ts: datetime, retry_ms: int, channels: string[], replay_applied: bool, replay_count: int }` |
-| `stream.closed` | yes | `{ code: enum, message: string, retry_ms: int?, reason_hint?: string }` |
+| `stream.opened` | yes | `{ streamId: uuid, userId: uuid, serverTs: datetime, retryMs: int, channels: string[], replayApplied: bool, replayCount: int }` |
+| `stream.closed` | yes | `{ code: enum, message: string, retryMs: int?, reasonHint?: string }` |
 | `ping` | no | `{ ts: datetime }` |
-| `error` | yes | `{ code: enum, message: string, dropped_count?: int }` |
+| `error` | yes | `{ code: enum, message: string, droppedCount?: int }` |
 | `notification.created` | yes | Exactly mirrors the REST `Notification` schema + `channel: "sse"` + `channels: string[]` |
-| `notification.read` | yes | `{ ids: uuid[], read_at: datetime, bulk: bool }` |
-| `notification.dismissed` | yes | `{ id: uuid, dismissed_at: datetime }` |
-| `session.invalidated_family` | yes | `{ reason: enum, logout_everywhere: bool }` |
+| `notification.read` | yes | `{ ids: uuid[], readAt: datetime, bulk: bool }` |
+| `notification.dismissed` | yes | `{ id: uuid, dismissedAt: datetime }` |
+| `session.invalidated_family` | yes | `{ reason: enum, logoutEverywhere: bool }` |
 
 ## 3. Connection Lifecycle
 
@@ -268,15 +268,15 @@ sequenceDiagram
 
 - **Per-request context done**: the Gin SSE handler blocks in a `select { case <-c.Request.Context().Done(): ... case ev := <-conn.Ch: ... case <-ticker.C: write ping }`. When the client disconnects, the HTTP context is cancelled by Gin inside `c.Stream()` and the handler goroutine returns within one ticker cycle.
 - **Heartbeat watchdog**: a single `SSEHub.watchdog()` goroutine wakes every `SSE_WATCHDOG_INTERVAL` (default `30s`) and closes any connection whose `lastWriteAt` is older than `2 * SSE_PING_INTERVAL_SECONDS + 10s` (i.e. 2 missed pings plus slack). This catches half-open TCP sockets where neither side sent a FIN/RST.
-- **Graceful shutdown**: during `app serve` SIGINT/SIGTERM handling, `SSEHub.Shutdown()` iterates every registered connection, writes a single `event: stream.closed { code: "shutdown", retry_ms: 15000 }` frame, drains the write channel, then cancels per-connection contexts. All goroutines should exit within the configured shutdown grace period (default 10s).
-- **Buffer overflow**: per-connection `chan` is sized conservatively. If a slow consumer causes the write to block longer than `SSE_WRITE_TIMEOUT` (default 250ms), the server drops the current event, increments the `sse_dropped_events_total` Prometheus counter by 1, writes a single `event: error { code: "fanout.buffer_full", dropped_count: N }` error frame, and moves on. It **never** blocks globally for a single slow client.
+- **Graceful shutdown**: during `app serve` SIGINT/SIGTERM handling, `SSEHub.Shutdown()` iterates every registered connection, writes a single `event: stream.closed { code: "shutdown", retryMs: 15000 }` frame, drains the write channel, then cancels per-connection contexts. All goroutines should exit within the configured shutdown grace period (default 10s).
+- **Buffer overflow**: per-connection `chan` is sized conservatively. If a slow consumer causes the write to block longer than `SSE_WRITE_TIMEOUT` (default 250ms), the server drops the current event, increments the `sse_dropped_events_total` Prometheus counter by 1, writes a single `event: error { code: "fanout.buffer_full", droppedCount: N }` error frame, and moves on. It **never** blocks globally for a single slow client.
 
 ### Reconnect / Retry Semantics
 
 - The server always writes `retry: 5000` on connect. Native `EventSource` uses this automatically for the initial reconnect delay after a clean drop.
-- Exponential backoff is **client enforced**. For browser clients using the companion client example below, the wrapper doubles the delay on each consecutive reconnect failure up to 120s, and resets back to `retry_ms` the moment a `stream.opened` frame arrives.
-- `Last-Event-ID` (or `?replay_after=`) replay: on reconnect, the server queries `sse_replay:user:<id>` with a zrangebyscore of ids strictly greater than the client's last seen id, replays them in order before any new fan-out, and sets `stream.opened.replay_applied=true` + `replay_count=N`.
-- If the `Last-Event-ID` is older than the replay ring TTL or larger than the newest id, the server still opens the stream and sets `replay_applied=false`; the client should immediately call `GET /api/v1/me/notifications` to fill any gap.
+- Exponential backoff is **client enforced**. For browser clients using the companion client example below, the wrapper doubles the delay on each consecutive reconnect failure up to 120s, and resets back to `retryMs` the moment a `stream.opened` frame arrives.
+- `Last-Event-ID` (or `?replayAfter=`) replay: on reconnect, the server queries `sse_replay:user:<id>` with a zrangebyscore of ids strictly greater than the client's last seen id, replays them in order before any new fan-out, and sets `stream.opened.replay_applied=true` + `replayCount=N`.
+- If the `Last-Event-ID` is older than the replay ring TTL or larger than the newest id, the server still opens the stream and sets `replayApplied=false`; the client should immediately call `GET /api/v1/me/notifications` to fill any gap.
 - `429 Too Many Requests` during connect: `Retry-After` seconds header is present and MUST be obeyed by clients. Aggressive reconnect loops (more than 5 failures within 60s per `ip:user_id` tuple) trigger a short `SSE_JAIL_TTL_SECONDS` (default 120) Redis rate-limit entry that responds with 429 until the jail elapses.
 
 ## 4. Security Measures
@@ -285,7 +285,7 @@ sequenceDiagram
 
 - Every request passes through the same `AuthMiddleware` used for other `/api/v1/me/*` endpoints.
 - Valid JWT bearer or valid http-only session cookie is required; anonymous requests return `401 UnauthorizedError` via the standard envelope.
-- `user_id` of the JWT `sub` claim is bound into the SSE connection; the connection can **only** receive messages published to channel keyed by that `user_id`. There is no server-side way for client code to upgrade the connection or subscribe to another user's fan-out.
+- `userId` of the JWT `sub` claim is bound into the SSE connection; the connection can **only** receive messages published to channel keyed by that `userId`. There is no server-side way for client code to upgrade the connection or subscribe to another user's fan-out.
 - If present, the `X-2FA-Verified` or step-up headers are ignored for reads (stream never writes on behalf of the user), but are still logged for audit.
 
 ### CORS Configuration
@@ -309,11 +309,11 @@ Concurrent connections are tracked in a Redis counter (`sse_active:user:<id>`) w
 
 ### Additional Hardening
 
-- **No query-string JWTs**: tokens must always be in `Authorization` header or session cookie. Never accept `?access_token=…` to avoid leaking into access logs, browser history, or `Referer` headers.
+- **No query-string JWTs**: tokens must always be in `Authorization` header or session cookie. Never accept `?accessToken=…` to avoid leaking into access logs, browser history, or `Referer` headers.
 - **CSRF defence for session-cookie callers**: if the request arrived with a session cookie and passes a non-empty `Origin` header matching a browser-origin, validate the `X-CSRF-Token` header; failure → 403 `csrf.invalid`.
 - **Response headers**: `X-Content-Type-Options: nosniff`, `Referrer-Policy: no-referrer`, `X-Frame-Options: DENY`. `Content-Security-Policy` is set globally by the browser security middleware; SSE connections do not relax it.
 - **Sanitize every `data:` payload before writing**: even though the server originates all payloads, the write path passes the JSON string through the same markdown+HTML allowlist sanitizer used for comment bodies so that user-controlled notification titles/previews cannot contain raw control sequences that might confuse naive parsers in older EventSource polyfills.
-- **Audit log**: connect / disconnect / reconnect-with-replay / too-many-connections / jailed-reconnect events are all written to the structured application log with `actor_id`, `stream_id`, `correlation_id`, `source_ip`, `user_agent_hash`. The sensitive `user_agent` is never stored in full; only SHA-256 (peppered) is retained per the PII retention policy.
+- **Audit log**: connect / disconnect / reconnect-with-replay / too-many-connections / jailed-reconnect events are all written to the structured application log with `actorId`, `streamId`, `correlation_id`, `source_ip`, `user_agent_hash`. The sensitive `userAgent` is never stored in full; only SHA-256 (peppered) is retained per the PII retention policy.
 
 ## 5. Client-Side Integration (EventSource)
 
@@ -324,21 +324,21 @@ Concurrent connections are tracked in a Redis counter (`sse_active:user:<id>`) w
 import { useCallback, useEffect, useRef, useState } from "react";
 
 type StreamOpenedData = {
-  stream_id: string;
-  user_id: string;
-  retry_ms: number;
-  replay_applied: boolean;
-  replay_count: number;
+  streamId: string;
+  userId: string;
+  retryMs: number;
+  replayApplied: boolean;
+  replayCount: number;
   channels: string[];
 };
 
 type NotificationCreatedData = {
-  notification_id: string;
+  notificationId: string;
   type: string;
   title: string;
   preview: string | null;
   read: boolean;
-  created_at: string;
+  createdAt: string;
 };
 
 type ClientStatus = "idle" | "connecting" | "open" | "reconnecting" | "closed" | "unsupported";
@@ -376,12 +376,12 @@ export function useNotificationStream(jwt: string | null) {
   const [lastError, setLastError] = useState<{ code: string; message: string } | null>(null);
 
   const fetchHistory = useCallback(async () => {
-    const r = await fetch(`${API_BASE}/api/v1/me/notifications?page=1&per_page=50`, {
+    const r = await fetch(`${API_BASE}/api/v1/me/notifications?page=1&perPage=50`, {
       headers: jwt ? { Authorization: `Bearer ${jwt}` } : undefined,
       credentials: "include",
     });
     if (!r.ok) return;
-    const body = (await r.json()) as { data?: { items?: Array<{ id: string; type: string; title: string; preview?: string | null; read: boolean; created_at: string }> } };
+    const body = (await r.json()) as { data?: { items?: Array<{ id: string; type: string; title: string; preview?: string | null; read: boolean; createdAt: string }> } };
     const items = body.data?.items ?? [];
     setNotifications(items.map((n) => ({
       id: n.id,
@@ -425,7 +425,7 @@ export function useNotificationStream(jwt: string | null) {
       backoffRef.current.attempt = 0;
       setStatus("open");
       setLastError(null);
-      if (!data.replay_applied) {
+      if (!data.replayApplied) {
         void fetchHistory();
       }
       // Note: Last-Event-ID is automatically persisted by the browser EventSource implementation
@@ -440,7 +440,7 @@ export function useNotificationStream(jwt: string | null) {
       if (data.code === "too_many_connections" || data.code === "auth.expired" || data.code === "session.revoked") {
         setStatus("closed");
       } else {
-        scheduleReconnect(data.retry_ms ?? 5000);
+        scheduleReconnect(data.retryMs ?? 5000);
       }
     });
 
@@ -458,15 +458,15 @@ export function useNotificationStream(jwt: string | null) {
       const data = JSON.parse(ev.data) as NotificationCreatedData;
       if (ev.lastEventId) lastIdRef.current = ev.lastEventId;
       setNotifications((prev) => {
-        if (prev.some((n) => n.id === data.notification_id)) return prev; // dedupe (at-least-once)
+        if (prev.some((n) => n.id === data.notificationId)) return prev; // dedupe (at-least-once)
         return [
           {
-            id: data.notification_id,
+            id: data.notificationId,
             type: data.type,
             title: data.title,
             preview: data.preview,
             read: data.read,
-            createdAt: data.created_at,
+            createdAt: data.createdAt,
             fromSse: true,
           },
           ...prev,
@@ -608,7 +608,7 @@ described here at the procedure level.
 
 - **Unit**: Simulate a server write sequence then disconnect by cancelling the request context. Reconnect with the exact last id received before disconnect via `Last-Event-ID` header; assert the server replays only events strictly greater than the supplied id (no duplicates, no gaps within ring TTL).
 - **Chaos (integration)**: Use a middleware gzip layer or test TCP killer that drops connections every ~50 events over a 10 000 event publish run. After all reconnects converge, collect every notification id received by the client. Assert the union of ids across reconnects + final REST history call covers all 10 000 ids (at-least-once + replay).
-- **Retry hint**: Assert reconnect wrapper doubles the delay each consecutive transport failure, reaching a 120s cap; resets to `retry_ms` immediately after the next `stream.opened` event.
+- **Retry hint**: Assert reconnect wrapper doubles the delay each consecutive transport failure, reaching a 120s cap; resets to `retryMs` immediately after the next `stream.opened` event.
 
 ### 6.4 Graceful Degradation for Non-SSE Clients
 
@@ -627,14 +627,14 @@ described here at the procedure level.
 - Assert JWT for user X with an attempt to read frames from a Redis-side stream keyed to user Y cannot happen; use a test-only `X-Debug-Force-User-Id` header and confirm the middleware strips it before fan-out registration.
 - Open 3 connections for the same user (inside 1s). Assert 4th connect returns 429 with `Retry-After: 30` and body code `sse.stream.too_many_connections`.
 - Run 12 connects over a 60s window for the same `ip:user` tuple. Assert the last 2 respond with 429 jail `sse.stream.jailed` and `Retry-After: 120`.
-- Buffer overflow: attach a consumer that reads 1 frame/sec. Write 1000 events as fast as possible. Assert `event: error { code: "fanout.buffer_full" }` is emitted exactly once with an integer `dropped_count`; assert the hub keeps running and non-slow clients continue unblocked.
+- Buffer overflow: attach a consumer that reads 1 frame/sec. Write 1000 events as fast as possible. Assert `event: error { code: "fanout.buffer_full" }` is emitted exactly once with an integer `droppedCount`; assert the hub keeps running and non-slow clients continue unblocked.
 
 ## 7. Error Codes
 
 The following machine-readable codes appear in 4xx/5xx JSON envelopes as `EnvelopeError.code`
 or inside `event: error` / `event: stream.closed` frames:
 
-| Code | HTTP or stream frame | Meaning | Retry-After / `retry_ms` |
+| Code | HTTP or stream frame | Meaning | Retry-After / `retryMs` |
 |------|----------------------|---------|---------------------------|
 | `unauthorized` | 401 envelope | missing or invalid auth | n/a |
 | `forbidden` | 403 envelope | CSRF / CORS origin / scope missing | n/a |

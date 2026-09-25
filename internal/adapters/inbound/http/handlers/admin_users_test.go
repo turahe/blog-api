@@ -44,7 +44,7 @@ func canManage(ok bool) func(*gin.Context) bool {
 	return func(*gin.Context) bool { return ok }
 }
 
-const newUserBody = `{"email":"ada@example.com","username":"ada","full_name":"Ada","password":"correct-horse-battery"`
+const newUserBody = `{"email":"ada@example.com","username":"ada","fullName":"Ada","password":"correct-horse-battery"`
 
 func TestAdminCreateUserReturnsCreated(t *testing.T) {
 	t.Parallel()
@@ -112,7 +112,7 @@ func TestAdminCreateUserValidatesBody(t *testing.T) {
 	admin := &fakeAdminUsers{}
 	w, _ := runProfile(t, adminCreateUserHandler(admin, canManage(true)), profileRequest{
 		method: nethttp.MethodPost, target: "/api/v1/admin/users",
-		contentType: "application/json", body: `{"email":"ada@example.com","username":"ada","full_name":"Ada","password":"short"}`,
+		contentType: "application/json", body: `{"email":"ada@example.com","username":"ada","fullName":"Ada","password":"short"}`,
 	})
 	require.Equal(t, nethttp.StatusBadRequest, w.Code, w.Body.String())
 	require.Zero(t, admin.calls)
@@ -131,12 +131,12 @@ func TestAdminResetPasswordDefaultsToRevokingSessions(t *testing.T) {
 	require.Equal(t, nethttp.StatusAccepted, w.Code, w.Body.String())
 	require.Equal(t, target, admin.target)
 	require.True(t, admin.revoke)
-	require.Equal(t, "2026-09-25T12:00:00Z", dataOf(body)["reset_link_expires_at"])
-	require.Equal(t, true, dataOf(body)["sessions_revoked"])
+	require.Equal(t, "2026-09-25T12:00:00Z", dataOf(body)["resetLinkExpiresAt"])
+	require.Equal(t, true, dataOf(body)["sessionsRevoked"])
 
 	w, _ = runProfile(t, adminResetPasswordHandler(admin), profileRequest{
 		method: nethttp.MethodPost, target: "/api/v1/admin/users/x/password/admin-reset", param: target.String(),
-		contentType: "application/json", body: `{"revoke_sessions":false}`,
+		contentType: "application/json", body: `{"revokeSessions":false}`,
 	})
 	require.Equal(t, nethttp.StatusAccepted, w.Code, w.Body.String())
 	require.False(t, admin.revoke)

@@ -25,7 +25,7 @@ type analyticsExportsAPI interface {
 // adminAnalyticsExportHandler godoc
 //
 //	@Summary		Request an analytics export
-//	@Description	Queues a ZIP of CSV files with every rollup (site, pages, referrers, audience, navigation, searches, search positions, clicked results) of whole periods covering from through to, plus the daily retention cohorts. No raw events, visitor hashes, or session ids are exported. Requires the current password, and two_factor_code when two-factor is enabled. The archive is built in the background: poll GET /api/v1/admin/analytics/exports/{param1} for a presigned download link. One export per user may be open; a second request answers 409 with the open one in error.details.
+//	@Description	Queues a ZIP of CSV files with every rollup (site, pages, referrers, audience, navigation, searches, search positions, clicked results) of whole periods covering from through to, plus the daily retention cohorts. No raw events, visitor hashes, or session ids are exported. Requires the current password, and twoFactorCode when two-factor is enabled. The archive is built in the background: poll GET /api/v1/admin/analytics/exports/{param1} for a presigned download link. One export per user may be open; a second request answers 409 with the open one in error.details.
 //	@Tags			admin
 //	@Accept			json
 //	@Produce		json
@@ -74,7 +74,7 @@ func adminAnalyticsExportHandler(exports analyticsExportsAPI) gin.HandlerFunc {
 // adminAnalyticsExportsListHandler godoc
 //
 //	@Summary		List my analytics exports
-//	@Description	The caller's 20 most recent exports, newest first. Completed exports whose archive still exists carry a fresh presigned download_url valid for ANALYTICS_EXPORT_URL_TTL (never past archive_expires_at).
+//	@Description	The caller's 20 most recent exports, newest first. Completed exports whose archive still exists carry a fresh presigned downloadUrl valid for ANALYTICS_EXPORT_URL_TTL (never past archiveExpiresAt).
 //	@Tags			admin
 //	@Produce		json
 //	@Success		200	{object}	responses.Envelope
@@ -103,7 +103,7 @@ func adminAnalyticsExportsListHandler(exports analyticsExportsAPI) gin.HandlerFu
 // adminAnalyticsExportGetHandler godoc
 //
 //	@Summary		Get an analytics export
-//	@Description	Status of one of the caller's exports; other users' exports answer 404. A completed export whose archive still exists carries a fresh presigned download_url; after ANALYTICS_EXPORT_RETENTION the archive is deleted and status is expired.
+//	@Description	Status of one of the caller's exports; other users' exports answer 404. A completed export whose archive still exists carries a fresh presigned downloadUrl; after ANALYTICS_EXPORT_RETENTION the archive is deleted and status is expired.
 //	@Tags			admin
 //	@Produce		json
 //	@Param			param1	path		string	true	"export id"

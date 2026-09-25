@@ -6,6 +6,7 @@ import (
 	"reflect"
 	"strings"
 	"unicode"
+	"unicode/utf8"
 
 	"github.com/gin-gonic/gin"
 	"github.com/gin-gonic/gin/binding"
@@ -89,33 +90,20 @@ func validationMessage(fe validator.FieldError) string {
 	case "max":
 		return fmt.Sprintf("The %s may not be greater than %s characters.", field, fe.Param())
 	case "eqfield":
-		other := camelToSnake(fe.Param())
+		other := lowerFirst(fe.Param())
 		return fmt.Sprintf("The %s field must match %s.", field, other)
 	default:
 		return fmt.Sprintf("The %s field is invalid.", field)
 	}
 }
 
-func camelToSnake(s string) string {
+// lowerFirst turns a Go field name such as NewPassword into its JSON name, newPassword.
+func lowerFirst(s string) string {
 	if s == "" {
 		return s
 	}
 
-	var b strings.Builder
+	r, size := utf8.DecodeRuneInString(s)
 
-	for i, r := range s {
-		if unicode.IsUpper(r) {
-			if i > 0 {
-				b.WriteByte('_')
-			}
-
-			b.WriteRune(unicode.ToLower(r))
-
-			continue
-		}
-
-		b.WriteRune(r)
-	}
-
-	return b.String()
+	return string(unicode.ToLower(r)) + s[size:]
 }

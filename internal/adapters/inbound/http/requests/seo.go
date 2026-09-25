@@ -37,22 +37,22 @@ func (n *NullableUUID) UnmarshalJSON(data []byte) error {
 // clears a text field, and null clears an image. Field rules are checked by the service
 // so every invalid field is reported together.
 type UpdatePostSEO struct {
-	SEOTitle           *string      `json:"seo_title"`
-	SEODescription     *string      `json:"seo_description"`
-	SEOKeywords        *[]string    `json:"seo_keywords"`
+	SEOTitle           *string      `json:"seoTitle"`
+	SEODescription     *string      `json:"seoDescription"`
+	SEOKeywords        *[]string    `json:"seoKeywords"`
 	Slug               *string      `json:"slug"`
-	OGTitle            *string      `json:"og_title"`
-	OGDescription      *string      `json:"og_description"`
-	OGImageID          NullableUUID `json:"og_image_id"          swaggertype:"string" format:"uuid"`
-	OGURL              *string      `json:"og_url"`
-	TwitterCard        *string      `json:"twitter_card"`
-	TwitterTitle       *string      `json:"twitter_title"`
-	TwitterDescription *string      `json:"twitter_description"`
-	TwitterImageID     NullableUUID `json:"twitter_image_id"     swaggertype:"string" format:"uuid"`
-	TwitterCreator     *string      `json:"twitter_creator"`
-	CanonicalURL       *string      `json:"canonical_url"`
-	RobotsNoindex      *bool        `json:"robots_noindex"`
-	RobotsNofollow     *bool        `json:"robots_nofollow"`
+	OGTitle            *string      `json:"ogTitle"`
+	OGDescription      *string      `json:"ogDescription"`
+	OGImageID          NullableUUID `json:"ogImageId"          swaggertype:"string" format:"uuid"`
+	OGURL              *string      `json:"ogUrl"`
+	TwitterCard        *string      `json:"twitterCard"`
+	TwitterTitle       *string      `json:"twitterTitle"`
+	TwitterDescription *string      `json:"twitterDescription"`
+	TwitterImageID     NullableUUID `json:"twitterImageId"     swaggertype:"string" format:"uuid"`
+	TwitterCreator     *string      `json:"twitterCreator"`
+	CanonicalURL       *string      `json:"canonicalUrl"`
+	RobotsNoindex      *bool        `json:"robotsNoindex"`
+	RobotsNofollow     *bool        `json:"robotsNofollow"`
 }
 
 // Patch converts the request to the domain patch.

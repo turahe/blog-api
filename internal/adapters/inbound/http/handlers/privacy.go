@@ -45,8 +45,8 @@ func meGetPrivacyHandler(privacy privacyAPI) gin.HandlerFunc {
 // meUpdatePrivacyHandler godoc
 //
 //	@Summary		Update my privacy settings
-//	@Description	Partial update; omitted flags are kept. Narrowing visibility_profile (public → unlisted → private)
-//	@Description	requires current_password; widening it and the other flags do not.
+//	@Description	Partial update; omitted flags are kept. Narrowing visibilityProfile (public → unlisted → private)
+//	@Description	requires currentPassword; widening it and the other flags do not.
 //	@Tags			self-service
 //	@Accept			json
 //	@Produce		json

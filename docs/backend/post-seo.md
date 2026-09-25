@@ -60,34 +60,34 @@ Indexes:
 
 ## Validation Rules
 
-- `seo_title`: max 200 chars; warning at 60 chars (soft validation returned in response warnings array, not hard error)
-- `seo_description`: max 500 chars; warning at 160 chars
-- `seo_keywords`: max 20 items; each trimmed, max 60 chars, no duplicate empty strings
+- `seoTitle`: max 200 chars; warning at 60 chars (soft validation returned in response warnings array, not hard error)
+- `seoDescription`: max 500 chars; warning at 160 chars
+- `seoKeywords`: max 20 items; each trimmed, max 60 chars, no duplicate empty strings
 - `slug`:
   - regex allowlist: `^[a-z0-9]+(?:-[a-z0-9]+)*$`; max 200 chars, min 1
   - uniqueness check across posts (with optional scope like category_id if you implement per-category duplicate slugs)
   - reserved slugs rejected (admin, api, health, etc.)
   - on change: optionally emit `blog.post.slug_changed` event for redirect management
-- `canonical_url`:
+- `canonicalUrl`:
   - absolute URL, allowlisted origin or setting-allowed hosts
   - length limits
-- `og_image_id` and `twitter_image_id`: must exist, content-type image/*
-- `twitter_creator`: if set, regex `@[A-Za-z0-9_]{1,15}`
-- `robots_noindex`, `robots_nofollow`: strict booleans
+- `ogImageId` and `twitterImageId`: must exist, content-type image/*
+- `twitterCreator`: if set, regex `@[A-Za-z0-9_]{1,15}`
+- `robotsNoindex`, `robotsNofollow`: strict booleans
 
 ## Endpoints
 
 ### Admin endpoints
 
-All under `/api/v1/admin/posts/{post_id}/seo`
+All under `/api/v1/admin/posts/{postId}/seo`
 
-#### `GET /api/v1/admin/posts/{post_id}/seo`
+#### `GET /api/v1/admin/posts/{postId}/seo`
 
 Requires auth + `post.seo.view` or ownership permission.
 
 Response: current SEO config, plus any soft warnings for preview.
 
-#### `PUT /api/v1/admin/posts/{post_id}/seo`
+#### `PUT /api/v1/admin/posts/{postId}/seo`
 
 Full replace or patch semantics; recommended: partial update with explicit fields allowlist.
 
@@ -95,22 +95,22 @@ Request body:
 
 ```json
 {
-  "seo_title": "Post SEO Title",
-  "seo_description": "Post SEO description",
-  "seo_keywords": ["a", "b"],
+  "seoTitle": "Post SEO Title",
+  "seoDescription": "Post SEO description",
+  "seoKeywords": ["a", "b"],
   "slug": "my-new-post-slug",
-  "og_title": "...",
-  "og_description": "...",
-  "og_image_id": "uuid or null",
-  "og_url": "https://example.com/posts/my-new-post-slug",
-  "twitter_card": "summary_large_image",
-  "twitter_title": "...",
-  "twitter_description": "...",
-  "twitter_image_id": "uuid or null",
-  "twitter_creator": "@handle",
-  "canonical_url": "...",
-  "robots_noindex": false,
-  "robots_nofollow": false
+  "ogTitle": "...",
+  "ogDescription": "...",
+  "ogImageId": "uuid or null",
+  "ogUrl": "https://example.com/posts/my-new-post-slug",
+  "twitterCard": "summary_large_image",
+  "twitterTitle": "...",
+  "twitterDescription": "...",
+  "twitterImageId": "uuid or null",
+  "twitterCreator": "@handle",
+  "canonicalUrl": "...",
+  "robotsNoindex": false,
+  "robotsNofollow": false
 }
 ```
 
@@ -120,7 +120,7 @@ Validation:
 
 Response: updated SEO plus optional warnings array.
 
-#### `POST /api/v1/admin/posts/{post_id}/seo/preview`
+#### `POST /api/v1/admin/posts/{postId}/seo/preview`
 
 Live preview endpoint. Accepts a draft SEO object (maybe unsaved) and returns rendered search/OG/Twitter preview.
 
@@ -131,34 +131,34 @@ Response:
 ```json
 {
   "data": {
-    "search_preview": {
+    "searchPreview": {
       "title": "...",
       "url": "...",
       "description": "..."
     },
-    "og_preview": {
+    "ogPreview": {
       "title": "...",
       "description": "...",
-      "image_url": "...",
+      "imageUrl": "...",
       "url": "..."
     },
-    "twitter_preview": {
+    "twitterPreview": {
       "card": "summary_large_image",
       "title": "...",
       "description": "...",
-      "image_url": "...",
+      "imageUrl": "...",
       "creator": "@handle"
     },
     "warnings": [
       {
-        "field": "seo_title",
+        "field": "seoTitle",
         "code": "too_long_recommended",
         "message": "SEO title is longer than the recommended 60 chars and may be truncated in search results"
       }
     ]
   },
   "meta": {
-    "request_id": "..."
+    "requestId": "..."
   },
   "error": null
 }
@@ -178,11 +178,11 @@ Response:
 {
   "data": {
     "title": "...",
-    "meta_description": "...",
-    "meta_keywords": "...",
+    "metaDescription": "...",
+    "metaKeywords": "...",
     "canonical": "...",
     "robots": "noindex,nofollow",
-    "open_graph": {
+    "openGraph": {
       "og:type": "article",
       "og:title": "...",
       "og:description": "...",
@@ -200,7 +200,7 @@ Response:
       "twitter:creator": "@..."
     }
   },
-  "meta": {"request_id": "..."}
+  "meta": {"requestId": "..."}
 }
 ```
 
@@ -209,9 +209,9 @@ Response:
 For any field not set explicitly, render according to fallback chain:
 
 - Title: `post_seo.seo_title` → `post.title` + `settings.site.seo_title_template`
-- Description: `seo_description` → `post.excerpt` → `settings.site.default_seo_description`
-- OG image: `og_image_id` → `post.cover_image_media_id` → `settings.seo.default_social_share_media_asset_id`
-- Canonical URL: `canonical_url` → default canonical pattern (e.g. `baseUrl + /posts/slug`)
+- Description: `seoDescription` → `post.excerpt` → `settings.site.default_seo_description`
+- OG image: `ogImageId` → `post.cover_image_media_id` → `settings.seo.default_social_share_media_asset_id`
+- Canonical URL: `canonicalUrl` → default canonical pattern (e.g. `baseUrl + /posts/slug`)
 - Twitter card: default to the site default Twitter card type if not set per post.
 
 ## Events
@@ -268,7 +268,7 @@ What shipped, where it differs from the design above:
 - **Validation.** Every invalid field is returned together as `422` with `error.details` = `[{field, code, message}]`.
   - Codes: `too_long`, `too_many`, `invalid_format`, `markup_not_allowed`, `host_not_allowed`, `not_found`, `not_image`, `slug_taken`, `slug_reserved`.
   - Text containing `<` or `>` or control characters is rejected rather than escaped.
-  - `canonical_url` and `og_url` must use the host of `site.canonical_base_url` (else `site.public_url`) or a host in `seo.canonical_allowed_hosts`. When neither base URL is set, any http(s) host is accepted.
+  - `canonicalUrl` and `ogUrl` must use the host of `site.canonical_base_url` (else `site.public_url`) or a host in `seo.canonical_allowed_hosts`. When neither base URL is set, any http(s) host is accepted.
   - Images must be ready, undeleted `image/*` media.
   - Title and description lengths over 60 and 160 characters are advisory `warnings` (`too_long_recommended`), not errors.
 - **Slug.** Changing `slug` requires `post.slug.edit`; without it the request is `403`. Resubmitting the current slug is allowed. A slug change bumps the post version and emits `blog.post.slug_changed`. Redirect rules are left to consumers of that event.
@@ -276,9 +276,9 @@ What shipped, where it differs from the design above:
   - Revisions snapshot SEO in `seo_snapshot` and diff it per field: `diff.seo = {field: {from, to}}`.
   - Restoring a revision restores its SEO, dropping images that no longer exist (they are listed in `skipped.media`).
 - **Rendering.** `GET /posts/{slug}/seo-meta` returns rendered meta for published posts only; anything else is `404`.
-  - Title: `seo_title`, else `seo.title_template` applied to the plain-text post title.
-  - Description: `seo_description`, else the excerpt, else a 160-character plain-text content summary, else `seo.default_description`.
-  - Canonical URL: `canonical_url`, else `{canonical base}/posts/{slug}`.
+  - Title: `seoTitle`, else `seo.title_template` applied to the plain-text post title.
+  - Description: `seoDescription`, else the excerpt, else a 160-character plain-text content summary, else `seo.default_description`.
+  - Canonical URL: `canonicalUrl`, else `{canonical base}/posts/{slug}`.
   - `og:image`: the OG image, else the cover image, else `seo.default_share_image_url`.
   - Twitter values fall back to the OG values.
   - Derived values have Markdown and HTML stripped.

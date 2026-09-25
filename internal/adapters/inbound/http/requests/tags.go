@@ -14,5 +14,5 @@ type UpdateTag struct {
 
 // MergeTag is POST /api/v1/admin/tags/:id/merge.
 type MergeTag struct {
-	IntoID string `json:"into_id" binding:"required,uuid"`
+	IntoID string `json:"intoId" binding:"required,uuid"`
 }

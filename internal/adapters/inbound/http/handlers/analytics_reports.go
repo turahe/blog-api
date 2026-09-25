@@ -24,7 +24,7 @@ type analyticsReportsAPI interface {
 // adminAnalyticsOverviewHandler godoc
 //
 //	@Summary		Analytics overview
-//	@Description	Totals, a series per period, the top 10 traffic sources, and audience (country, device, browser) for whole periods of the site time zone. Visitors are distinct within a period; a range total is the sum of per-period uniques, named visitor_days, visitor_weeks, or visitor_months after the grain, and plain visitors appears only when the window is a single period. previous holds the same number of periods just before the window (null with compare=none). Rates are null when their denominator is zero.
+//	@Description	Totals, a series per period, the top 10 traffic sources, and audience (country, device, browser) for whole periods of the site time zone. Visitors are distinct within a period; a range total is the sum of per-period uniques, named visitorDays, visitorWeeks, or visitorMonths after the grain, and plain visitors appears only when the window is a single period. previous holds the same number of periods just before the window (null with compare=none). Rates are null when their denominator is zero.
 //	@Tags			admin
 //	@Produce		json
 //	@Param			from	query		string	false	"first day, YYYY-MM-DD (default 29 days before to)"
@@ -44,7 +44,7 @@ func adminAnalyticsOverviewHandler(reports analyticsReportsAPI) gin.HandlerFunc 
 // adminAnalyticsPagesHandler godoc
 //
 //	@Summary		Analytics pages
-//	@Description	Top pages by views, average focus time (sort=time), or views gained over the previous window (sort=rising). previous_views and change appear with compare=previous or sort=rising. Pages outside the top 1000 of a period are folded into (other), which only sort=views lists.
+//	@Description	Top pages by views, average focus time (sort=time), or views gained over the previous window (sort=rising). previousViews and change appear with compare=previous or sort=rising. Pages outside the top 1000 of a period are folded into (other), which only sort=views lists.
 //	@Tags			admin
 //	@Produce		json
 //	@Param			from	query		string	false	"first day, YYYY-MM-DD"

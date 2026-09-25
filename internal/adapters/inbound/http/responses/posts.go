@@ -21,19 +21,19 @@ func Post(post postdomain.Post) gin.H {
 	}
 
 	return gin.H{
-		"id":                   post.UUID.String(),
-		"author_id":            post.AuthorUUID.String(),
-		"category_id":          categoryID,
-		"title":                post.Title,
-		"slug":                 post.Slug,
-		"excerpt":              post.Excerpt,
-		"content":              post.Content,
-		"cover_image_media_id": coverImageMediaID,
-		"status":               string(post.Status),
-		"comment_policy":       string(post.CommentPolicy),
-		"published_at":         RFC3339(post.PublishedAt),
-		"created_at":           post.CreatedAt.UTC().Format(time.RFC3339),
-		"updated_at":           post.UpdatedAt.UTC().Format(time.RFC3339),
+		"id":                post.UUID.String(),
+		"authorId":          post.AuthorUUID.String(),
+		"categoryId":        categoryID,
+		"title":             post.Title,
+		"slug":              post.Slug,
+		"excerpt":           post.Excerpt,
+		"content":           post.Content,
+		"coverImageMediaId": coverImageMediaID,
+		"status":            string(post.Status),
+		"commentPolicy":     string(post.CommentPolicy),
+		"publishedAt":       RFC3339(post.PublishedAt),
+		"createdAt":         post.CreatedAt.UTC().Format(time.RFC3339),
+		"updatedAt":         post.UpdatedAt.UTC().Format(time.RFC3339),
 	}
 }
 

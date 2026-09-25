@@ -114,12 +114,12 @@ func TestGetSettingsListsAndFilters(t *testing.T) {
 	svc := &fakeSettings{}
 	h := settingsHandlers(svc, allSettingsPerms())
 
-	w, body := runProfile(t, h.get, profileRequest{method: nethttp.MethodGet, target: "/?category=site&include_sensitive_admin=true", user: &testUserID})
+	w, body := runProfile(t, h.get, profileRequest{method: nethttp.MethodGet, target: "/?category=site&includeSensitiveAdmin=true", user: &testUserID})
 	require.Equal(t, nethttp.StatusOK, w.Code, w.Body.String())
 	assert.Equal(t, settingsservice.ListFilter{Category: settingsdomain.CategorySite, IncludeAdminOnly: true}, svc.listFilter)
 
 	data := dataOf(body)
-	assert.Equal(t, []any{"media.quality"}, data["default_applied"])
+	assert.Equal(t, []any{"media.quality"}, data["defaultApplied"])
 
 	items, _ := data["settings"].([]any)
 	require.Len(t, items, 2)
@@ -127,9 +127,9 @@ func TestGetSettingsListsAndFilters(t *testing.T) {
 	assert.Equal(t, "site.name", first["key"])
 	assert.Equal(t, "Mine", first["value"])
 	assert.Equal(t, "Blog", first["default"])
-	assert.Equal(t, "string", first["value_type"])
+	assert.Equal(t, "string", first["valueType"])
 	assert.InDelta(t, 2, first["version"], 0)
-	assert.Equal(t, testUserID.String(), first["updated_by"])
+	assert.Equal(t, testUserID.String(), first["updatedBy"])
 }
 
 func TestGetSettingsAdminOnlyNeedsUpdatePermission(t *testing.T) {
@@ -138,11 +138,11 @@ func TestGetSettingsAdminOnlyNeedsUpdatePermission(t *testing.T) {
 	svc := &fakeSettings{}
 	h := settingsHandlers(svc, permissionSet{permSettingsRead: true})
 
-	w, _ := runProfile(t, h.get, profileRequest{method: nethttp.MethodGet, target: "/?include_sensitive_admin=1", user: &testUserID})
+	w, _ := runProfile(t, h.get, profileRequest{method: nethttp.MethodGet, target: "/?includeSensitiveAdmin=1", user: &testUserID})
 	require.Equal(t, nethttp.StatusOK, w.Code)
 	assert.False(t, svc.listFilter.IncludeAdminOnly)
 
-	w, body := runProfile(t, h.get, profileRequest{method: nethttp.MethodGet, target: "/?include_sensitive_admin=maybe", user: &testUserID})
+	w, body := runProfile(t, h.get, profileRequest{method: nethttp.MethodGet, target: "/?includeSensitiveAdmin=maybe", user: &testUserID})
 	require.Equal(t, nethttp.StatusBadRequest, w.Code)
 	assert.Equal(t, responses.ErrorCodeValidation, errorCode(body))
 }
@@ -171,7 +171,7 @@ func TestPutSettingsPassesUpdatesAndActor(t *testing.T) {
 	assert.Equal(t, []any{"media.quality"}, data["unchanged"])
 	applied, _ := data["applied"].([]any)
 	require.Len(t, applied, 1)
-	assert.Equal(t, map[string]any{"key": "site.name", "previous_value": "Blog", "new_value": "Mine", "version": float64(1)}, applied[0])
+	assert.Equal(t, map[string]any{"key": "site.name", "previousValue": "Blog", "newValue": "Mine", "version": float64(1)}, applied[0])
 }
 
 func TestPutSettingsErrors(t *testing.T) {
@@ -221,19 +221,19 @@ func TestSettingsHistoryPaginatesAndShowsRedaction(t *testing.T) {
 	svc := &fakeSettings{}
 	h := settingsHandlers(svc, allSettingsPerms())
 
-	w, body := runProfile(t, h.history, profileRequest{method: nethttp.MethodGet, target: "/?key=site.name&page=2&per_page=5", user: &testUserID})
+	w, body := runProfile(t, h.history, profileRequest{method: nethttp.MethodGet, target: "/?key=site.name&page=2&perPage=5", user: &testUserID})
 	require.Equal(t, nethttp.StatusOK, w.Code, w.Body.String())
 	assert.Equal(t, settingsdomain.HistoryFilter{Key: "site.name", Page: 2, PerPage: 5}, svc.historyFilter)
 
 	items, _ := body["data"].([]any)
 	require.Len(t, items, 2)
 	first, _ := items[0].(map[string]any)
-	assert.Equal(t, "Blog", first["previous_value"])
-	assert.Equal(t, "Mine", first["new_value"])
+	assert.Equal(t, "Blog", first["previousValue"])
+	assert.Equal(t, "Mine", first["newValue"])
 
 	second, _ := items[1].(map[string]any)
 	assert.Equal(t, true, second["redacted"])
-	assert.Nil(t, second["new_value"])
+	assert.Nil(t, second["newValue"])
 
 	meta, _ := body["meta"].(map[string]any)
 	assert.InDelta(t, 2, meta["total"], 0)

@@ -172,7 +172,7 @@ func TestAdminUserRolesAssign(t *testing.T) {
 		contentType: "application/json", body: `{"roles":["editor"]}`,
 	})
 	require.Equal(t, nethttp.StatusOK, w.Code, w.Body.String())
-	require.Equal(t, target.String(), dataOf(body)["user_id"])
+	require.Equal(t, target.String(), dataOf(body)["userId"])
 	require.Equal(t, []any{"editor"}, dataOf(body)["roles"])
 
 	w, _ = runProfile(t, adminUserRolesAssignHandler(roles), profileRequest{

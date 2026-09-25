@@ -11,10 +11,10 @@ import (
 // TokenPair serializes an auth token pair for login/refresh responses.
 func TokenPair(pair authdomain.TokenPair) gin.H {
 	return gin.H{
-		"access_token":  pair.AccessToken,
-		"refresh_token": pair.RefreshToken,
-		"token_type":    pair.TokenType,
-		"expires_in":    pair.ExpiresIn,
+		"accessToken":  pair.AccessToken,
+		"refreshToken": pair.RefreshToken,
+		"tokenType":    pair.TokenType,
+		"expiresIn":    pair.ExpiresIn,
 	}
 }
 
@@ -22,20 +22,20 @@ func TokenPair(pair authdomain.TokenPair) gin.H {
 // the client completes it at POST /api/v1/auth/2fa/challenge.
 func TwoFactorChallenge(challenge authdomain.TwoFactorChallenge, now time.Time) gin.H {
 	return gin.H{
-		"two_factor_required": true,
-		"challenge_token":     challenge.Token,
-		"expires_at":          challenge.ExpiresAt.UTC().Format(time.RFC3339),
-		"expires_in":          int64(max(challenge.ExpiresAt.Sub(now).Seconds(), 0)),
+		"twoFactorRequired": true,
+		"challengeToken":    challenge.Token,
+		"expiresAt":         challenge.ExpiresAt.UTC().Format(time.RFC3339),
+		"expiresIn":         int64(max(challenge.ExpiresAt.Sub(now).Seconds(), 0)),
 	}
 }
 
 // TwoFactorStatus serializes a user's enrollment.
 func TwoFactorStatus(status authdomain.TwoFactorStatus) gin.H {
 	return gin.H{
-		"enabled":                status.Enabled,
-		"pending":                status.Pending,
-		"confirmed_at":           RFC3339(status.ConfirmedAt),
-		"backup_codes_remaining": status.BackupCodesRemaining,
+		"enabled":              status.Enabled,
+		"pending":              status.Pending,
+		"confirmedAt":          RFC3339(status.ConfirmedAt),
+		"backupCodesRemaining": status.BackupCodesRemaining,
 	}
 }
 

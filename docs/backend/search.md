@@ -8,7 +8,7 @@ worker consumer on `blog.post.revision.created`, which fires on every post write
 
 `GET /api/v1/posts?q=<query>` switches the public post list to search. `q` is trimmed, runs of
 whitespace are collapsed, and it may be at most 200 characters (`400 validation_error`
-otherwise). `page`, `per_page` (max 100), `category_id`, and `tag_id` work as on the plain list.
+otherwise). `page`, `perPage` (max 100), `categoryId`, and `tagId` work as on the plain list.
 Without a search backend (the migration was not applied) the answer is `503 search.unavailable`.
 
 `q` uses PostgreSQL web search syntax (`websearch_to_tsquery`):
@@ -35,7 +35,7 @@ post and there is no indexing lag or worker dependency. It is weighted:
 | C | first 100,000 characters of `content` (a tsvector is capped at 1 MB) |
 
 A GIN index (`posts_search_vector_idx`) serves the match. Tags and category names are not
-indexed; use `tag_id` or `category_id` to narrow results.
+indexed; use `tagId` or `categoryId` to narrow results.
 
 ## Language
 
@@ -55,7 +55,7 @@ language at startup and always queries with it, logging a warning while it diffe
 Results are ordered by `ts_rank(search_vector, query, 1)`, which weighs title matches above
 excerpt matches above content matches and divides by the log of the document length, so a short
 post that matches beats a long one that mentions the term once. Ties fall back to newest
-`published_at`, then id.
+`publishedAt`, then id.
 
 ## Response
 

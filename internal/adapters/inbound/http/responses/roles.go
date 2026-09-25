@@ -15,8 +15,8 @@ func Role(role rbacdomain.Role) gin.H {
 		"description": role.Description,
 		"permissions": role.Permissions,
 		"protected":   role.Name == rbacdomain.ProtectedRole,
-		"created_at":  role.CreatedAt.UTC().Format(time.RFC3339),
-		"updated_at":  role.UpdatedAt.UTC().Format(time.RFC3339),
+		"createdAt":   role.CreatedAt.UTC().Format(time.RFC3339),
+		"updatedAt":   role.UpdatedAt.UTC().Format(time.RFC3339),
 	}
 }
 

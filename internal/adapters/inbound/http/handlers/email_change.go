@@ -45,8 +45,8 @@ func meRequestEmailChangeHandler(auth authports.EmailChanger) gin.HandlerFunc {
 		}
 
 		responses.SuccessFor(c, nethttp.StatusAccepted, responses.ServiceAuth, responses.CaseAccepted, gin.H{
-			"new_email":  request.NewEmail,
-			"expires_at": request.ExpiresAt.UTC().Format(time.RFC3339),
+			"newEmail":  request.NewEmail,
+			"expiresAt": request.ExpiresAt.UTC().Format(time.RFC3339),
 		})
 	}
 }
@@ -83,9 +83,9 @@ func meConfirmEmailChangeHandler(auth authports.EmailChanger) gin.HandlerFunc {
 		}
 
 		responses.SuccessFor(c, nethttp.StatusOK, responses.ServiceAuth, responses.CaseSuccess, gin.H{
-			"email":             user.Email,
-			"email_verified_at": responses.RFC3339(user.EmailVerifiedAt),
-			"sessions_revoked":  true,
+			"email":           user.Email,
+			"emailVerifiedAt": responses.RFC3339(user.EmailVerifiedAt),
+			"sessionsRevoked": true,
 		})
 	}
 }

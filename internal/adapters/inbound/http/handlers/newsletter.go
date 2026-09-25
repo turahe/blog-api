@@ -82,7 +82,7 @@ func newsletterControllers(deps Deps) routes.Newsletter {
 //	@Summary		Subscribe to the newsletter
 //	@Description	Emails a double opt-in confirmation link. Always 202 with the same body whether the address
 //	@Description	is new, pending, already subscribed, or suppressed, so it cannot reveal who subscribes. lists
-//	@Description	are list slugs (empty means the default lists). Leave honeypot empty. turnstile_response is
+//	@Description	are list slugs (empty means the default lists). Leave honeypot empty. turnstileResponse is
 //	@Description	required when Turnstile is configured. Rate limited per IP and per address.
 //	@Tags			newsletter
 //	@Accept			json
@@ -259,7 +259,7 @@ func newsletterPreferencesHandler(nl newsletterPublicAPI) gin.HandlerFunc {
 //	@Summary		Update newsletter preferences
 //	@Description	Changes format and lists by preferences token. lists is the complete set to receive; chosen
 //	@Description	lists are active at once, including after an earlier unsubscribe. An empty lists array or
-//	@Description	unsubscribe_all stops all mail.
+//	@Description	unsubscribeAll stops all mail.
 //	@Tags			newsletter
 //	@Accept			json
 //	@Produce		json
@@ -365,7 +365,7 @@ func meNewsletterHandler(nl newsletterPublicAPI) gin.HandlerFunc {
 //
 //	@Summary		Subscribe my account email
 //	@Description	Subscribes the account email to lists (the default lists when empty). A verified account
-//	@Description	email joins at once unless double_optin_required is set; otherwise the lists stay pending
+//	@Description	email joins at once unless doubleOptinRequired is set; otherwise the lists stay pending
 //	@Description	until the emailed confirmation link is used (status pending_confirm).
 //	@Tags			me
 //	@Accept			json

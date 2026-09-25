@@ -1,5 +1,22 @@
 # Changelog
 
+## 2026-09-25 — camelCase REST API
+
+### Changed
+
+- **Breaking:** REST request and response fields, query parameters, and server-sent event
+  frames are camelCase, with acronyms cased as words: `accessToken`, `perPage`, `categoryId`,
+  `redirectUri`, `meta.requestId`, `meta.currentPage`. snake_case names are no longer accepted;
+  a snake_case request field is ignored like any unknown field, so a required one fails
+  validation. Validation error `details` are keyed by the new names.
+- Values keep their format: error codes, enum values, setting keys, consent purposes
+  (`authenticated_analytics`), and Open Graph / Twitter tag names.
+- Stored names are converted when rendered: notification `data`, post revision
+  `changedFields`, `diff`, and snapshot SEO, and SEO violation fields (`seoTitle`).
+- Not REST, so unchanged: broker events and AsyncAPI event payloads, audit `metadata` and
+  `changes`, CSV export columns, the newsletter provider webhook body, and the Redis read
+  cache format.
+
 ## 2026-09-25 — Self-registration with email verification
 
 ### Added

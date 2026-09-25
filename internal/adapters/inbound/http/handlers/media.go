@@ -91,19 +91,19 @@ func adminCompleteMediaHandler(media mediaports.Service) gin.HandlerFunc {
 //	@Summary	List media assets
 //	@Tags		admin
 //	@Produce	json
-//	@Param		page		query		int		false	"page"		default(1)
-//	@Param		per_page	query		int		false	"per page"	default(20)
-//	@Param		q			query		string	false	"search"
-//	@Param		disk		query		string	false	"disk filter"
-//	@Param		status		query		string	false	"status filter"	Enums(pending, ready, failed)
-//	@Param		unused		query		bool	false	"only ready assets no avatar, category, post cover, attachment, or SEO image references"
-//	@Success	200			{object}	responses.Envelope
+//	@Param		page	query		int		false	"page"		default(1)
+//	@Param		perPage	query		int		false	"per page"	default(20)
+//	@Param		q		query		string	false	"search"
+//	@Param		disk	query		string	false	"disk filter"
+//	@Param		status	query		string	false	"status filter"	Enums(pending, ready, failed)
+//	@Param		unused	query		bool	false	"only ready assets no avatar, category, post cover, attachment, or SEO image references"
+//	@Success	200		{object}	responses.Envelope
 //	@Security	Bearer
 //	@Router		/api/v1/admin/media [get]
 func adminListMediaHandler(media mediaports.Service) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		page := parsePositiveInt(c.Query("page"), 1)
-		perPage := parsePositiveInt(c.Query("per_page"), 20)
+		perPage := parsePositiveInt(c.Query("perPage"), 20)
 
 		result, err := media.List(c.Request.Context(), mediadomain.ListFilter{
 			Page:    page,
@@ -267,10 +267,10 @@ func publicTransformMediaHandler(media mediaports.Service) gin.HandlerFunc {
 // adminMediaUsageHandler godoc
 //
 //	@Summary		Storage usage
-//	@Description	Counts and bytes of stored media by status (soft-deleted assets as deleted until the orphan cleanup purges them), content type, and top uploaders. user_id narrows the report to one uploader.
+//	@Description	Counts and bytes of stored media by status (soft-deleted assets as deleted until the orphan cleanup purges them), content type, and top uploaders. userId narrows the report to one uploader.
 //	@Tags			admin
 //	@Produce		json
-//	@Param			user_id	query		string	false	"uploader UUID"
+//	@Param			userId	query		string	false	"uploader UUID"
 //	@Param			top		query		int		false	"uploaders to list (1-100)"	default(10)
 //	@Success		200		{object}	responses.Envelope
 //	@Failure		400		{object}	responses.Envelope
@@ -280,10 +280,10 @@ func adminMediaUsageHandler(media mediaports.Service) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		filter := mediadomain.UsageFilter{TopLimit: parsePositiveInt(c.Query("top"), 0)}
 
-		if raw := strings.TrimSpace(c.Query("user_id")); raw != "" {
+		if raw := strings.TrimSpace(c.Query("userId")); raw != "" {
 			id, err := uuid.Parse(raw)
 			if err != nil {
-				responses.Failure(c, nethttp.StatusBadRequest, responses.ErrorCodeValidation, "user_id must be a UUID")
+				responses.Failure(c, nethttp.StatusBadRequest, responses.ErrorCodeValidation, "userId must be a UUID")
 				return
 			}
 

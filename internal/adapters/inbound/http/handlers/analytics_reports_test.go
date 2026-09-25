@@ -108,13 +108,13 @@ func TestAdminAnalyticsOverviewRendersLabelledVisitorSums(t *testing.T) {
 	assert.NotNil(t, data["comparison"])
 
 	totals, _ := data["totals"].(map[string]any)
-	assert.InDelta(t, 9, totals["visitor_days"], 0)
+	assert.InDelta(t, 9, totals["visitorDays"], 0)
 	assert.NotContains(t, totals, "visitors", "a multi-period range has no distinct visitor total")
-	assert.InDelta(t, 0.4, totals["bounce_rate"], 1e-9)
-	assert.Nil(t, totals["avg_time_seconds"], "no focus data")
+	assert.InDelta(t, 0.4, totals["bounceRate"], 1e-9)
+	assert.Nil(t, totals["avgTimeSeconds"], "no focus data")
 
 	previous, _ := data["previous"].(map[string]any)
-	assert.Nil(t, previous["bounce_rate"])
+	assert.Nil(t, previous["bounceRate"])
 
 	audience, _ := data["audience"].(map[string]any)
 	devices, _ := audience["device"].([]any)
@@ -134,7 +134,7 @@ func TestAdminAnalyticsSinglePeriodAddsDistinctVisitors(t *testing.T) {
 	assert.Nil(t, data["comparison"])
 
 	totals, _ := data["totals"].(map[string]any)
-	assert.InDelta(t, 9, totals["visitor_months"], 0)
+	assert.InDelta(t, 9, totals["visitorMonths"], 0)
 	assert.InDelta(t, 9, totals["visitors"], 0)
 }
 
@@ -154,7 +154,7 @@ func TestAdminAnalyticsPagesShowChangeWhenRising(t *testing.T) {
 
 	page, _ := pages[0].(map[string]any)
 	assert.InDelta(t, 7, page["change"], 0)
-	assert.InDelta(t, 15, page["avg_time_seconds"], 0)
+	assert.InDelta(t, 15, page["avgTimeSeconds"], 0)
 }
 
 func TestAdminAnalyticsRetentionWeighsCompleteCohorts(t *testing.T) {
@@ -179,7 +179,7 @@ func TestAdminAnalyticsSearchRendersClickTimeAndShares(t *testing.T) {
 
 	data := dataOf(body)
 	totals, _ := data["totals"].(map[string]any)
-	assert.InDelta(t, 3, totals["avg_seconds_to_click"], 0)
+	assert.InDelta(t, 3, totals["avgSecondsToClick"], 0)
 
 	positions, _ := data["positions"].([]any)
 	require.Len(t, positions, 2)

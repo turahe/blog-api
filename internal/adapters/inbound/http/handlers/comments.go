@@ -30,13 +30,13 @@ type commentAPI interface {
 // listPostCommentsHandler godoc
 //
 //	@Summary		List comments on a post
-//	@Description	Top-level comments by default; pass parent_id to list the direct replies of a comment.
+//	@Description	Top-level comments by default; pass parentId to list the direct replies of a comment.
 //	@Tags			public
 //	@Produce		json
 //	@Param			param1		path		string	true	"post UUID"
-//	@Param			parent_id	query		string	false	"parent comment UUID"
+//	@Param			parentId	query		string	false	"parent comment UUID"
 //	@Param			page		query		int		false	"page"		default(1)
-//	@Param			per_page	query		int		false	"per page"	default(20)
+//	@Param			perPage		query		int		false	"per page"	default(20)
 //	@Success		200			{object}	responses.Envelope
 //	@Failure		400			{object}	responses.Envelope
 //	@Failure		403			{object}	responses.Envelope
@@ -51,10 +51,10 @@ func listPostCommentsHandler(comments commentAPI) gin.HandlerFunc {
 
 		var parentID *uuid.UUID
 
-		if raw := strings.TrimSpace(c.Query("parent_id")); raw != "" {
+		if raw := strings.TrimSpace(c.Query("parentId")); raw != "" {
 			parsed, err := uuid.Parse(raw)
 			if err != nil {
-				failCommentValidation(c, "Invalid parent_id")
+				failCommentValidation(c, "Invalid parentId")
 				return
 			}
 
@@ -75,7 +75,7 @@ func listPostCommentsHandler(comments commentAPI) gin.HandlerFunc {
 // createPostCommentHandler godoc
 //
 //	@Summary		Comment on a post
-//	@Description	Signed-in users comment as themselves. Guests send author_name and author_email when guest comments are enabled; guest comments await moderation. When the server has TURNSTILE_SECRET_KEY set, guests must also send turnstile_response.
+//	@Description	Signed-in users comment as themselves. Guests send authorName and authorEmail when guest comments are enabled; guest comments await moderation. When the server has TURNSTILE_SECRET_KEY set, guests must also send turnstileResponse.
 //	@Tags			public
 //	@Accept			json
 //	@Produce		json
@@ -116,7 +116,7 @@ func createPostCommentHandler(comments commentAPI) gin.HandlerFunc {
 		if req.ParentID != "" {
 			parentID, err := uuid.Parse(req.ParentID)
 			if err != nil {
-				failCommentValidation(c, "Invalid parent_id")
+				failCommentValidation(c, "Invalid parentId")
 				return
 			}
 
@@ -219,10 +219,10 @@ func flagCommentHandler(comments commentAPI) gin.HandlerFunc {
 //	@Description	All of the caller's comments except deleted ones, newest first, including pending and rejected.
 //	@Tags			self-service
 //	@Produce		json
-//	@Param			page		query		int	false	"page"		default(1)
-//	@Param			per_page	query		int	false	"per page"	default(20)
-//	@Success		200			{object}	responses.Envelope
-//	@Failure		401			{object}	responses.Envelope
+//	@Param			page	query		int	false	"page"		default(1)
+//	@Param			perPage	query		int	false	"per page"	default(20)
+//	@Success		200		{object}	responses.Envelope
+//	@Failure		401		{object}	responses.Envelope
 //	@Security		Bearer
 //	@Router			/api/v1/me/comments [get]
 func listMyCommentsHandler(comments commentAPI) gin.HandlerFunc {
@@ -350,7 +350,7 @@ func upvoteCommentHandler(comments commentAPI) gin.HandlerFunc {
 		}
 
 		responses.SuccessFor(c, nethttp.StatusOK, responses.ServiceComments, responses.CaseSuccess,
-			gin.H{"id": id.String(), "upvoted": upvoted, "upvote_count": count})
+			gin.H{"id": id.String(), "upvoted": upvoted, "upvoteCount": count})
 	}
 }
 
@@ -379,7 +379,7 @@ func requireCommentUser(c *gin.Context) (uuid.UUID, bool) {
 
 func pageParams(c *gin.Context) (int, int) {
 	page, _ := strconv.Atoi(c.DefaultQuery("page", "1"))
-	perPage, _ := strconv.Atoi(c.DefaultQuery("per_page", "20"))
+	perPage, _ := strconv.Atoi(c.DefaultQuery("perPage", "20"))
 
 	return page, perPage
 }
@@ -465,7 +465,7 @@ var commentErrorRules = []commentErrorRule{
 	{commentdomain.ErrNotFound, nethttp.StatusNotFound, responses.ErrorCodeNotFound, "Comment not found", false},
 	{commentdomain.ErrPostNotFound, nethttp.StatusNotFound, responses.ErrorCodeNotFound, "Post not found", false},
 	{commentdomain.ErrNotEditable, nethttp.StatusConflict, "comment.not_editable", "This comment can no longer be edited", false},
-	{commentdomain.ErrParentInvalid, nethttp.StatusUnprocessableEntity, "comment.parent_invalid", "parent_id must be an approved comment on the same post", false},
+	{commentdomain.ErrParentInvalid, nethttp.StatusUnprocessableEntity, "comment.parent_invalid", "parentId must be an approved comment on the same post", false},
 	{commentdomain.ErrDepthExceeded, nethttp.StatusUnprocessableEntity, "comment.depth_exceeded", "Replies cannot be nested deeper than 5 levels", false},
 }
 

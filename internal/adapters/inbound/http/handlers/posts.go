@@ -58,7 +58,7 @@ func adminCreatePostHandler(posts postAdminAPI) gin.HandlerFunc {
 		if req.CategoryID != nil && strings.TrimSpace(*req.CategoryID) != "" {
 			id, err := uuid.Parse(strings.TrimSpace(*req.CategoryID))
 			if err != nil {
-				responses.Failure(c, nethttp.StatusBadRequest, responses.ErrorCodeValidation, "Invalid category_id")
+				responses.Failure(c, nethttp.StatusBadRequest, responses.ErrorCodeValidation, "Invalid categoryId")
 				return
 			}
 
@@ -89,10 +89,10 @@ func adminCreatePostHandler(posts postAdminAPI) gin.HandlerFunc {
 //	@Tags		admin
 //	@Produce	json
 //	@Param		page		query		int		false	"page"		default(1)
-//	@Param		per_page	query		int		false	"per page"	default(20)
+//	@Param		perPage		query		int		false	"per page"	default(20)
 //	@Param		status		query		string	false	"status filter"
-//	@Param		author_id	query		string	false	"author UUID"
-//	@Param		category_id	query		string	false	"category UUID"
+//	@Param		authorId	query		string	false	"author UUID"
+//	@Param		categoryId	query		string	false	"category UUID"
 //	@Param		q			query		string	false	"search"
 //	@Param		trashed		query		bool	false	"list only soft-deleted posts"	default(false)
 //	@Success	200			{object}	responses.Envelope
@@ -111,17 +111,17 @@ func adminListPostsHandlerWithDeps(posts postAdminAPI, roles RoleLookup) gin.Han
 		}
 
 		page, _ := strconv.Atoi(c.DefaultQuery("page", "1"))
-		perPage, _ := strconv.Atoi(c.DefaultQuery("per_page", "20"))
+		perPage, _ := strconv.Atoi(c.DefaultQuery("perPage", "20"))
 
-		authorID, err := postservice.ParseOptionalUUID(c.Query("author_id"))
+		authorID, err := postservice.ParseOptionalUUID(c.Query("authorId"))
 		if err != nil {
-			responses.Failure(c, nethttp.StatusBadRequest, responses.ErrorCodeValidation, "Invalid author_id")
+			responses.Failure(c, nethttp.StatusBadRequest, responses.ErrorCodeValidation, "Invalid authorId")
 			return
 		}
 
-		categoryID, err := postservice.ParseOptionalUUID(c.Query("category_id"))
+		categoryID, err := postservice.ParseOptionalUUID(c.Query("categoryId"))
 		if err != nil {
-			responses.Failure(c, nethttp.StatusBadRequest, responses.ErrorCodeValidation, "Invalid category_id")
+			responses.Failure(c, nethttp.StatusBadRequest, responses.ErrorCodeValidation, "Invalid categoryId")
 			return
 		}
 
@@ -228,7 +228,7 @@ func adminUpdatePostHandlerWithDeps(posts postAdminAPI, roles RoleLookup) gin.Ha
 		if len(req.CategoryID) > 0 {
 			in.CategoryUUID.Present = true
 
-			categoryID, ok := parseNullableUUID(c, req.CategoryID, "category_id")
+			categoryID, ok := parseNullableUUID(c, req.CategoryID, "categoryId")
 			if !ok {
 				return
 			}
@@ -280,7 +280,7 @@ func adminReplacePostMediaHandler(posts *postservice.PostService, media mediapor
 		for _, item := range req.Items {
 			mediaID, err := uuid.Parse(strings.TrimSpace(item.MediaAssetID))
 			if err != nil {
-				responses.Failure(c, nethttp.StatusBadRequest, responses.ErrorCodeValidation, "Invalid media_asset_id")
+				responses.Failure(c, nethttp.StatusBadRequest, responses.ErrorCodeValidation, "Invalid mediaAssetId")
 				return
 			}
 
@@ -313,8 +313,8 @@ func adminReplacePostMediaHandler(posts *postservice.PostService, media mediapor
 		}
 
 		responses.Success(c, nethttp.StatusOK, gin.H{
-			"post_id": postID.String(),
-			"items":   payload,
+			"postId": postID.String(),
+			"items":  payload,
 		})
 	}
 }
@@ -337,9 +337,9 @@ func postMediaPayload(c *gin.Context, media mediaports.Service, items []mediadom
 	payload := make([]gin.H, 0, len(items))
 	for _, item := range items {
 		row := gin.H{
-			"media_asset_id": item.MediaAssetUUID.String(),
-			"kind":           item.Kind,
-			"sort_order":     item.SortOrder,
+			"mediaAssetId": item.MediaAssetUUID.String(),
+			"kind":         item.Kind,
+			"sortOrder":    item.SortOrder,
 		}
 		if item.Media != nil {
 			row["media"], rendered = rendered[0], rendered[1:]

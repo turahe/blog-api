@@ -81,7 +81,7 @@ func (s *analyticsStack) consentToken(t *testing.T, granted bool) string {
 	t.Helper()
 
 	r := s.send(t, "/api/v1/analytics/consent", browserUA, map[string]any{
-		"purposes": map[string]bool{"analytics": granted}, "policy_version": "2026-09",
+		"purposes": map[string]bool{"analytics": granted}, "policyVersion": "2026-09",
 	}, nil)
 	require.Equal(t, nethttp.StatusCreated, r.status, r.code)
 
@@ -105,7 +105,7 @@ func TestAnalyticsIngestHonoursConsent(t *testing.T) {
 
 	s := newAnalyticsStack(t)
 	session := uuid.NewString()
-	view := map[string]any{"session_id": session, "path": "/posts/hello?token=secret"}
+	view := map[string]any{"sessionId": session, "path": "/posts/hello?token=secret"}
 	page := "/api/v1/analytics/ingest/page-view"
 
 	r := s.send(t, page, browserUA, view, nil)
@@ -119,17 +119,17 @@ func TestAnalyticsIngestHonoursConsent(t *testing.T) {
 	require.NotEmpty(t, viewID)
 
 	r = s.send(t, "/api/v1/analytics/ingest/time-spent", browserUA,
-		map[string]any{"view_id": viewID, "session_id": session, "path": "/posts/hello", "focus_seconds": 20},
+		map[string]any{"viewId": viewID, "sessionId": session, "path": "/posts/hello", "focusSeconds": 20},
 		map[string]string{"X-Consent-Token": granted})
 	require.Equal(t, nethttp.StatusAccepted, r.status, r.code)
 
 	r = s.send(t, "/api/v1/analytics/ingest/search", browserUA,
-		map[string]any{"session_id": session, "query": "Hello", "result_count": 2}, map[string]string{"X-Consent-Token": granted})
+		map[string]any{"sessionId": session, "query": "Hello", "resultCount": 2}, map[string]string{"X-Consent-Token": granted})
 	require.Equal(t, nethttp.StatusAccepted, r.status, r.code)
 	searchID, _ := r.data["id"].(string)
 
 	r = s.send(t, "/api/v1/analytics/ingest/search-click", browserUA, map[string]any{
-		"session_id": session, "search_id": searchID, "position": 1, "resource_type": "post", "resource_id": uuid.NewString(),
+		"sessionId": session, "searchId": searchID, "position": 1, "resourceType": "post", "resourceId": uuid.NewString(),
 	}, map[string]string{"X-Consent-Token": granted})
 	require.Equal(t, nethttp.StatusAccepted, r.status, r.code)
 
@@ -141,11 +141,11 @@ func TestAnalyticsIngestHonoursConsent(t *testing.T) {
 	botSession := uuid.NewString()
 	refused := s.consentToken(t, false)
 
-	r = s.send(t, page, browserUA, map[string]any{"session_id": anonymous, "path": "/"}, nil)
+	r = s.send(t, page, browserUA, map[string]any{"sessionId": anonymous, "path": "/"}, nil)
 	require.Equal(t, nethttp.StatusAccepted, r.status, r.code)
-	r = s.send(t, page, browserUA, map[string]any{"session_id": refusedSession, "path": "/"}, map[string]string{"X-Consent-Token": refused})
+	r = s.send(t, page, browserUA, map[string]any{"sessionId": refusedSession, "path": "/"}, map[string]string{"X-Consent-Token": refused})
 	require.Equal(t, nethttp.StatusAccepted, r.status, "a refusal is answered like any other event")
-	r = s.send(t, page, "Googlebot/2.1", map[string]any{"session_id": botSession, "path": "/"}, nil)
+	r = s.send(t, page, "Googlebot/2.1", map[string]any{"sessionId": botSession, "path": "/"}, nil)
 	require.Equal(t, nethttp.StatusAccepted, r.status)
 
 	require.NoError(t, s.writer.Close(t.Context()))
@@ -179,11 +179,11 @@ func TestAnalyticsIngestIsDisabledBySetting(t *testing.T) {
 		ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value`).Error)
 
 	r := s.send(t, "/api/v1/analytics/ingest/page-view", browserUA,
-		map[string]any{"session_id": uuid.NewString(), "path": "/"}, nil)
+		map[string]any{"sessionId": uuid.NewString(), "path": "/"}, nil)
 	assert.Equal(t, nethttp.StatusNotFound, r.status)
 	assert.Equal(t, "analytics.disabled", r.code)
 
 	r = s.send(t, "/api/v1/analytics/ingest/navigation", browserUA,
-		map[string]any{"session_id": uuid.NewString(), "to": "/", "transition": "direct"}, nil)
+		map[string]any{"sessionId": uuid.NewString(), "to": "/", "transition": "direct"}, nil)
 	assert.Equal(t, nethttp.StatusNotFound, r.status)
 }

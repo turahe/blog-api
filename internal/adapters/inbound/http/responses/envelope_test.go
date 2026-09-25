@@ -70,7 +70,7 @@ func TestSuccessPaginatedLaravelShape(t *testing.T) {
 
 			w := httptest.NewRecorder()
 			c, _ := gin.CreateTestContext(w)
-			c.Request = httptest.NewRequestWithContext(t.Context(), http.MethodGet, "/api/v1/users?page=2&per_page=15&q=a", nil)
+			c.Request = httptest.NewRequestWithContext(t.Context(), http.MethodGet, "/api/v1/users?page=2&perPage=15&q=a", nil)
 			c.Request.Host = "example.com"
 
 			items := []gin.H{{"id": 1}}

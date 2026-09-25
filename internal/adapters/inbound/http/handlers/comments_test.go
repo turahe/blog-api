@@ -119,7 +119,7 @@ func TestCreateCommentPassesSignedInAuthorAndMasksSpam(t *testing.T) {
 		}, nil
 	}}
 	c, w := commentContext(nethttp.MethodPost, "/api/v1/posts/x/comments",
-		`{"content":"hi","honeypot":"bot","author_name":"Ignored","author_email":"x@example.com"}`, &testUserID, testPostID.String())
+		`{"content":"hi","honeypot":"bot","authorName":"Ignored","authorEmail":"x@example.com"}`, &testUserID, testPostID.String())
 
 	createPostCommentHandler(svc)(c)
 
@@ -151,7 +151,7 @@ func TestCreateCommentValidatesBody(t *testing.T) {
 	t.Parallel()
 
 	svc := &fakeCommentService{}
-	c, w := commentContext(nethttp.MethodPost, "/api/v1/posts/x/comments", `{"content":"","parent_id":"nope"}`, &testUserID, testPostID.String())
+	c, w := commentContext(nethttp.MethodPost, "/api/v1/posts/x/comments", `{"content":"","parentId":"nope"}`, &testUserID, testPostID.String())
 
 	createPostCommentHandler(svc)(c)
 
@@ -159,7 +159,7 @@ func TestCreateCommentValidatesBody(t *testing.T) {
 
 	details := as[map[string]any](t, decodeEnvelope(t, w).Error.Details)
 	require.Contains(t, details, "content")
-	require.Contains(t, details, "parent_id")
+	require.Contains(t, details, "parentId")
 }
 
 func TestPatchCommentByNonOwnerIsForbidden(t *testing.T) {
@@ -226,7 +226,7 @@ func TestCreateCommentCaptcha(t *testing.T) {
 			return commentdomain.Comment{}, captchaErr
 		}}
 		c, w := commentContext(nethttp.MethodPost, "/api/v1/posts/x/comments",
-			`{"content":"hi","author_name":"Ann","author_email":"ann@example.com","turnstile_response":"tok"}`, nil, testPostID.String())
+			`{"content":"hi","authorName":"Ann","authorEmail":"ann@example.com","turnstileResponse":"tok"}`, nil, testPostID.String())
 
 		createPostCommentHandler(svc)(c)
 
@@ -294,7 +294,7 @@ func TestGetCommentHidesDeletedContentAndAuthor(t *testing.T) {
 
 	data := as[map[string]any](t, decodeEnvelope(t, w).Data)
 	require.Empty(t, data["content"])
-	require.Empty(t, data["content_html"])
+	require.Empty(t, data["contentHtml"])
 	require.Nil(t, data["author"])
 
 	replies := as[[]any](t, data["replies"])
@@ -302,8 +302,8 @@ func TestGetCommentHidesDeletedContentAndAuthor(t *testing.T) {
 
 	reply := as[map[string]any](t, replies[0])
 	require.Equal(t, map[string]any{"id": nil, "name": "Guest", "guest": true}, reply["author"])
-	require.Equal(t, testCommentID.String(), reply["parent_id"])
-	require.Equal(t, "<p>reply</p>", reply["content_html"])
+	require.Equal(t, testCommentID.String(), reply["parentId"])
+	require.Equal(t, "<p>reply</p>", reply["contentHtml"])
 }
 
 func TestListPostCommentsPaginatesAndParsesParent(t *testing.T) {
@@ -318,7 +318,7 @@ func TestListPostCommentsPaginatesAndParsesParent(t *testing.T) {
 
 		return commentdomain.ListResult{Page: 2, PerPage: 5, Total: 7}, nil
 	}}
-	c, w := commentContext(nethttp.MethodGet, "/api/v1/posts/x/comments?page=2&per_page=5&parent_id="+parent.String(), "", nil, testPostID.String())
+	c, w := commentContext(nethttp.MethodGet, "/api/v1/posts/x/comments?page=2&perPage=5&parentId="+parent.String(), "", nil, testPostID.String())
 
 	listPostCommentsHandler(svc)(c)
 
@@ -350,7 +350,7 @@ func TestFlagCommentAsGuestIsAccepted(t *testing.T) {
 		got = in
 		return nil
 	}}
-	c, w := commentContext(nethttp.MethodPost, "/api/v1/comments/x/flag", `{"reason_code":"spam"}`, nil, testCommentID.String())
+	c, w := commentContext(nethttp.MethodPost, "/api/v1/comments/x/flag", `{"reasonCode":"spam"}`, nil, testCommentID.String())
 
 	flagCommentHandler(svc)(c)
 
@@ -363,7 +363,7 @@ func TestFlagCommentAsGuestIsAccepted(t *testing.T) {
 func TestFlagCommentRejectsUnknownReason(t *testing.T) {
 	t.Parallel()
 
-	c, w := commentContext(nethttp.MethodPost, "/api/v1/comments/x/flag", `{"reason_code":"boring"}`, nil, testCommentID.String())
+	c, w := commentContext(nethttp.MethodPost, "/api/v1/comments/x/flag", `{"reasonCode":"boring"}`, nil, testCommentID.String())
 
 	flagCommentHandler(&fakeCommentService{})(c)
 
@@ -385,7 +385,7 @@ func TestUpvoteCommentReturnsState(t *testing.T) {
 
 	data := as[map[string]any](t, decodeEnvelope(t, w).Data)
 	require.Equal(t, true, data["upvoted"])
-	require.InDelta(t, 4, data["upvote_count"], 0)
+	require.InDelta(t, 4, data["upvoteCount"], 0)
 }
 
 func TestMapCommentErrorCodes(t *testing.T) {

@@ -60,7 +60,7 @@ func TestMeActivityShowsCoarseOwnerView(t *testing.T) {
 
 	w, body := runProfile(t, meActivityHandler(activity), profileRequest{
 		method: nethttp.MethodGet,
-		target: "/me/activity?category=login,role_change&from=2026-09-01&to=2026-09-25&page=2&per_page=5",
+		target: "/me/activity?category=login,role_change&from=2026-09-01&to=2026-09-25&page=2&perPage=5",
 		user:   &user,
 	})
 
@@ -77,10 +77,10 @@ func TestMeActivityShowsCoarseOwnerView(t *testing.T) {
 	require.Len(t, items, 1)
 	item, _ := items[0].(map[string]any)
 	require.Equal(t, "role_change", item["category"])
-	require.Equal(t, "203.0.113.0/24", item["ip_prefix"])
+	require.Equal(t, "203.0.113.0/24", item["ipPrefix"])
 	require.Equal(t, "Safari on macOS", item["device"])
 
-	for _, hidden := range []string{"ip", "user_agent", "request_id", "metadata", "changes", "actor_id"} {
+	for _, hidden := range []string{"ip", "userAgent", "requestId", "metadata", "changes", "actorId"} {
 		require.NotContains(t, item, hidden)
 	}
 }
@@ -102,9 +102,9 @@ func TestAdminUserActivityShowsFullEntry(t *testing.T) {
 	items, _ := body["data"].([]any)
 	item, _ := items[0].(map[string]any)
 	require.Equal(t, "203.0.113.77", item["ip"])
-	require.Equal(t, "req-1", item["request_id"])
+	require.Equal(t, "req-1", item["requestId"])
 	require.Contains(t, item, "changes")
-	require.Contains(t, item, "actor_id")
+	require.Contains(t, item, "actorId")
 }
 
 func TestActivityRejectsBadFilters(t *testing.T) {

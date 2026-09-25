@@ -43,7 +43,7 @@ func TestExportHandler(t *testing.T) {
 		require.Equal(t, nethttp.StatusAccepted, w.Code)
 		require.Equal(t, "no-store", w.Header().Get("Cache-Control"))
 		require.Equal(t, "pending", dataOf(body)["status"])
-		require.NotContains(t, dataOf(body), "download_url")
+		require.NotContains(t, dataOf(body), "downloadUrl")
 	})
 
 	t.Run("ready is 200 with a link", func(t *testing.T) {
@@ -58,9 +58,9 @@ func TestExportHandler(t *testing.T) {
 
 		w, body := runProfile(t, meExportHandler(fake), profileRequest{method: nethttp.MethodGet, target: "/me/activity/export", user: &user})
 		require.Equal(t, nethttp.StatusOK, w.Code)
-		require.Equal(t, "https://s3.test/k.json?sig", dataOf(body)["download_url"])
-		require.Equal(t, linkExpiry.Format(time.RFC3339), dataOf(body)["download_expires_at"])
-		require.NotContains(t, dataOf(body), "storage_key")
+		require.Equal(t, "https://s3.test/k.json?sig", dataOf(body)["downloadUrl"])
+		require.Equal(t, linkExpiry.Format(time.RFC3339), dataOf(body)["downloadExpiresAt"])
+		require.NotContains(t, dataOf(body), "storageKey")
 	})
 
 	t.Run("no storage is 503", func(t *testing.T) {
@@ -85,7 +85,7 @@ func TestEraseHandler(t *testing.T) {
 		fake := &fakePrivacyRequests{erase: request}
 		w, body := runProfile(t, meEraseHandler(fake), profileRequest{
 			method: nethttp.MethodPost, target: "/me/activity/erase", contentType: "application/json", user: &user,
-			body: `{"current_password":"pw"}`,
+			body: `{"currentPassword":"pw"}`,
 		})
 		require.Equal(t, nethttp.StatusAccepted, w.Code)
 		require.Equal(t, "pw", fake.password)
@@ -107,7 +107,7 @@ func TestEraseHandler(t *testing.T) {
 		fake := &fakePrivacyRequests{err: privacydomain.ErrReauth}
 		w, body := runProfile(t, meEraseHandler(fake), profileRequest{
 			method: nethttp.MethodPost, target: "/me/activity/erase", contentType: "application/json", user: &user,
-			body: `{"current_password":"nope"}`,
+			body: `{"currentPassword":"nope"}`,
 		})
 		require.Equal(t, nethttp.StatusForbidden, w.Code)
 		require.Equal(t, "privacy.erase_requires_reauth", errorCode(body))

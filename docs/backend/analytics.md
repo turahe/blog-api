@@ -180,19 +180,19 @@ days, whatever `analytics.raw_retention_days` says.
 ### Public Ingestion (Consent-Gated)
 
 Each request carries one event and returns `202` with `{"id": "<uuid>"}`. Every event needs a
-`session_id` (a UUID the client generates per tab and rotates after 30 minutes idle); `id` is
+`sessionId` (a UUID the client generates per tab and rotates after 30 minutes idle); `id` is
 optional and is generated when omitted.
 
 - `POST /api/v1/analytics/ingest/page-view`: `path`, `referrer`. The returned id is the page
   view id for time-spent heartbeats.
-- `POST /api/v1/analytics/ingest/time-spent`: `view_id`, `path`, `focus_seconds` (cumulative).
+- `POST /api/v1/analytics/ingest/time-spent`: `viewId`, `path`, `focusSeconds` (cumulative).
   Send one every 15–30 seconds while visible and one on unload (`navigator.sendBeacon` cannot
   set headers, so use `fetch` with `keepalive: true`).
 - `POST /api/v1/analytics/ingest/navigation`: `from` (omit for an entry), `to`, `transition`.
-- `POST /api/v1/analytics/ingest/search`: `query`, `result_count`, `filters`. The returned id is
-  the `search_id` for clicks.
-- `POST /api/v1/analytics/ingest/search-click`: `search_id`, `position`, `resource_type`,
-  `resource_id`.
+- `POST /api/v1/analytics/ingest/search`: `query`, `resultCount`, `filters`. The returned id is
+  the `searchId` for clicks.
+- `POST /api/v1/analytics/ingest/search-click`: `searchId`, `position`, `resourceType`,
+  `resourceId`.
 
 #### Ingest pipeline
 
@@ -269,14 +269,14 @@ All five reports share one query:
 - **Series.** One point per period, zero-filled where no rollup row exists; each point's
   `visitors` is exact for that period.
 - **Visitors over a range.** Unique visitors do not add up across periods, so range totals are
-  the sum of per-period uniques and are named after the grain: `visitor_days`,
-  `visitor_weeks`, or `visitor_months` (likewise `consented_visitor_*` and each list row's
+  the sum of per-period uniques and are named after the grain: `visitorDays`,
+  `visitorWeeks`, or `visitorMonths` (likewise `consented_visitor_*` and each list row's
   visitors). When the window is a single period the true distinct count is also returned as
   `visitors`. For a distinct count over a month, ask for `grain=month` on that month.
-- **Rates** (`bounce_rate`, `pages_per_session`, `avg_time_seconds`, `search_ctr`, `ctr`,
-  `avg_seconds_to_click`, retention `rates`, position `share`) are ratios of summed counts and
+- **Rates** (`bounceRate`, `pagesPerSession`, `avgTimeSeconds`, `searchCtr`, `ctr`,
+  `avgSecondsToClick`, retention `rates`, position `share`) are ratios of summed counts and
   are `null` when the denominator is zero.
-- **Comparison.** `previous` holds the comparison window's totals; pages add `previous_views` and
+- **Comparison.** `previous` holds the comparison window's totals; pages add `previousViews` and
   `change` with `compare=previous` or `sort=rising`.
 - **The `(other)` row** folds everything outside a period's top 1000. It appears in view-ordered
   page lists, query lists, and traffic sources, but never in `sort=time`, `sort=rising`, or
@@ -307,7 +307,7 @@ All five reports share one query:
   The first `POST` without a valid token creates a pseudonymous subject and returns the token
   once (`201`); later calls return `200` without it. Only the SHA-256 hash of the token is stored
   (`consent_subjects.token_hash`).
-- Body: `{"purposes": {"analytics": true, "authenticated_analytics": false}, "policy_version": "2026-09"}`.
+- Body: `{"purposes": {"analytics": true, "authenticated_analytics": false}, "policyVersion": "2026-09"}`.
   Purposes are `analytics` and `authenticated_analytics`. Each decision is stored per purpose in
   `analytics_consents` with status (`granted`, `rejected`, `withdrawn`), policy version, and
   decision time. Refusing a previously granted purpose records `withdrawn`; a first refusal
@@ -353,23 +353,23 @@ broker (`503 analytics.realtime_unavailable` without one), and a free stream slo
 
 | Window | Value |
 | --- | --- |
-| Active sessions | sessions with any event (including time-spent heartbeats) in the last 5 minutes; tracking stops at 100,000 sessions (`active_sessions_capped: true`) |
+| Active sessions | sessions with any event (including time-spent heartbeats) in the last 5 minutes; tracking stops at 100,000 sessions (`activeSessionsCapped: true`) |
 | Series and top pages | the last 30 minutes in one-minute buckets; top 10 pages, with paths past 1,000 per minute folded into `(other)` |
 | Refresh | every 5 seconds, plus once when the stream opens |
 
 Each refresh writes `realtime.page_view` frames (`ts`, `path`, `country`, `device`) and
-`realtime.search` frames (`ts`, `query`, `result_count`) for events that arrived since the last
+`realtime.search` frames (`ts`, `query`, `resultCount`) for events that arrived since the last
 refresh, at most 20 of each (the latest when busier; the first refresh replays up to 20
 recent ones), then one `realtime.summary` frame:
 
 ```json
 {
   "ts": "2026-09-25T10:00:05Z",
-  "active_sessions": 42, "active_sessions_capped": false,
-  "active_window_minutes": 5, "window_minutes": 30,
+  "activeSessions": 42, "activeSessionsCapped": false,
+  "activeWindowMinutes": 5, "windowMinutes": 30,
   "views": 1830, "searches": 96,
   "series": [{"minute": "2026-09-25T09:31:00Z", "views": 61, "searches": 3}],
-  "top_pages": [{"path": "/posts/hello", "views": 210}]
+  "topPages": [{"path": "/posts/hello", "views": 210}]
 }
 ```
 
@@ -384,7 +384,7 @@ reconnects simply gets a fresh summary: live data has no replay.
 `POST /api/v1/admin/analytics/export` queues a ZIP of CSV files built from the rollups only:
 
 ```json
-{"from": "2026-08-01", "to": "2026-08-31", "grain": "day", "current_password": "…", "two_factor_code": "123456"}
+{"from": "2026-08-01", "to": "2026-08-31", "grain": "day", "currentPassword": "…", "twoFactorCode": "123456"}
 ```
 
 - **Scope.** One CSV per rollup table (`site`, `pages`, `referrers`, `audience`, `navigation`,
@@ -406,8 +406,8 @@ reconnects simply gets a fresh summary: live data has no replay.
   `503 analytics.export_unavailable`.
 - **Download.** `GET /api/v1/admin/analytics/exports/{id}` (and the list of the caller's 20 most
   recent exports) returns `status` (`pending`, `running`, `completed`, `failed`, `expired`) and,
-  while the archive exists, a presigned `download_url` valid for `ANALYTICS_EXPORT_URL_TTL`
-  (15 minutes, never past `archive_expires_at`). A new link is signed on every call. Exports of
+  while the archive exists, a presigned `downloadUrl` valid for `ANALYTICS_EXPORT_URL_TTL`
+  (15 minutes, never past `archiveExpiresAt`). A new link is signed on every call. Exports of
   other users are `404`, even for admins. Archives are deleted after
   `ANALYTICS_EXPORT_RETENTION` (72 hours), after which the export shows `expired`.
 - **Spreadsheet safety.** Paths, hosts, and queries come from visitors, so any value starting
@@ -465,8 +465,8 @@ Validation rules:
 - `referrer` keeps only an http(s) scheme, host, and path; anything else is dropped
 - search queries are lowercased, whitespace-collapsed, stripped of control characters, and cut to
   200 characters
-- `focus_seconds` is clamped to 0..14400, `position` to 1..1000, `result_count` to 0..1000000
-- unknown `transition`, `resource_type`, or filter keys are `400`
+- `focusSeconds` is clamped to 0..14400, `position` to 1..1000, `resultCount` to 0..1000000
+- unknown `transition`, `resourceType`, or filter keys are `400`
 - events from a subject that rejected or withdrew consent are dropped
 
 Error handling:

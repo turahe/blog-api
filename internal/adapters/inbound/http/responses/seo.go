@@ -16,29 +16,61 @@ func PostSEO(view postservice.SEOView) gin.H {
 		keywords = []string{}
 	}
 
-	warnings := view.Warnings
-	if warnings == nil {
-		warnings = []postdomain.FieldViolation{}
+	return gin.H{
+		"postId":             view.PostUUID,
+		"slug":               view.Slug,
+		"seoTitle":           seo.Title,
+		"seoDescription":     seo.Description,
+		"seoKeywords":        keywords,
+		"ogTitle":            seo.OGTitle,
+		"ogDescription":      seo.OGDescription,
+		"ogImageId":          uuidOrNil(seo.OGImageUUID),
+		"ogUrl":              seo.OGURL,
+		"twitterCard":        string(seo.TwitterCard),
+		"twitterTitle":       seo.TwitterTitle,
+		"twitterDescription": seo.TwitterDescription,
+		"twitterImageId":     uuidOrNil(seo.TwitterImageUUID),
+		"twitterCreator":     seo.TwitterCreator,
+		"canonicalUrl":       seo.CanonicalURL,
+		"robotsNoindex":      seo.RobotsNoindex,
+		"robotsNofollow":     seo.RobotsNofollow,
+		"warnings":           FieldViolations(view.Warnings),
+	}
+}
+
+// SEOMeta is the rendered meta a frontend emits as tags. The Open Graph and Twitter maps are
+// keyed by their tag names (og:title, twitter:card), which are kept as they are.
+func SEOMeta(meta postdomain.SEOMeta) gin.H {
+	out := gin.H{
+		"title":           meta.Title,
+		"metaDescription": meta.MetaDescription,
+		"robots":          meta.Robots,
+		"openGraph":       meta.OpenGraph,
+		"twitter":         meta.Twitter,
+	}
+	if meta.MetaKeywords != "" {
+		out["metaKeywords"] = meta.MetaKeywords
 	}
 
+	if meta.Canonical != "" {
+		out["canonical"] = meta.Canonical
+	}
+
+	return out
+}
+
+// SEOPreview renders the search snippet and social cards for the SEO editor.
+func SEOPreview(p postdomain.SEOPreview) gin.H {
 	return gin.H{
-		"post_id":             view.PostUUID,
-		"slug":                view.Slug,
-		"seo_title":           seo.Title,
-		"seo_description":     seo.Description,
-		"seo_keywords":        keywords,
-		"og_title":            seo.OGTitle,
-		"og_description":      seo.OGDescription,
-		"og_image_id":         uuidOrNil(seo.OGImageUUID),
-		"og_url":              seo.OGURL,
-		"twitter_card":        string(seo.TwitterCard),
-		"twitter_title":       seo.TwitterTitle,
-		"twitter_description": seo.TwitterDescription,
-		"twitter_image_id":    uuidOrNil(seo.TwitterImageUUID),
-		"twitter_creator":     seo.TwitterCreator,
-		"canonical_url":       seo.CanonicalURL,
-		"robots_noindex":      seo.RobotsNoindex,
-		"robots_nofollow":     seo.RobotsNofollow,
-		"warnings":            warnings,
+		"searchPreview": gin.H{"title": p.Search.Title, "url": p.Search.URL, "description": p.Search.Description},
+		"ogPreview": gin.H{
+			"title": p.OG.Title, "description": p.OG.Description, "imageUrl": p.OG.ImageURL,
+			"url": p.OG.URL, "siteName": p.OG.SiteName,
+		},
+		"twitterPreview": gin.H{
+			"card": p.Twitter.Card, "title": p.Twitter.Title, "description": p.Twitter.Description,
+			"imageUrl": p.Twitter.ImageURL, "creator": p.Twitter.Creator,
+		},
+		"warnings": FieldViolations(p.Warnings),
 	}
 }

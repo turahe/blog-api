@@ -11,16 +11,16 @@ import (
 type NewsletterProvider struct {
 	Name             string `json:"name"`
 	Endpoint         string `json:"endpoint,omitempty"`
-	SecretConfigured bool   `json:"secret_configured"`
-	SendingEnabled   bool   `json:"sending_enabled"`
-	WebhookEnabled   bool   `json:"webhook_enabled"`
+	SecretConfigured bool   `json:"secretConfigured"`
+	SendingEnabled   bool   `json:"sendingEnabled"`
+	WebhookEnabled   bool   `json:"webhookEnabled"`
 }
 
 // NewsletterList renders a list.
 func NewsletterList(l nldomain.List) gin.H {
 	return gin.H{
-		"slug": l.Slug, "name": l.Name, "description": l.Description, "is_default": l.IsDefault,
-		"position": l.Position, "archived_at": RFC3339(l.ArchivedAt),
+		"slug": l.Slug, "name": l.Name, "description": l.Description, "isDefault": l.IsDefault,
+		"position": l.Position, "archivedAt": RFC3339(l.ArchivedAt),
 	}
 }
 
@@ -39,7 +39,7 @@ func newsletterMemberships(sub nldomain.Subscriber) []gin.H {
 	for _, m := range sub.Memberships {
 		out = append(out, gin.H{
 			"slug": m.ListSlug, "name": m.ListName, "state": string(m.State),
-			"joined_at": RFC3339(m.JoinedAt), "left_at": RFC3339(m.LeftAt),
+			"joinedAt": RFC3339(m.JoinedAt), "leftAt": RFC3339(m.LeftAt),
 		})
 	}
 
@@ -56,7 +56,7 @@ func NewsletterConfirmed(sub nldomain.Subscriber) gin.H {
 		lists = []string{}
 	}
 
-	return gin.H{"status": string(sub.Status), "lists": lists, "opted_in_at": RFC3339(sub.OptedInAt)}
+	return gin.H{"status": string(sub.Status), "lists": lists, "optedInAt": RFC3339(sub.OptedInAt)}
 }
 
 // NewsletterMine renders the caller's own subscription; found is false when the account has none.
@@ -64,7 +64,7 @@ func NewsletterMine(sub nldomain.Subscriber, lists []nldomain.List, found bool) 
 	if !found {
 		return gin.H{
 			"subscribed": false, "status": nil, "format": nil, "memberships": []gin.H{},
-			"available_lists": NewsletterLists(lists),
+			"availableLists": NewsletterLists(lists),
 		}
 	}
 
@@ -83,34 +83,34 @@ func NewsletterPreferences(sub nldomain.Subscriber, lists []nldomain.List, maskE
 	}
 
 	return gin.H{
-		"email":           email,
-		"status":          string(sub.Status),
-		"format":          string(sub.Format),
-		"memberships":     newsletterMemberships(sub),
-		"available_lists": NewsletterLists(lists),
-		"opted_in_at":     RFC3339(sub.OptedInAt),
-		"unsubscribed_at": RFC3339(sub.UnsubscribedAt),
+		"email":          email,
+		"status":         string(sub.Status),
+		"format":         string(sub.Format),
+		"memberships":    newsletterMemberships(sub),
+		"availableLists": NewsletterLists(lists),
+		"optedInAt":      RFC3339(sub.OptedInAt),
+		"unsubscribedAt": RFC3339(sub.UnsubscribedAt),
 	}
 }
 
 // NewsletterSubscriber renders a subscriber for staff.
 func NewsletterSubscriber(sub nldomain.Subscriber) gin.H {
 	return gin.H{
-		"id":              sub.UUID,
-		"email":           sub.Email,
-		"display_name":    sub.DisplayName,
-		"user_id":         sub.UserID,
-		"status":          string(sub.Status),
-		"format":          string(sub.Format),
-		"source":          string(sub.Source),
-		"memberships":     newsletterMemberships(sub),
-		"opted_in_at":     RFC3339(sub.OptedInAt),
-		"unsubscribed_at": RFC3339(sub.UnsubscribedAt),
-		"bounced_at":      RFC3339(sub.BouncedAt),
-		"complained_at":   RFC3339(sub.ComplainedAt),
-		"erased_at":       RFC3339(sub.ErasedAt),
-		"created_at":      sub.CreatedAt.UTC().Format(time.RFC3339),
-		"updated_at":      sub.UpdatedAt.UTC().Format(time.RFC3339),
+		"id":             sub.UUID,
+		"email":          sub.Email,
+		"displayName":    sub.DisplayName,
+		"userId":         sub.UserID,
+		"status":         string(sub.Status),
+		"format":         string(sub.Format),
+		"source":         string(sub.Source),
+		"memberships":    newsletterMemberships(sub),
+		"optedInAt":      RFC3339(sub.OptedInAt),
+		"unsubscribedAt": RFC3339(sub.UnsubscribedAt),
+		"bouncedAt":      RFC3339(sub.BouncedAt),
+		"complainedAt":   RFC3339(sub.ComplainedAt),
+		"erasedAt":       RFC3339(sub.ErasedAt),
+		"createdAt":      sub.CreatedAt.UTC().Format(time.RFC3339),
+		"updatedAt":      sub.UpdatedAt.UTC().Format(time.RFC3339),
 	}
 }
 
@@ -119,38 +119,38 @@ func NewsletterSubscriberDetail(sub nldomain.Subscriber, history []nldomain.Cons
 	events := make([]gin.H, 0, len(history))
 	for _, e := range history {
 		events = append(events, gin.H{
-			"event": e.Event, "list": e.ListSlug, "source": e.Source, "reason_code": e.ReasonCode,
-			"feedback": e.Feedback, "occurred_at": e.OccurredAt.UTC().Format(time.RFC3339),
+			"event": e.Event, "list": e.ListSlug, "source": e.Source, "reasonCode": e.ReasonCode,
+			"feedback": e.Feedback, "occurredAt": e.OccurredAt.UTC().Format(time.RFC3339),
 		})
 	}
 
 	data := NewsletterSubscriber(sub)
-	data["consent_history"] = events
+	data["consentHistory"] = events
 
 	return data
 }
 
-// NewsletterIssue renders an issue; body_markdown is included only when withBody is set.
+// NewsletterIssue renders an issue; bodyMarkdown is included only when withBody is set.
 func NewsletterIssue(i nldomain.Issue, withBody bool) gin.H {
 	data := gin.H{
-		"id":           i.UUID,
-		"subject":      i.Subject,
-		"preheader":    i.Preheader,
-		"lists":        i.Lists,
-		"status":       string(i.Status),
-		"send_at":      RFC3339(i.SendAt),
-		"queued_at":    RFC3339(i.QueuedAt),
-		"started_at":   RFC3339(i.StartedAt),
-		"completed_at": RFC3339(i.CompletedAt),
-		"sent_count":   i.SentCount,
-		"failed_count": i.FailedCount,
-		"created_by":   i.CreatedBy,
-		"updated_by":   i.UpdatedBy,
-		"created_at":   i.CreatedAt.UTC().Format(time.RFC3339),
-		"updated_at":   i.UpdatedAt.UTC().Format(time.RFC3339),
+		"id":          i.UUID,
+		"subject":     i.Subject,
+		"preheader":   i.Preheader,
+		"lists":       i.Lists,
+		"status":      string(i.Status),
+		"sendAt":      RFC3339(i.SendAt),
+		"queuedAt":    RFC3339(i.QueuedAt),
+		"startedAt":   RFC3339(i.StartedAt),
+		"completedAt": RFC3339(i.CompletedAt),
+		"sentCount":   i.SentCount,
+		"failedCount": i.FailedCount,
+		"createdBy":   i.CreatedBy,
+		"updatedBy":   i.UpdatedBy,
+		"createdAt":   i.CreatedAt.UTC().Format(time.RFC3339),
+		"updatedAt":   i.UpdatedAt.UTC().Format(time.RFC3339),
 	}
 	if withBody {
-		data["body_markdown"] = i.BodyMarkdown
+		data["bodyMarkdown"] = i.BodyMarkdown
 	}
 
 	return data
@@ -159,16 +159,16 @@ func NewsletterIssue(i nldomain.Issue, withBody bool) gin.H {
 // NewsletterProviderConfig renders the stored settings, the lists, and the read-only provider.
 func NewsletterProviderConfig(cfg nldomain.Config, lists []nldomain.List, provider NewsletterProvider) gin.H {
 	return gin.H{
-		"from_name":             cfg.FromName,
-		"from_email":            cfg.FromEmail,
-		"reply_to":              cfg.ReplyTo,
-		"postal_address":        cfg.PostalAddress,
-		"confirm_ttl_hours":     int(cfg.ConfirmTTL.Hours()),
-		"double_optin_required": cfg.DoubleOptInRequired,
-		"ready_to_send":         cfg.ReadyToSend() == nil,
-		"updated_at":            RFC3339(cfg.UpdatedAt),
-		"updated_by":            cfg.UpdatedBy,
-		"lists":                 NewsletterLists(lists),
-		"provider":              provider,
+		"fromName":            cfg.FromName,
+		"fromEmail":           cfg.FromEmail,
+		"replyTo":             cfg.ReplyTo,
+		"postalAddress":       cfg.PostalAddress,
+		"confirmTtlHours":     int(cfg.ConfirmTTL.Hours()),
+		"doubleOptinRequired": cfg.DoubleOptInRequired,
+		"readyToSend":         cfg.ReadyToSend() == nil,
+		"updatedAt":           RFC3339(cfg.UpdatedAt),
+		"updatedBy":           cfg.UpdatedBy,
+		"lists":               NewsletterLists(lists),
+		"provider":            provider,
 	}
 }

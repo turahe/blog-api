@@ -61,12 +61,12 @@ func adminCommentHandlers(deps Deps) map[string]gin.HandlerFunc {
 	c := NewControllers(deps).Comments
 
 	return map[string]gin.HandlerFunc{
-		"list":        c.AdminList,
-		"get":         c.AdminGet,
-		"stats":       c.AdminStats,
-		"moderate":    c.AdminModerate,
-		"bulk":        c.AdminBulkModerate,
-		"hard_delete": c.AdminHardDelete,
+		"list":       c.AdminList,
+		"get":        c.AdminGet,
+		"stats":      c.AdminStats,
+		"moderate":   c.AdminModerate,
+		"bulk":       c.AdminBulkModerate,
+		"hardDelete": c.AdminHardDelete,
 	}
 }
 
@@ -75,7 +75,7 @@ func TestAdminCommentRoutesRequirePermissions(t *testing.T) {
 
 	want := map[string]string{
 		"list": "comment.moderate", "get": "comment.moderate", "stats": "comment.moderate",
-		"moderate": "comment.moderate", "bulk": "comment.moderate", "hard_delete": "comment.delete",
+		"moderate": "comment.moderate", "bulk": "comment.moderate", "hardDelete": "comment.delete",
 	}
 
 	enforcer := &recordingEnforcer{}
@@ -104,7 +104,7 @@ func TestAdminCommentRoleFallback(t *testing.T) {
 
 	editor := adminCommentHandlers(Deps{Roles: fakeRoleLookup{names: []string{"editor"}}})
 	c, w := commentContext(nethttp.MethodDelete, "/", "", &testUserID, testCommentID.String())
-	editor["hard_delete"](c)
+	editor["hardDelete"](c)
 	require.Equal(t, nethttp.StatusForbidden, w.Code, "editors cannot hard delete")
 
 	author := adminCommentHandlers(Deps{Roles: fakeRoleLookup{names: []string{"author"}}})
@@ -129,7 +129,7 @@ func TestAdminModerateCommentPassesInputAndShowsIdentity(t *testing.T) {
 			ModerationReason: in.Reason, CreatedAt: testTime, UpdatedAt: testTime,
 		}, nil
 	}}
-	c, w := commentContext(nethttp.MethodPost, "/", `{"action":"reject","reason":"off topic","notify_author":true}`,
+	c, w := commentContext(nethttp.MethodPost, "/", `{"action":"reject","reason":"off topic","notifyAuthor":true}`,
 		&testUserID, testCommentID.String())
 
 	adminModerateCommentHandler(svc)(c)
@@ -142,16 +142,16 @@ func TestAdminModerateCommentPassesInputAndShowsIdentity(t *testing.T) {
 
 	data := as[map[string]any](t, decodeEnvelope(t, w).Data)
 	require.Equal(t, "rejected", data["status"])
-	require.Equal(t, "guest@example.com", data["author_email"])
-	require.Equal(t, "abc", data["ip_hash"])
-	require.Equal(t, testUserID.String(), data["moderated_by"])
-	require.Equal(t, "off topic", data["moderation_reason"])
+	require.Equal(t, "guest@example.com", data["authorEmail"])
+	require.Equal(t, "abc", data["ipHash"])
+	require.Equal(t, testUserID.String(), data["moderatedBy"])
+	require.Equal(t, "off topic", data["moderationReason"])
 }
 
 func TestAdminModerateCommentRejectsUnknownAction(t *testing.T) {
 	t.Parallel()
 
-	c, w := commentContext(nethttp.MethodPost, "/", `{"action":"hard_delete"}`, &testUserID, testCommentID.String())
+	c, w := commentContext(nethttp.MethodPost, "/", `{"action":"hardDelete"}`, &testUserID, testCommentID.String())
 
 	adminModerateCommentHandler(&fakeModerationService{})(c)
 
@@ -264,7 +264,7 @@ func TestAdminListCommentsParsesFilters(t *testing.T) {
 		}}, Page: 1, PerPage: 20, Total: 1}, nil
 	}}
 	c, w := commentContext(nethttp.MethodGet,
-		"/?status=spam,+rejected&status=deleted&sort=newest&post_id="+testPostID.String(), "", &testUserID, "")
+		"/?status=spam,+rejected&status=deleted&sort=newest&postId="+testPostID.String(), "", &testUserID, "")
 
 	adminListCommentsHandler(svc)(c)
 
@@ -305,7 +305,7 @@ func TestAdminGetCommentIncludesFlagsAndLog(t *testing.T) {
 	data := as[map[string]any](t, decodeEnvelope(t, w).Data)
 	flag := as[map[string]any](t, as[[]any](t, data["flags"])[0])
 	require.Equal(t, true, flag["guest"])
-	entry := as[map[string]any](t, as[[]any](t, data["moderation_log"])[0])
+	entry := as[map[string]any](t, as[[]any](t, data["moderationLog"])[0])
 	require.Equal(t, "reject", entry["action"])
 	require.Equal(t, map[string]any{"status": "flagged"}, entry["before"])
 }
@@ -326,8 +326,8 @@ func TestAdminCommentStatsSerializesAllStatuses(t *testing.T) {
 
 	require.Equal(t, nethttp.StatusOK, w.Code)
 	data := as[map[string]any](t, decodeEnvelope(t, w).Data)
-	byStatus := as[map[string]any](t, data["by_status"])
+	byStatus := as[map[string]any](t, data["byStatus"])
 	require.Len(t, byStatus, 6)
 	require.InDelta(t, 2, byStatus["pending"], 0)
-	require.Nil(t, data["oldest_queued_at"])
+	require.Nil(t, data["oldestQueuedAt"])
 }

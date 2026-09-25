@@ -24,7 +24,7 @@ type postLifecycleAPI interface {
 // adminPublishPostHandler godoc
 //
 //	@Summary		Publish post
-//	@Description	Allowed from draft, scheduled, or archived; sets published_at to now. Returns 409 post.invalid_transition for a post that is already published.
+//	@Description	Allowed from draft, scheduled, or archived; sets publishedAt to now. Returns 409 post.invalid_transition for a post that is already published.
 //	@Tags			admin
 //	@Produce		json
 //	@Param			param1	path		string	true	"post UUID"
@@ -50,7 +50,7 @@ func adminPublishPostHandler(posts postLifecycleAPI) gin.HandlerFunc {
 // adminUnpublishPostHandler godoc
 //
 //	@Summary		Unpublish post
-//	@Description	Returns a published or scheduled post to draft and clears published_at.
+//	@Description	Returns a published or scheduled post to draft and clears publishedAt.
 //	@Tags			admin
 //	@Produce		json
 //	@Param			param1	path		string	true	"post UUID"
@@ -67,7 +67,7 @@ func adminUnpublishPostHandler(posts postLifecycleAPI) gin.HandlerFunc {
 // adminArchivePostHandler godoc
 //
 //	@Summary		Archive post
-//	@Description	Hides a draft, scheduled, or published post from public reads; published_at is kept. Publish again to bring it back.
+//	@Description	Hides a draft, scheduled, or published post from public reads; publishedAt is kept. Publish again to bring it back.
 //	@Tags			admin
 //	@Produce		json
 //	@Param			param1	path		string	true	"post UUID"

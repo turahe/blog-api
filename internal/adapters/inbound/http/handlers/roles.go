@@ -54,7 +54,7 @@ func roleParam(c *gin.Context, key string) string {
 }
 
 func userRolesBody(userID uuid.UUID, names []string) gin.H {
-	return gin.H{"user_id": userID.String(), "roles": names}
+	return gin.H{"userId": userID.String(), "roles": names}
 }
 
 // adminRolesListHandler godoc

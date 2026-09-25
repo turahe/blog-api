@@ -21,7 +21,7 @@ var (
 
 // unsupportedProfileFields are allowlisted by the spec but not stored yet.
 var unsupportedProfileFields = map[string]string{
-	"contact_phone": "contact_phone is not supported yet",
+	"contactPhone": "contactPhone is not supported yet",
 }
 
 // decodeProfilePatch parses an allowlisted profile patch, keeping "absent" and
@@ -44,13 +44,13 @@ func decodeProfilePatch(body io.Reader) (userdomain.ProfilePatch, error) {
 	var patch userdomain.ProfilePatch
 
 	textFields := map[string]*userdomain.Change[string]{
-		"full_name":        &patch.FullName,
-		"display_name":     &patch.DisplayName,
-		"bio":              &patch.Bio,
-		"contact_website":  &patch.ContactWebsite,
-		"contact_location": &patch.ContactLocation,
-		"locale":           &patch.Locale,
-		"timezone":         &patch.Timezone,
+		"fullName":        &patch.FullName,
+		"displayName":     &patch.DisplayName,
+		"bio":             &patch.Bio,
+		"contactWebsite":  &patch.ContactWebsite,
+		"contactLocation": &patch.ContactLocation,
+		"locale":          &patch.Locale,
+		"timezone":        &patch.Timezone,
 	}
 
 	for _, key := range sortedKeys(fields) {
@@ -59,9 +59,9 @@ func decodeProfilePatch(body io.Reader) (userdomain.ProfilePatch, error) {
 		switch dst, ok := textFields[key]; {
 		case ok:
 			err = decodeChange(value, key, dst)
-		case key == "marketing_consent":
+		case key == "marketingConsent":
 			err = decodeChange(value, key, &patch.MarketingConsent)
-		case key == "social_links":
+		case key == "socialLinks":
 			err = decodeSocialLinks(value, &patch)
 		case unsupportedProfileFields[key] != "":
 			err = fmt.Errorf("%w: %s", errUnsupportedProfileField, unsupportedProfileFields[key])
@@ -92,7 +92,7 @@ func decodeSocialLinks(raw json.RawMessage, patch *userdomain.ProfilePatch) erro
 		return nil
 	}
 
-	fields, err := decodeObject(raw, "social_links")
+	fields, err := decodeObject(raw, "socialLinks")
 	if err != nil {
 		return err
 	}
@@ -100,10 +100,10 @@ func decodeSocialLinks(raw json.RawMessage, patch *userdomain.ProfilePatch) erro
 	for _, key := range sortedKeys(fields) {
 		dst, ok := links[key]
 		if !ok {
-			return fmt.Errorf("%w: social_links.%s", errUnknownProfileField, key)
+			return fmt.Errorf("%w: socialLinks.%s", errUnknownProfileField, key)
 		}
 
-		if err := decodeChange(fields[key], "social_links."+key, dst); err != nil {
+		if err := decodeChange(fields[key], "socialLinks."+key, dst); err != nil {
 			return err
 		}
 	}

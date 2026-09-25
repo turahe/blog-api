@@ -22,9 +22,9 @@ import (
 //	@Produce		json
 //	@Param			q			query		string	false	"full-text search query (max 200 characters)"
 //	@Param			page		query		int		false	"page"		default(1)
-//	@Param			per_page	query		int		false	"per page"	default(20)
-//	@Param			category_id	query		string	false	"category UUID"
-//	@Param			tag_id		query		string	false	"tag UUID"
+//	@Param			perPage		query		int		false	"per page"	default(20)
+//	@Param			categoryId	query		string	false	"category UUID"
+//	@Param			tagId		query		string	false	"tag UUID"
 //	@Success		200			{object}	responses.Envelope
 //	@Failure		400			{object}	responses.Envelope
 //	@Failure		503			{object}	responses.Envelope	"search.unavailable"
@@ -32,17 +32,17 @@ import (
 func listPublishedPostsHandler(posts *postservice.PostService) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		page, _ := strconv.Atoi(c.DefaultQuery("page", "1"))
-		perPage, _ := strconv.Atoi(c.DefaultQuery("per_page", "20"))
+		perPage, _ := strconv.Atoi(c.DefaultQuery("perPage", "20"))
 
-		categoryID, err := postservice.ParseOptionalUUID(c.Query("category_id"))
+		categoryID, err := postservice.ParseOptionalUUID(c.Query("categoryId"))
 		if err != nil {
-			responses.Failure(c, nethttp.StatusBadRequest, responses.ErrorCodeValidation, "Invalid category_id")
+			responses.Failure(c, nethttp.StatusBadRequest, responses.ErrorCodeValidation, "Invalid categoryId")
 			return
 		}
 
-		tagID, err := postservice.ParseOptionalUUID(c.Query("tag_id"))
+		tagID, err := postservice.ParseOptionalUUID(c.Query("tagId"))
 		if err != nil {
-			responses.Failure(c, nethttp.StatusBadRequest, responses.ErrorCodeValidation, "Invalid tag_id")
+			responses.Failure(c, nethttp.StatusBadRequest, responses.ErrorCodeValidation, "Invalid tagId")
 			return
 		}
 

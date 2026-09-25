@@ -92,7 +92,7 @@ func (s *impersonationStack) start(t *testing.T, staff, password string) reply {
 	t.Helper()
 
 	return s.do(t, nethttp.MethodPost, "/api/v1/admin/impersonation/start", staff, map[string]any{
-		"target_user_id": s.target.String(), "reason": "ticket #4521 cannot publish", "current_password": password,
+		"targetUserId": s.target.String(), "reason": "ticket #4521 cannot publish", "currentPassword": password,
 	})
 }
 
@@ -109,7 +109,7 @@ func TestImpersonationLifecycle(t *testing.T) {
 	r = s.start(t, staff, cyclePassword)
 	require.Equal(t, nethttp.StatusCreated, r.status, r.code)
 
-	token, _ := r.data["access_token"].(string)
+	token, _ := r.data["accessToken"].(string)
 	require.NotEmpty(t, token)
 	require.NotContains(t, r.data, "refresh_token")
 
@@ -117,7 +117,7 @@ func TestImpersonationLifecycle(t *testing.T) {
 	require.Equal(t, nethttp.StatusOK, r.status, r.code)
 	require.Equal(t, s.target.String(), r.data["id"], "the token acts as the target")
 
-	r = s.do(t, nethttp.MethodPut, "/api/v1/me/password", token, map[string]any{"current_password": "x", "new_password": "y"})
+	r = s.do(t, nethttp.MethodPut, "/api/v1/me/password", token, map[string]any{"currentPassword": "x", "newPassword": "y"})
 	require.Equal(t, nethttp.StatusForbidden, r.status)
 	require.Equal(t, "impersonation.forbidden_action", r.code)
 
@@ -171,14 +171,14 @@ func TestImpersonationAuditTrail(t *testing.T) {
 	r := s.start(t, staff, cyclePassword)
 	require.Equal(t, nethttp.StatusCreated, r.status, r.code)
 
-	token, _ := r.data["access_token"].(string)
+	token, _ := r.data["accessToken"].(string)
 	session, _ := r.data["session"].(map[string]any)
-	sessionID, _ := session["impersonation_session_id"].(string)
+	sessionID, _ := session["impersonationSessionId"].(string)
 
 	require.Equal(t, nethttp.StatusOK, s.do(t, nethttp.MethodGet, "/api/v1/me", token, nil).status)
 	require.Equal(t, nethttp.StatusOK, s.do(t, nethttp.MethodGet, "/api/v1/me", staff, nil).status)
 
-	r = s.do(t, nethttp.MethodPut, "/api/v1/me/password", token, map[string]any{"current_password": "x", "new_password": "y"})
+	r = s.do(t, nethttp.MethodPut, "/api/v1/me/password", token, map[string]any{"currentPassword": "x", "newPassword": "y"})
 	require.Equal(t, "impersonation.forbidden_action", r.code)
 
 	require.Equal(t, nethttp.StatusOK, s.do(t, nethttp.MethodPost, "/api/v1/admin/impersonation/stop", token, nil).status)
@@ -251,10 +251,10 @@ func TestImpersonationEndsWhenStaffSignsOut(t *testing.T) {
 	r := s.start(t, staff, cyclePassword)
 	require.Equal(t, nethttp.StatusCreated, r.status, r.code)
 
-	token, _ := r.data["access_token"].(string)
+	token, _ := r.data["accessToken"].(string)
 	require.Equal(t, nethttp.StatusOK, s.do(t, nethttp.MethodGet, "/api/v1/me", token, nil).status)
 
-	r = s.do(t, nethttp.MethodPost, "/api/v1/auth/logout", staff, map[string]any{"refresh_token": refresh})
+	r = s.do(t, nethttp.MethodPost, "/api/v1/auth/logout", staff, map[string]any{"refreshToken": refresh})
 	require.Equal(t, nethttp.StatusOK, r.status, r.code)
 
 	r = s.do(t, nethttp.MethodGet, "/api/v1/me", token, nil)
@@ -281,9 +281,9 @@ func TestImpersonationStartClosesSessionOfEndedSignIn(t *testing.T) {
 	r := s.start(t, staff, cyclePassword)
 	require.Equal(t, nethttp.StatusCreated, r.status, r.code)
 
-	first, _ := r.data["access_token"].(string)
+	first, _ := r.data["accessToken"].(string)
 
-	r = s.do(t, nethttp.MethodPost, "/api/v1/auth/logout", staff, map[string]any{"refresh_token": refresh})
+	r = s.do(t, nethttp.MethodPost, "/api/v1/auth/logout", staff, map[string]any{"refreshToken": refresh})
 	require.Equal(t, nethttp.StatusOK, r.status, r.code)
 
 	again, _ := s.login(t)
@@ -304,7 +304,7 @@ func TestImpersonationTokenDiesAtSessionExpiry(t *testing.T) {
 	r := s.start(t, staff, cyclePassword)
 	require.Equal(t, nethttp.StatusCreated, r.status, r.code)
 
-	token, _ := r.data["access_token"].(string)
+	token, _ := r.data["accessToken"].(string)
 
 	s.clock.advance(time.Hour)
 

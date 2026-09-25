@@ -132,7 +132,7 @@ func adminMergeTagHandler(tags tagAPI) gin.HandlerFunc {
 
 		intoID, err := uuid.Parse(strings.TrimSpace(req.IntoID))
 		if err != nil {
-			responses.Failure(c, nethttp.StatusBadRequest, responses.ErrorCodeValidation, "Invalid into_id")
+			responses.Failure(c, nethttp.StatusBadRequest, responses.ErrorCodeValidation, "Invalid intoId")
 			return
 		}
 

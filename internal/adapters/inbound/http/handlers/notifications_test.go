@@ -39,7 +39,7 @@ func sampleNotification() notificationdomain.Notification {
 		Title:     "Grace replied to your comment",
 		Body:      `On "Hello": nice`,
 		Preview:   "nice",
-		Payload:   map[string]string{"post_id": uuid.NewString()},
+		Payload:   map[string]string{"postId": uuid.NewString()},
 		CreatedAt: time.Date(2026, 9, 25, 10, 0, 0, 0, time.UTC),
 	}
 }
@@ -53,7 +53,7 @@ func TestMeNotificationsList(t *testing.T) {
 	}}
 
 	w, body := runProfile(t, meNotificationsListHandler(inbox), profileRequest{
-		method: nethttp.MethodGet, target: "/me/notifications?unread=true&page=2&per_page=5", user: &user,
+		method: nethttp.MethodGet, target: "/me/notifications?unread=true&page=2&perPage=5", user: &user,
 	})
 
 	require.Equal(t, nethttp.StatusOK, w.Code, w.Body.String())
@@ -67,7 +67,7 @@ func TestMeNotificationsList(t *testing.T) {
 	require.Len(t, items, 1)
 	item, _ := items[0].(map[string]any)
 	require.Equal(t, "comment.reply", item["type"])
-	require.Equal(t, false, item["is_read"])
+	require.Equal(t, false, item["isRead"])
 	require.Contains(t, item, "data")
 }
 
@@ -120,7 +120,7 @@ func TestMeNotificationRead(t *testing.T) {
 			}
 
 			data, _ := body["data"].(map[string]any)
-			require.Equal(t, true, data["is_read"])
+			require.Equal(t, true, data["isRead"])
 			require.Equal(t, user, inbox.userID)
 		})
 	}

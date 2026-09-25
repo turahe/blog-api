@@ -36,12 +36,12 @@ func TestOAuthStartHandler(t *testing.T) {
 	api := &fakeOAuth{}
 	w, body := runProfile(t, oauthStartHandler(api), profileRequest{
 		method: nethttp.MethodGet, param: "google",
-		target: "/api/v1/auth/oauth/google/start?redirect_uri=https%3A%2F%2Fapp.test%2Fcb",
+		target: "/api/v1/auth/oauth/google/start?redirectUri=https%3A%2F%2Fapp.test%2Fcb",
 	})
 	require.Equal(t, nethttp.StatusOK, w.Code, w.Body.String())
 	require.Equal(t, "no-store", w.Header().Get("Cache-Control"))
-	require.Equal(t, "https://provider.test/authorize?state=s", dataOf(body)["authorize_url"])
-	require.Equal(t, "2026-09-25T12:00:00Z", dataOf(body)["expires_at"])
+	require.Equal(t, "https://provider.test/authorize?state=s", dataOf(body)["authorizeUrl"])
+	require.Equal(t, "2026-09-25T12:00:00Z", dataOf(body)["expiresAt"])
 	require.Equal(t, "google", api.provider)
 	require.Equal(t, "https://app.test/cb", api.redirectURI)
 }
@@ -60,7 +60,7 @@ func TestOAuthStartHandlerErrors(t *testing.T) {
 	}
 	for err, status := range cases {
 		w, _ := runProfile(t, oauthStartHandler(&fakeOAuth{err: err}), profileRequest{
-			method: nethttp.MethodGet, param: "gitlab", target: "/api/v1/auth/oauth/gitlab/start?redirect_uri=x",
+			method: nethttp.MethodGet, param: "gitlab", target: "/api/v1/auth/oauth/gitlab/start?redirectUri=x",
 		})
 		require.Equal(t, status, w.Code, err.Error())
 	}
@@ -75,7 +75,7 @@ func TestOAuthCallbackHandler(t *testing.T) {
 		contentType: "application/json", body: `{"code":"c1","state":"s1"}`,
 	})
 	require.Equal(t, nethttp.StatusOK, w.Code, w.Body.String())
-	require.Equal(t, "oauth-token", dataOf(body)["access_token"])
+	require.Equal(t, "oauth-token", dataOf(body)["accessToken"])
 	require.Equal(t, "github", api.provider)
 	require.Equal(t, "c1", api.code)
 	require.Equal(t, "s1", api.state)
@@ -88,8 +88,8 @@ func TestOAuthCallbackHandler(t *testing.T) {
 		contentType: "application/json", body: `{"code":"c1","state":"s1"}`,
 	})
 	require.Equal(t, nethttp.StatusOK, w.Code, w.Body.String())
-	require.Equal(t, true, dataOf(body)["two_factor_required"])
-	require.Equal(t, "challenge", dataOf(body)["challenge_token"])
+	require.Equal(t, true, dataOf(body)["twoFactorRequired"])
+	require.Equal(t, "challenge", dataOf(body)["challengeToken"])
 }
 
 func TestOAuthCallbackHandlerErrors(t *testing.T) {

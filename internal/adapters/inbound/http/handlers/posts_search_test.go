@@ -55,7 +55,7 @@ func TestListPublishedPostsSearch(t *testing.T) {
 	posts := postservice.New(nil, nil, nil).WithSearch(searcher)
 
 	code, body := getPosts(t, posts, url.Values{
-		"q": {" generics "}, "page": {"2"}, "per_page": {"5"}, "category_id": {category.String()},
+		"q": {" generics "}, "page": {"2"}, "perPage": {"5"}, "categoryId": {category.String()},
 	})
 	require.Equal(t, nethttp.StatusOK, code)
 	assert.Equal(t, "generics", searcher.filter.Query)

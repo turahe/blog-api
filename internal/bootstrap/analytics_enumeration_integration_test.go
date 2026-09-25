@@ -117,12 +117,12 @@ func TestAnalyticsIngestCannotEnumerateContentOrUsers(t *testing.T) {
 
 	t.Run("consent tokens while consent is required", func(t *testing.T) {
 		got := requireSameAnswers(t, s, "/api/v1/analytics/ingest/page-view", map[string]func() (any, map[string]string){
-			"no token": func() (any, map[string]string) { return map[string]any{"session_id": session(), "path": "/"}, nil },
+			"no token": func() (any, map[string]string) { return map[string]any{"sessionId": session(), "path": "/"}, nil },
 			"unknown token": func() (any, map[string]string) {
-				return map[string]any{"session_id": session(), "path": "/"}, map[string]string{"X-Consent-Token": unknown}
+				return map[string]any{"sessionId": session(), "path": "/"}, map[string]string{"X-Consent-Token": unknown}
 			},
 			"refused token": func() (any, map[string]string) {
-				return map[string]any{"session_id": session(), "path": "/"}, map[string]string{"X-Consent-Token": refused}
+				return map[string]any{"sessionId": session(), "path": "/"}, map[string]string{"X-Consent-Token": refused}
 			},
 		})
 		assert.Equal(t, nethttp.StatusForbidden, got.Status)
@@ -136,7 +136,7 @@ func TestAnalyticsIngestCannotEnumerateContentOrUsers(t *testing.T) {
 		cases := map[string]func() (any, map[string]string){}
 		for name, token := range map[string]string{"no token": "", "unknown token": unknown, "refused token": refused, "granted token": granted} {
 			cases[name] = func() (any, map[string]string) {
-				return map[string]any{"session_id": session(), "path": "/"}, map[string]string{"X-Consent-Token": token}
+				return map[string]any{"sessionId": session(), "path": "/"}, map[string]string{"X-Consent-Token": token}
 			}
 		}
 
@@ -150,7 +150,7 @@ func TestAnalyticsIngestCannotEnumerateContentOrUsers(t *testing.T) {
 		cases := map[string]func() (any, map[string]string){}
 		for name, auth := range map[string]string{"none": "", "valid": "Bearer " + access, "garbage": "Bearer not-a-token"} {
 			cases[name] = func() (any, map[string]string) {
-				return map[string]any{"session_id": session(), "path": "/"}, map[string]string{"Authorization": auth}
+				return map[string]any{"sessionId": session(), "path": "/"}, map[string]string{"Authorization": auth}
 			}
 		}
 
@@ -162,9 +162,9 @@ func TestAnalyticsIngestCannotEnumerateContentOrUsers(t *testing.T) {
 			cases := map[string]func() (any, map[string]string){}
 			for name, path := range map[string]string{"existing user": "/users/" + user.Username, "missing user": "/users/nobody-" + session()[:8]} {
 				cases[name] = func() (any, map[string]string) {
-					body := map[string]any{"session_id": session(), "path": path, "to": path, "transition": "internal", "from": "/"}
+					body := map[string]any{"sessionId": session(), "path": path, "to": path, "transition": "internal", "from": "/"}
 					if route == "time-spent" {
-						body["view_id"], body["focus_seconds"] = uuid.NewString(), 5
+						body["viewId"], body["focusSeconds"] = uuid.NewString(), 5
 					}
 
 					return body, nil
@@ -181,7 +181,7 @@ func TestAnalyticsIngestCannotEnumerateContentOrUsers(t *testing.T) {
 		for name, id := range map[string]uuid.UUID{"existing user id": user.UUID, "random id": uuid.New()} {
 			cases[name] = func() (any, map[string]string) {
 				return map[string]any{
-					"session_id": session(), "search_id": uuid.NewString(), "position": 1, "resource_type": "post", "resource_id": id,
+					"sessionId": session(), "searchId": uuid.NewString(), "position": 1, "resourceType": "post", "resourceId": id,
 				}, nil
 			}
 		}

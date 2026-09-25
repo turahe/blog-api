@@ -110,7 +110,7 @@ func TestNotificationStreamLifecycle(t *testing.T) {
 	require.Equal(t, "event: notification.created", frame[0])
 	require.Equal(t, "id: "+n.UUID.String(), frame[1])
 	require.Contains(t, frame[2], `"type":"comment.reply"`)
-	require.NotContains(t, frame[2], "is_read")
+	require.NotContains(t, frame[2], "isRead")
 
 	require.Equal(t, "event: ping", readFrame(t, body)[0], "idle streams are pinged")
 

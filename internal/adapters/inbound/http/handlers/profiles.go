@@ -241,7 +241,7 @@ func failAvatarTooLarge(c *gin.Context, maxBytes int64) {
 		Case:    responses.CaseValidation,
 		Code:    "profile.avatar_too_large",
 		Message: "Avatar exceeds the upload limit",
-		Details: gin.H{"max_bytes": maxBytes},
+		Details: gin.H{"maxBytes": maxBytes},
 	})
 }
 
@@ -266,7 +266,7 @@ func meDeleteAvatarHandler(profiles profileAPI) gin.HandlerFunc {
 			return
 		}
 
-		responses.SuccessFor(c, nethttp.StatusOK, responses.ServiceUsers, responses.CaseSuccess, gin.H{"avatar_id": nil})
+		responses.SuccessFor(c, nethttp.StatusOK, responses.ServiceUsers, responses.CaseSuccess, gin.H{"avatarId": nil})
 	}
 }
 

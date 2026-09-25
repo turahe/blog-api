@@ -24,19 +24,19 @@ func Comment(comment commentdomain.Comment) gin.H {
 	}
 
 	return gin.H{
-		"id":           comment.UUID.String(),
-		"post_id":      comment.PostUUID.String(),
-		"parent_id":    parentID,
-		"depth":        comment.Depth,
-		"author":       author,
-		"content":      content,
-		"content_html": contentHTML,
-		"status":       string(comment.Status),
-		"upvote_count": comment.UpvoteCount,
-		"reply_count":  comment.ReplyCount,
-		"edited_at":    RFC3339(comment.EditedAt),
-		"created_at":   comment.CreatedAt.UTC().Format(time.RFC3339),
-		"updated_at":   comment.UpdatedAt.UTC().Format(time.RFC3339),
+		"id":          comment.UUID.String(),
+		"postId":      comment.PostUUID.String(),
+		"parentId":    parentID,
+		"depth":       comment.Depth,
+		"author":      author,
+		"content":     content,
+		"contentHtml": contentHTML,
+		"status":      string(comment.Status),
+		"upvoteCount": comment.UpvoteCount,
+		"replyCount":  comment.ReplyCount,
+		"editedAt":    RFC3339(comment.EditedAt),
+		"createdAt":   comment.CreatedAt.UTC().Format(time.RFC3339),
+		"updatedAt":   comment.UpdatedAt.UTC().Format(time.RFC3339),
 	}
 }
 
@@ -50,7 +50,7 @@ func CommentThread(thread commentdomain.Thread) gin.H {
 	}
 
 	payload["replies"] = replies
-	payload["replies_total"] = thread.Replies.Total
+	payload["repliesTotal"] = thread.Replies.Total
 
 	return payload
 }

@@ -13,7 +13,7 @@ Handlers call `bindJSON(c, &req)` instead of raw `ShouldBindJSON`. Failures retu
 ```json
 {
   "ok": false,
-  "meta": { "request_id": "..." },
+  "meta": { "requestId": "..." },
   "error": {
     "code": "validation_error",
     "message": "The given data was invalid.",
@@ -51,20 +51,20 @@ JSON names come from `json` tags registered on the shared validator engine.
 - category image: valid media_asset_id existence and image content-type whitelist
 - post attachments: valid media_asset_id existence, kind allowlist, sort_order range, cover consistency with post_media join table
 - post cover_image_media_id: either null or matches an existing kind=cover post_media entry when enforce_cover_sync is enabled
-- profile PATCH `/me/profile` allowlist: `full_name, display_name, bio, contact_phone, contact_website, contact_location, social_links{twitter, linkedin, github}, locale, timezone, marketing_consent`; unknown keys rejected with `code=profile.unknown_field`
-- privacy PUT `/me/privacy` allowlist: `visibility_profile, visibility_email, visibility_contact_details, visibility_activity_timeline, search_allow_indexing, tracking_personalize_ads`; enums and booleans strict typed; no type coercion
+- profile PATCH `/me/profile` allowlist: `fullName, displayName, bio, contactPhone, contactWebsite, contactLocation, socialLinks{twitter, linkedin, github}, locale, timezone, marketingConsent`; unknown keys rejected with `code=profile.unknown_field`
+- privacy PUT `/me/privacy` allowlist: `visibilityProfile, visibilityEmail, visibility_contact_details, visibility_activity_timeline, searchAllowIndexing, tracking_personalize_ads`; enums and booleans strict typed; no type coercion
 - profile field validators:
-  - `full_name` / `display_name` / `contact_location`: no control chars (`\p{Cc}`), 1–N length
-  - `display_name`: partial unique index constraint per DB; case-insensitive duplicate check before insert/update
+  - `fullName` / `displayName` / `contactLocation`: no control chars (`\p{Cc}`), 1–N length
+  - `displayName`: partial unique index constraint per DB; case-insensitive duplicate check before insert/update
   - `bio` markdown sanitized: tags allow {a,strong,em,code,pre,blockquote,p,h3-h6,ul,ol,li}; strip `<script,iframe,form,input,on*>`; all `href` must be http/https; add `rel=nofollow noreferrer noopener`; length ≤ 4000 after sanitization
-  - `contact_phone`: E.164 format + libphonenumber-style region valid; when `visibility_contact_details` toggled to true for phone, enforce SMS OTP verified (contact_phone_verified_at not null)
-  - `contact_website`: RFC 3986 with scheme http|https; length ≤ 2048; reject data:/file: schemes; allow IDNA punycode domains only
-  - `social_links.twitter`: `^@?[A-Za-z0-9_]{1,15}$` normalized to `@handle` unless full twitter URL
-  - `social_links.linkedin`: profile slug matching `^[A-Za-z0-9\-]{5,}$` OR full https://www.linkedin.com/in/{slug} URL
-  - `social_links.github`: `^[A-Za-z0-9][A-Za-z0-9\-]{0,38}$` OR https://github.com/{slug}
+  - `contactPhone`: E.164 format + libphonenumber-style region valid; when `visibility_contact_details` toggled to true for phone, enforce SMS OTP verified (contact_phone_verified_at not null)
+  - `contactWebsite`: RFC 3986 with scheme http|https; length ≤ 2048; reject data:/file: schemes; allow IDNA punycode domains only
+  - `socialLinks.twitter`: `^@?[A-Za-z0-9_]{1,15}$` normalized to `@handle` unless full twitter URL
+  - `socialLinks.linkedin`: profile slug matching `^[A-Za-z0-9\-]{5,}$` OR full https://www.linkedin.com/in/{slug} URL
+  - `socialLinks.github`: `^[A-Za-z0-9][A-Za-z0-9\-]{0,38}$` OR https://github.com/{slug}
   - `locale`: BCP 47 in application allowlist (default: en_US, en_GB, zh_Hans_CN, id_ID, vi_VN); fall back to en_US if unknown
   - `timezone`: IANA tzdb entry (e.g. `America/New_York`, `Asia/Jakarta`); reject abbreviations like `EST`/`GMT`
-  - `marketing_consent`: strict boolean; when toggled true must also record a consent event through ConsentService with UTC timestamp and request_id
+  - `marketingConsent`: strict boolean; when toggled true must also record a consent event through ConsentService with UTC timestamp and request_id
 - password validators:
   - update/reset min length 12; max 128; reject control chars
   - reject top 100k common passwords via bloom/hash-lookup (NIST SP 800-63B guidance)

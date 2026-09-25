@@ -1311,33 +1311,40 @@ components:
             type: string
             format: date-time
     NotificationStreamMessage:
-      description: SSE notification event for per-user streams
+      description: SSE notification event for per-user streams. SSE frames use camelCase field
+        names like the REST API.
       payload:
         type: object
         required:
-        - notification_id
+        - id
         - type
         - title
-        - created_at
+        - createdAt
         properties:
-          notification_id:
+          id:
             type: string
             format: uuid
           type:
             type: string
           title:
             type: string
+          body:
+            type: string
           preview:
             type: string
             nullable: true
-          read:
-            type: boolean
-          created_at:
+          data:
+            type: object
+            description: Links to the subject, such as postId, commentId, and url.
+            additionalProperties:
+              type: string
+          actorId:
+            type: string
+            format: uuid
+            nullable: true
+          createdAt:
             type: string
             format: date-time
-          channel:
-            type: string
-            default: sse
     AdminAnalyticsRealtime:
       description: Realtime admin analytics events (page_view, search, etc.)
       payload:
@@ -1360,7 +1367,7 @@ components:
             - post.revision_restored
             - post.seo_updated
             - post.slug_changed
-          occurred_at:
+          occurredAt:
             type: string
             format: date-time
           data:

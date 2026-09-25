@@ -24,7 +24,7 @@ type privacyRequestsAPI interface {
 //	@Summary		Export my personal data
 //	@Description	Queues a JSON export of everything stored about the caller, or returns the open or still
 //	@Description	downloadable one. 202 while it is being prepared (poll this endpoint); 200 with a short-lived
-//	@Description	download_url once ready. After the archive expires, the next call queues a new export.
+//	@Description	downloadUrl once ready. After the archive expires, the next call queues a new export.
 //	@Tags			self-service
 //	@Produce		json
 //	@Success		200	{object}	responses.Envelope

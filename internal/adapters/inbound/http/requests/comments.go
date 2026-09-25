@@ -4,14 +4,14 @@ package requests
 type CreateComment struct {
 	// Plain text or markdown; HTML is not rendered.
 	Content  string `json:"content" binding:"required,max=10000"`
-	ParentID string `json:"parent_id" binding:"omitempty,uuid" format:"uuid"`
+	ParentID string `json:"parentId" binding:"omitempty,uuid" format:"uuid"`
 	// Guest commenters only; ignored when a bearer token is sent.
-	AuthorName  string `json:"author_name" binding:"omitempty,max=100"`
-	AuthorEmail string `json:"author_email" binding:"omitempty,email,max=254"`
+	AuthorName  string `json:"authorName" binding:"omitempty,max=100"`
+	AuthorEmail string `json:"authorEmail" binding:"omitempty,email,max=254"`
 	// Leave empty. Anti-spam trap for bots; must stay hidden in forms.
 	Honeypot string `json:"honeypot" binding:"omitempty,max=500"`
 	// Cloudflare Turnstile token; required for guests when the server has TURNSTILE_SECRET_KEY set.
-	TurnstileResponse string `json:"turnstile_response" binding:"omitempty,max=2048"`
+	TurnstileResponse string `json:"turnstileResponse" binding:"omitempty,max=2048"`
 }
 
 // UpdateComment is PATCH /api/v1/comments/:id.
@@ -24,7 +24,7 @@ type ModerateComment struct {
 	Action string `json:"action" binding:"required,oneof=approve reject spam restore" enums:"approve,reject,spam,restore"`
 	Reason string `json:"reason" binding:"omitempty,max=1000"`
 	// Recorded in the moderation log for author notifications.
-	NotifyAuthor bool `json:"notify_author"`
+	NotifyAuthor bool `json:"notifyAuthor"`
 }
 
 // BulkModerateComments is POST /api/v1/admin/comments/bulk-moderate. All comments change or none do.
@@ -36,6 +36,6 @@ type BulkModerateComments struct {
 
 // FlagComment is POST /api/v1/comments/:id/flag.
 type FlagComment struct {
-	ReasonCode string `json:"reason_code" binding:"required,oneof=spam abuse hate harassment doxx self_harm copyright impersonation illegal other"`
+	ReasonCode string `json:"reasonCode" binding:"required,oneof=spam abuse hate harassment doxx self_harm copyright impersonation illegal other"`
 	Details    string `json:"details" binding:"omitempty,max=2000"`
 }

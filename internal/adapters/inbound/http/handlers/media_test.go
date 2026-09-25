@@ -164,7 +164,7 @@ func TestMediaPresignHappyPath(t *testing.T) {
 
 	w := httptest.NewRecorder()
 	c, _ := gin.CreateTestContext(w)
-	body := `{"original_filename":"photo.png","content_type":"image/png","size_bytes":1024}`
+	body := `{"originalFilename":"photo.png","contentType":"image/png","sizeBytes":1024}`
 	c.Request = httptest.NewRequestWithContext(t.Context(), nethttp.MethodPost, "/api/v1/admin/media", bytes.NewBufferString(body))
 	c.Request.Header.Set("Content-Type", "application/json")
 	c.Set(middleware.ContextUserIDKey, userID)
@@ -178,8 +178,8 @@ func TestMediaPresignHappyPath(t *testing.T) {
 	require.True(t, envelope.OK)
 	data, ok := envelope.Data.(map[string]any)
 	require.True(t, ok)
-	require.Equal(t, "https://storage.example/upload", data["upload_url"])
-	require.Equal(t, mediaID.String(), data["media_id"])
+	require.Equal(t, "https://storage.example/upload", data["uploadUrl"])
+	require.Equal(t, mediaID.String(), data["mediaId"])
 }
 
 func TestMediaPresignValidation(t *testing.T) {
@@ -195,7 +195,7 @@ func TestMediaPresignValidation(t *testing.T) {
 
 	w := httptest.NewRecorder()
 	c, _ := gin.CreateTestContext(w)
-	c.Request = httptest.NewRequestWithContext(t.Context(), nethttp.MethodPost, "/api/v1/admin/media", bytes.NewBufferString(`{"original_filename":"x","content_type":"text/plain","size_bytes":1}`))
+	c.Request = httptest.NewRequestWithContext(t.Context(), nethttp.MethodPost, "/api/v1/admin/media", bytes.NewBufferString(`{"originalFilename":"x","contentType":"text/plain","sizeBytes":1}`))
 	c.Request.Header.Set("Content-Type", "application/json")
 	c.Set(middleware.ContextUserIDKey, uuid.New())
 
@@ -236,9 +236,9 @@ func TestMediaUsageReport(t *testing.T) {
 		return w
 	}
 
-	require.Equal(t, nethttp.StatusBadRequest, serve("?user_id=nope").Code)
+	require.Equal(t, nethttp.StatusBadRequest, serve("?userId=nope").Code)
 
-	w := serve("?user_id=" + userID.String() + "&top=5")
+	w := serve("?userId=" + userID.String() + "&top=5")
 	require.Equal(t, nethttp.StatusOK, w.Code)
 	require.Equal(t, "no-store", w.Header().Get("Cache-Control"))
 	require.Equal(t, 5, got.TopLimit)
@@ -247,15 +247,15 @@ func TestMediaUsageReport(t *testing.T) {
 	var envelope struct {
 		Data struct {
 			Total        map[string]float64 `json:"total"`
-			ByStatus     []map[string]any   `json:"by_status"`
-			TopUploaders []map[string]any   `json:"top_uploaders"`
+			ByStatus     []map[string]any   `json:"byStatus"`
+			TopUploaders []map[string]any   `json:"topUploaders"`
 		} `json:"data"`
 	}
 	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &envelope))
 	require.InDelta(t, 900, envelope.Data.Total["bytes"], 0)
 	require.Equal(t, "ready", envelope.Data.ByStatus[0]["status"])
 	require.Equal(t, "ana", envelope.Data.TopUploaders[0]["username"])
-	require.Nil(t, envelope.Data.TopUploaders[1]["user_id"])
+	require.Nil(t, envelope.Data.TopUploaders[1]["userId"])
 }
 
 func TestMediaCompleteMapsErrors(t *testing.T) {

@@ -11,7 +11,7 @@ type Login struct {
 // TwoFactorChallenge is POST /api/v1/auth/2fa/challenge. Code is a 6-digit TOTP
 // code or a backup code.
 type TwoFactorChallenge struct {
-	ChallengeToken string `json:"challenge_token" binding:"required,max=128"`
+	ChallengeToken string `json:"challengeToken" binding:"required,max=128"`
 	Code           string `json:"code" binding:"required,max=32"`
 }
 
@@ -34,19 +34,19 @@ type OAuthCallback struct {
 
 // Refresh is POST /api/v1/auth/refresh.
 type Refresh struct {
-	RefreshToken string `json:"refresh_token" binding:"required"`
+	RefreshToken string `json:"refreshToken" binding:"required"`
 }
 
 // Logout is POST /api/v1/auth/logout (body optional).
 type Logout struct {
-	RefreshToken string `json:"refresh_token" binding:"omitempty"`
+	RefreshToken string `json:"refreshToken" binding:"omitempty"`
 }
 
 // Register is POST /api/v1/auth/register.
 type Register struct {
 	Email    string `json:"email" binding:"required,email,max=254"`
 	Username string `json:"username" binding:"required,min=3,max=32"`
-	FullName string `json:"full_name" binding:"required,max=120"`
+	FullName string `json:"fullName" binding:"required,max=120"`
 	Password string `json:"password" binding:"required,min=12,max=128"`
 }
 
@@ -58,20 +58,20 @@ type VerifyEmail struct {
 
 // ForgotPassword is POST /api/v1/auth/password/forgot.
 type ForgotPassword struct {
-	EmailOrUsername string `json:"email_or_username" binding:"required"`
+	EmailOrUsername string `json:"emailOrUsername" binding:"required"`
 }
 
 // ResetPassword is POST /api/v1/auth/password/reset.
 type ResetPassword struct {
 	Token           string `json:"token" binding:"required"`
-	NewPassword     string `json:"new_password" binding:"required,min=12,max=128"`
-	ConfirmPassword string `json:"confirm_password" binding:"required,eqfield=NewPassword"`
+	NewPassword     string `json:"newPassword" binding:"required,min=12,max=128"`
+	ConfirmPassword string `json:"confirmPassword" binding:"required,eqfield=NewPassword"`
 }
 
 // ChangePassword is PUT /api/v1/me/password.
 type ChangePassword struct {
-	CurrentPassword   string `json:"current_password" binding:"required"`
-	NewPassword       string `json:"new_password" binding:"required,min=12,max=128"`
-	ConfirmPassword   string `json:"confirm_password" binding:"required,eqfield=NewPassword"`
-	RevokeAllSessions *bool  `json:"revoke_all_sessions"`
+	CurrentPassword   string `json:"currentPassword" binding:"required"`
+	NewPassword       string `json:"newPassword" binding:"required,min=12,max=128"`
+	ConfirmPassword   string `json:"confirmPassword" binding:"required,eqfield=NewPassword"`
+	RevokeAllSessions *bool  `json:"revokeAllSessions"`
 }

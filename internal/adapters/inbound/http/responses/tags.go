@@ -10,9 +10,9 @@ import (
 // Tag serializes a tag resource.
 func Tag(tag tagdomain.Tag) gin.H {
 	return gin.H{
-		"id":         tag.UUID.String(),
-		"name":       tag.Name,
-		"slug":       tag.Slug,
-		"created_at": tag.CreatedAt.UTC().Format(time.RFC3339),
+		"id":        tag.UUID.String(),
+		"name":      tag.Name,
+		"slug":      tag.Slug,
+		"createdAt": tag.CreatedAt.UTC().Format(time.RFC3339),
 	}
 }

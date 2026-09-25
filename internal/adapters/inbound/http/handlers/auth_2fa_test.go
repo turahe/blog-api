@@ -72,10 +72,10 @@ func TestLoginReturnsChallengeForTwoFactorAccounts(t *testing.T) {
 	require.Equal(t, nethttp.StatusOK, w.Code, w.Body.String())
 
 	data := dataOf(body)
-	require.Equal(t, true, data["two_factor_required"])
-	require.Equal(t, "chal", data["challenge_token"])
-	require.InDelta(t, 300, data["expires_in"], 2)
-	require.NotContains(t, data, "access_token")
+	require.Equal(t, true, data["twoFactorRequired"])
+	require.Equal(t, "chal", data["challengeToken"])
+	require.InDelta(t, 300, data["expiresIn"], 2)
+	require.NotContains(t, data, "accessToken")
 }
 
 func TestTwoFactorChallengeReturnsTokens(t *testing.T) {
@@ -84,10 +84,10 @@ func TestTwoFactorChallengeReturnsTokens(t *testing.T) {
 	mfa := &fakeTwoFactor{}
 	w, body := runProfile(t, twoFactorChallengeHandler(mfa), profileRequest{
 		method: nethttp.MethodPost, target: "/api/v1/auth/2fa/challenge", contentType: "application/json",
-		body: `{"challenge_token":"chal","code":"123456"}`,
+		body: `{"challengeToken":"chal","code":"123456"}`,
 	})
 	require.Equal(t, nethttp.StatusOK, w.Code, w.Body.String())
-	require.Equal(t, "access", dataOf(body)["access_token"])
+	require.Equal(t, "access", dataOf(body)["accessToken"])
 	require.Equal(t, "chal", mfa.token)
 	require.Equal(t, "123456", mfa.code)
 }
@@ -106,7 +106,7 @@ func TestTwoFactorChallengeMapsErrors(t *testing.T) {
 	for err, want := range cases {
 		w, body := runProfile(t, twoFactorChallengeHandler(&fakeTwoFactor{err: err}), profileRequest{
 			method: nethttp.MethodPost, target: "/api/v1/auth/2fa/challenge", contentType: "application/json",
-			body: `{"challenge_token":"chal","code":"123456"}`,
+			body: `{"challengeToken":"chal","code":"123456"}`,
 		})
 		require.Equal(t, want.status, w.Code, w.Body.String())
 		require.Equal(t, want.code, errorCode(body))
@@ -128,7 +128,7 @@ func TestMeTwoFactorEndpoints(t *testing.T) {
 	w, body := runProfile(t, meTwoFactorGetHandler(mfa), profileRequest{method: nethttp.MethodGet, target: "/api/v1/me/2fa", user: &user})
 	require.Equal(t, nethttp.StatusOK, w.Code, w.Body.String())
 	require.Equal(t, true, dataOf(body)["enabled"])
-	require.InDelta(t, 7, dataOf(body)["backup_codes_remaining"], 0)
+	require.InDelta(t, 7, dataOf(body)["backupCodesRemaining"], 0)
 	require.Equal(t, user, mfa.user)
 
 	w, body = runProfile(t, meTwoFactorSetupHandler(mfa), profileRequest{method: nethttp.MethodPost, target: "/api/v1/me/2fa/setup", user: &user})
@@ -141,7 +141,7 @@ func TestMeTwoFactorEndpoints(t *testing.T) {
 		body: `{"code":"654321"}`, user: &user,
 	})
 	require.Equal(t, nethttp.StatusOK, w.Code, w.Body.String())
-	require.Equal(t, []any{"aaaaa-bbbbb"}, dataOf(body)["backup_codes"])
+	require.Equal(t, []any{"aaaaa-bbbbb"}, dataOf(body)["backupCodes"])
 	require.Equal(t, "654321", mfa.code)
 
 	w, body = runProfile(t, meTwoFactorBackupCodesHandler(mfa), profileRequest{
@@ -149,7 +149,7 @@ func TestMeTwoFactorEndpoints(t *testing.T) {
 		body: `{"code":"111111"}`, user: &user,
 	})
 	require.Equal(t, nethttp.StatusOK, w.Code, w.Body.String())
-	require.Equal(t, []any{"ccccc-ddddd"}, dataOf(body)["backup_codes"])
+	require.Equal(t, []any{"ccccc-ddddd"}, dataOf(body)["backupCodes"])
 
 	w, body = runProfile(t, meTwoFactorDisableHandler(mfa), profileRequest{
 		method: nethttp.MethodDelete, target: "/api/v1/me/2fa", contentType: "application/json",
@@ -188,7 +188,7 @@ func TestAdminLoginHandler(t *testing.T) {
 		body: `{"email":"staff@example.com","password":"x"}`,
 	})
 	require.Equal(t, nethttp.StatusOK, w.Code, w.Body.String())
-	require.Equal(t, "staff-token", dataOf(body)["access_token"])
+	require.Equal(t, "staff-token", dataOf(body)["accessToken"])
 	require.Equal(t, "staff@example.com", admin.email)
 
 	w, body = runProfile(t, adminLoginHandler(&fakeAdminLogin{err: authdomain.ErrInvalidCredentials}), profileRequest{

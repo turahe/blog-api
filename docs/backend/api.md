@@ -16,6 +16,15 @@ Use `docs/backend/api.md` as a human-readable summary of areas and conventions.
 
 - version routes under `/api/v1`
 - use JSON request and response bodies
+- name JSON fields and query parameters in camelCase, treating acronyms as words:
+  `perPage`, `categoryId`, `redirectUri`, `accessToken`, `requestId`. snake_case names are
+  not accepted as aliases. Server-sent event frames follow the same rule.
+- values keep their own format: error codes (`auth.registration.token_invalid`), enum values
+  (`read_only`, `pending_confirm`), setting keys (`security.registration_enabled`), consent
+  purposes (`authenticated_analytics`), and Open Graph / Twitter tag names (`og:site_name`)
+- not REST, so still snake_case: broker events and AsyncAPI payloads, audit `metadata` and
+  `changes`, CSV export columns, and the newsletter provider webhook body (`occurred_at`),
+  which follows the `custom_http` provider protocol
 - use pagination for list endpoints — see [data-wrapping-and-pagination.md](data-wrapping-and-pagination.md)
 - return a consistent error envelope
 - include packed numeric `code` on every envelope — see [response-codes.md](response-codes.md)
@@ -74,7 +83,7 @@ the wired Phase 2 surface and where it deliberately differs from the target.
 
 | Operation | Route | Notes |
 | --- | --- | --- |
-| `admin.posts.unpublish` | `POST /api/v1/admin/posts/{id}/unpublish` | published or scheduled → draft, clears `published_at`; `post.publish` |
+| `admin.posts.unpublish` | `POST /api/v1/admin/posts/{id}/unpublish` | published or scheduled → draft, clears `publishedAt`; `post.publish` |
 | `admin.posts.archive` | `POST /api/v1/admin/posts/{id}/archive` | draft, scheduled or published → archived; `post.publish` |
 | `admin.posts.delete` | `DELETE /api/v1/admin/posts/{id}` | soft delete, releases the slug; `post.delete` |
 | `admin.posts.restore` | `POST /api/v1/admin/posts/{id}/restore` | back as a draft; `post.delete` |
@@ -88,7 +97,7 @@ the wired Phase 2 surface and where it deliberately differs from the target.
   collisions always yield the same slug. On update a taken slug returns `409`.
 - Public post, category, tag and user-profile reads are cached; the contract is in
   [services.md](services.md#public-read-caching). Cached entries are domain results, so
-  `meta.request_id` is always per request.
+  `meta.requestId` is always per request.
 
 ### Roles and permissions
 
@@ -114,7 +123,7 @@ the wired Phase 2 surface and where it deliberately differs from the target.
   `422 rbac.permission.not_found`. `"*"` is reserved for `admin` → `400`.
 - `admin` is protected: deleting it or changing its permissions → `403 rbac.role.protected`;
   revoking it from yourself → `403 rbac.role.self_revoke`.
-- User-role endpoints return `{"user_id", "roles"}` after the change. `POST` takes
+- User-role endpoints return `{"userId", "roles"}` after the change. `POST` takes
   `{"roles": [...]}` (1–20 names) and keeps existing assignments.
 - Errors: unknown role → `404 rbac.role.not_found`; unknown user → `404 user.not_found`;
   duplicate name → `409 rbac.role.exists`. Responses use service code `11` (RBAC).
@@ -150,7 +159,7 @@ limit the answer is `429 rate_limited` with `Retry-After`.
 
 - **Switch.** Off by default. An admin turns it on with the `security.registration_enabled`
   setting. While it is off, both routes answer `403 auth.registration.closed`.
-- **Register.** Body `{"email", "username", "full_name", "password"}`. The email is trimmed
+- **Register.** Body `{"email", "username", "fullName", "password"}`. The email is trimmed
   and lowercased. The password follows the usual strength rules (12–128 characters, upper,
   lower and a digit → `422 password.strength`). A taken username is `409 user.username.taken`.
   The answer is always `202` with the same body, whether or not the email already has an
@@ -164,7 +173,7 @@ limit the answer is `429 rate_limited` with `Retry-After`.
 - **Verify.** Body `{"token", "password"}`. The password must match the one given at
   sign-up, so someone who registers another person's address can't finish the account
   without them, and the address owner can't finish it without the password. On success the
-  account is created in one transaction: active, `email_verified_at` set, no role (a plain
+  account is created in one transaction: active, `emailVerifiedAt` set, no role (a plain
   reader), `blog.user.created` event. Every other pending sign-up for the address is removed,
   and the answer is `201` with a token pair, as for `POST /auth/login`.
 - **Verify errors.** Unknown or used token → `400 auth.registration.token_invalid`; expired
@@ -178,12 +187,12 @@ limit the answer is `429 rate_limited` with `Retry-After`.
 
 | Operation | Route | Auth | Rate limit |
 | --- | --- | --- | --- |
-| `auth.oauth.start` | `GET /api/v1/auth/oauth/{provider}/start?redirect_uri=` | none | `auth.oauth` = `AUTH_LOGIN_PER_MINUTE` per IP |
+| `auth.oauth.start` | `GET /api/v1/auth/oauth/{provider}/start?redirectUri=` | none | `auth.oauth` = `AUTH_LOGIN_PER_MINUTE` per IP |
 | `auth.oauth.callback` | `POST /api/v1/auth/oauth/{provider}/callback` | none | `auth.oauth` (shared) |
 
 - **Flow.** The client calls `start` with its callback URL, which must be listed exactly in
-  `OAUTH_REDIRECT_URIS`. The response is `{"authorize_url", "expires_at"}`
-  (`Cache-Control: no-store`). The browser visits `authorize_url`. The provider redirects to
+  `OAUTH_REDIRECT_URIS`. The response is `{"authorizeUrl", "expiresAt"}`
+  (`Cache-Control: no-store`). The browser visits `authorizeUrl`. The provider redirects to
   the client with `code` and `state`, and the client posts `{"code", "state"}` to `callback`.
   The answer is the same as `POST /auth/login`: a token pair, or a two-factor challenge for
   enrolled accounts. The refresh session is not "remember me".
@@ -218,13 +227,13 @@ limit the answer is `429 rate_limited` with `Retry-After`.
 - **Login.** For an account with 2FA enabled, `POST /auth/login` checks the password as
   before but answers `200` with `{"two_factor_required": true, "challenge_token",
   "expires_at", "expires_in"}` instead of tokens. The client posts
-  `{"challenge_token", "code"}` to `/auth/2fa/challenge` and gets the usual token pair.
+  `{"challengeToken", "code"}` to `/auth/2fa/challenge` and gets the usual token pair.
   `code` is a 6-digit TOTP code or a backup code (`xxxxx-xxxxx`; case, spaces and the dash
   are ignored). A challenge lives 5 minutes, is single use, and dies after 5 attempts.
   It is stored in Redis only as a SHA-256 hash.
-- **Enrollment.** `setup` returns `{"secret", "otpauth_url"}` (base32 secret for manual
+- **Enrollment.** `setup` returns `{"secret", "otpauthUrl"}` (base32 secret for manual
   entry, URL for a QR code) and may be repeated until confirmed. `confirm {code}` enables
-  2FA and returns 10 `backup_codes` once. `backup-codes {code}` replaces them after a TOTP
+  2FA and returns 10 `backupCodes` once. `backup-codes {code}` replaces them after a TOTP
   check. `DELETE /me/2fa {password, code}` disables 2FA (the code may be a backup code).
   Setup, confirm and backup-code responses carry `Cache-Control: no-store`.
 - **Storage.** TOTP secrets are AES-256-GCM encrypted under `APP_ENCRYPTION_KEY`, and backup
@@ -258,30 +267,30 @@ limit the answer is `429 rate_limited` with `Retry-After`.
 | `admin.users.create` | `POST /api/v1/admin/users` | `user.create` (+ `role.manage` to send `roles`) | — |
 | `admin.users.password.admin_reset` | `POST /api/v1/admin/users/{id}/password/admin-reset` | `user.password.admin_reset` | — |
 
-- **Admin create:** body `email`, `username` (3–32 of `A-Z a-z 0-9 . _ -`), `full_name`,
+- **Admin create:** body `email`, `username` (3–32 of `A-Z a-z 0-9 . _ -`), `fullName`,
   `password` (password policy), optional `roles` (role names). The account is created active
   → `201` with the user. Taken email → `409 auth.email.taken`; taken username →
   `409 user.username.taken`; unknown role → `422 rbac.role.not_found`; `roles` without
   `role.manage` → `403 rbac.forbidden`.
 - **Admin password reset:** emails a fresh reset link and invalidates earlier links. Optional
-  body `{"revoke_sessions": false}` keeps sessions (default revokes them) → `202` with
-  `reset_link_expires_at` and `sessions_revoked`. Unknown user → `404 user.not_found`;
+  body `{"revokeSessions": false}` keeps sessions (default revokes them) → `202` with
+  `resetLinkExpiresAt` and `sessionsRevoked`. Unknown user → `404 user.not_found`;
   inactive user → `409 user.inactive`.
 
 Differences from the target rules below:
 
-- **Patch keys:** `full_name`, `display_name`, `bio`, `contact_website`, `contact_location`,
-  `social_links` (`twitter`, `linkedin`, `github`), `locale`, `timezone`,
-  `marketing_consent`. `null` clears a field. Unknown keys → `400 profile.unknown_field`;
-  `contact_phone` → `400 profile.field_unsupported` (it needs field encryption first).
+- **Patch keys:** `fullName`, `displayName`, `bio`, `contactWebsite`, `contactLocation`,
+  `socialLinks` (`twitter`, `linkedin`, `github`), `locale`, `timezone`,
+  `marketingConsent`. `null` clears a field. Unknown keys → `400 profile.unknown_field`;
+  `contactPhone` → `400 profile.field_unsupported` (it needs field encryption first).
   A display name is unique case-insensitively → `409 profile.display_name_taken`.
 - **Avatar:** multipart field `file`. The response is the stored media asset (the original
   image); request sizes through `public.media.transform` (`?w=128`). Over
   `AVATAR_MAX_BYTES` → `413 profile.avatar_too_large`; storage down → `502
   storage_unavailable`; media disabled → the routes stay `501`. Replacing or deleting an
   avatar soft-deletes the previous asset when this user uploaded it.
-- **Email change:** request body `{ new_email, password_proof }` → `202` with
-  `{ new_email, expires_at }` (`auth.email.taken` 409, `password.current_mismatch` 403).
+- **Email change:** request body `{ newEmail, passwordProof }` → `202` with
+  `{ newEmail, expiresAt }` (`auth.email.taken` 409, `password.current_mismatch` 403).
   Confirm body `{ token }` → `200` with the new email; every session is revoked, so the
   client must log in again. Token errors: `auth.email.change_token_{invalid,used,expired}`.
   A new request supersedes the pending one. Reset and email-change tokens are not
@@ -289,13 +298,13 @@ Differences from the target rules below:
   never the token.
 - **Public profile:** `404` for private profiles unless the caller is the owner or holds
   `user.profile.read`, and for inactive users. The email is shown only when
-  `visibility_email` is on, and contact fields only when `visibility_contact` is on.
+  `visibilityEmail` is on, and contact fields only when `visibilityContact` is on.
   `X-Robots-Tag: noindex` is sent when indexing is disallowed or the profile is not public.
   `followers_only` and `include=` are not implemented yet.
-- **Privacy settings:** `GET /me/privacy` returns `visibility_profile` (`public`, `unlisted`,
-  `private`), `visibility_email`, `visibility_contact`, and `search_allow_indexing`. `PUT` takes
-  any of those keys plus `current_password`; omitted keys are kept. Narrowing
-  `visibility_profile` (public → unlisted → private) requires `current_password`; without it,
+- **Privacy settings:** `GET /me/privacy` returns `visibilityProfile` (`public`, `unlisted`,
+  `private`), `visibilityEmail`, `visibilityContact`, and `searchAllowIndexing`. `PUT` takes
+  any of those keys plus `currentPassword`; omitted keys are kept. Narrowing
+  `visibilityProfile` (public → unlisted → private) requires `currentPassword`; without it,
   or with a wrong one, the answer is `403 privacy.level_change_requires_reauth`. Accounts that
   sign in only with OAuth have no password, so they must set one through the password reset
   flow first. Widening visibility and the other flags need no proof. A change invalidates cached
@@ -306,13 +315,13 @@ Differences from the target rules below:
   (account, roles, profile, privacy, activity, sessions, OAuth identities, analytics consents,
   posts, comments, media, notifications) and answers `202` with `{id, kind, status,
   requested_at, completed_at}`. Poll the same route: while the job is pending or running it
-  returns that job; once done it answers `200` with `download_url`, `download_expires_at`, and
-  `archive_expires_at`. Each call signs a new link valid for `PRIVACY_EXPORT_URL_TTL` (never past
+  returns that job; once done it answers `200` with `downloadUrl`, `downloadExpiresAt`, and
+  `archiveExpiresAt`. Each call signs a new link valid for `PRIVACY_EXPORT_URL_TTL` (never past
   the archive expiry); the archive is deleted after `PRIVACY_EXPORT_RETENTION`, and the next
   call queues a fresh export. Responses carry `Cache-Control: no-store`. Without object storage
   (`MEDIA_ENABLED=false`) the route answers `503 privacy.export_unavailable`. Queuing records
   `user.activity.export_requested`.
-- **Erasure:** `POST /me/activity/erase` with `{current_password}` queues the anonymization
+- **Erasure:** `POST /me/activity/erase` with `{currentPassword}` queues the anonymization
   and answers `202`; a missing or wrong password → `403 privacy.erase_requires_reauth` (OAuth-only
   accounts set a password through reset first). Repeating the call while it is pending returns
   the same request. Within about a minute `app scheduler` deletes the user's activity feed,
@@ -328,17 +337,17 @@ Differences from the target rules below:
 ### Comment content
 
 Comments are written as markdown in `content` and returned with both `content` (the raw text)
-and `content_html`. `content_html` is rendered on create and edit (CommonMark via goldmark),
+and `contentHtml`. `contentHtml` is rendered on create and edit (CommonMark via goldmark),
 then sanitized with bluemonday to an allow-list: `p`, `br`, `strong`, `em`, `code`, `pre`,
 `blockquote`, `ul`, `ol`, `li`, and `a` with an `http`, `https`, or `mailto` `href` and
 `rel="nofollow noreferrer"`. Raw HTML in the input is dropped; headings, images, tables, and
-other elements are reduced to their text. Clients may insert `content_html` as HTML; `content`
+other elements are reduced to their text. Clients may insert `contentHtml` as HTML; `content`
 must still be escaped. Both fields are empty on deleted comments in public responses; the
 admin view keeps them. Rows stored before `00017_comment_content_html.sql` are rendered on read.
 
 ### Comment policy
 
-Every post has a `comment_policy` (default `open`), returned on post responses and set with
+Every post has a `commentPolicy` (default `open`), returned on post responses and set with
 `PATCH /api/v1/admin/posts/{id}`. Admin comment operations ignore it.
 
 | Policy | Read (list, get) | Create | Edit, upvote | Flag | Delete own |
@@ -353,7 +362,7 @@ Every post has a `comment_policy` (default `open`), returned on post responses a
 ### Guest comment captcha
 
 When `TURNSTILE_SECRET_KEY` is set, `POST /api/v1/posts/{id}/comments` without a bearer token
-must include `turnstile_response`, the token from the Cloudflare Turnstile widget. The server
+must include `turnstileResponse`, the token from the Cloudflare Turnstile widget. The server
 checks it with Cloudflare's siteverify API, sending the token and the client IP. A missing or
 rejected token returns `400 comments.spam.challenge_invalid`; if Cloudflare cannot be reached
 or rejects the secret, the request fails with `503 comments.spam.challenge_unavailable` (fail
@@ -376,15 +385,15 @@ the entries are logged and dropped, and `blog_audit_entries_dropped_total` count
 | `auth.refresh`, `auth.password.forgot`, `self.comments.upvote`, `admin.posts.seo.preview` | never |
 
 Each row holds the operation id as `action`, the actor, the resource (inferred from the
-operation and first path parameter; `resource_type=user` for `/me`, auth, and
+operation and first path parameter; `resourceType=user` for `/me`, auth, and
 `/admin/users/{id}` operations), the result and status, IP, user agent, request id, and
 `metadata.changes` with before/after values. Services add the details only they know through
 `internal/core/audit`: the actor of a login or reset, and changes for role assignment, post
 status, comment moderation, and marketing consent. Profile edits record the field names in
 `metadata.fields`, never the values.
 
-A user's activity is every row where the user is the actor or `resource_type=user` and
-`resource_id` is the user. Operations with a user-facing category (`login`, `logout`,
+A user's activity is every row where the user is the actor or `resourceType=user` and
+`resourceId` is the user. Operations with a user-facing category (`login`, `logout`,
 `password_reset`, `password_change`, `profile_edit`, `avatar_update`, `email_change`,
 `twofa_enable`, `twofa_disable`, `twofa_backup_codes`, `role_change`, `post_create`,
 `post_edit`, `post_publish`, `comment_create`) show on `/me/activity`; the rest are admin-only.
@@ -395,7 +404,7 @@ A user's activity is every row where the user is the actor or `resource_type=use
 | `admin.users.activity.list` | `GET /api/v1/admin/users/{id}/activity` | `user.activity.read_all` | every row, with `ip`, `user_agent`, `request_id`, `changes`, `metadata`, and `impersonator_id` |
 
 Both take `category` (comma-separated), `from` and `to` (RFC 3339 or `YYYY-MM-DD`; a date `to`
-covers the whole day), `page`, and `per_page` (max 100), and return newest first.
+covers the whole day), `page`, and `perPage` (max 100), and return newest first.
 
 Rows older than `AUDIT_RETENTION_DAYS` (default 395) are deleted by `app audit prune`
 (`--older-than-days` overrides the setting) and hourly by `app scheduler`.
@@ -407,12 +416,12 @@ event happens; see [notification.md](../features/notification.md#in-app-inbox) f
 
 | Operation | Method and path | Auth | Notes |
 | --- | --- | --- | --- |
-| `me.notifications.list` | `GET /api/v1/me/notifications` | bearer | newest first; `unread=true` filters; `page`, `per_page` (max 100); `X-Unread-Count` header |
+| `me.notifications.list` | `GET /api/v1/me/notifications` | bearer | newest first; `unread=true` filters; `page`, `perPage` (max 100); `X-Unread-Count` header |
 | `me.notifications.read` | `POST /api/v1/me/notifications/{id}/read` | bearer | idempotent; `404` for unknown or another user's id |
 | `me.notifications.stream` | `GET /api/v1/me/notifications/stream` | bearer | server-sent events; needs `MESSAGE_BROKER` (`503 notifications.stream_unavailable` otherwise); `429 notifications.stream_limit` past `SSE_MAX_CONCURRENT_PER_USER`; see [realtime-notifications-sse.md](../features/realtime-notifications-sse.md#implementation-status) |
 
-Each item has `id`, `type`, `title`, `body`, `preview`, `data` (links such as `post_id`,
-`comment_id`, `url`), `actor_id`, `is_read`, `read_at`, and `created_at`.
+Each item has `id`, `type`, `title`, `body`, `preview`, `data` (links such as `postId`,
+`commentId`, `url`), `actorId`, `isRead`, `readAt`, and `createdAt`.
 
 ### Media
 
@@ -455,7 +464,7 @@ Each item has `id`, `type`, `title`, `body`, `preview`, `data` (links such as `p
   `compare` (`previous` by default, or `none`), `limit` (1–100, default 20), and pages' `sort`
   (`views`/`time`/`rising`).
 - Reports cover whole periods and read rollups only. Range visitor totals are sums of
-  per-period uniques named `visitor_days`/`visitor_weeks`/`visitor_months`; plain `visitors`
+  per-period uniques named `visitorDays`/`visitorWeeks`/`visitorMonths`; plain `visitors`
   appears only for a one-period window. Details:
   [analytics.md](analytics.md#admin-dashboard-rbac-protected).
 - `GET /api/v1/admin/analytics/realtime/stream` (SSE, `analytics.realtime.read`) sends
@@ -467,14 +476,14 @@ Each item has `id`, `type`, `title`, `body`, `preview`, `data` (links such as `p
 
 - `POST /api/v1/admin/analytics/export` (`analytics.export`, admins only) queues a ZIP of rollup
   CSVs for `from`/`to` (required) and optional `grain`, and answers `202`. The body also carries
-  `current_password` and, with two-factor enabled, `two_factor_code`; a failed check is `403
+  `currentPassword` and, with two-factor enabled, `twoFactorCode`; a failed check is `403
   analytics.step_up_required`. A second open export is `409 analytics.export_in_progress` (the
   open one in `error.details`); without object storage, `503 analytics.export_unavailable`.
 - `GET /api/v1/admin/analytics/exports` lists the caller's 20 most recent exports and
   `GET /api/v1/admin/analytics/exports/{id}` returns one (`404` for another user's). `status` is
   `pending`, `running`, `completed`, `failed`, or `expired`; a completed export carries a new
-  presigned `download_url` on every call (valid `ANALYTICS_EXPORT_URL_TTL`, never past
-  `archive_expires_at`). Details: [analytics.md](analytics.md#export).
+  presigned `downloadUrl` on every call (valid `ANALYTICS_EXPORT_URL_TTL`, never past
+  `archiveExpiresAt`). Details: [analytics.md](analytics.md#export).
 
 ## Main API Areas
 
@@ -555,13 +564,13 @@ Full wire format, client integration, security, and scaling guidance is in the f
   - periodic `event: ping` frames every `SSE_PING_INTERVAL_SECONDS` (default 15s) to keep
     intermediate proxy sockets alive
   - opening `retry: 5000` line for EventSource reconnect delay hint + `event: stream.opened`
-    frame with `stream_id`, `user_id`, `retry_ms`, `replay_applied`, `replay_count`
+    frame with `streamId`, `userId`, `retryMs`, `replayApplied`, `replayCount`
   - graceful close on client disconnect (request context done), auth expiration
     (`event: stream.closed { code: "auth.expired" }`), session revocation, or server SIGTERM
     shutdown
   - watchdog-based cleanup of half-open TCP sockets after 2 missed pings
   - bounded per-connection write buffer (default 512); slow consumers overflow produces a
-    single `event: error { code: "fanout.buffer_full", dropped_count: N }` frame and drops
+    single `event: error { code: "fanout.buffer_full", droppedCount: N }` frame and drops
     oldest events rather than blocking the global fan-out
 - Event format on the wire (WHATWG Server-Sent Events):
   - `event: notification.created` / `notification.read` / `notification.dismissed` /
@@ -576,7 +585,7 @@ Full wire format, client integration, security, and scaling guidance is in the f
   can use Watermill in-process; multi-process deployments MUST fan out via Redis bus so any
   process can publish and every process's connected clients receive the frame.
 - Delivery semantics are at-least-once; clients MUST deduplicate by `id:` or
-  `data.notification_id`. `Last-Event-ID` (or query `?replay_after=`) replay restores gaps
+  `data.notificationId`. `Last-Event-ID` (or query `?replayAfter=`) replay restores gaps
   within the replay ring; gaps outside the ring are filled by the client calling
   `GET /api/v1/me/notifications` immediately after the reconnect.
 - Rate limiting on SSE (all Redis-backed, keys documented in
@@ -600,16 +609,16 @@ Full wire format, client integration, security, and scaling guidance is in the f
 - `GET /api/v1/admin/posts`
 - `POST /api/v1/admin/posts` (optional `tags: string[]` create-or-link attach on create)
 - `POST /api/v1/admin/posts/:id/publish`
-- `PATCH /api/v1/admin/posts/:id` (partial post update; ownership-aware; optional `tags: string[]` create-or-link attach; optional `comment_policy`, see [Comment policy](#comment-policy))
+- `PATCH /api/v1/admin/posts/:id` (partial post update; ownership-aware; optional `tags: string[]` create-or-link attach; optional `commentPolicy`, see [Comment policy](#comment-policy))
 - `PATCH /api/v1/admin/posts/:id/media` (replace post attachments join rows)
 - `POST /api/v1/admin/tags` (create curated tag; slug optional, derived from name)
 - `PATCH /api/v1/admin/tags/:id` (rename or reslug tag)
 - `POST /api/v1/admin/tags/:id/merge` (reassign post links from source to target, delete source)
 - `DELETE /api/v1/admin/tags/:id` (hard delete when unused; 409 when posts still reference the tag)
 - `GET /api/v1/admin/categories` (tree order; requires `category.read`)
-- `POST /api/v1/admin/categories` (create with optional `parent_id`, `before_id`, `image_id`; requires `category.create`)
+- `POST /api/v1/admin/categories` (create with optional `parentId`, `beforeId`, `imageId`; requires `category.create`)
 - `PATCH /api/v1/admin/categories/:id` (name/slug/description/image_id only; requires `category.update`)
-- `POST /api/v1/admin/categories/:id/move` (reparent/reorder via `parent_id` + optional `before_id`; requires `category.update`)
+- `POST /api/v1/admin/categories/:id/move` (reparent/reorder via `parentId` + optional `beforeId`; requires `category.update`)
 - `DELETE /api/v1/admin/categories/:id` (hard delete when unused; 409 `category_in_use` when posts or children remain; requires `category.delete`)
 - `GET /api/v1/admin/posts/:id/revisions` (list revisions, paginated + filters)
 - `GET /api/v1/admin/posts/:id/revisions/:revision_id_or_number` (get single revision with snapshot + diff)
@@ -620,7 +629,7 @@ Full wire format, client integration, security, and scaling guidance is in the f
 - `POST /api/v1/admin/media`
 - `GET /api/v1/admin/media` (`?unused=true` lists ready assets nothing references; items carry `variants`)
 - `POST /api/v1/admin/media/:id/complete`
-- `GET /api/v1/admin/media/usage` (storage report by status, content type, and uploader; `?user_id=`, `?top=`)
+- `GET /api/v1/admin/media/usage` (storage report by status, content type, and uploader; `?userId=`, `?top=`)
 - `PATCH /api/v1/admin/media/:id/tags`
 - `DELETE /api/v1/admin/media/:id`
 - `GET /api/v1/admin/settings`
@@ -648,10 +657,10 @@ like every other read in the API.
 Implemented; details in [impersonation.md](./impersonation.md).
 
 - `POST /api/v1/admin/impersonation/start` requires `impersonation.start`, a non-impersonation
-  token, a 10–255 character `reason`, `current_password`, and `two_factor_code` when the caller
+  token, a 10–255 character `reason`, `currentPassword`, and `twoFactorCode` when the caller
   has 2FA enabled; rate limited to 10 per minute. The target must be active, not an administrator
   or impersonator, and hold no permission the caller lacks. Returns `201` with a Bearer token
-  (`sub` = target, `act.sub` = caller, no refresh token) valid until the session's `expires_at`
+  (`sub` = target, `act.sub` = caller, no refresh token) valid until the session's `expiresAt`
   or until the caller's own sign-in ends; a caller token without a sign-in family (`fam`) is
   `401 impersonation.sign_in_required`
 - `POST /api/v1/admin/impersonation/stop` ends the session of the impersonation token sent, or the
@@ -663,14 +672,14 @@ Implemented; details in [impersonation.md](./impersonation.md).
   analytics consent, newsletter self-service, logout, refresh, and starting another
   impersonation; responses carry `X-Impersonation-Session`
 - every request made with an impersonation token, reads included, is audited with
-  `impersonator_id` and the session id
+  `impersonatorId` and the session id
 
 ## Admin Post Revision Endpoint Rules
 
 - `GET /api/v1/admin/posts/:id/revisions` requires auth + `post.revisions.view` or ownership permission for authors
 - `GET /api/v1/admin/posts/:id/revisions/:revision_id_or_number` requires same auth as list; supports revision_number for friendly navigation
 - `POST /api/v1/admin/posts/:id/revisions/:revision_id_or_number/restore` requires `post.revisions.restore` permission + CSRF protection for browser clients
-- restore creates a new revision row (type=restore) with `restore_from_revision_id` set, never mutates existing revisions
+- restore creates a new revision row (type=restore) with `restoreFromRevisionId` set, never mutates existing revisions
 - implemented; ownership (`post.revisions.view_all`), the diff format, and restore's `skipped` report are in [post-versions.md](./post-versions.md#implementation)
 - restore restores content/excerpt/slug/status/category/cover/media attachments/tags/SEO snapshot exactly
 - every revision must record `author_id` (effective user) and, when applicable, impersonator metadata for audit
@@ -687,19 +696,19 @@ Implemented; details in [impersonation.md](./impersonation.md).
 ## Admin Category Endpoint Rules
 
 - `GET /api/v1/admin/categories` requires auth + `category.read`; returns categories in nested-set order (`lft ASC`)
-- `POST /api/v1/admin/categories` requires auth + `category.create`; optional `parent_id`, `before_id`, and `image_id`
-- `PATCH /api/v1/admin/categories/:id` requires auth + `category.update`; allowlisted fields only (`name`, `slug`, `description`, `image_id`); reject `parent_id` on PATCH
-- `POST /api/v1/admin/categories/:id/move` requires auth + `category.update`; body `{ parent_id, before_id? }` for reparent/reorder (`parent_id: null` = root)
+- `POST /api/v1/admin/categories` requires auth + `category.create`; optional `parentId`, `beforeId`, and `imageId`
+- `PATCH /api/v1/admin/categories/:id` requires auth + `category.update`; allowlisted fields only (`name`, `slug`, `description`, `imageId`); reject `parentId` on PATCH
+- `POST /api/v1/admin/categories/:id/move` requires auth + `category.update`; body `{ parentId, beforeId? }` for reparent/reorder (`parentId: null` = root)
 - `DELETE /api/v1/admin/categories/:id` requires auth + `category.delete`; hard delete when no posts and no children; otherwise `409 category_in_use`
 - adjacency (`parent_id`) is source of truth; service rebuilds `lft`/`rgt`/`depth`/`sort_order` after structural writes
-- public list/get include nest fields and `image_id`; list envelope is `{ items: [...] }` per `EnvelopeCategoryList` (no `image` expansion in this slice)
+- public list/get include nest fields and `imageId`; list envelope is `{ items: [...] }` per `EnvelopeCategoryList` (no `image` expansion in this slice)
 
 ## Example Public Endpoints
 
 - `GET /api/v1/posts`
 - `GET /api/v1/posts/:slug`
 - `GET /api/v1/posts/:slug/seo-meta` (public structured SEO meta tags payload for SSR; published posts only, cached)
-- `GET /api/v1/categories` (ordered by `lft`; `data.items[]` includes `lft`, `rgt`, `depth`, `sort_order`, `image_id`)
+- `GET /api/v1/categories` (ordered by `lft`; `data.items[]` includes `lft`, `rgt`, `depth`, `sortOrder`, `imageId`)
 - `GET /api/v1/categories/:slug` (single category with nest metadata and `image_id`)
 - `GET /api/v1/tags`
 - `POST /api/v1/posts/:id/comments`
@@ -727,7 +736,7 @@ Implemented; details in [impersonation.md](./impersonation.md).
   - avatar delete: same
   - privacy visibility direction `public → private`: same
   - activity erase: same
-- password/email change MUST rotate the user's refresh-token family unless caller explicitly opts in to keep the current session only via `keep_current_session=true` header; `revoke_all_sessions=true` overrides any opt-in
+- password/email change MUST rotate the user's refresh-token family unless caller explicitly opts in to keep the current session only via `keep_current_session=true` header; `revokeAllSessions=true` overrides any opt-in
 - forgot/reset password endpoints (unauthenticated) return timing-safe identical responses regardless of user existence to prevent email/username enumeration
 - contact fields marked `encrypted` (phone) are never serialized to logs/audit metadata; only HMAC hashes are allowed
 - rate limits apply per endpoint family; see `docs/backend/user-profile.md` for exact tiers and Retry-After behavior
@@ -735,11 +744,11 @@ Implemented; details in [impersonation.md](./impersonation.md).
 ### Public User Rules
 
 - `GET /api/v1/users/:username_or_id` applies user_privacy_settings exactly:
-  - `visibility_profile=private` → `404` for non-owner / non-admin callers
-  - `visibility_profile=followers_only` → 404 unless caller is confirmed follower relationship or admin
+  - `visibilityProfile=private` → `404` for non-owner / non-admin callers
+  - `visibilityProfile=followers_only` → 404 unless caller is confirmed follower relationship or admin
   - `visibility_contact_details=false` → phone/website/location fields omitted even for owner (no-op; owner always sees via `/me`; public never sees)
-  - `visibility_email=false` → email omitted on public payload (default: always false; email is admin-only + owner only)
-  - `search_allow_indexing=false` → injects `X-Robots-Tag: noindex` response header in SSR + frontend HTML
+  - `visibilityEmail=false` → email omitted on public payload (default: always false; email is admin-only + owner only)
+  - `searchAllowIndexing=false` → injects `X-Robots-Tag: noindex` response header in SSR + frontend HTML
 - public profile response does NOT include oauth links, sessions, private activity, hashed passwords, encrypted phone, full IPs, or internal ids like jti/request_id
 
 ## Response Shape
@@ -758,7 +767,7 @@ Implemented; details in [impersonation.md](./impersonation.md).
 {
   "ok": false,
   "meta": {
-    "request_id": "..."
+    "requestId": "..."
   },
   "error": {
     "code": "validation_error",

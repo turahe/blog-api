@@ -220,8 +220,8 @@ func (s *authStack) loginWith(t *testing.T, remember bool) (access, refresh stri
 		map[string]any{"email": s.email, "password": cyclePassword, "remember": remember})
 	require.Equal(t, nethttp.StatusOK, r.status, r.code)
 
-	access, _ = r.data["access_token"].(string)
-	refresh, _ = r.data["refresh_token"].(string)
+	access, _ = r.data["accessToken"].(string)
+	refresh, _ = r.data["refreshToken"].(string)
 
 	require.NotEmpty(t, access)
 	require.NotEmpty(t, refresh)
@@ -231,7 +231,7 @@ func (s *authStack) loginWith(t *testing.T, remember bool) (access, refresh stri
 
 func (s *authStack) refresh(t *testing.T, token string) reply {
 	t.Helper()
-	return s.do(t, nethttp.MethodPost, "/api/v1/auth/refresh", "", map[string]any{"refresh_token": token})
+	return s.do(t, nethttp.MethodPost, "/api/v1/auth/refresh", "", map[string]any{"refreshToken": token})
 }
 
 func (s *authStack) liveSessions(t *testing.T) int64 {
@@ -291,15 +291,15 @@ func TestAuthLoginRefreshLogoutCycle(t *testing.T) {
 	r = s.refresh(t, refresh)
 	require.Equal(t, nethttp.StatusOK, r.status, r.code)
 
-	access, _ := r.data["access_token"].(string)
-	rotated, _ := r.data["refresh_token"].(string)
+	access, _ := r.data["accessToken"].(string)
+	rotated, _ := r.data["refreshToken"].(string)
 	require.NotEqual(t, refresh, rotated, "refresh rotates the token")
 	require.Equal(t, int64(1), s.liveSessions(t), "the old session is replaced, not kept")
 
-	r = s.do(t, nethttp.MethodPost, "/api/v1/auth/logout", "", map[string]any{"refresh_token": rotated})
+	r = s.do(t, nethttp.MethodPost, "/api/v1/auth/logout", "", map[string]any{"refreshToken": rotated})
 	require.Equal(t, nethttp.StatusUnauthorized, r.status, "logout requires the access token")
 
-	r = s.do(t, nethttp.MethodPost, "/api/v1/auth/logout", access, map[string]any{"refresh_token": rotated})
+	r = s.do(t, nethttp.MethodPost, "/api/v1/auth/logout", access, map[string]any{"refreshToken": rotated})
 	require.Equal(t, nethttp.StatusOK, r.status, r.code)
 	require.Equal(t, int64(0), s.liveSessions(t))
 
@@ -332,7 +332,7 @@ func TestAuthRefreshReuseRevokesFamily(t *testing.T) {
 	r := s.refresh(t, first)
 	require.Equal(t, nethttp.StatusOK, r.status, r.code)
 
-	second, _ := r.data["refresh_token"].(string)
+	second, _ := r.data["refreshToken"].(string)
 
 	r = s.refresh(t, first)
 	require.Equal(t, nethttp.StatusUnauthorized, r.status, "a rotated token cannot be reused")

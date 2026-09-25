@@ -187,13 +187,13 @@ func TestNewsletterLifecycle(t *testing.T) {
 	reader := "reader-" + suffix + "@example.test"
 
 	r := s.do(t, nethttp.MethodPut, "/api/v1/admin/newsletter/provider-config", staff, map[string]any{
-		"from_name": "Example Blog", "postal_address": "1 Example Street, Jakarta", "confirm_ttl_hours": 48,
-		"double_optin_required": true, "lists": []map[string]any{
-			{"slug": weekly, "name": "Weekly", "is_default": true}, {"slug": news, "name": "Product news"},
+		"fromName": "Example Blog", "postalAddress": "1 Example Street, Jakarta", "confirmTtlHours": 48,
+		"doubleOptinRequired": true, "lists": []map[string]any{
+			{"slug": weekly, "name": "Weekly", "isDefault": true}, {"slug": news, "name": "Product news"},
 		},
 	})
 	require.Equal(t, nethttp.StatusOK, r.status, r.code)
-	require.Equal(t, true, r.data["ready_to_send"])
+	require.Equal(t, true, r.data["readyToSend"])
 
 	// Double opt-in: the confirmation token activates the pending list, once.
 	r = s.do(t, nethttp.MethodPost, "/api/v1/newsletter/subscribe", "", map[string]any{"email": reader, "lists": []string{weekly}})
@@ -224,7 +224,7 @@ func TestNewsletterLifecycle(t *testing.T) {
 
 	// Send an issue now; dispatch mails the subscriber with one-click unsubscribe headers.
 	r = s.do(t, nethttp.MethodPost, "/api/v1/admin/newsletter/issues", staff, map[string]any{
-		"subject": "September", "body_markdown": "## Hello\n\n<script>alert(1)</script>Read [more](https://example.test).",
+		"subject": "September", "bodyMarkdown": "## Hello\n\n<script>alert(1)</script>Read [more](https://example.test).",
 		"lists": []string{news}, "status": "queued",
 	})
 	require.Equal(t, nethttp.StatusCreated, r.status, r.code)
@@ -246,7 +246,7 @@ func TestNewsletterLifecycle(t *testing.T) {
 
 	r = s.do(t, nethttp.MethodGet, "/api/v1/admin/newsletter/issues/"+issueID.String(), staff, nil)
 	require.Equal(t, "sent", r.data["status"])
-	require.InDelta(t, 1, r.data["sent_count"], 0)
+	require.InDelta(t, 1, r.data["sentCount"], 0)
 
 	// RFC 8058 one-click: the mail client posts the form to the List-Unsubscribe URL.
 	header := strings.Trim(mail.Headers["List-Unsubscribe"], "<>")
@@ -282,8 +282,8 @@ func TestNewsletterLifecycle(t *testing.T) {
 
 	// Scheduled issues are queued by the scheduler once send_at passes.
 	r = s.do(t, nethttp.MethodPost, "/api/v1/admin/newsletter/issues", staff, map[string]any{
-		"subject": "October", "body_markdown": "Soon", "lists": []string{weekly}, "status": "scheduled",
-		"send_at": s.nlClock.Now().Add(time.Hour).Format(time.RFC3339),
+		"subject": "October", "bodyMarkdown": "Soon", "lists": []string{weekly}, "status": "scheduled",
+		"sendAt": s.nlClock.Now().Add(time.Hour).Format(time.RFC3339),
 	})
 	require.Equal(t, nethttp.StatusCreated, r.status, r.code)
 
@@ -317,8 +317,8 @@ func TestAccountErasureErasesTheNewsletterSubscriber(t *testing.T) {
 	weekly := "weekly-" + strings.ReplaceAll(uuid.NewString()[:8], "-", "")
 
 	r := s.do(t, nethttp.MethodPut, "/api/v1/admin/newsletter/provider-config", staff, map[string]any{
-		"from_name": "Example Blog", "postal_address": "1 Example Street, Jakarta", "confirm_ttl_hours": 48,
-		"double_optin_required": true, "lists": []map[string]any{{"slug": weekly, "name": "Weekly", "is_default": true}},
+		"fromName": "Example Blog", "postalAddress": "1 Example Street, Jakarta", "confirmTtlHours": 48,
+		"doubleOptinRequired": true, "lists": []map[string]any{{"slug": weekly, "name": "Weekly", "isDefault": true}},
 	})
 	require.Equal(t, nethttp.StatusOK, r.status, r.code)
 

@@ -9,11 +9,11 @@ import (
 )
 
 // IngestPageView is POST /api/v1/analytics/ingest/page-view. id is the client's page view id
-// (generated when omitted) that time-spent heartbeats refer to; session_id is the client's
+// (generated when omitted) that time-spent heartbeats refer to; sessionId is the client's
 // short-lived session.
 type IngestPageView struct {
 	ID        string `json:"id"         binding:"omitempty,uuid"`
-	SessionID string `json:"session_id" binding:"required,uuid"`
+	SessionID string `json:"sessionId" binding:"required,uuid"`
 	Path      string `json:"path"       binding:"required,max=2048"`
 	Referrer  string `json:"referrer"   binding:"max=2048"`
 }
@@ -26,12 +26,12 @@ func (r IngestPageView) Input() analyticsservice.PageViewInput {
 }
 
 // IngestTimeSpent is POST /api/v1/analytics/ingest/time-spent: a heartbeat with the
-// cumulative seconds page view view_id has been in focus.
+// cumulative seconds page view viewId has been in focus.
 type IngestTimeSpent struct {
-	ViewID       string `json:"view_id"       binding:"required,uuid"`
-	SessionID    string `json:"session_id"    binding:"required,uuid"`
+	ViewID       string `json:"viewId"       binding:"required,uuid"`
+	SessionID    string `json:"sessionId"    binding:"required,uuid"`
 	Path         string `json:"path"          binding:"required,max=2048"`
-	FocusSeconds int    `json:"focus_seconds" binding:"min=0"`
+	FocusSeconds int    `json:"focusSeconds" binding:"min=0"`
 }
 
 // Input converts the request for the ingest service.
@@ -44,7 +44,7 @@ func (r IngestTimeSpent) Input() analyticsservice.TimeSpentInput {
 // IngestNavigation is POST /api/v1/analytics/ingest/navigation. from is omitted for an entry.
 type IngestNavigation struct {
 	ID         string `json:"id"         binding:"omitempty,uuid"`
-	SessionID  string `json:"session_id" binding:"required,uuid"`
+	SessionID  string `json:"sessionId" binding:"required,uuid"`
 	From       string `json:"from"       binding:"max=2048"`
 	To         string `json:"to"         binding:"required,max=2048"`
 	Transition string `json:"transition" binding:"required,oneof=internal external back_forward direct"`
@@ -61,9 +61,9 @@ func (r IngestNavigation) Input() analyticsservice.NavigationInput {
 // (generated when omitted). filters keys: category, tag, from, to.
 type IngestSearch struct {
 	ID          string            `json:"id"           binding:"omitempty,uuid"`
-	SessionID   string            `json:"session_id"   binding:"required,uuid"`
+	SessionID   string            `json:"sessionId"   binding:"required,uuid"`
 	Query       string            `json:"query"        binding:"required,max=1000"`
-	ResultCount int               `json:"result_count" binding:"min=0"`
+	ResultCount int               `json:"resultCount" binding:"min=0"`
 	Filters     map[string]string `json:"filters"      binding:"max=4"`
 }
 
@@ -76,14 +76,14 @@ func (r IngestSearch) Input() analyticsservice.SearchInput {
 }
 
 // IngestSearchClick is POST /api/v1/analytics/ingest/search-click: result position (from 1)
-// of search search_id was clicked.
+// of search searchId was clicked.
 type IngestSearchClick struct {
 	ID           string `json:"id"            binding:"omitempty,uuid"`
-	SessionID    string `json:"session_id"    binding:"required,uuid"`
-	SearchID     string `json:"search_id"     binding:"required,uuid"`
+	SessionID    string `json:"sessionId"    binding:"required,uuid"`
+	SearchID     string `json:"searchId"     binding:"required,uuid"`
 	Position     int    `json:"position"      binding:"required,min=1"`
-	ResourceType string `json:"resource_type" binding:"required,oneof=post page category tag"`
-	ResourceID   string `json:"resource_id"   binding:"required,uuid"`
+	ResourceType string `json:"resourceType" binding:"required,oneof=post page category tag"`
+	ResourceID   string `json:"resourceId"   binding:"required,uuid"`
 }
 
 // Input converts the request for the ingest service.
@@ -116,14 +116,14 @@ func (r AnalyticsReport) Query() analyticsdomain.ReportQuery {
 
 // AnalyticsExport is POST /api/v1/admin/analytics/export: the rollups of from through to (dates
 // in the site time zone, widened to whole periods of grain). grain is picked from the range
-// length when omitted. current_password, and two_factor_code when two-factor is enabled,
+// length when omitted. currentPassword, and twoFactorCode when two-factor is enabled,
 // re-verify the caller.
 type AnalyticsExport struct {
 	From            string `json:"from"             binding:"required,datetime=2006-01-02" example:"2026-08-01"`
 	To              string `json:"to"               binding:"required,datetime=2006-01-02" example:"2026-08-31"`
 	Grain           string `json:"grain"            binding:"omitempty,oneof=day week month" example:"day"`
-	CurrentPassword string `json:"current_password" binding:"required,max=128"`
-	TwoFactorCode   string `json:"two_factor_code"  binding:"max=32" example:"123456"`
+	CurrentPassword string `json:"currentPassword" binding:"required,max=128"`
+	TwoFactorCode   string `json:"twoFactorCode"  binding:"max=32" example:"123456"`
 }
 
 // Input converts the request for the exports service.

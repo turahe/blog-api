@@ -45,8 +45,8 @@ func TestPrivacyHandlers(t *testing.T) {
 		fake := &fakePrivacy{settings: userdomain.DefaultPrivacy()}
 		w, body := runProfile(t, meGetPrivacyHandler(fake), profileRequest{method: nethttp.MethodGet, target: "/me/privacy", user: &user})
 		require.Equal(t, nethttp.StatusOK, w.Code)
-		require.Equal(t, "public", dataOf(body)["visibility_profile"])
-		require.Equal(t, true, dataOf(body)["search_allow_indexing"])
+		require.Equal(t, "public", dataOf(body)["visibilityProfile"])
+		require.Equal(t, true, dataOf(body)["searchAllowIndexing"])
 	})
 
 	t.Run("put passes the patch and password", func(t *testing.T) {
@@ -55,14 +55,14 @@ func TestPrivacyHandlers(t *testing.T) {
 		fake := &fakePrivacy{settings: userdomain.DefaultPrivacy()}
 		w, body := runProfile(t, meUpdatePrivacyHandler(fake), profileRequest{
 			method: nethttp.MethodPut, target: "/me/privacy", contentType: json, user: &user,
-			body: `{"visibility_profile":"private","visibility_email":true,"current_password":"pw"}`,
+			body: `{"visibilityProfile":"private","visibilityEmail":true,"currentPassword":"pw"}`,
 		})
 		require.Equal(t, nethttp.StatusOK, w.Code)
 		require.Equal(t, userdomain.VisibilityPrivate, *fake.patch.Visibility)
 		require.True(t, *fake.patch.ShowEmail)
 		require.Nil(t, fake.patch.ShowContact)
 		require.Equal(t, "pw", fake.password)
-		require.Equal(t, "private", dataOf(body)["visibility_profile"])
+		require.Equal(t, "private", dataOf(body)["visibilityProfile"])
 	})
 
 	t.Run("put rejects unknown visibility", func(t *testing.T) {
@@ -70,7 +70,7 @@ func TestPrivacyHandlers(t *testing.T) {
 
 		w, _ := runProfile(t, meUpdatePrivacyHandler(&fakePrivacy{}), profileRequest{
 			method: nethttp.MethodPut, target: "/me/privacy", contentType: json, user: &user,
-			body: `{"visibility_profile":"friends"}`,
+			body: `{"visibilityProfile":"friends"}`,
 		})
 		require.Equal(t, nethttp.StatusBadRequest, w.Code)
 	})
@@ -81,7 +81,7 @@ func TestPrivacyHandlers(t *testing.T) {
 		fake := &fakePrivacy{err: userdomain.ErrPrivacyReauth}
 		w, body := runProfile(t, meUpdatePrivacyHandler(fake), profileRequest{
 			method: nethttp.MethodPut, target: "/me/privacy", contentType: json, user: &user,
-			body: `{"visibility_profile":"private"}`,
+			body: `{"visibilityProfile":"private"}`,
 		})
 		require.Equal(t, nethttp.StatusForbidden, w.Code)
 		require.Equal(t, "privacy.level_change_requires_reauth", errorCode(body))

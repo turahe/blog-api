@@ -50,7 +50,7 @@ func TestLoginAttemptsAppearInMyActivity(t *testing.T) {
 			Action   string  `json:"action"`
 			Category string  `json:"category"`
 			Result   string  `json:"result"`
-			IPPrefix *string `json:"ip_prefix"`
+			IPPrefix *string `json:"ipPrefix"`
 		} `json:"data"`
 	}
 	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &body))

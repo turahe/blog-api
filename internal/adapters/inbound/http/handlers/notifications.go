@@ -40,13 +40,13 @@ func notificationControllers(deps Deps) routes.Notifications {
 //	@Description	In-app notices (replies, moderation outcomes, publications), newest first. The X-Unread-Count header holds the unread total across all pages.
 //	@Tags			me
 //	@Produce		json
-//	@Param			unread		query		bool	false	"only unread notifications"
-//	@Param			page		query		int		false	"page"		default(1)
-//	@Param			per_page	query		int		false	"per page"	default(20)
-//	@Success		200			{object}	responses.Envelope
-//	@Header			200			{integer}	X-Unread-Count	"unread notifications"
-//	@Failure		400			{object}	responses.Envelope
-//	@Failure		401			{object}	responses.Envelope
+//	@Param			unread	query		bool	false	"only unread notifications"
+//	@Param			page	query		int		false	"page"		default(1)
+//	@Param			perPage	query		int		false	"per page"	default(20)
+//	@Success		200		{object}	responses.Envelope
+//	@Header			200		{integer}	X-Unread-Count	"unread notifications"
+//	@Failure		400		{object}	responses.Envelope
+//	@Failure		401		{object}	responses.Envelope
 //	@Security		Bearer
 //	@Router			/api/v1/me/notifications [get]
 func meNotificationsListHandler(inbox notificationAPI) gin.HandlerFunc {
@@ -93,7 +93,7 @@ func meNotificationsListHandler(inbox notificationAPI) gin.HandlerFunc {
 // meNotificationReadHandler godoc
 //
 //	@Summary		Mark a notification read
-//	@Description	Idempotent: a notification that is already read keeps its first read_at.
+//	@Description	Idempotent: a notification that is already read keeps its first readAt.
 //	@Tags			me
 //	@Produce		json
 //	@Param			param1	path		string	true	"notification UUID"

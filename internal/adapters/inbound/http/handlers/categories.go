@@ -107,19 +107,19 @@ func adminCreateCategoryHandler(cats categoryAPI) gin.HandlerFunc {
 			return
 		}
 
-		parentID, err := parseOptionalUUIDString(req.ParentID, "parent_id")
+		parentID, err := parseOptionalUUIDString(req.ParentID, "parentId")
 		if err != nil {
 			responses.Failure(c, nethttp.StatusBadRequest, responses.ErrorCodeValidation, err.Error())
 			return
 		}
 
-		imageID, err := parseOptionalUUIDString(req.ImageID, "image_id")
+		imageID, err := parseOptionalUUIDString(req.ImageID, "imageId")
 		if err != nil {
 			responses.Failure(c, nethttp.StatusBadRequest, responses.ErrorCodeValidation, err.Error())
 			return
 		}
 
-		beforeID, err := parseOptionalUUIDString(req.BeforeID, "before_id")
+		beforeID, err := parseOptionalUUIDString(req.BeforeID, "beforeId")
 		if err != nil {
 			responses.Failure(c, nethttp.StatusBadRequest, responses.ErrorCodeValidation, err.Error())
 			return
@@ -167,8 +167,8 @@ func adminUpdateCategoryHandler(cats categoryAPI) gin.HandlerFunc {
 			return
 		}
 
-		if _, ok := raw["parent_id"]; ok {
-			responses.Failure(c, nethttp.StatusBadRequest, responses.ErrorCodeValidation, "parent_id cannot be updated via PATCH; use move")
+		if _, ok := raw["parentId"]; ok {
+			responses.Failure(c, nethttp.StatusBadRequest, responses.ErrorCodeValidation, "parentId cannot be updated via PATCH; use move")
 			return
 		}
 
@@ -236,20 +236,20 @@ func adminMoveCategoryHandler(cats categoryAPI) gin.HandlerFunc {
 			return
 		}
 
-		parentRaw, ok := raw["parent_id"]
+		parentRaw, ok := raw["parentId"]
 		if !ok {
-			responses.Failure(c, nethttp.StatusBadRequest, responses.ErrorCodeValidation, "parent_id required")
+			responses.Failure(c, nethttp.StatusBadRequest, responses.ErrorCodeValidation, "parentId required")
 			return
 		}
 
-		parentID, ok := parseNullableUUID(c, parentRaw, "parent_id")
+		parentID, ok := parseNullableUUID(c, parentRaw, "parentId")
 		if !ok {
 			return
 		}
 
 		var beforeID *uuid.UUID
-		if beforeRaw, hasBefore := raw["before_id"]; hasBefore {
-			beforeID, ok = parseNullableUUID(c, beforeRaw, "before_id")
+		if beforeRaw, hasBefore := raw["beforeId"]; hasBefore {
+			beforeID, ok = parseNullableUUID(c, beforeRaw, "beforeId")
 			if !ok {
 				return
 			}
@@ -344,10 +344,10 @@ func parseCategoryUpdate(c *gin.Context, raw map[string]json.RawMessage) (catego
 		}
 	}
 
-	if v, ok := raw["image_id"]; ok {
+	if v, ok := raw["imageId"]; ok {
 		in.ImageIDProvided = true
 
-		imageID, ok := parseNullableUUID(c, v, "image_id")
+		imageID, ok := parseNullableUUID(c, v, "imageId")
 		if !ok {
 			return in, false
 		}

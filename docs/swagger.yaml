@@ -5,7 +5,7 @@ definitions:
       email:
         maxLength: 254
         type: string
-      full_name:
+      fullName:
         maxLength: 120
         type: string
       password:
@@ -23,20 +23,20 @@ definitions:
         type: string
     required:
     - email
-    - full_name
+    - fullName
     - password
     - roles
     - username
     type: object
   requests.AdminResetPassword:
     properties:
-      revoke_sessions:
+      revokeSessions:
         description: RevokeSessions defaults to true.
         type: boolean
     type: object
   requests.AnalyticsExport:
     properties:
-      current_password:
+      currentPassword:
         maxLength: 128
         type: string
       from:
@@ -52,12 +52,12 @@ definitions:
       to:
         example: "2026-08-31"
         type: string
-      two_factor_code:
+      twoFactorCode:
         example: "123456"
         maxLength: 32
         type: string
     required:
-    - current_password
+    - currentPassword
     - from
     - to
     type: object
@@ -96,20 +96,20 @@ definitions:
     type: object
   requests.ChangePassword:
     properties:
-      confirm_password:
+      confirmPassword:
         type: string
-      current_password:
+      currentPassword:
         type: string
-      new_password:
+      newPassword:
         maxLength: 128
         minLength: 12
         type: string
-      revoke_all_sessions:
+      revokeAllSessions:
         type: boolean
     required:
-    - confirm_password
-    - current_password
-    - new_password
+    - confirmPassword
+    - currentPassword
+    - newPassword
     type: object
   requests.ConfirmEmailChange:
     properties:
@@ -121,18 +121,18 @@ definitions:
     type: object
   requests.CreateCategory:
     properties:
-      before_id:
+      beforeId:
         type: string
       description:
         maxLength: 2000
         type: string
-      image_id:
+      imageId:
         type: string
       name:
         maxLength: 255
         minLength: 1
         type: string
-      parent_id:
+      parentId:
         type: string
       slug:
         maxLength: 255
@@ -143,10 +143,10 @@ definitions:
     type: object
   requests.CreateComment:
     properties:
-      author_email:
+      authorEmail:
         maxLength: 254
         type: string
-      author_name:
+      authorName:
         description: Guest commenters only; ignored when a bearer token is sent.
         maxLength: 100
         type: string
@@ -158,10 +158,10 @@ definitions:
         description: Leave empty. Anti-spam trap for bots; must stay hidden in forms.
         maxLength: 500
         type: string
-      parent_id:
+      parentId:
         format: uuid
         type: string
-      turnstile_response:
+      turnstileResponse:
         description: Cloudflare Turnstile token; required for guests when the server
           has TURNSTILE_SECRET_KEY set.
         maxLength: 2048
@@ -171,7 +171,7 @@ definitions:
     type: object
   requests.CreatePost:
     properties:
-      category_id:
+      categoryId:
         type: string
       content:
         type: string
@@ -239,18 +239,18 @@ definitions:
     type: object
   requests.EraseAccount:
     properties:
-      current_password:
+      currentPassword:
         maxLength: 128
         type: string
     required:
-    - current_password
+    - currentPassword
     type: object
   requests.FlagComment:
     properties:
       details:
         maxLength: 2000
         type: string
-      reason_code:
+      reasonCode:
         enum:
         - spam
         - abuse
@@ -264,14 +264,14 @@ definitions:
         - other
         type: string
     required:
-    - reason_code
+    - reasonCode
     type: object
   requests.ForgotPassword:
     properties:
-      email_or_username:
+      emailOrUsername:
         type: string
     required:
-    - email_or_username
+    - emailOrUsername
     type: object
   requests.IngestNavigation:
     properties:
@@ -280,7 +280,7 @@ definitions:
         type: string
       id:
         type: string
-      session_id:
+      sessionId:
         type: string
       to:
         maxLength: 2048
@@ -293,7 +293,7 @@ definitions:
         - direct
         type: string
     required:
-    - session_id
+    - sessionId
     - to
     - transition
     type: object
@@ -307,11 +307,11 @@ definitions:
       referrer:
         maxLength: 2048
         type: string
-      session_id:
+      sessionId:
         type: string
     required:
     - path
-    - session_id
+    - sessionId
     type: object
   requests.IngestSearch:
     properties:
@@ -324,14 +324,14 @@ definitions:
       query:
         maxLength: 1000
         type: string
-      result_count:
+      resultCount:
         minimum: 0
         type: integer
-      session_id:
+      sessionId:
         type: string
     required:
     - query
-    - session_id
+    - sessionId
     type: object
   requests.IngestSearchClick:
     properties:
@@ -340,42 +340,42 @@ definitions:
       position:
         minimum: 1
         type: integer
-      resource_id:
+      resourceId:
         type: string
-      resource_type:
+      resourceType:
         enum:
         - post
         - page
         - category
         - tag
         type: string
-      search_id:
+      searchId:
         type: string
-      session_id:
+      sessionId:
         type: string
     required:
     - position
-    - resource_id
-    - resource_type
-    - search_id
-    - session_id
+    - resourceId
+    - resourceType
+    - searchId
+    - sessionId
     type: object
   requests.IngestTimeSpent:
     properties:
-      focus_seconds:
+      focusSeconds:
         minimum: 0
         type: integer
       path:
         maxLength: 2048
         type: string
-      session_id:
+      sessionId:
         type: string
-      view_id:
+      viewId:
         type: string
     required:
     - path
-    - session_id
-    - view_id
+    - sessionId
+    - viewId
     type: object
   requests.Login:
     properties:
@@ -392,15 +392,15 @@ definitions:
     type: object
   requests.Logout:
     properties:
-      refresh_token:
+      refreshToken:
         type: string
     type: object
   requests.MergeTag:
     properties:
-      into_id:
+      intoId:
         type: string
     required:
-    - into_id
+    - intoId
     type: object
   requests.ModerateComment:
     properties:
@@ -411,7 +411,7 @@ definitions:
         - spam
         - restore
         type: string
-      notify_author:
+      notifyAuthor:
         description: Recorded in the moderation log for author notifications.
         type: boolean
       reason:
@@ -422,7 +422,7 @@ definitions:
     type: object
   requests.NewsletterIssueCreate:
     properties:
-      body_markdown:
+      bodyMarkdown:
         example: |-
           ## Hello
 
@@ -441,7 +441,7 @@ definitions:
         example: Three posts you may have missed
         maxLength: 200
         type: string
-      send_at:
+      sendAt:
         example: "2026-10-01T09:00:00Z"
         type: string
       status:
@@ -456,13 +456,13 @@ definitions:
         maxLength: 200
         type: string
     required:
-    - body_markdown
+    - bodyMarkdown
     - lists
     - subject
     type: object
   requests.NewsletterIssuePatch:
     properties:
-      body_markdown:
+      bodyMarkdown:
         maxLength: 200000
         type: string
       lists:
@@ -474,7 +474,7 @@ definitions:
       preheader:
         maxLength: 200
         type: string
-      send_at:
+      sendAt:
         type: string
       status:
         enum:
@@ -496,7 +496,7 @@ definitions:
         example: The week's posts, every Friday
         maxLength: 500
         type: string
-      is_default:
+      isDefault:
         example: true
         type: boolean
       name:
@@ -539,7 +539,7 @@ definitions:
           type: string
         maxItems: 20
         type: array
-      reason_code:
+      reasonCode:
         enum:
         - too_frequent
         - not_relevant
@@ -562,26 +562,26 @@ definitions:
           type: string
         maxItems: 20
         type: array
-      unsubscribe_all:
+      unsubscribeAll:
         type: boolean
     required:
     - lists
     type: object
   requests.NewsletterProviderConfig:
     properties:
-      confirm_ttl_hours:
+      confirmTtlHours:
         example: 48
         maximum: 168
         minimum: 1
         type: integer
-      double_optin_required:
+      doubleOptinRequired:
         example: true
         type: boolean
-      from_email:
+      fromEmail:
         example: newsletter@example.com
         maxLength: 254
         type: string
-      from_name:
+      fromName:
         example: Turahe Blog
         maxLength: 100
         type: string
@@ -591,17 +591,17 @@ definitions:
         maxItems: 20
         minItems: 1
         type: array
-      postal_address:
+      postalAddress:
         example: 123 Example Street, Jakarta, ID
         maxLength: 500
         type: string
-      reply_to:
+      replyTo:
         example: hello@example.com
         maxLength: 254
         type: string
     required:
-    - confirm_ttl_hours
-    - double_optin_required
+    - confirmTtlHours
+    - doubleOptinRequired
     - lists
     type: object
   requests.NewsletterResend:
@@ -615,7 +615,7 @@ definitions:
     type: object
   requests.NewsletterSubscribe:
     properties:
-      display_name:
+      displayName:
         example: Alex
         maxLength: 100
         type: string
@@ -639,7 +639,7 @@ definitions:
           type: string
         maxItems: 20
         type: array
-      turnstile_response:
+      turnstileResponse:
         maxLength: 2048
         type: string
     required:
@@ -659,7 +659,7 @@ definitions:
       feedback:
         maxLength: 1000
         type: string
-      reason_code:
+      reasonCode:
         enum:
         - too_frequent
         - not_relevant
@@ -695,20 +695,20 @@ definitions:
     properties:
       bio:
         type: string
-      contact_location:
+      contactLocation:
         type: string
-      contact_website:
+      contactWebsite:
         type: string
-      display_name:
+      displayName:
         type: string
-      full_name:
+      fullName:
         type: string
       locale:
         example: en_US
         type: string
-      marketing_consent:
+      marketingConsent:
         type: boolean
-      social_links:
+      socialLinks:
         $ref: '#/definitions/requests.SocialLinks'
       timezone:
         example: Asia/Jakarta
@@ -718,92 +718,92 @@ definitions:
     properties:
       kind:
         type: string
-      media_asset_id:
+      mediaAssetId:
         type: string
-      sort_order:
+      sortOrder:
         minimum: 0
         type: integer
     required:
     - kind
-    - media_asset_id
+    - mediaAssetId
     type: object
   requests.PresignMedia:
     properties:
-      content_type:
+      contentType:
         type: string
-      original_filename:
+      originalFilename:
         maxLength: 255
         minLength: 1
         type: string
-      size_bytes:
+      sizeBytes:
         type: integer
       tags:
         items:
           type: string
         type: array
     required:
-    - content_type
-    - original_filename
-    - size_bytes
+    - contentType
+    - originalFilename
+    - sizeBytes
     type: object
   requests.PreviewPostSEO:
     properties:
-      canonical_url:
+      canonicalUrl:
         type: string
       excerpt:
         maxLength: 2000
         type: string
-      og_description:
+      ogDescription:
         type: string
-      og_image_id:
+      ogImageId:
         format: uuid
         type: string
-      og_title:
+      ogTitle:
         type: string
-      og_url:
+      ogUrl:
         type: string
-      robots_nofollow:
+      robotsNofollow:
         type: boolean
-      robots_noindex:
+      robotsNoindex:
         type: boolean
-      seo_description:
+      seoDescription:
         type: string
-      seo_keywords:
+      seoKeywords:
         items:
           type: string
         type: array
-      seo_title:
+      seoTitle:
         type: string
       slug:
         type: string
       title:
         maxLength: 255
         type: string
-      twitter_card:
+      twitterCard:
         type: string
-      twitter_creator:
+      twitterCreator:
         type: string
-      twitter_description:
+      twitterDescription:
         type: string
-      twitter_image_id:
+      twitterImageId:
         format: uuid
         type: string
-      twitter_title:
+      twitterTitle:
         type: string
     type: object
   requests.Refresh:
     properties:
-      refresh_token:
+      refreshToken:
         type: string
     required:
-    - refresh_token
+    - refreshToken
     type: object
   requests.Register:
     properties:
       email:
         maxLength: 254
         type: string
-      full_name:
+      fullName:
         maxLength: 120
         type: string
       password:
@@ -816,13 +816,13 @@ definitions:
         type: string
     required:
     - email
-    - full_name
+    - fullName
     - password
     - username
     type: object
   requests.ReplacePostMedia:
     properties:
-      enforce_cover_consistency:
+      enforceCoverConsistency:
         type: boolean
       items:
         items:
@@ -833,34 +833,34 @@ definitions:
     type: object
   requests.RequestEmailChange:
     properties:
-      new_email:
+      newEmail:
         maxLength: 254
         type: string
-      password_proof:
+      passwordProof:
         maxLength: 128
         type: string
     required:
-    - new_email
-    - password_proof
+    - newEmail
+    - passwordProof
     type: object
   requests.ResetPassword:
     properties:
-      confirm_password:
+      confirmPassword:
         type: string
-      new_password:
+      newPassword:
         maxLength: 128
         minLength: 12
         type: string
       token:
         type: string
     required:
-    - confirm_password
-    - new_password
+    - confirmPassword
+    - newPassword
     - token
     type: object
   requests.RestoreRevision:
     properties:
-      restore_note:
+      restoreNote:
         maxLength: 1000
         type: string
     type: object
@@ -898,7 +898,7 @@ definitions:
     type: object
   requests.StartImpersonation:
     properties:
-      current_password:
+      currentPassword:
         maxLength: 128
         type: string
       reason:
@@ -906,21 +906,21 @@ definitions:
         maxLength: 255
         minLength: 10
         type: string
-      target_user_id:
+      targetUserId:
         example: 0b8f5c1e-3c1a-4f5e-9d7a-2a1b3c4d5e6f
         type: string
-      two_factor_code:
+      twoFactorCode:
         example: "123456"
         maxLength: 32
         type: string
     required:
-    - current_password
+    - currentPassword
     - reason
-    - target_user_id
+    - targetUserId
     type: object
   requests.StoreConsent:
     properties:
-      policy_version:
+      policyVersion:
         maxLength: 32
         type: string
       purposes:
@@ -928,19 +928,19 @@ definitions:
           type: boolean
         type: object
     required:
-    - policy_version
+    - policyVersion
     - purposes
     type: object
   requests.TwoFactorChallenge:
     properties:
-      challenge_token:
+      challengeToken:
         maxLength: 128
         type: string
       code:
         maxLength: 32
         type: string
     required:
-    - challenge_token
+    - challengeToken
     - code
     type: object
   requests.TwoFactorCode:
@@ -961,12 +961,12 @@ definitions:
     type: object
   requests.UpdatePost:
     properties:
-      category_id:
+      categoryId:
         description: Category UUID; null clears the category, omitting the field keeps
           it.
         format: uuid
         type: string
-      comment_policy:
+      commentPolicy:
         description: 'Who may comment: open, authenticated, read_only, or disabled
           (hides existing comments).'
         enum:
@@ -990,55 +990,55 @@ definitions:
     type: object
   requests.UpdatePostSEO:
     properties:
-      canonical_url:
+      canonicalUrl:
         type: string
-      og_description:
+      ogDescription:
         type: string
-      og_image_id:
+      ogImageId:
         format: uuid
         type: string
-      og_title:
+      ogTitle:
         type: string
-      og_url:
+      ogUrl:
         type: string
-      robots_nofollow:
+      robotsNofollow:
         type: boolean
-      robots_noindex:
+      robotsNoindex:
         type: boolean
-      seo_description:
+      seoDescription:
         type: string
-      seo_keywords:
+      seoKeywords:
         items:
           type: string
         type: array
-      seo_title:
+      seoTitle:
         type: string
       slug:
         type: string
-      twitter_card:
+      twitterCard:
         type: string
-      twitter_creator:
+      twitterCreator:
         type: string
-      twitter_description:
+      twitterDescription:
         type: string
-      twitter_image_id:
+      twitterImageId:
         format: uuid
         type: string
-      twitter_title:
+      twitterTitle:
         type: string
     type: object
   requests.UpdatePrivacy:
     properties:
-      current_password:
+      currentPassword:
         maxLength: 128
         type: string
-      search_allow_indexing:
+      searchAllowIndexing:
         type: boolean
-      visibility_contact:
+      visibilityContact:
         type: boolean
-      visibility_email:
+      visibilityEmail:
         type: boolean
-      visibility_profile:
+      visibilityProfile:
         enum:
         - public
         - unlisted
@@ -1142,7 +1142,7 @@ paths:
         audience, navigation, searches, search positions, clicked results) of whole
         periods covering from through to, plus the daily retention cohorts. No raw
         events, visitor hashes, or session ids are exported. Requires the current
-        password, and two_factor_code when two-factor is enabled. The archive is built
+        password, and twoFactorCode when two-factor is enabled. The archive is built
         in the background: poll GET /api/v1/admin/analytics/exports/{param1} for a
         presigned download link. One export per user may be open; a second request
         answers 409 with the open one in error.details.'
@@ -1188,8 +1188,8 @@ paths:
   /api/v1/admin/analytics/exports:
     get:
       description: The caller's 20 most recent exports, newest first. Completed exports
-        whose archive still exists carry a fresh presigned download_url valid for
-        ANALYTICS_EXPORT_URL_TTL (never past archive_expires_at).
+        whose archive still exists carry a fresh presigned downloadUrl valid for ANALYTICS_EXPORT_URL_TTL
+        (never past archiveExpiresAt).
       produces:
       - application/json
       responses:
@@ -1214,8 +1214,8 @@ paths:
     get:
       description: Status of one of the caller's exports; other users' exports answer
         404. A completed export whose archive still exists carries a fresh presigned
-        download_url; after ANALYTICS_EXPORT_RETENTION the archive is deleted and
-        status is expired.
+        downloadUrl; after ANALYTICS_EXPORT_RETENTION the archive is deleted and status
+        is expired.
       parameters:
       - description: export id
         in: path
@@ -1307,10 +1307,10 @@ paths:
       description: Totals, a series per period, the top 10 traffic sources, and audience
         (country, device, browser) for whole periods of the site time zone. Visitors
         are distinct within a period; a range total is the sum of per-period uniques,
-        named visitor_days, visitor_weeks, or visitor_months after the grain, and
-        plain visitors appears only when the window is a single period. previous holds
-        the same number of periods just before the window (null with compare=none).
-        Rates are null when their denominator is zero.
+        named visitorDays, visitorWeeks, or visitorMonths after the grain, and plain
+        visitors appears only when the window is a single period. previous holds the
+        same number of periods just before the window (null with compare=none). Rates
+        are null when their denominator is zero.
       parameters:
       - description: first day, YYYY-MM-DD (default 29 days before to)
         in: query
@@ -1364,7 +1364,7 @@ paths:
   /api/v1/admin/analytics/pages:
     get:
       description: Top pages by views, average focus time (sort=time), or views gained
-        over the previous window (sort=rising). previous_views and change appear with
+        over the previous window (sort=rising). previousViews and change appear with
         compare=previous or sort=rising. Pages outside the top 1000 of a period are
         folded into (other), which only sort=views lists.
       parameters:
@@ -1767,7 +1767,7 @@ paths:
         type: string
       - description: post UUID
         in: query
-        name: post_id
+        name: postId
         type: string
       - default: oldest
         description: oldest or newest
@@ -1785,7 +1785,7 @@ paths:
       - default: 20
         description: per page
         in: query
-        name: per_page
+        name: perPage
         type: integer
       produces:
       - application/json
@@ -2038,7 +2038,7 @@ paths:
       - application/json
       description: |-
         Opens an impersonation session and returns a Bearer token that acts as the target until
-        expires_at (IMPERSONATION_TTL, never renewed; no refresh token). Requires impersonation.start,
+        expiresAt (IMPERSONATION_TTL, never renewed; no refresh token). Requires impersonation.start,
         the caller's current password, and a TOTP or backup code when the caller has two-factor
         enabled. The target must be active, must not be an administrator or able to impersonate, and
         every permission the target has must be one the caller has. One active session per caller.
@@ -2124,7 +2124,7 @@ paths:
       - default: 20
         description: per page
         in: query
-        name: per_page
+        name: perPage
         type: integer
       - description: search
         in: query
@@ -2263,11 +2263,11 @@ paths:
     get:
       description: Counts and bytes of stored media by status (soft-deleted assets
         as deleted until the orphan cleanup purges them), content type, and top uploaders.
-        user_id narrows the report to one uploader.
+        userId narrows the report to one uploader.
       parameters:
       - description: uploader UUID
         in: query
-        name: user_id
+        name: userId
         type: string
       - default: 10
         description: uploaders to list (1-100)
@@ -2305,7 +2305,7 @@ paths:
       - default: 20
         description: per page
         in: query
-        name: per_page
+        name: perPage
         type: integer
       produces:
       - application/json
@@ -2335,8 +2335,8 @@ paths:
       consumes:
       - application/json
       description: |-
-        status draft (default) saves; scheduled sends at send_at; queued sends now. Scheduling and
-        sending need newsletter.issues.send and a postal_address in the provider config. The Markdown
+        status draft (default) saves; scheduled sends at sendAt; queued sends now. Scheduling and
+        sending need newsletter.issues.send and a postalAddress in the provider config. The Markdown
         body is rendered to sanitized HTML and plain text inside a template that adds the unsubscribe
         and preferences links and the postal address.
       parameters:
@@ -2569,7 +2569,7 @@ paths:
       - default: 20
         description: per page
         in: query
-        name: per_page
+        name: perPage
         type: integer
       produces:
       - application/json
@@ -2705,7 +2705,7 @@ paths:
       - default: 20
         description: per page
         in: query
-        name: per_page
+        name: perPage
         type: integer
       - description: status filter
         in: query
@@ -2713,11 +2713,11 @@ paths:
         type: string
       - description: author UUID
         in: query
-        name: author_id
+        name: authorId
         type: string
       - description: category UUID
         in: query
-        name: category_id
+        name: categoryId
         type: string
       - description: search
         in: query
@@ -2842,7 +2842,7 @@ paths:
   /api/v1/admin/posts/{param1}/archive:
     post:
       description: Hides a draft, scheduled, or published post from public reads;
-        published_at is kept. Publish again to bring it back.
+        publishedAt is kept. Publish again to bring it back.
       parameters:
       - description: post UUID
         in: path
@@ -2911,7 +2911,7 @@ paths:
       - admin
   /api/v1/admin/posts/{param1}/publish:
     post:
-      description: Allowed from draft, scheduled, or archived; sets published_at to
+      description: Allowed from draft, scheduled, or archived; sets publishedAt to
         now. Returns 409 post.invalid_transition for a post that is already published.
       parameters:
       - description: post UUID
@@ -2994,23 +2994,23 @@ paths:
         type: integer
       - description: page size (default 20, max 100)
         in: query
-        name: per_page
+        name: perPage
         type: integer
       - description: only revisions by this user UUID
         in: query
-        name: author_id
+        name: authorId
         type: string
       - description: RFC 3339 time or YYYY-MM-DD (inclusive)
         in: query
-        name: from_date
+        name: fromDate
         type: string
       - description: RFC 3339 time or YYYY-MM-DD (inclusive, whole day)
         in: query
-        name: to_date
+        name: toDate
         type: string
       - description: include per-field diffs (default true)
         in: query
-        name: include_diff
+        name: includeDiff
         type: boolean
       produces:
       - application/json
@@ -3081,7 +3081,7 @@ paths:
       - application/json
       description: Copies the revision's title, slug, excerpt, content, comment policy,
         category, cover, tags, and media back onto the post as a new revision of type
-        restore. The post keeps its status and published_at. Categories, tags, and
+        restore. The post keeps its status and publishedAt. Categories, tags, and
         media that no longer exist (or media that is not ready) are skipped and listed
         in skipped; if another post took the slug, the current slug stays.
       parameters:
@@ -3264,7 +3264,7 @@ paths:
       - admin
   /api/v1/admin/posts/{param1}/unpublish:
     post:
-      description: Returns a published or scheduled post to draft and clears published_at.
+      description: Returns a published or scheduled post to draft and clears publishedAt.
       parameters:
       - description: post UUID
         in: path
@@ -3486,8 +3486,8 @@ paths:
   /api/v1/admin/settings:
     get:
       description: Returns the settings catalogue with current values. server_only
-        keys are never returned; admin_only keys need include_sensitive_admin=true
-        and settings.update.
+        keys are never returned; admin_only keys need includeSensitiveAdmin=true and
+        settings.update.
       parameters:
       - description: site, content, media, analytics, notifications, seo, or security
         in: query
@@ -3495,7 +3495,7 @@ paths:
         type: string
       - description: include admin_only keys
         in: query
-        name: include_sensitive_admin
+        name: includeSensitiveAdmin
         type: boolean
       produces:
       - application/json
@@ -3571,7 +3571,7 @@ paths:
         type: integer
       - description: page size (default 20, max 100)
         in: query
-        name: per_page
+        name: perPage
         type: integer
       produces:
       - application/json
@@ -3700,7 +3700,7 @@ paths:
       - default: 20
         description: per page
         in: query
-        name: per_page
+        name: perPage
         type: integer
       produces:
       - application/json
@@ -3792,7 +3792,7 @@ paths:
       - default: 20
         description: per page
         in: query
-        name: per_page
+        name: perPage
         type: integer
       produces:
       - application/json
@@ -3823,7 +3823,7 @@ paths:
       consumes:
       - application/json
       description: Emails the user a new reset link, invalidating earlier links. Sessions
-        are revoked unless revoke_sessions is false.
+        are revoked unless revokeSessions is false.
       parameters:
       - description: user UUID
         in: path
@@ -4227,7 +4227,7 @@ paths:
       - application/json
       description: A search the visitor ran. The query is lowercased, whitespace-collapsed,
         and cut to 200 characters. filters may hold category, tag, from, and to. The
-        response id (the client's id when sent) is the search_id to send with result
+        response id (the client's id when sent) is the searchId to send with result
         clicks. Accepted asynchronously like page views.
       parameters:
       - description: consent subject token
@@ -4274,7 +4274,7 @@ paths:
     post:
       consumes:
       - application/json
-      description: A click on result position (from 1) of search search_id, pointing
+      description: A click on result position (from 1) of search searchId, pointing
         at a post, page, category, or tag. Neither id is checked against stored data,
         so the endpoint reveals nothing about what exists. Accepted asynchronously
         like page views.
@@ -4323,7 +4323,7 @@ paths:
     post:
       consumes:
       - application/json
-      description: A heartbeat for page view view_id with the cumulative seconds the
+      description: A heartbeat for page view viewId with the cumulative seconds the
         page has been in focus (clamped to 4 hours). Send one every 15-30 seconds
         while the page is visible and one on unload; the highest value is kept. Accepted
         asynchronously like page views.
@@ -4373,7 +4373,7 @@ paths:
       consumes:
       - application/json
       description: |-
-        Exchanges the challenge_token from POST /api/v1/auth/login and a 6-digit TOTP code
+        Exchanges the challengeToken from POST /api/v1/auth/login and a 6-digit TOTP code
         or a backup code for a token pair. A challenge expires after 5 minutes or 5 wrong codes.
       parameters:
       - description: challenge and code
@@ -4410,7 +4410,7 @@ paths:
       - application/json
       description: |-
         Returns a token pair, or for accounts with two-factor enabled
-        `{"two_factor_required": true, "challenge_token", "expires_at", "expires_in"}`
+        `{"twoFactorRequired": true, "challengeToken", "expiresAt", "expiresIn"}`
         to complete at POST /api/v1/auth/2fa/challenge.
       parameters:
       - description: credentials
@@ -4476,7 +4476,7 @@ paths:
       consumes:
       - application/json
       description: |-
-        Exchanges the code and state the provider sent to the client's redirect_uri. Signs in
+        Exchanges the code and state the provider sent to the client's redirectUri. Signs in
         the account linked to the provider identity, or the existing account whose email the
         provider verified (the identity is then linked). No account is ever created.
         Responds like POST /api/v1/auth/login: a token pair or a two-factor challenge.
@@ -4526,7 +4526,7 @@ paths:
     get:
       description: |-
         Returns the provider authorization URL (with state and a PKCE challenge) for the
-        browser to visit. redirect_uri must be listed in OAUTH_REDIRECT_URIS. The state
+        browser to visit. redirectUri must be listed in OAUTH_REDIRECT_URIS. The state
         is single use and expires after 10 minutes.
       parameters:
       - description: google or github
@@ -4536,7 +4536,7 @@ paths:
         type: string
       - description: registered client callback URL
         in: query
-        name: redirect_uri
+        name: redirectUri
         required: true
         type: string
       produces:
@@ -5169,7 +5169,7 @@ paths:
       - default: 20
         description: per page
         in: query
-        name: per_page
+        name: perPage
         type: integer
       produces:
       - application/json
@@ -5240,7 +5240,7 @@ paths:
       description: |-
         Queues a JSON export of everything stored about the caller, or returns the open or still
         downloadable one. 202 while it is being prepared (poll this endpoint); 200 with a short-lived
-        download_url once ready. After the archive expires, the next call queues a new export.
+        downloadUrl once ready. After the archive expires, the next call queues a new export.
       produces:
       - application/json
       responses:
@@ -5347,7 +5347,7 @@ paths:
       - default: 20
         description: per page
         in: query
-        name: per_page
+        name: perPage
         type: integer
       produces:
       - application/json
@@ -5445,7 +5445,7 @@ paths:
       - application/json
       description: |-
         Subscribes the account email to lists (the default lists when empty). A verified account
-        email joins at once unless double_optin_required is set; otherwise the lists stay pending
+        email joins at once unless doubleOptinRequired is set; otherwise the lists stay pending
         until the emailed confirmation link is used (status pending_confirm).
       parameters:
       - description: lists and format
@@ -5561,7 +5561,7 @@ paths:
       - default: 20
         description: per page
         in: query
-        name: per_page
+        name: perPage
         type: integer
       produces:
       - application/json
@@ -5590,7 +5590,7 @@ paths:
   /api/v1/me/notifications/{param1}/read:
     post:
       description: 'Idempotent: a notification that is already read keeps its first
-        read_at.'
+        readAt.'
       parameters:
       - description: notification UUID
         in: path
@@ -5709,8 +5709,8 @@ paths:
       consumes:
       - application/json
       description: |-
-        Partial update; omitted flags are kept. Narrowing visibility_profile (public → unlisted → private)
-        requires current_password; widening it and the other flags do not.
+        Partial update; omitted flags are kept. Narrowing visibilityProfile (public → unlisted → private)
+        requires currentPassword; widening it and the other flags do not.
       parameters:
       - description: privacy flags
         in: body
@@ -5967,7 +5967,7 @@ paths:
       description: |-
         Changes format and lists by preferences token. lists is the complete set to receive; chosen
         lists are active at once, including after an earlier unsubscribe. An empty lists array or
-        unsubscribe_all stops all mail.
+        unsubscribeAll stops all mail.
       parameters:
       - description: preferences token
         in: path
@@ -6013,7 +6013,7 @@ paths:
       description: |-
         Emails a double opt-in confirmation link. Always 202 with the same body whether the address
         is new, pending, already subscribed, or suppressed, so it cannot reveal who subscribes. lists
-        are list slugs (empty means the default lists). Leave honeypot empty. turnstile_response is
+        are list slugs (empty means the default lists). Leave honeypot empty. turnstileResponse is
         required when Turnstile is configured. Rate limited per IP and per address.
       parameters:
       - description: subscription request
@@ -6160,15 +6160,15 @@ paths:
       - default: 20
         description: per page
         in: query
-        name: per_page
+        name: perPage
         type: integer
       - description: category UUID
         in: query
-        name: category_id
+        name: categoryId
         type: string
       - description: tag UUID
         in: query
-        name: tag_id
+        name: tagId
         type: string
       produces:
       - application/json
@@ -6212,7 +6212,7 @@ paths:
       - public
   /api/v1/posts/{param1}/comments:
     get:
-      description: Top-level comments by default; pass parent_id to list the direct
+      description: Top-level comments by default; pass parentId to list the direct
         replies of a comment.
       parameters:
       - description: post UUID
@@ -6222,7 +6222,7 @@ paths:
         type: string
       - description: parent comment UUID
         in: query
-        name: parent_id
+        name: parentId
         type: string
       - default: 1
         description: page
@@ -6232,7 +6232,7 @@ paths:
       - default: 20
         description: per page
         in: query
-        name: per_page
+        name: perPage
         type: integer
       produces:
       - application/json
@@ -6259,9 +6259,9 @@ paths:
     post:
       consumes:
       - application/json
-      description: Signed-in users comment as themselves. Guests send author_name
-        and author_email when guest comments are enabled; guest comments await moderation.
-        When the server has TURNSTILE_SECRET_KEY set, guests must also send turnstile_response.
+      description: Signed-in users comment as themselves. Guests send authorName and
+        authorEmail when guest comments are enabled; guest comments await moderation.
+        When the server has TURNSTILE_SECRET_KEY set, guests must also send turnstileResponse.
       parameters:
       - description: post UUID
         in: path

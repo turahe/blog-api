@@ -24,13 +24,13 @@ func Category(cat categorydomain.Category) gin.H {
 		"name":        cat.Name,
 		"slug":        cat.Slug,
 		"description": cat.Description,
-		"parent_id":   parent,
-		"image_id":    image,
+		"parentId":    parent,
+		"imageId":     image,
 		"lft":         cat.Lft,
 		"rgt":         cat.Rgt,
 		"depth":       cat.Depth,
-		"sort_order":  cat.SortOrder,
-		"created_at":  cat.CreatedAt.UTC().Format(time.RFC3339),
-		"updated_at":  cat.UpdatedAt.UTC().Format(time.RFC3339),
+		"sortOrder":   cat.SortOrder,
+		"createdAt":   cat.CreatedAt.UTC().Format(time.RFC3339),
+		"updatedAt":   cat.UpdatedAt.UTC().Format(time.RFC3339),
 	}
 }

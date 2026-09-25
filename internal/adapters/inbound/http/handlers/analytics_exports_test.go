@@ -52,7 +52,7 @@ func pendingExportView() analyticsservice.ExportView {
 	}}
 }
 
-const exportBody = `{"from":"2026-08-01","to":"2026-08-31","current_password":"pw","two_factor_code":"123456"}`
+const exportBody = `{"from":"2026-08-01","to":"2026-08-31","currentPassword":"pw","twoFactorCode":"123456"}`
 
 func TestAdminAnalyticsExportQueues(t *testing.T) {
 	t.Parallel()
@@ -71,7 +71,7 @@ func TestAdminAnalyticsExportQueues(t *testing.T) {
 	data := dataOf(body)
 	assert.Equal(t, "pending", data["status"])
 	assert.Equal(t, "2026-08-31", data["to"])
-	assert.NotContains(t, data, "download_url")
+	assert.NotContains(t, data, "downloadUrl")
 }
 
 func TestAdminAnalyticsExportRefusals(t *testing.T) {
@@ -84,8 +84,8 @@ func TestAdminAnalyticsExportRefusals(t *testing.T) {
 		code   string
 	}{
 		"no password":  {`{"from":"2026-08-01","to":"2026-08-31"}`, nil, nethttp.StatusBadRequest, "validation_error"},
-		"bad date":     {`{"from":"2026-8-1","to":"2026-08-31","current_password":"pw"}`, nil, nethttp.StatusBadRequest, "validation_error"},
-		"bad grain":    {`{"from":"2026-08-01","to":"2026-08-31","grain":"year","current_password":"pw"}`, nil, nethttp.StatusBadRequest, "validation_error"},
+		"bad date":     {`{"from":"2026-8-1","to":"2026-08-31","currentPassword":"pw"}`, nil, nethttp.StatusBadRequest, "validation_error"},
+		"bad grain":    {`{"from":"2026-08-01","to":"2026-08-31","grain":"year","currentPassword":"pw"}`, nil, nethttp.StatusBadRequest, "validation_error"},
 		"window":       {exportBody, analyticsdomain.ErrValidation, nethttp.StatusBadRequest, "validation_error"},
 		"step-up":      {exportBody, analyticsdomain.ErrStepUpRequired, nethttp.StatusForbidden, "analytics.step_up_required"},
 		"no storage":   {exportBody, analyticsdomain.ErrExportUnavailable, nethttp.StatusServiceUnavailable, "analytics.export_unavailable"},
@@ -142,8 +142,8 @@ func TestAdminAnalyticsExportGetAndList(t *testing.T) {
 
 	data := dataOf(body)
 	assert.Equal(t, "completed", data["status"])
-	assert.Equal(t, "https://storage.example/x", data["download_url"])
-	assert.InDelta(t, 42, data["size_bytes"], 0)
+	assert.Equal(t, "https://storage.example/x", data["downloadUrl"])
+	assert.InDelta(t, 42, data["sizeBytes"], 0)
 
 	w, body = runProfile(t, adminAnalyticsExportsListHandler(fake), profileRequest{method: nethttp.MethodGet, target: "/", user: &testUserID})
 	require.Equal(t, nethttp.StatusOK, w.Code)

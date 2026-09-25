@@ -50,7 +50,7 @@ func setLockedRetryAfter(c *gin.Context, err error) {
 //	@Accept			json
 //	@Produce		json
 //	@Description	Returns a token pair, or for accounts with two-factor enabled
-//	@Description	`{"two_factor_required": true, "challenge_token", "expires_at", "expires_in"}`
+//	@Description	`{"twoFactorRequired": true, "challengeToken", "expiresAt", "expiresIn"}`
 //	@Description	to complete at POST /api/v1/auth/2fa/challenge.
 //	@Param			body	body		requests.Login	true	"credentials"
 //	@Success		200		{object}	responses.Envelope
@@ -239,8 +239,8 @@ func resetTokenValidityHandler(auth authports.Service) gin.HandlerFunc {
 		}
 
 		responses.SuccessFor(c, nethttp.StatusOK, responses.ServiceAuth, responses.CaseSuccess, gin.H{
-			"valid":      validity.Valid,
-			"expires_at": validity.ExpiresAt.UTC().Format(time.RFC3339),
+			"valid":     validity.Valid,
+			"expiresAt": validity.ExpiresAt.UTC().Format(time.RFC3339),
 		})
 	}
 }
@@ -319,8 +319,8 @@ func changePasswordHandler(auth authports.Service) gin.HandlerFunc {
 		}
 
 		responses.SuccessFor(c, nethttp.StatusOK, responses.ServiceAuth, responses.CaseSuccess, gin.H{
-			"password_changed_at":  changedAt.UTC().Format(time.RFC3339),
-			"sessions_invalidated": invalidated,
+			"passwordChangedAt":   changedAt.UTC().Format(time.RFC3339),
+			"sessionsInvalidated": invalidated,
 		})
 	}
 }

@@ -96,7 +96,7 @@ func TestStartImpersonationHandler(t *testing.T) {
 	t.Parallel()
 
 	session, target := impersonationFixture()
-	valid := `{"target_user_id":"` + target.UUID.String() + `","reason":"ticket #4521 cannot publish","current_password":"pw","two_factor_code":"123456"}`
+	valid := `{"targetUserId":"` + target.UUID.String() + `","reason":"ticket #4521 cannot publish","currentPassword":"pw","twoFactorCode":"123456"}`
 	staff := authdomain.AccessClaims{Subject: testUserID, FamilyID: uuid.New()}
 
 	t.Run("issues the token", func(t *testing.T) {
@@ -107,12 +107,12 @@ func TestStartImpersonationHandler(t *testing.T) {
 		require.Equal(t, nethttp.StatusCreated, status)
 
 		data := dataOf(body)
-		assert.Equal(t, "imp-token", data["access_token"])
-		assert.Equal(t, "Bearer", data["token_type"])
-		assert.InDelta(t, 3600, data["expires_in"], 0)
-		assert.NotContains(t, data, "refresh_token")
-		assert.Equal(t, session.UUID.String(), objectOf(t, data["session"])["impersonation_session_id"])
-		assert.Equal(t, target.UUID.String(), objectOf(t, data["target_user"])["id"])
+		assert.Equal(t, "imp-token", data["accessToken"])
+		assert.Equal(t, "Bearer", data["tokenType"])
+		assert.InDelta(t, 3600, data["expiresIn"], 0)
+		assert.NotContains(t, data, "refreshToken")
+		assert.Equal(t, session.UUID.String(), objectOf(t, data["session"])["impersonationSessionId"])
+		assert.Equal(t, target.UUID.String(), objectOf(t, data["targetUser"])["id"])
 
 		assert.Equal(t, testUserID, fake.input.ActorID)
 		assert.Equal(t, target.UUID, fake.input.TargetID)
@@ -125,9 +125,9 @@ func TestStartImpersonationHandler(t *testing.T) {
 		t.Parallel()
 
 		for _, body := range []string{
-			`{"target_user_id":"nope","reason":"ticket #4521 cannot publish","current_password":"pw"}`,
-			`{"target_user_id":"` + target.UUID.String() + `","reason":"short","current_password":"pw"}`,
-			`{"target_user_id":"` + target.UUID.String() + `","reason":"ticket #4521 cannot publish"}`,
+			`{"targetUserId":"nope","reason":"ticket #4521 cannot publish","currentPassword":"pw"}`,
+			`{"targetUserId":"` + target.UUID.String() + `","reason":"short","currentPassword":"pw"}`,
+			`{"targetUserId":"` + target.UUID.String() + `","reason":"ticket #4521 cannot publish"}`,
 		} {
 			status, out := runImpersonation(t, adminStartImpersonationHandler(&fakeImpersonation{}), nethttp.MethodPost, body, staff)
 			assert.Equal(t, nethttp.StatusBadRequest, status, body)
@@ -196,7 +196,7 @@ func TestStopAndCurrentImpersonationHandlers(t *testing.T) {
 		status, body := runImpersonation(t, adminCurrentImpersonationHandler(fake), nethttp.MethodGet, "", impToken)
 		require.Equal(t, nethttp.StatusOK, status)
 		assert.Equal(t, true, dataOf(body)["active"])
-		assert.Equal(t, target.UUID.String(), objectOf(t, dataOf(body)["session"])["target_user_id"])
+		assert.Equal(t, target.UUID.String(), objectOf(t, dataOf(body)["session"])["targetUserId"])
 	})
 
 	t.Run("current without a session is null", func(t *testing.T) {

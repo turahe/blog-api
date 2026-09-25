@@ -129,7 +129,7 @@ Caching: Cache-Control private max-age=30; Redis TTL 30s keyed by user_id + incl
 
 Partial update of profile fields via JSON body `{patch}`.
 
-Rules: allowlist of patch keys matches `full_name, display_name, bio, contact{phone,website,location}, social_links, locale, timezone, marketing_consent`; unknown keys fail.
+Rules: allowlist of patch keys matches `fullName, displayName, bio, contact{phone,website,location}, socialLinks, locale, timezone, marketingConsent`; unknown keys fail.
 
 Headers: `X-CSRF-Token` (browser clients), `Content-Type: application/json`, optional `X-Re-Verify-Password` or `X-2FA-Verified` for high-risk directions.
 
@@ -149,13 +149,13 @@ Detach avatar: set FK null; optionally soft-delete media_asset. Activity + audit
 
 #### `PUT /api/v1/me/password`
 
-Body: `{current_password, new_password, confirm_password, revoke_all_sessions?}`.
+Body: `{currentPassword, newPassword, confirmPassword, revokeAllSessions?}`.
 
 Requires re-verify password or recent 2FA success. Rate limit 5/min; history check N=10; new password strength validator (12 char min, not common). If revoke_all_sessions true → SessionRepo rotate user's refresh family; emit `user.session.invalidated_family`. Audit `password_change`, outbox event.
 
 #### `POST /api/v1/auth/password/forgot`
 
-Unauthenticated, public; body `{email_or_username}`.
+Unauthenticated, public; body `{emailOrUsername}`.
 
 Response: 200 with timing-safe message "If your account exists, a reset link has been sent."
 
@@ -163,13 +163,13 @@ Rate limit 5/hour 15/day per email + IP. Side effects: generate JWT token with j
 
 #### `POST /api/v1/auth/password/reset`
 
-Body: `{token, new_password, confirm_password}`.
+Body: `{token, newPassword, confirmPassword}`.
 
 Validate JWT signature + jti via Redis → check email_hash salted matches → same password validation rules → upsert password_hash + append password_history row → invalidate token family → emit audit + `user.password.reset` → return success envelope with login hint.
 
 #### `POST /api/v1/me/email/request-change`
 
-Authenticated; body: `{new_email, password_proof}`.
+Authenticated; body: `{newEmail, passwordProof}`.
 
 Generate JWT email-change token (1 hour TTL), send confirmation email to new address AND warning notice to old email. Produce activity + audit; rate limit 2/day per user.
 
@@ -181,12 +181,12 @@ Body: `{token}` → verify → update users.email + email_verified_at = now → 
 
 GET: returns current user_privacy_settings row; no cache.
 PUT: partial patch, allowlisted keys only; when visibility reduces (public→private) require re-verification password. Invalidate public profile cache, emit `user.privacy.updated`.
-Implemented; the password travels in the body as `current_password`, not in a header. See
+Implemented; the password travels in the body as `currentPassword`, not in a header. See
 [api.md](api.md#profiles-and-email-change).
 
 #### `GET /api/v1/me/activity`
 
-Query params: `page`, `per_page` (max 100), `category[]` (multi enum), `from_date`, `to_date`, `export=csv` optional.
+Query params: `page`, `perPage` (max 100), `category[]` (multi enum), `fromDate`, `toDate`, `export=csv` optional.
 
 Owner only. Append-only rows; CSV export via streaming writer. Rate limit export 1/hour.
 
@@ -207,17 +207,17 @@ Path param: either UUID or unique display_name / username.
 
 Query: `include=avatar,posts_preview,roles_brief`; caller identity anonymous when public.
 
-Response filters fields exactly by user_privacy_settings: private profile returns 404 unless owner/admin; `X-Robots-Tag: noindex` when `search_allow_indexing=false`; SSR HTTP header + meta tag pair.
+Response filters fields exactly by user_privacy_settings: private profile returns 404 unless owner/admin; `X-Robots-Tag: noindex` when `searchAllowIndexing=false`; SSR HTTP header + meta tag pair.
 
 Cached heavily: 15 min public, invalidated on `user.profile.updated` and `user.privacy.updated`.
 
 ### Admin Cross-User Profile
 
-#### `GET /api/v1/admin/users/{user_id}/profile`
+#### `GET /api/v1/admin/users/{userId}/profile`
 
 Requires `user.profile.read` permission (plus auth). Returns full non-redacted profile, privacy state, summary activity counts, and linked provider list.
 
-#### `PATCH /api/v1/admin/users/{user_id}/profile`
+#### `PATCH /api/v1/admin/users/{userId}/profile`
 
 Requires `user.profile.edit`. Same allowlist as self-service plus support flags. 2FA step-up for all admin writes.
 
@@ -225,15 +225,15 @@ Requires `user.profile.edit`. Same allowlist as self-service plus support flags.
 
 ### Allowlisted patch keys
 
-`full_name, display_name, bio, contact_phone, contact_website, contact_location, social_links.twitter, social_links.linkedin, social_links.github, locale, timezone, marketing_consent`.
+`fullName, displayName, bio, contactPhone, contactWebsite, contactLocation, socialLinks.twitter, socialLinks.linkedin, socialLinks.github, locale, timezone, marketingConsent`.
 
 ### Strict Validation Rules
 
-- `full_name` / `display_name` / `contact_location`: regex `^[^\p{Cc}]{1,N}$`.
+- `fullName` / `displayName` / `contactLocation`: regex `^[^\p{Cc}]{1,N}$`.
 - `bio` markdown; allow tags: a, strong, em, code, ul, ol, li, blockquote, p, h3-h6, pre; strip `<script,iframe,form,input,on* attributes>`; all hrefs rel=nofollow noreferrer noopener; max length 4000 chars after sanitization.
-- `contact_phone` → E.164 via `libphonenumber`-style regex + region validation.
-- `contact_website` → RFC 3986 with scheme http/https; 2048 length; URL-encode unwise chars; reject file:/data: schemes.
-- `social_links.twitter` → regex `^@?[A-Za-z0-9_]{1,15}$` normalized to `@handle` when not full URL.
+- `contactPhone` → E.164 via `libphonenumber`-style regex + region validation.
+- `contactWebsite` → RFC 3986 with scheme http/https; 2048 length; URL-encode unwise chars; reject file:/data: schemes.
+- `socialLinks.twitter` → regex `^@?[A-Za-z0-9_]{1,15}$` normalized to `@handle` when not full URL.
 - `locale` → BCP 47 allowlist (application configured); default `en_US`.
 - `timezone` → in IANA tz database provided by `time` package tzdata; default `UTC`.
 - `marketing_consent` → strict boolean. If `true`, confirm ConsentService has recorded the opt-in with timestamp before persisting (use outbox pattern).

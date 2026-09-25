@@ -28,7 +28,7 @@ func (f *fakeRegistrar) VerifyEmail(_ context.Context, token, password, _, _ str
 	return f.pair, f.err
 }
 
-const registerBody = `{"email":"new@example.com","username":"reader","full_name":"New Reader","password":"Sup3rSecretPass"}`
+const registerBody = `{"email":"new@example.com","username":"reader","fullName":"New Reader","password":"Sup3rSecretPass"}`
 
 func TestRegisterHandlerAccepts(t *testing.T) {
 	t.Parallel()
@@ -48,7 +48,7 @@ func TestRegisterHandlerErrors(t *testing.T) {
 
 	w, _ := runProfile(t, registerHandler(&fakeRegistrar{}), profileRequest{
 		method: nethttp.MethodPost, target: "/api/v1/auth/register", contentType: "application/json",
-		body: `{"email":"not-an-email","username":"reader","full_name":"R","password":"Sup3rSecretPass"}`,
+		body: `{"email":"not-an-email","username":"reader","fullName":"R","password":"Sup3rSecretPass"}`,
 	})
 	require.Equal(t, nethttp.StatusBadRequest, w.Code)
 
@@ -77,8 +77,8 @@ func TestVerifyEmailHandlerSignsIn(t *testing.T) {
 		body: `{"token":"tok","password":"Sup3rSecretPass"}`,
 	})
 	require.Equal(t, nethttp.StatusCreated, w.Code, w.Body.String())
-	require.Equal(t, "access", dataOf(body)["access_token"])
-	require.Equal(t, "refresh", dataOf(body)["refresh_token"])
+	require.Equal(t, "access", dataOf(body)["accessToken"])
+	require.Equal(t, "refresh", dataOf(body)["refreshToken"])
 	require.Equal(t, "tok", api.token)
 	require.Equal(t, "Sup3rSecretPass", api.password)
 }

@@ -2,7 +2,7 @@
 
 List endpoints use a Laravel-style length-aware paginator shape inside the project envelope.
 
-Non-list responses stay `{ ok, data, meta, error }` with `meta.request_id` only.
+Non-list responses stay `{ ok, data, meta, error }` with `meta.requestId` only.
 Paginated lists add `links` and expand `meta`.
 
 ## Paginated success shape
@@ -30,12 +30,12 @@ Paginated lists add `links` and expand `meta`.
     "next": null
   },
   "meta": {
-    "request_id": "…",
-    "current_page": 1,
+    "requestId": "…",
+    "currentPage": 1,
     "from": 1,
-    "last_page": 1,
+    "lastPage": 1,
     "path": "http://example.com/users",
-    "per_page": 15,
+    "perPage": 15,
     "to": 10,
     "total": 10
   }
@@ -51,18 +51,18 @@ Numeric `code` packing is documented in [response-codes.md](response-codes.md).
 | `data` | Array of resources for the current page (not `{ items: [...] }`) |
 | `links.first` / `links.last` | Absolute URLs for page 1 and the last page; other filters preserved |
 | `links.prev` / `links.next` | Absolute URLs or `null` at the ends |
-| `meta.current_page` | 1-based page index |
-| `meta.per_page` | Page size |
+| `meta.currentPage` | 1-based page index |
+| `meta.perPage` | Page size |
 | `meta.total` | Total matching rows |
-| `meta.last_page` | `ceil(total / per_page)` (minimum 1) |
+| `meta.lastPage` | `ceil(total / perPage)` (minimum 1) |
 | `meta.from` / `meta.to` | 1-based inclusive item indices on this page, or `null` when empty |
 | `meta.path` | Absolute path without the query string |
-| `meta.request_id` | Correlation id (project addition; not part of Laravel’s default meta) |
+| `meta.requestId` | Correlation id (project addition; not part of Laravel’s default meta) |
 
 ## Query parameters
 
 - `page` — 1-based (default `1`)
-- `per_page` — page size (endpoint-specific defaults/caps)
+- `perPage` — page size (endpoint-specific defaults/caps)
 
 ## Implementation
 

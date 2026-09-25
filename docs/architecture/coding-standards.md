@@ -43,6 +43,10 @@
 - package names should be short and descriptive
 - interface names should reflect business capability, not storage detail
 - event names should use dot-separated domain form such as `blog.post.published`
+- REST JSON fields and query parameters are camelCase (`categoryId`, `perPage`); database
+  columns, event payloads, and stored JSON stay snake_case. Convert in the HTTP adapter
+  (`responses`, `requests`), not by changing domain or storage names — see
+  `docs/backend/api.md` → Conventions
 
 ## Testing
 

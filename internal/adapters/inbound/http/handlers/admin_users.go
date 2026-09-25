@@ -82,7 +82,7 @@ func adminCreateUserHandler(admin adminUserAPI, canManageRoles func(*gin.Context
 // adminResetPasswordHandler godoc
 //
 //	@Summary		Reset a user's password
-//	@Description	Emails the user a new reset link, invalidating earlier links. Sessions are revoked unless revoke_sessions is false.
+//	@Description	Emails the user a new reset link, invalidating earlier links. Sessions are revoked unless revokeSessions is false.
 //	@Tags			admin
 //	@Accept			json
 //	@Produce		json
@@ -120,8 +120,8 @@ func adminResetPasswordHandler(admin adminUserAPI) gin.HandlerFunc {
 		}
 
 		responses.SuccessFor(c, nethttp.StatusAccepted, responses.ServiceUsers, responses.CaseAccepted, gin.H{
-			"reset_link_expires_at": result.ExpiresAt.UTC().Format(time.RFC3339),
-			"sessions_revoked":      result.SessionsRevoked,
+			"resetLinkExpiresAt": result.ExpiresAt.UTC().Format(time.RFC3339),
+			"sessionsRevoked":    result.SessionsRevoked,
 		})
 	}
 }

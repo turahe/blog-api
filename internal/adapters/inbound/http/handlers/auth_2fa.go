@@ -29,7 +29,7 @@ func authOK(c *gin.Context, data any) {
 // twoFactorChallengeHandler godoc
 //
 //	@Summary		Complete a two-factor login
-//	@Description	Exchanges the challenge_token from POST /api/v1/auth/login and a 6-digit TOTP code
+//	@Description	Exchanges the challengeToken from POST /api/v1/auth/login and a 6-digit TOTP code
 //	@Description	or a backup code for a token pair. A challenge expires after 5 minutes or 5 wrong codes.
 //	@Tags			auth
 //	@Accept			json
@@ -110,7 +110,7 @@ func meTwoFactorSetupHandler(mfa twoFactorAPI) gin.HandlerFunc {
 		}
 
 		c.Header("Cache-Control", "no-store")
-		authOK(c, gin.H{"secret": setup.Secret, "otpauth_url": setup.OTPAuthURL})
+		authOK(c, gin.H{"secret": setup.Secret, "otpauthUrl": setup.OTPAuthURL})
 	}
 }
 
@@ -146,7 +146,7 @@ func meTwoFactorConfirmHandler(mfa twoFactorAPI) gin.HandlerFunc {
 		}
 
 		c.Header("Cache-Control", "no-store")
-		authOK(c, gin.H{"enabled": true, "backup_codes": codes})
+		authOK(c, gin.H{"enabled": true, "backupCodes": codes})
 	}
 }
 
@@ -216,6 +216,6 @@ func meTwoFactorBackupCodesHandler(mfa twoFactorAPI) gin.HandlerFunc {
 		}
 
 		c.Header("Cache-Control", "no-store")
-		authOK(c, gin.H{"backup_codes": codes})
+		authOK(c, gin.H{"backupCodes": codes})
 	}
 }

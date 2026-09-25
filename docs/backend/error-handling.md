@@ -42,8 +42,8 @@ Client-safe codes only; never include usernames, emails, hashes, IPs, or interna
 | `profile.avatar.dimensions_exceeded`           | 422  | 8192×8192 cap hit                                                       |
 | `password.strength`                            | 422  | New password fails policy; details array of `{rule, hint}`              |
 | `password.history_conflict`                    | 422  | New password matches one of last N historical hashes                    |
-| `password.confirm_mismatch`                    | 422  | `confirm_password` != `new_password`                                    |
-| `password.current_mismatch`                    | 403  | update `current_password` failed verify                                |
+| `password.confirm_mismatch`                    | 422  | `confirmPassword` != `newPassword`                                    |
+| `password.current_mismatch`                    | 403  | update `currentPassword` failed verify                                |
 | `auth.password.reset_token_invalid`            | 400  | token signature / aud / nbf fails validation                            |
 | `auth.password.reset_token_expired`            | 400  | expires_at passed                                                       |
 | `auth.password.reset_token_used`               | 400  | token jti already consumed (single-use)                                 |
@@ -80,6 +80,6 @@ Client-safe codes only; never include usernames, emails, hashes, IPs, or interna
 - log unexpected failures at error level
 - avoid logging secrets or full sensitive payloads
 - correlate logs with request ID and actor when available
-- NEVER log `current_password`, `new_password`, `confirm_password`, reset/email-change tokens, raw JWT bodies, encrypted contact cleartext, or reset-token URLs
+- NEVER log `currentPassword`, `newPassword`, `confirmPassword`, reset/email-change tokens, raw JWT bodies, encrypted contact cleartext, or reset-token URLs
 - HMAC (peppered) hash or truncated SHA-256 allowed for password_reset_tokens.email_address_hash logging when authorized operator debug stream needs correlation
 - profile mutation audit logs: `before_value_hash` / `after_value_hash` (never before_value / after_value) for sensitive fields; plain before/after permitted for public-safe display fields (full_name, display_name, bio, locale, timezone, website non-sensitive) with data minimization

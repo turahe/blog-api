@@ -61,16 +61,16 @@ func wireNewsletterAdmin(c *routes.Newsletter, deps Deps, nl newsletterAdminAPI)
 //	@Tags			admin
 //	@Produce		json
 //	@Produce		text/csv
-//	@Param			status		query		string	false	"pending_confirm, active, unsubscribed, bounced, complained, erased"
-//	@Param			list		query		string	false	"list slug"
-//	@Param			q			query		string	false	"email prefix"
-//	@Param			format		query		string	false	"json or csv"	Enums(json, csv)	default(json)
-//	@Param			page		query		int		false	"page"			default(1)
-//	@Param			per_page	query		int		false	"per page"		default(20)
-//	@Success		200			{object}	responses.Envelope
-//	@Failure		400			{object}	responses.Envelope
-//	@Failure		401			{object}	responses.Envelope
-//	@Failure		403			{object}	responses.Envelope
+//	@Param			status	query		string	false	"pending_confirm, active, unsubscribed, bounced, complained, erased"
+//	@Param			list	query		string	false	"list slug"
+//	@Param			q		query		string	false	"email prefix"
+//	@Param			format	query		string	false	"json or csv"	Enums(json, csv)	default(json)
+//	@Param			page	query		int		false	"page"			default(1)
+//	@Param			perPage	query		int		false	"per page"		default(20)
+//	@Success		200		{object}	responses.Envelope
+//	@Failure		400		{object}	responses.Envelope
+//	@Failure		401		{object}	responses.Envelope
+//	@Failure		403		{object}	responses.Envelope
 //	@Security		Bearer
 //	@Router			/api/v1/admin/newsletter/subscribers [get]
 func adminNewsletterSubscribersHandler(nl newsletterAdminAPI, canExport func(*gin.Context) bool) gin.HandlerFunc {
@@ -257,13 +257,13 @@ func adminNewsletterDeleteSubscriberHandler(nl newsletterAdminAPI) gin.HandlerFu
 //	@Summary	List newsletter issues
 //	@Tags		admin
 //	@Produce	json
-//	@Param		status		query		string	false	"draft, scheduled, queued, sending, sent, cancelled"
-//	@Param		page		query		int		false	"page"		default(1)
-//	@Param		per_page	query		int		false	"per page"	default(20)
-//	@Success	200			{object}	responses.Envelope
-//	@Failure	400			{object}	responses.Envelope
-//	@Failure	401			{object}	responses.Envelope
-//	@Failure	403			{object}	responses.Envelope
+//	@Param		status	query		string	false	"draft, scheduled, queued, sending, sent, cancelled"
+//	@Param		page	query		int		false	"page"		default(1)
+//	@Param		perPage	query		int		false	"per page"	default(20)
+//	@Success	200		{object}	responses.Envelope
+//	@Failure	400		{object}	responses.Envelope
+//	@Failure	401		{object}	responses.Envelope
+//	@Failure	403		{object}	responses.Envelope
 //	@Security	Bearer
 //	@Router		/api/v1/admin/newsletter/issues [get]
 func adminNewsletterIssuesHandler(nl newsletterAdminAPI) gin.HandlerFunc {
@@ -290,8 +290,8 @@ func adminNewsletterIssuesHandler(nl newsletterAdminAPI) gin.HandlerFunc {
 // adminNewsletterCreateIssueHandler godoc
 //
 //	@Summary		Create, schedule, or send a newsletter issue
-//	@Description	status draft (default) saves; scheduled sends at send_at; queued sends now. Scheduling and
-//	@Description	sending need newsletter.issues.send and a postal_address in the provider config. The Markdown
+//	@Description	status draft (default) saves; scheduled sends at sendAt; queued sends now. Scheduling and
+//	@Description	sending need newsletter.issues.send and a postalAddress in the provider config. The Markdown
 //	@Description	body is rendered to sanitized HTML and plain text inside a template that adds the unsubscribe
 //	@Description	and preferences links and the postal address.
 //	@Tags			admin

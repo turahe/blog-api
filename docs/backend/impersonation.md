@@ -34,7 +34,7 @@ Product spec: [impersonation.md](../features/impersonation.md).
 
 `act` and `sid` come together or not at all; a token with only one of them, with a non-uuid
 `act.sub`, or with `act.sub` equal to `sub` is rejected when parsed. There is no refresh token and
-the session is never renewed: the token dies at `expires_at` (`IMPERSONATION_TTL`, default `1h`,
+the session is never renewed: the token dies at `expiresAt` (`IMPERSONATION_TTL`, default `1h`,
 allowed `5m`–`2h`).
 
 Ordinary access tokens carry a `fam` claim: the refresh-session family (the sign-in) they were
@@ -50,7 +50,7 @@ a client can tell it is acting as someone else.
 the token only while all of these hold:
 
 1. the session exists, is `active`, and has the token's actor and target;
-2. `expires_at` has not passed — otherwise the session is closed as `expired`;
+2. `expiresAt` has not passed — otherwise the session is closed as `expired`;
 3. the staff member's base sign-in is live: the refresh-session family recorded at start still has
    an unrevoked, unexpired session — otherwise the session is closed as `revoked`
    (`parent_session_expired`). Logout, a password change or reset, an admin password reset that revokes
@@ -72,7 +72,7 @@ and closes, so an open stream does not outlive the session.
 
 1. `reason` is 10–255 characters (trimmed) — `400 validation_error`;
 2. the caller holds `impersonation.start` — `403 rbac.forbidden`;
-3. `current_password`, plus `two_factor_code` (TOTP or unused backup code, which is consumed) when
+3. `currentPassword`, plus `twoFactorCode` (TOTP or unused backup code, which is consumed) when
    the caller has 2FA enabled — `403 impersonation.step_up_required`. An enrolled account whose
    codes cannot be checked (no encryption key) fails closed;
 4. the caller's token names its sign-in (`fam`) — `401 impersonation.sign_in_required`; refreshing
@@ -82,7 +82,7 @@ and closes, so an open stream does not outlive the session.
    target has is one the caller has (`*` covers everything) — `422 impersonation.target_ineligible`.
    Impersonation never adds rights;
 7. the caller has no other active session — `409 impersonation.already_active` (a partial unique
-   index enforces one active session per staff member). A session that is past `expires_at` or
+   index enforces one active session per staff member). A session that is past `expiresAt` or
    whose base sign-in ended, but was not closed yet, is closed first and does not block.
 
 The endpoint is rate limited to 10 requests per minute per caller (`impersonation.start`).
@@ -114,10 +114,10 @@ Requires `impersonation.start` and a normal (non-impersonation) token.
 
 ```json
 {
-  "target_user_id": "uuid",
+  "targetUserId": "uuid",
   "reason": "Ticket #4521: author cannot publish",
-  "current_password": "…",
-  "two_factor_code": "123456"
+  "currentPassword": "…",
+  "twoFactorCode": "123456"
 }
 ```
 
@@ -127,21 +127,21 @@ Requires `impersonation.start` and a normal (non-impersonation) token.
 {
   "data": {
     "session": {
-      "impersonation_session_id": "uuid",
-      "impersonator_user_id": "uuid",
-      "target_user_id": "uuid",
+      "impersonationSessionId": "uuid",
+      "impersonatorUserId": "uuid",
+      "targetUserId": "uuid",
       "state": "active",
       "active": true,
       "reason": "Ticket #4521: author cannot publish",
-      "started_at": "2026-09-25T10:00:00Z",
-      "expires_at": "2026-09-25T11:00:00Z",
-      "ended_at": null,
-      "end_reason": null
+      "startedAt": "2026-09-25T10:00:00Z",
+      "expiresAt": "2026-09-25T11:00:00Z",
+      "endedAt": null,
+      "endReason": null
     },
-    "target_user": { "id": "uuid", "username": "…", "email": "…", "full_name": "…" },
-    "access_token": "…",
-    "token_type": "Bearer",
-    "expires_in": 3600
+    "targetUser": { "id": "uuid", "username": "…", "email": "…", "fullName": "…" },
+    "accessToken": "…",
+    "tokenType": "Bearer",
+    "expiresIn": 3600
   }
 }
 ```
@@ -186,7 +186,7 @@ history.
   activity but not in the user's own feed.
 - A request the guard refused is recorded as a failure with `failure_reason:
   impersonation.forbidden_action`.
-- Admin activity (`GET /api/v1/admin/users/{id}/activity`) returns `impersonator_id`; the user's
+- Admin activity (`GET /api/v1/admin/users/{id}/activity`) returns `impersonatorId`; the user's
   own activity (`GET /api/v1/me/activity`) shows `impersonated: true` on those entries.
 - `admin.impersonation.start` (category `impersonation_start`) records the staff member as actor,
   the target as resource, and the reason and session id as metadata. Refused starts are recorded

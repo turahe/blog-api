@@ -256,6 +256,6 @@ func NotImplemented(route Route) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		responses.FailureWithDetails(c, nethttp.StatusNotImplemented, "operation.not_implemented",
 			"Operation is registered but not implemented",
-			gin.H{"operation_id": route.OperationID, "route_group": route.Group, "auth_mode": route.Auth})
+			gin.H{"operationId": route.OperationID, "routeGroup": route.Group, "authMode": route.Auth})
 	}
 }

@@ -20,7 +20,7 @@ The key catalogue lives in code, not in the database: each key declares its cate
 enum, pattern, range, item limits, and custom checks such as IANA time zones and absolute
 http(s) URLs without credentials). A `settings` row exists only once a key has been changed,
 so `type`, `category`, and `sensitivity` columns are not stored. A stored value that no longer
-passes the current rules resolves to the default and is reported in `default_applied`.
+passes the current rules resolves to the default and is reported in `defaultApplied`.
 
 | Key | Type | Sensitivity | Default |
 | --- | --- | --- | --- |
@@ -54,9 +54,9 @@ credentials and provider switches stay in environment variables, per the feature
 ### Behaviour
 
 - `GET /api/v1/admin/settings` needs `settings.read`. `category` filters; an unknown category
-  is `400`. `include_sensitive_admin=true` adds `admin_only` keys only when the caller also
+  is `400`. `includeSensitiveAdmin=true` adds `admin_only` keys only when the caller also
   holds `settings.update`. `server_only` keys are never returned. Each item carries `value`,
-  `default`, `version` (0 while the default applies), `updated_at`, and `updated_by`.
+  `default`, `version` (0 while the default applies), `updatedAt`, and `updatedBy`.
 - `PUT /api/v1/admin/settings` needs `settings.update` and is limited to 60 requests per
   minute per admin. Up to 100 updates; each may carry the `version` it was read at. All keys
   are validated before any is applied; any violation rejects the whole request with `422`
@@ -67,10 +67,10 @@ credentials and provider switches stay in environment variables, per the feature
   `settings.version_conflict` and applies nothing. Values equal to the current one are listed
   in `unchanged` and write nothing.
 - `GET /api/v1/admin/settings/history` needs `settings.history.read` (admin only by default).
-  Filters by `key`, paginates newest first (`per_page` ≤ 100). `previous_value` is the value in
+  Filters by `key`, paginates newest first (`perPage` ≤ 100). `previousValue` is the value in
   effect before the change, including a coded default. Values of keys no longer in the
   catalogue, or `server_only`, are returned as `null` with `redacted: true`. History is kept
-  until an admin prunes it; `changed_by` becomes `null` if the user is deleted.
+  until an admin prunes it; `changedBy` becomes `null` if the user is deleted.
 
 ### Concurrency, events, cache, audit
 
@@ -166,13 +166,13 @@ Purpose: return current non-sensitive settings for admins.
 
 Headers:
 
-- `Authorization: Bearer <access_token>` or equivalent server-managed session
+- `Authorization: Bearer <accessToken>` or equivalent server-managed session
 - `X-Request-ID` recommended
 
 Query params:
 
 - `category` optional filter: `site`, `content`, `media`, `analytics`, `notifications`, `seo`, `security`, `storage`, `smtp`
-- `include_sensitive_admin` boolean, default `false`; when true and caller has elevated permission, include `admin_only` keys. Must never include `server_only` keys.
+- `includeSensitiveAdmin` boolean, default `false`; when true and caller has elevated permission, include `admin_only` keys. Must never include `server_only` keys.
 
 Response:
 
@@ -183,18 +183,18 @@ Response:
       {
         "key": "site.name",
         "value": "Blog",
-        "value_type": "string",
+        "valueType": "string",
         "category": "site",
         "sensitivity": "public_safe",
-        "updated_at": "2026-07-29T10:00:00Z"
+        "updatedAt": "2026-07-29T10:00:00Z"
       }
     ],
-    "default_applied": [
+    "defaultApplied": [
       "content.default_post_status"
     ]
   },
   "meta": {
-    "request_id": "req_123"
+    "requestId": "req_123"
   },
   "error": null
 }
@@ -213,7 +213,7 @@ Purpose: partial update of authorized settings keys.
 
 Headers:
 
-- `Authorization: Bearer <access_token>`
+- `Authorization: Bearer <accessToken>`
 - `Content-Type: application/json`
 - `X-CSRF-Token` where the client is browser-based
 - `If-Match` optional for optimistic locking with a version digest or per-key versions
@@ -248,11 +248,11 @@ Response on success (200):
 {
   "data": {
     "applied": [
-      { "key": "site.name", "previous_value": "Blog", "new_value": "New Blog Name" }
+      { "key": "site.name", "previousValue": "Blog", "newValue": "New Blog Name" }
     ],
     "unchanged": []
   },
-  "meta": { "request_id": "req_123" },
+  "meta": { "requestId": "req_123" },
   "error": null
 }
 ```
@@ -262,7 +262,7 @@ Response on validation failure (422):
 ```json
 {
   "data": null,
-  "meta": { "request_id": "req_123" },
+  "meta": { "requestId": "req_123" },
   "error": {
     "code": "validation_error",
     "message": "one or more settings are invalid",

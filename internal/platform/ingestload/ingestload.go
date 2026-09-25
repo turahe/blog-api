@@ -325,7 +325,7 @@ func (g *generator) next() request {
 		route, body = "page-view", map[string]any{"id": id, "path": path, "referrer": g.referrer()}
 	case roll < 65:
 		route, body = "time-spent", map[string]any{
-			"view_id": g.remembered(g.lastView, session), "path": path, "focus_seconds": g.rand.IntN(300),
+			"viewId": g.remembered(g.lastView, session), "path": path, "focusSeconds": g.rand.IntN(300),
 		}
 	case roll < 85:
 		route, body = "navigation", map[string]any{
@@ -335,12 +335,12 @@ func (g *generator) next() request {
 		id := uuid.New()
 		g.lastSearch[session] = id
 		route, body = "search", map[string]any{
-			"id": id, "query": "query " + strconv.Itoa(g.rand.IntN(200)), "result_count": g.rand.IntN(20),
+			"id": id, "query": "query " + strconv.Itoa(g.rand.IntN(200)), "resultCount": g.rand.IntN(20),
 		}
 	default:
 		route, body = "search-click", map[string]any{
-			"search_id": g.remembered(g.lastSearch, session), "position": 1 + g.rand.IntN(10),
-			"resource_type": "post", "resource_id": uuid.New(),
+			"searchId": g.remembered(g.lastSearch, session), "position": 1 + g.rand.IntN(10),
+			"resourceType": "post", "resourceId": uuid.New(),
 		}
 	}
 

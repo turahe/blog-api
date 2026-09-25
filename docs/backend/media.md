@@ -25,10 +25,10 @@ The media module handles upload, storage, metadata, dynamic image transformation
 Admin upload uses **presigned PUT** (bytes go client → object storage, not through the API).
 
 1. `POST /api/v1/admin/media` (`admin.media.create`, permission `media.create`) with JSON:
-   `original_filename`, `content_type`, `size_bytes`, optional `tags`
+   `originalFilename`, `contentType`, `sizeBytes`, optional `tags`
 2. API validates MIME allowlist / max size / filename, creates a `pending` `media_assets` row, returns
-   `upload_url`, `required_headers`, `expires_at`, `media_id`, `storage_key`, `disk`
-3. Client `PUT`s the file to `upload_url` with the required headers (at least `Content-Type`)
+   `uploadUrl`, `requiredHeaders`, `expiresAt`, `mediaId`, `storageKey`, `disk`
+3. Client `PUT`s the file to `uploadUrl` with the required headers (at least `Content-Type`)
 4. `POST /api/v1/admin/media/{id}/complete` (`admin.media.complete`, same permission) — API `HeadObject`s
    storage, re-checks type and size, sniffs the first 512 bytes (a mismatch with the declared type
    is a `400`), then marks the asset `ready` (or returns `media.upload_incomplete` / `media.upload_expired`)
@@ -133,13 +133,13 @@ image points at, for an admin to review and delete.
 editor) reports stored assets:
 
 - `total`: `count` and `bytes`
-- `by_status`: `pending`, `ready`, `failed`, and `deleted` (soft-deleted, not yet purged)
-- `by_content_type`
-- `top_uploaders`: `user_id`, `username`, `count`, `bytes`, largest first; assets without an
-  uploader (deleted users) are one row with `user_id: null`. `top` sets the length (default 10,
+- `byStatus`: `pending`, `ready`, `failed`, and `deleted` (soft-deleted, not yet purged)
+- `byContentType`
+- `topUploaders`: `userId`, `username`, `count`, `bytes`, largest first; assets without an
+  uploader (deleted users) are one row with `userId: null`. `top` sets the length (default 10,
   max 100).
 
-`user_id` limits the report to one uploader. The response is `Cache-Control: no-store`. It is
+`userId` limits the report to one uploader. The response is `Cache-Control: no-store`. It is
 a report only; there are no quotas.
 
 ## Featured media on posts

@@ -29,7 +29,7 @@ const docTemplate = `{
                         "Bearer": []
                     }
                 ],
-                "description": "Queues a ZIP of CSV files with every rollup (site, pages, referrers, audience, navigation, searches, search positions, clicked results) of whole periods covering from through to, plus the daily retention cohorts. No raw events, visitor hashes, or session ids are exported. Requires the current password, and two_factor_code when two-factor is enabled. The archive is built in the background: poll GET /api/v1/admin/analytics/exports/{param1} for a presigned download link. One export per user may be open; a second request answers 409 with the open one in error.details.",
+                "description": "Queues a ZIP of CSV files with every rollup (site, pages, referrers, audience, navigation, searches, search positions, clicked results) of whole periods covering from through to, plus the daily retention cohorts. No raw events, visitor hashes, or session ids are exported. Requires the current password, and twoFactorCode when two-factor is enabled. The archive is built in the background: poll GET /api/v1/admin/analytics/exports/{param1} for a presigned download link. One export per user may be open; a second request answers 409 with the open one in error.details.",
                 "consumes": [
                     "application/json"
                 ],
@@ -98,7 +98,7 @@ const docTemplate = `{
                         "Bearer": []
                     }
                 ],
-                "description": "The caller's 20 most recent exports, newest first. Completed exports whose archive still exists carry a fresh presigned download_url valid for ANALYTICS_EXPORT_URL_TTL (never past archive_expires_at).",
+                "description": "The caller's 20 most recent exports, newest first. Completed exports whose archive still exists carry a fresh presigned downloadUrl valid for ANALYTICS_EXPORT_URL_TTL (never past archiveExpiresAt).",
                 "produces": [
                     "application/json"
                 ],
@@ -135,7 +135,7 @@ const docTemplate = `{
                         "Bearer": []
                     }
                 ],
-                "description": "Status of one of the caller's exports; other users' exports answer 404. A completed export whose archive still exists carries a fresh presigned download_url; after ANALYTICS_EXPORT_RETENTION the archive is deleted and status is expired.",
+                "description": "Status of one of the caller's exports; other users' exports answer 404. A completed export whose archive still exists carries a fresh presigned downloadUrl; after ANALYTICS_EXPORT_RETENTION the archive is deleted and status is expired.",
                 "produces": [
                     "application/json"
                 ],
@@ -270,7 +270,7 @@ const docTemplate = `{
                         "Bearer": []
                     }
                 ],
-                "description": "Totals, a series per period, the top 10 traffic sources, and audience (country, device, browser) for whole periods of the site time zone. Visitors are distinct within a period; a range total is the sum of per-period uniques, named visitor_days, visitor_weeks, or visitor_months after the grain, and plain visitors appears only when the window is a single period. previous holds the same number of periods just before the window (null with compare=none). Rates are null when their denominator is zero.",
+                "description": "Totals, a series per period, the top 10 traffic sources, and audience (country, device, browser) for whole periods of the site time zone. Visitors are distinct within a period; a range total is the sum of per-period uniques, named visitorDays, visitorWeeks, or visitorMonths after the grain, and plain visitors appears only when the window is a single period. previous holds the same number of periods just before the window (null with compare=none). Rates are null when their denominator is zero.",
                 "produces": [
                     "application/json"
                 ],
@@ -349,7 +349,7 @@ const docTemplate = `{
                         "Bearer": []
                     }
                 ],
-                "description": "Top pages by views, average focus time (sort=time), or views gained over the previous window (sort=rising). previous_views and change appear with compare=previous or sort=rising. Pages outside the top 1000 of a period are folded into (other), which only sort=views lists.",
+                "description": "Top pages by views, average focus time (sort=time), or views gained over the previous window (sort=rising). previousViews and change appear with compare=previous or sort=rising. Pages outside the top 1000 of a period are folded into (other), which only sort=views lists.",
                 "produces": [
                     "application/json"
                 ],
@@ -940,7 +940,7 @@ const docTemplate = `{
                     {
                         "type": "string",
                         "description": "post UUID",
-                        "name": "post_id",
+                        "name": "postId",
                         "in": "query"
                     },
                     {
@@ -965,7 +965,7 @@ const docTemplate = `{
                         "type": "integer",
                         "default": 20,
                         "description": "per page",
-                        "name": "per_page",
+                        "name": "perPage",
                         "in": "query"
                     }
                 ],
@@ -1336,7 +1336,7 @@ const docTemplate = `{
                         "Bearer": []
                     }
                 ],
-                "description": "Opens an impersonation session and returns a Bearer token that acts as the target until\nexpires_at (IMPERSONATION_TTL, never renewed; no refresh token). Requires impersonation.start,\nthe caller's current password, and a TOTP or backup code when the caller has two-factor\nenabled. The target must be active, must not be an administrator or able to impersonate, and\nevery permission the target has must be one the caller has. One active session per caller.\nThe session ends with the caller's own sign-in (logout, revocation, or refresh-session expiry).",
+                "description": "Opens an impersonation session and returns a Bearer token that acts as the target until\nexpiresAt (IMPERSONATION_TTL, never renewed; no refresh token). Requires impersonation.start,\nthe caller's current password, and a TOTP or backup code when the caller has two-factor\nenabled. The target must be active, must not be an administrator or able to impersonate, and\nevery permission the target has must be one the caller has. One active session per caller.\nThe session ends with the caller's own sign-in (logout, revocation, or refresh-session expiry).",
                 "consumes": [
                     "application/json"
                 ],
@@ -1467,7 +1467,7 @@ const docTemplate = `{
                         "type": "integer",
                         "default": 20,
                         "description": "per page",
-                        "name": "per_page",
+                        "name": "perPage",
                         "in": "query"
                     },
                     {
@@ -1565,7 +1565,7 @@ const docTemplate = `{
                         "Bearer": []
                     }
                 ],
-                "description": "Counts and bytes of stored media by status (soft-deleted assets as deleted until the orphan cleanup purges them), content type, and top uploaders. user_id narrows the report to one uploader.",
+                "description": "Counts and bytes of stored media by status (soft-deleted assets as deleted until the orphan cleanup purges them), content type, and top uploaders. userId narrows the report to one uploader.",
                 "produces": [
                     "application/json"
                 ],
@@ -1577,7 +1577,7 @@ const docTemplate = `{
                     {
                         "type": "string",
                         "description": "uploader UUID",
-                        "name": "user_id",
+                        "name": "userId",
                         "in": "query"
                     },
                     {
@@ -1750,7 +1750,7 @@ const docTemplate = `{
                         "type": "integer",
                         "default": 20,
                         "description": "per page",
-                        "name": "per_page",
+                        "name": "perPage",
                         "in": "query"
                     }
                 ],
@@ -1787,7 +1787,7 @@ const docTemplate = `{
                         "Bearer": []
                     }
                 ],
-                "description": "status draft (default) saves; scheduled sends at send_at; queued sends now. Scheduling and\nsending need newsletter.issues.send and a postal_address in the provider config. The Markdown\nbody is rendered to sanitized HTML and plain text inside a template that adds the unsubscribe\nand preferences links and the postal address.",
+                "description": "status draft (default) saves; scheduled sends at sendAt; queued sends now. Scheduling and\nsending need newsletter.issues.send and a postalAddress in the provider config. The Markdown\nbody is rendered to sanitized HTML and plain text inside a template that adds the unsubscribe\nand preferences links and the postal address.",
                 "consumes": [
                     "application/json"
                 ],
@@ -2136,7 +2136,7 @@ const docTemplate = `{
                         "type": "integer",
                         "default": 20,
                         "description": "per page",
-                        "name": "per_page",
+                        "name": "perPage",
                         "in": "query"
                     }
                 ],
@@ -2343,7 +2343,7 @@ const docTemplate = `{
                         "type": "integer",
                         "default": 20,
                         "description": "per page",
-                        "name": "per_page",
+                        "name": "perPage",
                         "in": "query"
                     },
                     {
@@ -2355,13 +2355,13 @@ const docTemplate = `{
                     {
                         "type": "string",
                         "description": "author UUID",
-                        "name": "author_id",
+                        "name": "authorId",
                         "in": "query"
                     },
                     {
                         "type": "string",
                         "description": "category UUID",
-                        "name": "category_id",
+                        "name": "categoryId",
                         "in": "query"
                     },
                     {
@@ -2550,7 +2550,7 @@ const docTemplate = `{
                         "Bearer": []
                     }
                 ],
-                "description": "Hides a draft, scheduled, or published post from public reads; published_at is kept. Publish again to bring it back.",
+                "description": "Hides a draft, scheduled, or published post from public reads; publishedAt is kept. Publish again to bring it back.",
                 "produces": [
                     "application/json"
                 ],
@@ -2659,7 +2659,7 @@ const docTemplate = `{
                         "Bearer": []
                     }
                 ],
-                "description": "Allowed from draft, scheduled, or archived; sets published_at to now. Returns 409 post.invalid_transition for a post that is already published.",
+                "description": "Allowed from draft, scheduled, or archived; sets publishedAt to now. Returns 409 post.invalid_transition for a post that is already published.",
                 "produces": [
                     "application/json"
                 ],
@@ -2788,31 +2788,31 @@ const docTemplate = `{
                     {
                         "type": "integer",
                         "description": "page size (default 20, max 100)",
-                        "name": "per_page",
+                        "name": "perPage",
                         "in": "query"
                     },
                     {
                         "type": "string",
                         "description": "only revisions by this user UUID",
-                        "name": "author_id",
+                        "name": "authorId",
                         "in": "query"
                     },
                     {
                         "type": "string",
                         "description": "RFC 3339 time or YYYY-MM-DD (inclusive)",
-                        "name": "from_date",
+                        "name": "fromDate",
                         "in": "query"
                     },
                     {
                         "type": "string",
                         "description": "RFC 3339 time or YYYY-MM-DD (inclusive, whole day)",
-                        "name": "to_date",
+                        "name": "toDate",
                         "in": "query"
                     },
                     {
                         "type": "boolean",
                         "description": "include per-field diffs (default true)",
-                        "name": "include_diff",
+                        "name": "includeDiff",
                         "in": "query"
                     }
                 ],
@@ -2910,7 +2910,7 @@ const docTemplate = `{
                         "Bearer": []
                     }
                 ],
-                "description": "Copies the revision's title, slug, excerpt, content, comment policy, category, cover, tags, and media back onto the post as a new revision of type restore. The post keeps its status and published_at. Categories, tags, and media that no longer exist (or media that is not ready) are skipped and listed in skipped; if another post took the slug, the current slug stays.",
+                "description": "Copies the revision's title, slug, excerpt, content, comment policy, category, cover, tags, and media back onto the post as a new revision of type restore. The post keeps its status and publishedAt. Categories, tags, and media that no longer exist (or media that is not ready) are skipped and listed in skipped; if another post took the slug, the current slug stays.",
                 "consumes": [
                     "application/json"
                 ],
@@ -3181,7 +3181,7 @@ const docTemplate = `{
                         "Bearer": []
                     }
                 ],
-                "description": "Returns a published or scheduled post to draft and clears published_at.",
+                "description": "Returns a published or scheduled post to draft and clears publishedAt.",
                 "produces": [
                     "application/json"
                 ],
@@ -3526,7 +3526,7 @@ const docTemplate = `{
                         "Bearer": []
                     }
                 ],
-                "description": "Returns the settings catalogue with current values. server_only keys are never returned; admin_only keys need include_sensitive_admin=true and settings.update.",
+                "description": "Returns the settings catalogue with current values. server_only keys are never returned; admin_only keys need includeSensitiveAdmin=true and settings.update.",
                 "produces": [
                     "application/json"
                 ],
@@ -3544,7 +3544,7 @@ const docTemplate = `{
                     {
                         "type": "boolean",
                         "description": "include admin_only keys",
-                        "name": "include_sensitive_admin",
+                        "name": "includeSensitiveAdmin",
                         "in": "query"
                     }
                 ],
@@ -3661,7 +3661,7 @@ const docTemplate = `{
                     {
                         "type": "integer",
                         "description": "page size (default 20, max 100)",
-                        "name": "per_page",
+                        "name": "perPage",
                         "in": "query"
                     }
                 ],
@@ -3869,7 +3869,7 @@ const docTemplate = `{
                         "type": "integer",
                         "default": 20,
                         "description": "per page",
-                        "name": "per_page",
+                        "name": "perPage",
                         "in": "query"
                     }
                 ],
@@ -4008,7 +4008,7 @@ const docTemplate = `{
                         "type": "integer",
                         "default": 20,
                         "description": "per page",
-                        "name": "per_page",
+                        "name": "perPage",
                         "in": "query"
                     }
                 ],
@@ -4047,7 +4047,7 @@ const docTemplate = `{
                         "Bearer": []
                     }
                 ],
-                "description": "Emails the user a new reset link, invalidating earlier links. Sessions are revoked unless revoke_sessions is false.",
+                "description": "Emails the user a new reset link, invalidating earlier links. Sessions are revoked unless revokeSessions is false.",
                 "consumes": [
                     "application/json"
                 ],
@@ -4636,7 +4636,7 @@ const docTemplate = `{
         },
         "/api/v1/analytics/ingest/search": {
             "post": {
-                "description": "A search the visitor ran. The query is lowercased, whitespace-collapsed, and cut to 200 characters. filters may hold category, tag, from, and to. The response id (the client's id when sent) is the search_id to send with result clicks. Accepted asynchronously like page views.",
+                "description": "A search the visitor ran. The query is lowercased, whitespace-collapsed, and cut to 200 characters. filters may hold category, tag, from, and to. The response id (the client's id when sent) is the searchId to send with result clicks. Accepted asynchronously like page views.",
                 "consumes": [
                     "application/json"
                 ],
@@ -4706,7 +4706,7 @@ const docTemplate = `{
         },
         "/api/v1/analytics/ingest/search-click": {
             "post": {
-                "description": "A click on result position (from 1) of search search_id, pointing at a post, page, category, or tag. Neither id is checked against stored data, so the endpoint reveals nothing about what exists. Accepted asynchronously like page views.",
+                "description": "A click on result position (from 1) of search searchId, pointing at a post, page, category, or tag. Neither id is checked against stored data, so the endpoint reveals nothing about what exists. Accepted asynchronously like page views.",
                 "consumes": [
                     "application/json"
                 ],
@@ -4776,7 +4776,7 @@ const docTemplate = `{
         },
         "/api/v1/analytics/ingest/time-spent": {
             "post": {
-                "description": "A heartbeat for page view view_id with the cumulative seconds the page has been in focus (clamped to 4 hours). Send one every 15-30 seconds while the page is visible and one on unload; the highest value is kept. Accepted asynchronously like page views.",
+                "description": "A heartbeat for page view viewId with the cumulative seconds the page has been in focus (clamped to 4 hours). Send one every 15-30 seconds while the page is visible and one on unload; the highest value is kept. Accepted asynchronously like page views.",
                 "consumes": [
                     "application/json"
                 ],
@@ -4846,7 +4846,7 @@ const docTemplate = `{
         },
         "/api/v1/auth/2fa/challenge": {
             "post": {
-                "description": "Exchanges the challenge_token from POST /api/v1/auth/login and a 6-digit TOTP code\nor a backup code for a token pair. A challenge expires after 5 minutes or 5 wrong codes.",
+                "description": "Exchanges the challengeToken from POST /api/v1/auth/login and a 6-digit TOTP code\nor a backup code for a token pair. A challenge expires after 5 minutes or 5 wrong codes.",
                 "consumes": [
                     "application/json"
                 ],
@@ -4898,7 +4898,7 @@ const docTemplate = `{
         },
         "/api/v1/auth/login": {
             "post": {
-                "description": "Returns a token pair, or for accounts with two-factor enabled\n` + "`" + `{\"two_factor_required\": true, \"challenge_token\", \"expires_at\", \"expires_in\"}` + "`" + `\nto complete at POST /api/v1/auth/2fa/challenge.",
+                "description": "Returns a token pair, or for accounts with two-factor enabled\n` + "`" + `{\"twoFactorRequired\": true, \"challengeToken\", \"expiresAt\", \"expiresIn\"}` + "`" + `\nto complete at POST /api/v1/auth/2fa/challenge.",
                 "consumes": [
                     "application/json"
                 ],
@@ -4999,7 +4999,7 @@ const docTemplate = `{
         },
         "/api/v1/auth/oauth/{param1}/callback": {
             "post": {
-                "description": "Exchanges the code and state the provider sent to the client's redirect_uri. Signs in\nthe account linked to the provider identity, or the existing account whose email the\nprovider verified (the identity is then linked). No account is ever created.\nResponds like POST /api/v1/auth/login: a token pair or a two-factor challenge.",
+                "description": "Exchanges the code and state the provider sent to the client's redirectUri. Signs in\nthe account linked to the provider identity, or the existing account whose email the\nprovider verified (the identity is then linked). No account is ever created.\nResponds like POST /api/v1/auth/login: a token pair or a two-factor challenge.",
                 "consumes": [
                     "application/json"
                 ],
@@ -5070,7 +5070,7 @@ const docTemplate = `{
         },
         "/api/v1/auth/oauth/{param1}/start": {
             "get": {
-                "description": "Returns the provider authorization URL (with state and a PKCE challenge) for the\nbrowser to visit. redirect_uri must be listed in OAUTH_REDIRECT_URIS. The state\nis single use and expires after 10 minutes.",
+                "description": "Returns the provider authorization URL (with state and a PKCE challenge) for the\nbrowser to visit. redirectUri must be listed in OAUTH_REDIRECT_URIS. The state\nis single use and expires after 10 minutes.",
                 "produces": [
                     "application/json"
                 ],
@@ -5089,7 +5089,7 @@ const docTemplate = `{
                     {
                         "type": "string",
                         "description": "registered client callback URL",
-                        "name": "redirect_uri",
+                        "name": "redirectUri",
                         "in": "query",
                         "required": true
                     }
@@ -6049,7 +6049,7 @@ const docTemplate = `{
                         "type": "integer",
                         "default": 20,
                         "description": "per page",
-                        "name": "per_page",
+                        "name": "perPage",
                         "in": "query"
                     }
                 ],
@@ -6145,7 +6145,7 @@ const docTemplate = `{
                         "Bearer": []
                     }
                 ],
-                "description": "Queues a JSON export of everything stored about the caller, or returns the open or still\ndownloadable one. 202 while it is being prepared (poll this endpoint); 200 with a short-lived\ndownload_url once ready. After the archive expires, the next call queues a new export.",
+                "description": "Queues a JSON export of everything stored about the caller, or returns the open or still\ndownloadable one. 202 while it is being prepared (poll this endpoint); 200 with a short-lived\ndownloadUrl once ready. After the archive expires, the next call queues a new export.",
                 "produces": [
                     "application/json"
                 ],
@@ -6315,7 +6315,7 @@ const docTemplate = `{
                         "type": "integer",
                         "default": 20,
                         "description": "per page",
-                        "name": "per_page",
+                        "name": "perPage",
                         "in": "query"
                     }
                 ],
@@ -6456,7 +6456,7 @@ const docTemplate = `{
                         "Bearer": []
                     }
                 ],
-                "description": "Subscribes the account email to lists (the default lists when empty). A verified account\nemail joins at once unless double_optin_required is set; otherwise the lists stay pending\nuntil the emailed confirmation link is used (status pending_confirm).",
+                "description": "Subscribes the account email to lists (the default lists when empty). A verified account\nemail joins at once unless doubleOptinRequired is set; otherwise the lists stay pending\nuntil the emailed confirmation link is used (status pending_confirm).",
                 "consumes": [
                     "application/json"
                 ],
@@ -6639,7 +6639,7 @@ const docTemplate = `{
                         "type": "integer",
                         "default": 20,
                         "description": "per page",
-                        "name": "per_page",
+                        "name": "perPage",
                         "in": "query"
                     }
                 ],
@@ -6721,7 +6721,7 @@ const docTemplate = `{
                         "Bearer": []
                     }
                 ],
-                "description": "Idempotent: a notification that is already read keeps its first read_at.",
+                "description": "Idempotent: a notification that is already read keeps its first readAt.",
                 "produces": [
                     "application/json"
                 ],
@@ -6851,7 +6851,7 @@ const docTemplate = `{
                         "Bearer": []
                     }
                 ],
-                "description": "Partial update; omitted flags are kept. Narrowing visibility_profile (public → unlisted → private)\nrequires current_password; widening it and the other flags do not.",
+                "description": "Partial update; omitted flags are kept. Narrowing visibilityProfile (public → unlisted → private)\nrequires currentPassword; widening it and the other flags do not.",
                 "consumes": [
                     "application/json"
                 ],
@@ -7221,7 +7221,7 @@ const docTemplate = `{
                 }
             },
             "patch": {
-                "description": "Changes format and lists by preferences token. lists is the complete set to receive; chosen\nlists are active at once, including after an earlier unsubscribe. An empty lists array or\nunsubscribe_all stops all mail.",
+                "description": "Changes format and lists by preferences token. lists is the complete set to receive; chosen\nlists are active at once, including after an earlier unsubscribe. An empty lists array or\nunsubscribeAll stops all mail.",
                 "consumes": [
                     "application/json"
                 ],
@@ -7286,7 +7286,7 @@ const docTemplate = `{
         },
         "/api/v1/newsletter/subscribe": {
             "post": {
-                "description": "Emails a double opt-in confirmation link. Always 202 with the same body whether the address\nis new, pending, already subscribed, or suppressed, so it cannot reveal who subscribes. lists\nare list slugs (empty means the default lists). Leave honeypot empty. turnstile_response is\nrequired when Turnstile is configured. Rate limited per IP and per address.",
+                "description": "Emails a double opt-in confirmation link. Always 202 with the same body whether the address\nis new, pending, already subscribed, or suppressed, so it cannot reveal who subscribes. lists\nare list slugs (empty means the default lists). Leave honeypot empty. turnstileResponse is\nrequired when Turnstile is configured. Rate limited per IP and per address.",
                 "consumes": [
                     "application/json"
                 ],
@@ -7497,19 +7497,19 @@ const docTemplate = `{
                         "type": "integer",
                         "default": 20,
                         "description": "per page",
-                        "name": "per_page",
+                        "name": "perPage",
                         "in": "query"
                     },
                     {
                         "type": "string",
                         "description": "category UUID",
-                        "name": "category_id",
+                        "name": "categoryId",
                         "in": "query"
                     },
                     {
                         "type": "string",
                         "description": "tag UUID",
-                        "name": "tag_id",
+                        "name": "tagId",
                         "in": "query"
                     }
                 ],
@@ -7571,7 +7571,7 @@ const docTemplate = `{
         },
         "/api/v1/posts/{param1}/comments": {
             "get": {
-                "description": "Top-level comments by default; pass parent_id to list the direct replies of a comment.",
+                "description": "Top-level comments by default; pass parentId to list the direct replies of a comment.",
                 "produces": [
                     "application/json"
                 ],
@@ -7590,7 +7590,7 @@ const docTemplate = `{
                     {
                         "type": "string",
                         "description": "parent comment UUID",
-                        "name": "parent_id",
+                        "name": "parentId",
                         "in": "query"
                     },
                     {
@@ -7604,7 +7604,7 @@ const docTemplate = `{
                         "type": "integer",
                         "default": 20,
                         "description": "per page",
-                        "name": "per_page",
+                        "name": "perPage",
                         "in": "query"
                     }
                 ],
@@ -7641,7 +7641,7 @@ const docTemplate = `{
                         "Bearer": []
                     }
                 ],
-                "description": "Signed-in users comment as themselves. Guests send author_name and author_email when guest comments are enabled; guest comments await moderation. When the server has TURNSTILE_SECRET_KEY set, guests must also send turnstile_response.",
+                "description": "Signed-in users comment as themselves. Guests send authorName and authorEmail when guest comments are enabled; guest comments await moderation. When the server has TURNSTILE_SECRET_KEY set, guests must also send turnstileResponse.",
                 "consumes": [
                     "application/json"
                 ],
@@ -7880,7 +7880,7 @@ const docTemplate = `{
             "type": "object",
             "required": [
                 "email",
-                "full_name",
+                "fullName",
                 "password",
                 "roles",
                 "username"
@@ -7890,7 +7890,7 @@ const docTemplate = `{
                     "type": "string",
                     "maxLength": 254
                 },
-                "full_name": {
+                "fullName": {
                     "type": "string",
                     "maxLength": 120
                 },
@@ -7916,7 +7916,7 @@ const docTemplate = `{
         "requests.AdminResetPassword": {
             "type": "object",
             "properties": {
-                "revoke_sessions": {
+                "revokeSessions": {
                     "description": "RevokeSessions defaults to true.",
                     "type": "boolean"
                 }
@@ -7925,12 +7925,12 @@ const docTemplate = `{
         "requests.AnalyticsExport": {
             "type": "object",
             "required": [
-                "current_password",
+                "currentPassword",
                 "from",
                 "to"
             ],
             "properties": {
-                "current_password": {
+                "currentPassword": {
                     "type": "string",
                     "maxLength": 128
                 },
@@ -7951,7 +7951,7 @@ const docTemplate = `{
                     "type": "string",
                     "example": "2026-08-31"
                 },
-                "two_factor_code": {
+                "twoFactorCode": {
                     "type": "string",
                     "maxLength": 32,
                     "example": "123456"
@@ -8007,23 +8007,23 @@ const docTemplate = `{
         "requests.ChangePassword": {
             "type": "object",
             "required": [
-                "confirm_password",
-                "current_password",
-                "new_password"
+                "confirmPassword",
+                "currentPassword",
+                "newPassword"
             ],
             "properties": {
-                "confirm_password": {
+                "confirmPassword": {
                     "type": "string"
                 },
-                "current_password": {
+                "currentPassword": {
                     "type": "string"
                 },
-                "new_password": {
+                "newPassword": {
                     "type": "string",
                     "maxLength": 128,
                     "minLength": 12
                 },
-                "revoke_all_sessions": {
+                "revokeAllSessions": {
                     "type": "boolean"
                 }
             }
@@ -8046,14 +8046,14 @@ const docTemplate = `{
                 "name"
             ],
             "properties": {
-                "before_id": {
+                "beforeId": {
                     "type": "string"
                 },
                 "description": {
                     "type": "string",
                     "maxLength": 2000
                 },
-                "image_id": {
+                "imageId": {
                     "type": "string"
                 },
                 "name": {
@@ -8061,7 +8061,7 @@ const docTemplate = `{
                     "maxLength": 255,
                     "minLength": 1
                 },
-                "parent_id": {
+                "parentId": {
                     "type": "string"
                 },
                 "slug": {
@@ -8077,11 +8077,11 @@ const docTemplate = `{
                 "content"
             ],
             "properties": {
-                "author_email": {
+                "authorEmail": {
                     "type": "string",
                     "maxLength": 254
                 },
-                "author_name": {
+                "authorName": {
                     "description": "Guest commenters only; ignored when a bearer token is sent.",
                     "type": "string",
                     "maxLength": 100
@@ -8096,11 +8096,11 @@ const docTemplate = `{
                     "type": "string",
                     "maxLength": 500
                 },
-                "parent_id": {
+                "parentId": {
                     "type": "string",
                     "format": "uuid"
                 },
-                "turnstile_response": {
+                "turnstileResponse": {
                     "description": "Cloudflare Turnstile token; required for guests when the server has TURNSTILE_SECRET_KEY set.",
                     "type": "string",
                     "maxLength": 2048
@@ -8114,7 +8114,7 @@ const docTemplate = `{
                 "title"
             ],
             "properties": {
-                "category_id": {
+                "categoryId": {
                     "type": "string"
                 },
                 "content": {
@@ -8205,10 +8205,10 @@ const docTemplate = `{
         "requests.EraseAccount": {
             "type": "object",
             "required": [
-                "current_password"
+                "currentPassword"
             ],
             "properties": {
-                "current_password": {
+                "currentPassword": {
                     "type": "string",
                     "maxLength": 128
                 }
@@ -8217,14 +8217,14 @@ const docTemplate = `{
         "requests.FlagComment": {
             "type": "object",
             "required": [
-                "reason_code"
+                "reasonCode"
             ],
             "properties": {
                 "details": {
                     "type": "string",
                     "maxLength": 2000
                 },
-                "reason_code": {
+                "reasonCode": {
                     "type": "string",
                     "enum": [
                         "spam",
@@ -8244,10 +8244,10 @@ const docTemplate = `{
         "requests.ForgotPassword": {
             "type": "object",
             "required": [
-                "email_or_username"
+                "emailOrUsername"
             ],
             "properties": {
-                "email_or_username": {
+                "emailOrUsername": {
                     "type": "string"
                 }
             }
@@ -8255,7 +8255,7 @@ const docTemplate = `{
         "requests.IngestNavigation": {
             "type": "object",
             "required": [
-                "session_id",
+                "sessionId",
                 "to",
                 "transition"
             ],
@@ -8267,7 +8267,7 @@ const docTemplate = `{
                 "id": {
                     "type": "string"
                 },
-                "session_id": {
+                "sessionId": {
                     "type": "string"
                 },
                 "to": {
@@ -8289,7 +8289,7 @@ const docTemplate = `{
             "type": "object",
             "required": [
                 "path",
-                "session_id"
+                "sessionId"
             ],
             "properties": {
                 "id": {
@@ -8303,7 +8303,7 @@ const docTemplate = `{
                     "type": "string",
                     "maxLength": 2048
                 },
-                "session_id": {
+                "sessionId": {
                     "type": "string"
                 }
             }
@@ -8312,7 +8312,7 @@ const docTemplate = `{
             "type": "object",
             "required": [
                 "query",
-                "session_id"
+                "sessionId"
             ],
             "properties": {
                 "filters": {
@@ -8328,11 +8328,11 @@ const docTemplate = `{
                     "type": "string",
                     "maxLength": 1000
                 },
-                "result_count": {
+                "resultCount": {
                     "type": "integer",
                     "minimum": 0
                 },
-                "session_id": {
+                "sessionId": {
                     "type": "string"
                 }
             }
@@ -8341,10 +8341,10 @@ const docTemplate = `{
             "type": "object",
             "required": [
                 "position",
-                "resource_id",
-                "resource_type",
-                "search_id",
-                "session_id"
+                "resourceId",
+                "resourceType",
+                "searchId",
+                "sessionId"
             ],
             "properties": {
                 "id": {
@@ -8354,10 +8354,10 @@ const docTemplate = `{
                     "type": "integer",
                     "minimum": 1
                 },
-                "resource_id": {
+                "resourceId": {
                     "type": "string"
                 },
-                "resource_type": {
+                "resourceType": {
                     "type": "string",
                     "enum": [
                         "post",
@@ -8366,10 +8366,10 @@ const docTemplate = `{
                         "tag"
                     ]
                 },
-                "search_id": {
+                "searchId": {
                     "type": "string"
                 },
-                "session_id": {
+                "sessionId": {
                     "type": "string"
                 }
             }
@@ -8378,11 +8378,11 @@ const docTemplate = `{
             "type": "object",
             "required": [
                 "path",
-                "session_id",
-                "view_id"
+                "sessionId",
+                "viewId"
             ],
             "properties": {
-                "focus_seconds": {
+                "focusSeconds": {
                     "type": "integer",
                     "minimum": 0
                 },
@@ -8390,10 +8390,10 @@ const docTemplate = `{
                     "type": "string",
                     "maxLength": 2048
                 },
-                "session_id": {
+                "sessionId": {
                     "type": "string"
                 },
-                "view_id": {
+                "viewId": {
                     "type": "string"
                 }
             }
@@ -8420,7 +8420,7 @@ const docTemplate = `{
         "requests.Logout": {
             "type": "object",
             "properties": {
-                "refresh_token": {
+                "refreshToken": {
                     "type": "string"
                 }
             }
@@ -8428,10 +8428,10 @@ const docTemplate = `{
         "requests.MergeTag": {
             "type": "object",
             "required": [
-                "into_id"
+                "intoId"
             ],
             "properties": {
-                "into_id": {
+                "intoId": {
                     "type": "string"
                 }
             }
@@ -8451,7 +8451,7 @@ const docTemplate = `{
                         "restore"
                     ]
                 },
-                "notify_author": {
+                "notifyAuthor": {
                     "description": "Recorded in the moderation log for author notifications.",
                     "type": "boolean"
                 },
@@ -8464,12 +8464,12 @@ const docTemplate = `{
         "requests.NewsletterIssueCreate": {
             "type": "object",
             "required": [
-                "body_markdown",
+                "bodyMarkdown",
                 "lists",
                 "subject"
             ],
             "properties": {
-                "body_markdown": {
+                "bodyMarkdown": {
                     "type": "string",
                     "maxLength": 200000,
                     "example": "## Hello\n\nThis month..."
@@ -8490,7 +8490,7 @@ const docTemplate = `{
                     "maxLength": 200,
                     "example": "Three posts you may have missed"
                 },
-                "send_at": {
+                "sendAt": {
                     "type": "string",
                     "example": "2026-10-01T09:00:00Z"
                 },
@@ -8516,7 +8516,7 @@ const docTemplate = `{
                 "lists"
             ],
             "properties": {
-                "body_markdown": {
+                "bodyMarkdown": {
                     "type": "string",
                     "maxLength": 200000
                 },
@@ -8532,7 +8532,7 @@ const docTemplate = `{
                     "type": "string",
                     "maxLength": 200
                 },
-                "send_at": {
+                "sendAt": {
                     "type": "string"
                 },
                 "status": {
@@ -8563,7 +8563,7 @@ const docTemplate = `{
                     "maxLength": 500,
                     "example": "The week's posts, every Friday"
                 },
-                "is_default": {
+                "isDefault": {
                     "type": "boolean",
                     "example": true
                 },
@@ -8622,7 +8622,7 @@ const docTemplate = `{
                         "type": "string"
                     }
                 },
-                "reason_code": {
+                "reasonCode": {
                     "type": "string",
                     "enum": [
                         "too_frequent",
@@ -8654,7 +8654,7 @@ const docTemplate = `{
                         "type": "string"
                     }
                 },
-                "unsubscribe_all": {
+                "unsubscribeAll": {
                     "type": "boolean"
                 }
             }
@@ -8662,27 +8662,27 @@ const docTemplate = `{
         "requests.NewsletterProviderConfig": {
             "type": "object",
             "required": [
-                "confirm_ttl_hours",
-                "double_optin_required",
+                "confirmTtlHours",
+                "doubleOptinRequired",
                 "lists"
             ],
             "properties": {
-                "confirm_ttl_hours": {
+                "confirmTtlHours": {
                     "type": "integer",
                     "maximum": 168,
                     "minimum": 1,
                     "example": 48
                 },
-                "double_optin_required": {
+                "doubleOptinRequired": {
                     "type": "boolean",
                     "example": true
                 },
-                "from_email": {
+                "fromEmail": {
                     "type": "string",
                     "maxLength": 254,
                     "example": "newsletter@example.com"
                 },
-                "from_name": {
+                "fromName": {
                     "type": "string",
                     "maxLength": 100,
                     "example": "Turahe Blog"
@@ -8695,12 +8695,12 @@ const docTemplate = `{
                         "$ref": "#/definitions/requests.NewsletterList"
                     }
                 },
-                "postal_address": {
+                "postalAddress": {
                     "type": "string",
                     "maxLength": 500,
                     "example": "123 Example Street, Jakarta, ID"
                 },
-                "reply_to": {
+                "replyTo": {
                     "type": "string",
                     "maxLength": 254,
                     "example": "hello@example.com"
@@ -8727,7 +8727,7 @@ const docTemplate = `{
                 "lists"
             ],
             "properties": {
-                "display_name": {
+                "displayName": {
                     "type": "string",
                     "maxLength": 100,
                     "example": "Alex"
@@ -8759,7 +8759,7 @@ const docTemplate = `{
                         "weekly"
                     ]
                 },
-                "turnstile_response": {
+                "turnstileResponse": {
                     "type": "string",
                     "maxLength": 2048
                 }
@@ -8784,7 +8784,7 @@ const docTemplate = `{
                     "type": "string",
                     "maxLength": 1000
                 },
-                "reason_code": {
+                "reasonCode": {
                     "type": "string",
                     "enum": [
                         "too_frequent",
@@ -8836,26 +8836,26 @@ const docTemplate = `{
                 "bio": {
                     "type": "string"
                 },
-                "contact_location": {
+                "contactLocation": {
                     "type": "string"
                 },
-                "contact_website": {
+                "contactWebsite": {
                     "type": "string"
                 },
-                "display_name": {
+                "displayName": {
                     "type": "string"
                 },
-                "full_name": {
+                "fullName": {
                     "type": "string"
                 },
                 "locale": {
                     "type": "string",
                     "example": "en_US"
                 },
-                "marketing_consent": {
+                "marketingConsent": {
                     "type": "boolean"
                 },
-                "social_links": {
+                "socialLinks": {
                     "$ref": "#/definitions/requests.SocialLinks"
                 },
                 "timezone": {
@@ -8868,16 +8868,16 @@ const docTemplate = `{
             "type": "object",
             "required": [
                 "kind",
-                "media_asset_id"
+                "mediaAssetId"
             ],
             "properties": {
                 "kind": {
                     "type": "string"
                 },
-                "media_asset_id": {
+                "mediaAssetId": {
                     "type": "string"
                 },
-                "sort_order": {
+                "sortOrder": {
                     "type": "integer",
                     "minimum": 0
                 }
@@ -8886,20 +8886,20 @@ const docTemplate = `{
         "requests.PresignMedia": {
             "type": "object",
             "required": [
-                "content_type",
-                "original_filename",
-                "size_bytes"
+                "contentType",
+                "originalFilename",
+                "sizeBytes"
             ],
             "properties": {
-                "content_type": {
+                "contentType": {
                     "type": "string"
                 },
-                "original_filename": {
+                "originalFilename": {
                     "type": "string",
                     "maxLength": 255,
                     "minLength": 1
                 },
-                "size_bytes": {
+                "sizeBytes": {
                     "type": "integer"
                 },
                 "tags": {
@@ -8913,42 +8913,42 @@ const docTemplate = `{
         "requests.PreviewPostSEO": {
             "type": "object",
             "properties": {
-                "canonical_url": {
+                "canonicalUrl": {
                     "type": "string"
                 },
                 "excerpt": {
                     "type": "string",
                     "maxLength": 2000
                 },
-                "og_description": {
+                "ogDescription": {
                     "type": "string"
                 },
-                "og_image_id": {
+                "ogImageId": {
                     "type": "string",
                     "format": "uuid"
                 },
-                "og_title": {
+                "ogTitle": {
                     "type": "string"
                 },
-                "og_url": {
+                "ogUrl": {
                     "type": "string"
                 },
-                "robots_nofollow": {
+                "robotsNofollow": {
                     "type": "boolean"
                 },
-                "robots_noindex": {
+                "robotsNoindex": {
                     "type": "boolean"
                 },
-                "seo_description": {
+                "seoDescription": {
                     "type": "string"
                 },
-                "seo_keywords": {
+                "seoKeywords": {
                     "type": "array",
                     "items": {
                         "type": "string"
                     }
                 },
-                "seo_title": {
+                "seoTitle": {
                     "type": "string"
                 },
                 "slug": {
@@ -8958,20 +8958,20 @@ const docTemplate = `{
                     "type": "string",
                     "maxLength": 255
                 },
-                "twitter_card": {
+                "twitterCard": {
                     "type": "string"
                 },
-                "twitter_creator": {
+                "twitterCreator": {
                     "type": "string"
                 },
-                "twitter_description": {
+                "twitterDescription": {
                     "type": "string"
                 },
-                "twitter_image_id": {
+                "twitterImageId": {
                     "type": "string",
                     "format": "uuid"
                 },
-                "twitter_title": {
+                "twitterTitle": {
                     "type": "string"
                 }
             }
@@ -8979,10 +8979,10 @@ const docTemplate = `{
         "requests.Refresh": {
             "type": "object",
             "required": [
-                "refresh_token"
+                "refreshToken"
             ],
             "properties": {
-                "refresh_token": {
+                "refreshToken": {
                     "type": "string"
                 }
             }
@@ -8991,7 +8991,7 @@ const docTemplate = `{
             "type": "object",
             "required": [
                 "email",
-                "full_name",
+                "fullName",
                 "password",
                 "username"
             ],
@@ -9000,7 +9000,7 @@ const docTemplate = `{
                     "type": "string",
                     "maxLength": 254
                 },
-                "full_name": {
+                "fullName": {
                     "type": "string",
                     "maxLength": 120
                 },
@@ -9022,7 +9022,7 @@ const docTemplate = `{
                 "items"
             ],
             "properties": {
-                "enforce_cover_consistency": {
+                "enforceCoverConsistency": {
                     "type": "boolean"
                 },
                 "items": {
@@ -9036,15 +9036,15 @@ const docTemplate = `{
         "requests.RequestEmailChange": {
             "type": "object",
             "required": [
-                "new_email",
-                "password_proof"
+                "newEmail",
+                "passwordProof"
             ],
             "properties": {
-                "new_email": {
+                "newEmail": {
                     "type": "string",
                     "maxLength": 254
                 },
-                "password_proof": {
+                "passwordProof": {
                     "type": "string",
                     "maxLength": 128
                 }
@@ -9053,15 +9053,15 @@ const docTemplate = `{
         "requests.ResetPassword": {
             "type": "object",
             "required": [
-                "confirm_password",
-                "new_password",
+                "confirmPassword",
+                "newPassword",
                 "token"
             ],
             "properties": {
-                "confirm_password": {
+                "confirmPassword": {
                     "type": "string"
                 },
-                "new_password": {
+                "newPassword": {
                     "type": "string",
                     "maxLength": 128,
                     "minLength": 12
@@ -9074,7 +9074,7 @@ const docTemplate = `{
         "requests.RestoreRevision": {
             "type": "object",
             "properties": {
-                "restore_note": {
+                "restoreNote": {
                     "type": "string",
                     "maxLength": 1000
                 }
@@ -9131,12 +9131,12 @@ const docTemplate = `{
         "requests.StartImpersonation": {
             "type": "object",
             "required": [
-                "current_password",
+                "currentPassword",
                 "reason",
-                "target_user_id"
+                "targetUserId"
             ],
             "properties": {
-                "current_password": {
+                "currentPassword": {
                     "type": "string",
                     "maxLength": 128
                 },
@@ -9146,11 +9146,11 @@ const docTemplate = `{
                     "minLength": 10,
                     "example": "Ticket #4521: author cannot publish"
                 },
-                "target_user_id": {
+                "targetUserId": {
                     "type": "string",
                     "example": "0b8f5c1e-3c1a-4f5e-9d7a-2a1b3c4d5e6f"
                 },
-                "two_factor_code": {
+                "twoFactorCode": {
                     "type": "string",
                     "maxLength": 32,
                     "example": "123456"
@@ -9160,11 +9160,11 @@ const docTemplate = `{
         "requests.StoreConsent": {
             "type": "object",
             "required": [
-                "policy_version",
+                "policyVersion",
                 "purposes"
             ],
             "properties": {
-                "policy_version": {
+                "policyVersion": {
                     "type": "string",
                     "maxLength": 32
                 },
@@ -9179,11 +9179,11 @@ const docTemplate = `{
         "requests.TwoFactorChallenge": {
             "type": "object",
             "required": [
-                "challenge_token",
+                "challengeToken",
                 "code"
             ],
             "properties": {
-                "challenge_token": {
+                "challengeToken": {
                     "type": "string",
                     "maxLength": 128
                 },
@@ -9220,12 +9220,12 @@ const docTemplate = `{
         "requests.UpdatePost": {
             "type": "object",
             "properties": {
-                "category_id": {
+                "categoryId": {
                     "description": "Category UUID; null clears the category, omitting the field keeps it.",
                     "type": "string",
                     "format": "uuid"
                 },
-                "comment_policy": {
+                "commentPolicy": {
                     "description": "Who may comment: open, authenticated, read_only, or disabled (hides existing comments).",
                     "type": "string",
                     "enum": [
@@ -9258,57 +9258,57 @@ const docTemplate = `{
         "requests.UpdatePostSEO": {
             "type": "object",
             "properties": {
-                "canonical_url": {
+                "canonicalUrl": {
                     "type": "string"
                 },
-                "og_description": {
+                "ogDescription": {
                     "type": "string"
                 },
-                "og_image_id": {
+                "ogImageId": {
                     "type": "string",
                     "format": "uuid"
                 },
-                "og_title": {
+                "ogTitle": {
                     "type": "string"
                 },
-                "og_url": {
+                "ogUrl": {
                     "type": "string"
                 },
-                "robots_nofollow": {
+                "robotsNofollow": {
                     "type": "boolean"
                 },
-                "robots_noindex": {
+                "robotsNoindex": {
                     "type": "boolean"
                 },
-                "seo_description": {
+                "seoDescription": {
                     "type": "string"
                 },
-                "seo_keywords": {
+                "seoKeywords": {
                     "type": "array",
                     "items": {
                         "type": "string"
                     }
                 },
-                "seo_title": {
+                "seoTitle": {
                     "type": "string"
                 },
                 "slug": {
                     "type": "string"
                 },
-                "twitter_card": {
+                "twitterCard": {
                     "type": "string"
                 },
-                "twitter_creator": {
+                "twitterCreator": {
                     "type": "string"
                 },
-                "twitter_description": {
+                "twitterDescription": {
                     "type": "string"
                 },
-                "twitter_image_id": {
+                "twitterImageId": {
                     "type": "string",
                     "format": "uuid"
                 },
-                "twitter_title": {
+                "twitterTitle": {
                     "type": "string"
                 }
             }
@@ -9316,20 +9316,20 @@ const docTemplate = `{
         "requests.UpdatePrivacy": {
             "type": "object",
             "properties": {
-                "current_password": {
+                "currentPassword": {
                     "type": "string",
                     "maxLength": 128
                 },
-                "search_allow_indexing": {
+                "searchAllowIndexing": {
                     "type": "boolean"
                 },
-                "visibility_contact": {
+                "visibilityContact": {
                     "type": "boolean"
                 },
-                "visibility_email": {
+                "visibilityEmail": {
                     "type": "boolean"
                 },
-                "visibility_profile": {
+                "visibilityProfile": {
                     "type": "string",
                     "enum": [
                         "public",

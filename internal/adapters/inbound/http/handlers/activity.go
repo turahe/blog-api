@@ -42,7 +42,7 @@ func activityControllers(deps Deps) (me, admin gin.HandlerFunc) {
 //	@Param			from		query		string	false	"RFC 3339 timestamp or YYYY-MM-DD"
 //	@Param			to			query		string	false	"RFC 3339 timestamp or YYYY-MM-DD (inclusive)"
 //	@Param			page		query		int		false	"page"		default(1)
-//	@Param			per_page	query		int		false	"per page"	default(20)
+//	@Param			perPage		query		int		false	"per page"	default(20)
 //	@Success		200			{object}	responses.Envelope
 //	@Failure		400			{object}	responses.Envelope
 //	@Failure		401			{object}	responses.Envelope
@@ -78,7 +78,7 @@ func meActivityHandler(activity activityAPI) gin.HandlerFunc {
 //	@Param			from		query		string	false	"RFC 3339 timestamp or YYYY-MM-DD"
 //	@Param			to			query		string	false	"RFC 3339 timestamp or YYYY-MM-DD (inclusive)"
 //	@Param			page		query		int		false	"page"		default(1)
-//	@Param			per_page	query		int		false	"per page"	default(20)
+//	@Param			perPage		query		int		false	"per page"	default(20)
 //	@Success		200			{object}	responses.Envelope
 //	@Failure		400			{object}	responses.Envelope
 //	@Failure		401			{object}	responses.Envelope

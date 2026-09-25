@@ -76,7 +76,7 @@ func TestStoreConsentCreatesOrUpdates(t *testing.T) {
 
 	w, body := runProfile(t, storeConsentHandler(svc), profileRequest{
 		method: nethttp.MethodPost, target: "/", contentType: "application/json", user: &testUserID,
-		body: `{"purposes":{"analytics":true,"authenticated_analytics":false},"policy_version":"2026-09"}`,
+		body: `{"purposes":{"analytics":true,"authenticated_analytics":false},"policyVersion":"2026-09"}`,
 	})
 	require.Equal(t, nethttp.StatusCreated, w.Code, w.Body.String())
 	assert.Equal(t, "secret", dataOf(body)["token"])
@@ -90,7 +90,7 @@ func TestStoreConsentCreatesOrUpdates(t *testing.T) {
 	svc.newToken = ""
 	w, body = runProfile(t, withConsentToken(storeConsentHandler(svc), "existing"), profileRequest{
 		method: nethttp.MethodPost, target: "/", contentType: "application/json",
-		body: `{"purposes":{"analytics":false},"policy_version":"2026-09"}`,
+		body: `{"purposes":{"analytics":false},"policyVersion":"2026-09"}`,
 	})
 	require.Equal(t, nethttp.StatusOK, w.Code)
 	assert.Equal(t, "existing", svc.token)
@@ -100,7 +100,7 @@ func TestStoreConsentCreatesOrUpdates(t *testing.T) {
 	svc.err = consentdomain.ErrValidation
 	w, _ = runProfile(t, storeConsentHandler(svc), profileRequest{
 		method: nethttp.MethodPost, target: "/", contentType: "application/json",
-		body: `{"purposes":{"x":true},"policy_version":"v"}`,
+		body: `{"purposes":{"x":true},"policyVersion":"v"}`,
 	})
 	assert.Equal(t, nethttp.StatusBadRequest, w.Code)
 }

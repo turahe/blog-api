@@ -152,7 +152,7 @@ func TestAdminMergeTagHandlerReturnsTargetTag(t *testing.T) {
 	w := httptest.NewRecorder()
 	c, _ := gin.CreateTestContext(w)
 	c.Params = gin.Params{{Key: "param1", Value: sourceID.String()}}
-	c.Request = httptest.NewRequestWithContext(t.Context(), nethttp.MethodPost, "/api/v1/admin/tags/"+sourceID.String()+"/merge", bytes.NewBufferString(`{"into_id":"`+intoID.String()+`"}`))
+	c.Request = httptest.NewRequestWithContext(t.Context(), nethttp.MethodPost, "/api/v1/admin/tags/"+sourceID.String()+"/merge", bytes.NewBufferString(`{"intoId":"`+intoID.String()+`"}`))
 	c.Request.Header.Set("Content-Type", "application/json")
 
 	adminMergeTagHandler(svc)(c)

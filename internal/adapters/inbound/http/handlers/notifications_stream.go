@@ -119,8 +119,8 @@ func streamNotifications(c *gin.Context, conn *realtime.Conn, userID uuid.UUID, 
 	w := c.Writer
 
 	opened := gin.H{
-		"stream_id": uuid.New(), "user_id": userID, "server_ts": time.Now().UTC(),
-		"retry_ms": streamRetryMS, "channels": []string{"default"}, "replay_applied": false, "replay_count": 0,
+		"streamId": uuid.New(), "userId": userID, "serverTs": time.Now().UTC(),
+		"retryMs": streamRetryMS, "channels": []string{"default"}, "replayApplied": false, "replayCount": 0,
 	}
 	if _, err := fmt.Fprintf(w, "retry: %d\n\n", streamRetryMS); err != nil {
 		return
@@ -173,7 +173,7 @@ func streamNotifications(c *gin.Context, conn *realtime.Conn, userID uuid.UUID, 
 
 // writeShutdown tells the client the server is stopping and when to reconnect.
 func writeShutdown(w gin.ResponseWriter) {
-	_ = writeFrame(w, "stream.closed", uuid.NewString(), gin.H{"code": "shutdown", "retry_ms": streamShutdownRetryMS})
+	_ = writeFrame(w, "stream.closed", uuid.NewString(), gin.H{"code": "shutdown", "retryMs": streamShutdownRetryMS})
 	w.Flush()
 }
 
@@ -183,7 +183,7 @@ func writeDropped(w io.Writer, conn *realtime.Conn) error {
 		return nil
 	}
 
-	return writeFrame(w, "error", uuid.NewString(), gin.H{"code": "fanout.buffer_full", "dropped_count": dropped})
+	return writeFrame(w, "error", uuid.NewString(), gin.H{"code": "fanout.buffer_full", "droppedCount": dropped})
 }
 
 func writeFrame(w io.Writer, event, id string, data any) error {
@@ -204,8 +204,8 @@ func writeFrame(w io.Writer, event, id string, data any) error {
 
 func streamNotification(n notificationdomain.Notification) gin.H {
 	item := responses.Notification(n)
-	delete(item, "is_read")
-	delete(item, "read_at")
+	delete(item, "isRead")
+	delete(item, "readAt")
 
 	return item
 }

@@ -4,5 +4,5 @@ package requests
 // of the consent policy the visitor was shown.
 type StoreConsent struct {
 	Purposes      map[string]bool `json:"purposes"       binding:"required,min=1,max=10"`
-	PolicyVersion string          `json:"policy_version" binding:"required,max=32"`
+	PolicyVersion string          `json:"policyVersion" binding:"required,max=32"`
 }

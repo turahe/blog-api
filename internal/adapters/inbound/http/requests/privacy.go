@@ -1,16 +1,16 @@
 package requests
 
-// UpdatePrivacy is a partial privacy update; omitted flags are kept. current_password is
-// required only when visibility_profile narrows (public → unlisted → private).
+// UpdatePrivacy is a partial privacy update; omitted flags are kept. currentPassword is
+// required only when visibilityProfile narrows (public → unlisted → private).
 type UpdatePrivacy struct {
-	VisibilityProfile   *string `json:"visibility_profile" binding:"omitempty,oneof=public unlisted private" example:"private"`
-	VisibilityEmail     *bool   `json:"visibility_email"`
-	VisibilityContact   *bool   `json:"visibility_contact"`
-	SearchAllowIndexing *bool   `json:"search_allow_indexing"`
-	CurrentPassword     string  `json:"current_password" binding:"max=128"`
+	VisibilityProfile   *string `json:"visibilityProfile" binding:"omitempty,oneof=public unlisted private" example:"private"`
+	VisibilityEmail     *bool   `json:"visibilityEmail"`
+	VisibilityContact   *bool   `json:"visibilityContact"`
+	SearchAllowIndexing *bool   `json:"searchAllowIndexing"`
+	CurrentPassword     string  `json:"currentPassword" binding:"max=128"`
 }
 
 // EraseAccount confirms an account erasure with the current password.
 type EraseAccount struct {
-	CurrentPassword string `json:"current_password" binding:"required,max=128"`
+	CurrentPassword string `json:"currentPassword" binding:"required,max=128"`
 }

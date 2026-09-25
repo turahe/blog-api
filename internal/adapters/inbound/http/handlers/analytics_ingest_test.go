@@ -142,23 +142,23 @@ func TestIngestHandlersAcceptEveryKind(t *testing.T) {
 		want any
 	}{
 		"/page-view": {
-			fmt.Sprintf(`{"id":%q,"session_id":%q,"path":"/posts/hello?utm=1","referrer":"https://example.com/x"}`, id, session),
+			fmt.Sprintf(`{"id":%q,"sessionId":%q,"path":"/posts/hello?utm=1","referrer":"https://example.com/x"}`, id, session),
 			analyticsservice.PageViewInput{ID: id, SessionID: uuid.MustParse(session), Path: "/posts/hello?utm=1", Referrer: "https://example.com/x"},
 		},
 		"/time-spent": {
-			fmt.Sprintf(`{"view_id":%q,"session_id":%q,"path":"/posts/hello","focus_seconds":42}`, id, session),
+			fmt.Sprintf(`{"viewId":%q,"sessionId":%q,"path":"/posts/hello","focusSeconds":42}`, id, session),
 			analyticsservice.TimeSpentInput{ViewID: id, SessionID: uuid.MustParse(session), Path: "/posts/hello", FocusSeconds: 42},
 		},
 		"/navigation": {
-			fmt.Sprintf(`{"session_id":%q,"from":"/","to":"/posts/hello","transition":"internal"}`, session),
+			fmt.Sprintf(`{"sessionId":%q,"from":"/","to":"/posts/hello","transition":"internal"}`, session),
 			analyticsservice.NavigationInput{SessionID: uuid.MustParse(session), From: "/", To: "/posts/hello", Transition: "internal"},
 		},
 		"/search": {
-			fmt.Sprintf(`{"session_id":%q,"query":"Go","result_count":3,"filters":{"tag":"go"}}`, session),
+			fmt.Sprintf(`{"sessionId":%q,"query":"Go","resultCount":3,"filters":{"tag":"go"}}`, session),
 			analyticsservice.SearchInput{SessionID: uuid.MustParse(session), Query: "Go", ResultCount: 3, Filters: map[string]string{"tag": "go"}},
 		},
 		"/search-click": {
-			fmt.Sprintf(`{"session_id":%q,"search_id":%q,"position":2,"resource_type":"post","resource_id":%q}`, session, id, id),
+			fmt.Sprintf(`{"sessionId":%q,"searchId":%q,"position":2,"resourceType":"post","resourceId":%q}`, session, id, id),
 			analyticsservice.SearchClickInput{
 				SessionID: uuid.MustParse(session), SearchID: id, Position: 2, ResourceType: "post", ResourceID: id,
 			},
@@ -188,17 +188,17 @@ func TestIngestHandlersRejectInvalidEvents(t *testing.T) {
 	a := ingestControllers(Deps{AnalyticsIngest: ingest})
 
 	w, _ := serveIngest(t, a, ingestCall{path: "/page-view", body: `{"path":"/"}`})
-	assert.Equal(t, nethttp.StatusBadRequest, w.Code, "session_id is required")
+	assert.Equal(t, nethttp.StatusBadRequest, w.Code, "sessionId is required")
 
-	w, _ = serveIngest(t, a, ingestCall{path: "/navigation", body: fmt.Sprintf(`{"session_id":%q,"to":"/","transition":"teleport"}`, uuid.New())})
+	w, _ = serveIngest(t, a, ingestCall{path: "/navigation", body: fmt.Sprintf(`{"sessionId":%q,"to":"/","transition":"teleport"}`, uuid.New())})
 	assert.Equal(t, nethttp.StatusBadRequest, w.Code)
 
 	ingest.err = fmt.Errorf("%w: path must start with /", analyticsdomain.ErrValidation)
-	w, body := serveIngest(t, a, ingestCall{path: "/page-view", body: fmt.Sprintf(`{"session_id":%q,"path":"x"}`, uuid.New())})
+	w, body := serveIngest(t, a, ingestCall{path: "/page-view", body: fmt.Sprintf(`{"sessionId":%q,"path":"x"}`, uuid.New())})
 	assert.Equal(t, nethttp.StatusBadRequest, w.Code)
 	assert.Equal(t, responses.ErrorCodeValidation, errorCode(body))
 
-	large := fmt.Sprintf(`{"session_id":%q,"path":"/%s"}`, uuid.New(), strings.Repeat("a", ingestMaxBodyBytes))
+	large := fmt.Sprintf(`{"sessionId":%q,"path":"/%s"}`, uuid.New(), strings.Repeat("a", ingestMaxBodyBytes))
 	w, body = serveIngest(t, a, ingestCall{path: "/page-view", body: large})
 	assert.Equal(t, nethttp.StatusRequestEntityTooLarge, w.Code)
 	assert.Equal(t, "analytics.payload_too_large", errorCode(body))
@@ -207,7 +207,7 @@ func TestIngestHandlersRejectInvalidEvents(t *testing.T) {
 func TestIngestMetaFromTheRequest(t *testing.T) {
 	t.Parallel()
 
-	body := fmt.Sprintf(`{"session_id":%q,"path":"/"}`, uuid.New())
+	body := fmt.Sprintf(`{"sessionId":%q,"path":"/"}`, uuid.New())
 	deps := Deps{AnalyticsCountryHeader: "Cf-Ipcountry", TrustedProxies: []string{"10.0.0.0/8", "192.0.2.7"}}
 
 	for name, tc := range map[string]struct {
@@ -261,7 +261,7 @@ func TestIngestLimitsRunBeforeTheConsentGate(t *testing.T) {
 	a := routes.Analytics{IngestGate: func(*gin.Context) { gateCalls++ }}
 	analyticsIngestControllers(Deps{AnalyticsIngest: &fakeIngest{}, RateLimiter: denyLimiter{}, AnalyticsIngestPerMinute: 1}, &a)
 
-	w, _ := serveIngest(t, a, ingestCall{path: "/page-view", body: fmt.Sprintf(`{"session_id":%q,"path":"/"}`, uuid.New())})
+	w, _ := serveIngest(t, a, ingestCall{path: "/page-view", body: fmt.Sprintf(`{"sessionId":%q,"path":"/"}`, uuid.New())})
 	assert.Equal(t, nethttp.StatusTooManyRequests, w.Code)
 	assert.Zero(t, gateCalls, "a throttled request must not reach the consent lookup")
 }

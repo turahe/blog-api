@@ -187,7 +187,7 @@ func TestAdminMoveCategoryHandlerRejectsCycle(t *testing.T) {
 	c, _ := gin.CreateTestContext(w)
 	c.Params = gin.Params{{Key: "param1", Value: catID.String()}}
 	c.Request = httptest.NewRequestWithContext(t.Context(), nethttp.MethodPost, "/api/v1/admin/categories/"+catID.String()+"/move",
-		bytes.NewBufferString(`{"parent_id":"`+childID.String()+`"}`))
+		bytes.NewBufferString(`{"parentId":"`+childID.String()+`"}`))
 	c.Request.Header.Set("Content-Type", "application/json")
 
 	adminMoveCategoryHandler(svc)(c)
@@ -216,7 +216,7 @@ func TestAdminMoveCategoryHandlerRequiresParentID(t *testing.T) {
 	c, _ := gin.CreateTestContext(w)
 	c.Params = gin.Params{{Key: "param1", Value: catID.String()}}
 	c.Request = httptest.NewRequestWithContext(t.Context(), nethttp.MethodPost, "/api/v1/admin/categories/"+catID.String()+"/move",
-		bytes.NewBufferString(`{"before_id":null}`))
+		bytes.NewBufferString(`{"beforeId":null}`))
 	c.Request.Header.Set("Content-Type", "application/json")
 
 	adminMoveCategoryHandler(svc)(c)

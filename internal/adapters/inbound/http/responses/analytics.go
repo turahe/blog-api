@@ -26,10 +26,10 @@ func AnalyticsHeader(h analyticsservice.Header) gin.H {
 	return out
 }
 
-// visitorKey names a count of per-period uniques added up: visitor_days, visitor_weeks, or
-// visitor_months.
+// visitorKey names a count of per-period uniques added up: visitorDays, visitorWeeks, or
+// visitorMonths.
 func visitorKey(prefix string, grain analyticsdomain.Grain) string {
-	return prefix + "_" + string(grain) + "s"
+	return CamelKey(prefix + "_" + string(grain) + "s")
 }
 
 // setVisitors adds the summed per-period uniques under their grain key and, when the window is
@@ -45,20 +45,20 @@ func setVisitors(out gin.H, key string, grain analyticsdomain.Grain, periods int
 // denominator is null.
 func AnalyticsTotals(t analyticsdomain.Totals, grain analyticsdomain.Grain) gin.H {
 	out := gin.H{
-		"views":                t.Views,
-		"sessions":             t.Sessions,
-		"bounces":              t.Bounces,
-		"bounce_rate":          ratio(t.Bounces, t.Sessions),
-		"pages_per_session":    ratio(t.Views, t.Sessions),
-		"avg_time_seconds":     ratio(t.FocusSeconds, t.FocusViews),
-		"searches":             t.Searches,
-		"zero_result_searches": t.ZeroResultSearches,
-		"search_clicks":        t.SearchClicks,
-		"search_ctr":           ratio(t.SearchesWithClick, t.Searches),
-		"new_visitors":         t.NewVisitors,
+		"views":              t.Views,
+		"sessions":           t.Sessions,
+		"bounces":            t.Bounces,
+		"bounceRate":         ratio(t.Bounces, t.Sessions),
+		"pagesPerSession":    ratio(t.Views, t.Sessions),
+		"avgTimeSeconds":     ratio(t.FocusSeconds, t.FocusViews),
+		"searches":           t.Searches,
+		"zeroResultSearches": t.ZeroResultSearches,
+		"searchClicks":       t.SearchClicks,
+		"searchCtr":          ratio(t.SearchesWithClick, t.Searches),
+		"newVisitors":        t.NewVisitors,
 	}
 	setVisitors(out, "visitor", grain, t.Periods, t.Visitors)
-	setVisitors(out, "consented_visitor", grain, t.Periods, t.ConsentedVisitors)
+	setVisitors(out, "consentedVisitor", grain, t.Periods, t.ConsentedVisitors)
 
 	return out
 }
@@ -78,9 +78,9 @@ func AnalyticsSeries(rows []analyticsdomain.SiteRow) []gin.H {
 	for _, r := range rows {
 		out = append(out, gin.H{
 			"period": r.Period, "views": r.Views, "visitors": r.Visitors, "sessions": r.Sessions,
-			"bounce_rate": ratio(r.Bounces, r.Sessions), "avg_time_seconds": ratio(r.FocusSeconds, r.FocusViews),
-			"searches": r.Searches, "search_ctr": ratio(r.SearchesWithClick, r.Searches),
-			"new_visitors": r.NewVisitors,
+			"bounceRate": ratio(r.Bounces, r.Sessions), "avgTimeSeconds": ratio(r.FocusSeconds, r.FocusViews),
+			"searches": r.Searches, "searchCtr": ratio(r.SearchesWithClick, r.Searches),
+			"newVisitors": r.NewVisitors,
 		})
 	}
 
@@ -118,7 +118,7 @@ func AnalyticsOverview(o analyticsservice.Overview) gin.H {
 	return out
 }
 
-// AnalyticsPages renders the page list. previous_views and change appear when comparing or
+// AnalyticsPages renders the page list. previousViews and change appear when comparing or
 // sorting by rising.
 func AnalyticsPages(p analyticsservice.PagesReport) gin.H {
 	grain, periods := p.Window.Grain, len(p.Window.Periods)
@@ -128,12 +128,12 @@ func AnalyticsPages(p analyticsservice.PagesReport) gin.H {
 	for _, row := range p.Pages {
 		item := gin.H{
 			"path": row.Path, "views": row.Views, "entries": row.Entries, "exits": row.Exits,
-			"avg_time_seconds": ratio(row.FocusSeconds, row.FocusViews),
+			"avgTimeSeconds": ratio(row.FocusSeconds, row.FocusViews),
 		}
 		setVisitors(item, "visitor", grain, periods, row.Visitors)
 
 		if withPrevious {
-			item["previous_views"], item["change"] = row.PreviousViews, row.Views-row.PreviousViews
+			item["previousViews"], item["change"] = row.PreviousViews, row.Views-row.PreviousViews
 		}
 
 		pages = append(pages, item)
@@ -187,7 +187,7 @@ func AnalyticsRetention(r analyticsservice.RetentionReport) gin.H {
 	}
 
 	grain := r.Window.Grain
-	visitors := gin.H{"new_visitors": r.Totals.NewVisitors}
+	visitors := gin.H{"newVisitors": r.Totals.NewVisitors}
 	setVisitors(visitors, "consented_visitor", grain, r.Totals.Periods, r.Totals.ConsentedVisitors)
 
 	out := AnalyticsHeader(r.Header)
@@ -213,19 +213,19 @@ func AnalyticsSearch(s analyticsservice.SearchReport) gin.H {
 	results := make([]gin.H, 0, len(s.Results))
 	for _, r := range s.Results {
 		results = append(results, gin.H{
-			"query": r.Query, "resource_type": r.ResourceType, "resource_id": r.ResourceUUID, "clicks": r.Clicks,
+			"query": r.Query, "resourceType": r.ResourceType, "resourceId": r.ResourceUUID, "clicks": r.Clicks,
 		})
 	}
 
 	totals := AnalyticsTotals(s.Totals, grain)
-	totals["avg_seconds_to_click"] = ratio(s.ClickTime.ClickSeconds, s.ClickTime.SearchesWithClick)
+	totals["avgSecondsToClick"] = ratio(s.ClickTime.ClickSeconds, s.ClickTime.SearchesWithClick)
 
 	out := AnalyticsHeader(s.Header)
 	out["totals"], out["previous"] = totals, AnalyticsTotalsOrNil(s.Previous, grain)
 	out["series"] = AnalyticsSeries(s.Series)
 	out["queries"] = searchQueries(s.Queries, grain, periods)
-	out["zero_result_queries"] = searchQueries(s.ZeroResults, grain, periods)
-	out["positions"], out["clicked_results"] = positions, results
+	out["zeroResultQueries"] = searchQueries(s.ZeroResults, grain, periods)
+	out["positions"], out["clickedResults"] = positions, results
 
 	return out
 }
@@ -248,15 +248,15 @@ func AnalyticsLiveSummary(s analyticsdomain.LiveSnapshot) gin.H {
 	}
 
 	return gin.H{
-		"ts":                     s.At.UTC().Format(time.RFC3339),
-		"active_sessions":        s.ActiveSessions,
-		"active_sessions_capped": s.SessionsCapped,
-		"active_window_minutes":  int(analyticsdomain.LiveActiveWindow / time.Minute),
-		"window_minutes":         int(analyticsdomain.LiveWindow / time.Minute),
-		"views":                  views,
-		"searches":               searches,
-		"series":                 series,
-		"top_pages":              top,
+		"ts":                   s.At.UTC().Format(time.RFC3339),
+		"activeSessions":       s.ActiveSessions,
+		"activeSessionsCapped": s.SessionsCapped,
+		"activeWindowMinutes":  int(analyticsdomain.LiveActiveWindow / time.Minute),
+		"windowMinutes":        int(analyticsdomain.LiveWindow / time.Minute),
+		"views":                views,
+		"searches":             searches,
+		"series":               series,
+		"topPages":             top,
 	}
 }
 
@@ -267,15 +267,15 @@ func AnalyticsLivePageView(e analyticsdomain.LiveEvent) gin.H {
 
 // AnalyticsLiveSearch renders one live search.
 func AnalyticsLiveSearch(e analyticsdomain.LiveEvent) gin.H {
-	return gin.H{"ts": e.At.UTC().Format(time.RFC3339), "query": e.Query, "result_count": e.Results}
+	return gin.H{"ts": e.At.UTC().Format(time.RFC3339), "query": e.Query, "resultCount": e.Results}
 }
 
 func searchQueries(rows []analyticsdomain.QueryRow, grain analyticsdomain.Grain, periods int) []gin.H {
 	out := make([]gin.H, 0, len(rows))
 	for _, q := range rows {
 		item := gin.H{
-			"query": q.Query, "searches": q.Searches, "zero_results": q.ZeroResults, "clicks": q.Clicks,
-			"ctr": ratio(q.SearchesWithClick, q.Searches), "avg_seconds_to_click": ratio(q.ClickSeconds, q.SearchesWithClick),
+			"query": q.Query, "searches": q.Searches, "zeroResults": q.ZeroResults, "clicks": q.Clicks,
+			"ctr": ratio(q.SearchesWithClick, q.Searches), "avgSecondsToClick": ratio(q.ClickSeconds, q.SearchesWithClick),
 		}
 		setVisitors(item, "visitor", grain, periods, q.Visitors)
 		out = append(out, item)

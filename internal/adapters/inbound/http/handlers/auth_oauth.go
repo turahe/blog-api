@@ -23,22 +23,22 @@ type oauthAPI interface {
 //
 //	@Summary		Start an OAuth sign-in
 //	@Description	Returns the provider authorization URL (with state and a PKCE challenge) for the
-//	@Description	browser to visit. redirect_uri must be listed in OAUTH_REDIRECT_URIS. The state
+//	@Description	browser to visit. redirectUri must be listed in OAUTH_REDIRECT_URIS. The state
 //	@Description	is single use and expires after 10 minutes.
 //	@Tags			auth
 //	@Produce		json
-//	@Param			param1			path		string	true	"google or github"
-//	@Param			redirect_uri	query		string	true	"registered client callback URL"
-//	@Success		200				{object}	responses.Envelope
-//	@Failure		400				{object}	responses.Envelope
-//	@Failure		404				{object}	responses.Envelope
-//	@Failure		429				{object}	responses.Envelope
+//	@Param			param1		path		string	true	"google or github"
+//	@Param			redirectUri	query		string	true	"registered client callback URL"
+//	@Success		200			{object}	responses.Envelope
+//	@Failure		400			{object}	responses.Envelope
+//	@Failure		404			{object}	responses.Envelope
+//	@Failure		429			{object}	responses.Envelope
 //	@Router			/api/v1/auth/oauth/{param1}/start [get]
 func oauthStartHandler(api oauthAPI) gin.HandlerFunc {
 	return func(c *gin.Context) {
-		redirectURI := strings.TrimSpace(c.Query("redirect_uri"))
+		redirectURI := strings.TrimSpace(c.Query("redirectUri"))
 		if redirectURI == "" {
-			responses.Failure(c, nethttp.StatusBadRequest, responses.ErrorCodeValidation, "redirect_uri is required")
+			responses.Failure(c, nethttp.StatusBadRequest, responses.ErrorCodeValidation, "redirectUri is required")
 			return
 		}
 
@@ -50,8 +50,8 @@ func oauthStartHandler(api oauthAPI) gin.HandlerFunc {
 
 		c.Header("Cache-Control", "no-store")
 		responses.SuccessFor(c, nethttp.StatusOK, responses.ServiceAuth, responses.CaseSuccess, gin.H{
-			"authorize_url": start.AuthorizeURL,
-			"expires_at":    start.ExpiresAt.UTC().Format(time.RFC3339),
+			"authorizeUrl": start.AuthorizeURL,
+			"expiresAt":    start.ExpiresAt.UTC().Format(time.RFC3339),
 		})
 	}
 }
@@ -59,7 +59,7 @@ func oauthStartHandler(api oauthAPI) gin.HandlerFunc {
 // oauthCallbackHandler godoc
 //
 //	@Summary		Complete an OAuth sign-in
-//	@Description	Exchanges the code and state the provider sent to the client's redirect_uri. Signs in
+//	@Description	Exchanges the code and state the provider sent to the client's redirectUri. Signs in
 //	@Description	the account linked to the provider identity, or the existing account whose email the
 //	@Description	provider verified (the identity is then linked). No account is ever created.
 //	@Description	Responds like POST /api/v1/auth/login: a token pair or a two-factor challenge.

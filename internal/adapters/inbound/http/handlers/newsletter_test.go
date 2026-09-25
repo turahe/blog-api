@@ -190,7 +190,7 @@ func TestNewsletterSubscribeAlwaysAccepts(t *testing.T) {
 	fake := &fakeNewsletter{}
 	w := runNewsletter(t, newsletterSubscribeHandler(fake), nlRequest{
 		method: nethttp.MethodPost, target: "/api/v1/newsletter/subscribe",
-		body: `{"email":"reader@example.test","lists":["weekly"],"format":"plaintext","turnstile_response":"tok"}`,
+		body: `{"email":"reader@example.test","lists":["weekly"],"format":"plaintext","turnstileResponse":"tok"}`,
 	})
 
 	require.Equal(t, nethttp.StatusAccepted, w.Code)
@@ -248,7 +248,7 @@ func TestNewsletterUnsubscribeOneClick(t *testing.T) {
 
 	w = runNewsletter(t, newsletterUnsubscribeHandler(fake), nlRequest{
 		method: nethttp.MethodPost, target: "/api/v1/newsletter/unsubscribe",
-		body: `{"token":"from-body","reason_code":"not_relevant","feedback":"thanks"}`,
+		body: `{"token":"from-body","reasonCode":"not_relevant","feedback":"thanks"}`,
 	})
 	require.Equal(t, nethttp.StatusOK, w.Code)
 	assert.Equal(t, "from-body", fake.unsubscribe.Token)
@@ -342,7 +342,7 @@ func TestNewsletterSubscribersCSVExport(t *testing.T) {
 func TestNewsletterIssueSendNeedsPermission(t *testing.T) {
 	t.Parallel()
 
-	body := `{"subject":"Hello","body_markdown":"Body","lists":["weekly"],"status":"queued"}`
+	body := `{"subject":"Hello","bodyMarkdown":"Body","lists":["weekly"],"status":"queued"}`
 	deny := func(*gin.Context) bool { return false }
 
 	fake := &fakeNewsletter{}
@@ -354,7 +354,7 @@ func TestNewsletterIssueSendNeedsPermission(t *testing.T) {
 
 	w = runNewsletter(t, adminNewsletterCreateIssueHandler(fake, deny), nlRequest{
 		method: nethttp.MethodPost, target: "/api/v1/admin/newsletter/issues", signedIn: true,
-		body: `{"subject":"Hello","body_markdown":"Body","lists":["weekly"]}`,
+		body: `{"subject":"Hello","bodyMarkdown":"Body","lists":["weekly"]}`,
 	})
 	require.Equal(t, nethttp.StatusCreated, w.Code, "drafts need only issues.edit")
 
@@ -385,24 +385,24 @@ func TestNewsletterProviderConfigHidesSecret(t *testing.T) {
 	require.Equal(t, nethttp.StatusOK, w.Code)
 
 	data := dataOf(envelopeOf(t, w))
-	assert.Equal(t, false, data["ready_to_send"])
-	assert.InDelta(t, 48, data["confirm_ttl_hours"], 0)
-	assert.Equal(t, true, objectOf(t, data["provider"])["secret_configured"])
+	assert.Equal(t, false, data["readyToSend"])
+	assert.InDelta(t, 48, data["confirmTtlHours"], 0)
+	assert.Equal(t, true, objectOf(t, data["provider"])["secretConfigured"])
 
 	w = runNewsletter(t, adminNewsletterSaveConfigHandler(fake, provider), nlRequest{
 		method: nethttp.MethodPut, target: "/api/v1/admin/newsletter/provider-config", signedIn: true,
-		body: `{"postal_address":"1 Example Street","confirm_ttl_hours":24,"double_optin_required":false,` +
-			`"lists":[{"slug":"weekly","name":"Weekly","is_default":true}]}`,
+		body: `{"postalAddress":"1 Example Street","confirmTtlHours":24,"doubleOptinRequired":false,` +
+			`"lists":[{"slug":"weekly","name":"Weekly","isDefault":true}]}`,
 	})
 	require.Equal(t, nethttp.StatusOK, w.Code, w.Body.String())
 	assert.Equal(t, 24*time.Hour, fake.config.Config.ConfirmTTL)
 	assert.False(t, fake.config.Config.DoubleOptInRequired)
-	assert.Equal(t, true, dataOf(envelopeOf(t, w))["ready_to_send"])
+	assert.Equal(t, true, dataOf(envelopeOf(t, w))["readyToSend"])
 
 	w = runNewsletter(t, adminNewsletterSaveConfigHandler(fake, provider), nlRequest{
-		method: nethttp.MethodPut, target: "/", signedIn: true, body: `{"confirm_ttl_hours":24,"lists":[]}`,
+		method: nethttp.MethodPut, target: "/", signedIn: true, body: `{"confirmTtlHours":24,"lists":[]}`,
 	})
-	require.Equal(t, nethttp.StatusBadRequest, w.Code, "double_optin_required and a list are required")
+	require.Equal(t, nethttp.StatusBadRequest, w.Code, "doubleOptinRequired and a list are required")
 }
 
 func TestMyNewsletterWithoutSubscription(t *testing.T) {
@@ -415,5 +415,5 @@ func TestMyNewsletterWithoutSubscription(t *testing.T) {
 
 	data := dataOf(envelopeOf(t, w))
 	assert.Equal(t, false, data["subscribed"])
-	assert.Len(t, data["available_lists"], 1)
+	assert.Len(t, data["availableLists"], 1)
 }

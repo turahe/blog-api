@@ -25,11 +25,11 @@ type settingsAPI interface {
 // adminGetSettingsHandler godoc
 //
 //	@Summary		Get settings
-//	@Description	Returns the settings catalogue with current values. server_only keys are never returned; admin_only keys need include_sensitive_admin=true and settings.update.
+//	@Description	Returns the settings catalogue with current values. server_only keys are never returned; admin_only keys need includeSensitiveAdmin=true and settings.update.
 //	@Tags			admin
 //	@Produce		json
 //	@Param			category				query		string	false	"site, content, media, analytics, notifications, seo, or security"
-//	@Param			include_sensitive_admin	query		bool	false	"include admin_only keys"
+//	@Param			includeSensitiveAdmin	query		bool	false	"include admin_only keys"
 //	@Success		200						{object}	responses.Envelope
 //	@Failure		400						{object}	responses.Envelope
 //	@Failure		403						{object}	responses.Envelope
@@ -39,10 +39,10 @@ func adminGetSettingsHandler(settings settingsAPI, canSeeAdminOnly func(*gin.Con
 	return func(c *gin.Context) {
 		filter := settingsservice.ListFilter{Category: settingsdomain.Category(c.Query("category"))}
 
-		if raw := c.Query("include_sensitive_admin"); raw != "" {
+		if raw := c.Query("includeSensitiveAdmin"); raw != "" {
 			include, err := strconv.ParseBool(raw)
 			if err != nil {
-				failSettings(c, nethttp.StatusBadRequest, responses.ErrorCodeValidation, "include_sensitive_admin must be a boolean", nil)
+				failSettings(c, nethttp.StatusBadRequest, responses.ErrorCodeValidation, "includeSensitiveAdmin must be a boolean", nil)
 				return
 			}
 
@@ -65,7 +65,7 @@ func adminGetSettingsHandler(settings settingsAPI, canSeeAdminOnly func(*gin.Con
 		}
 
 		responses.SuccessFor(c, nethttp.StatusOK, responses.ServiceSettings, responses.CaseSuccess,
-			gin.H{"settings": out, "default_applied": defaulted})
+			gin.H{"settings": out, "defaultApplied": defaulted})
 	}
 }
 
@@ -121,11 +121,11 @@ func adminUpdateSettingsHandler(settings settingsAPI) gin.HandlerFunc {
 //	@Summary	List settings history
 //	@Tags		admin
 //	@Produce	json
-//	@Param		key			query		string	false	"only changes of this key"
-//	@Param		page		query		int		false	"page (default 1)"
-//	@Param		per_page	query		int		false	"page size (default 20, max 100)"
-//	@Success	200			{object}	responses.Envelope
-//	@Failure	403			{object}	responses.Envelope
+//	@Param		key		query		string	false	"only changes of this key"
+//	@Param		page	query		int		false	"page (default 1)"
+//	@Param		perPage	query		int		false	"page size (default 20, max 100)"
+//	@Success	200		{object}	responses.Envelope
+//	@Failure	403		{object}	responses.Envelope
 //	@Security	Bearer
 //	@Router		/api/v1/admin/settings/history [get]
 func adminSettingsHistoryHandler(settings settingsAPI) gin.HandlerFunc {

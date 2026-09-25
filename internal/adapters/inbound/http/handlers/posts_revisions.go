@@ -31,17 +31,17 @@ type allPosts func(c *gin.Context) bool
 //	@Description	Newest first. Authors see only their own posts' history; editors and admins (post.revisions.view_all) see every post's.
 //	@Tags			admin
 //	@Produce		json
-//	@Param			param1			path		string	true	"post UUID"
-//	@Param			page			query		int		false	"page (default 1)"
-//	@Param			per_page		query		int		false	"page size (default 20, max 100)"
-//	@Param			author_id		query		string	false	"only revisions by this user UUID"
-//	@Param			from_date		query		string	false	"RFC 3339 time or YYYY-MM-DD (inclusive)"
-//	@Param			to_date			query		string	false	"RFC 3339 time or YYYY-MM-DD (inclusive, whole day)"
-//	@Param			include_diff	query		bool	false	"include per-field diffs (default true)"
-//	@Success		200				{object}	responses.Envelope
-//	@Failure		400				{object}	responses.Envelope
-//	@Failure		403				{object}	responses.Envelope
-//	@Failure		404				{object}	responses.Envelope
+//	@Param			param1		path		string	true	"post UUID"
+//	@Param			page		query		int		false	"page (default 1)"
+//	@Param			perPage		query		int		false	"page size (default 20, max 100)"
+//	@Param			authorId	query		string	false	"only revisions by this user UUID"
+//	@Param			fromDate	query		string	false	"RFC 3339 time or YYYY-MM-DD (inclusive)"
+//	@Param			toDate		query		string	false	"RFC 3339 time or YYYY-MM-DD (inclusive, whole day)"
+//	@Param			includeDiff	query		bool	false	"include per-field diffs (default true)"
+//	@Success		200			{object}	responses.Envelope
+//	@Failure		400			{object}	responses.Envelope
+//	@Failure		403			{object}	responses.Envelope
+//	@Failure		404			{object}	responses.Envelope
 //	@Security		Bearer
 //	@Router			/api/v1/admin/posts/{param1}/revisions [get]
 func adminListPostRevisionsHandler(posts postRevisionsAPI, all allPosts) gin.HandlerFunc {
@@ -115,7 +115,7 @@ func adminGetPostRevisionHandler(posts postRevisionsAPI, all allPosts) gin.Handl
 // adminRestorePostRevisionHandler godoc
 //
 //	@Summary		Restore post revision
-//	@Description	Copies the revision's title, slug, excerpt, content, comment policy, category, cover, tags, and media back onto the post as a new revision of type restore. The post keeps its status and published_at. Categories, tags, and media that no longer exist (or media that is not ready) are skipped and listed in skipped; if another post took the slug, the current slug stays.
+//	@Description	Copies the revision's title, slug, excerpt, content, comment policy, category, cover, tags, and media back onto the post as a new revision of type restore. The post keeps its status and publishedAt. Categories, tags, and media that no longer exist (or media that is not ready) are skipped and listed in skipped; if another post took the slug, the current slug stays.
 //	@Tags			admin
 //	@Accept			json
 //	@Produce		json
@@ -198,29 +198,29 @@ func revisionFilter(c *gin.Context, postID uuid.UUID) (postdomain.RevisionFilter
 		return postdomain.RevisionFilter{}, false, false
 	}
 
-	if raw := strings.TrimSpace(c.Query("author_id")); raw != "" {
+	if raw := strings.TrimSpace(c.Query("authorId")); raw != "" {
 		id, err := uuid.Parse(raw)
 		if err != nil {
-			return fail("author_id must be a UUID")
+			return fail("authorId must be a UUID")
 		}
 
 		filter.AuthorUUID = &id
 	}
 
 	var err error
-	if filter.From, err = revisionDate(c.Query("from_date"), false); err != nil {
-		return fail("from_date must be an RFC 3339 time or YYYY-MM-DD")
+	if filter.From, err = revisionDate(c.Query("fromDate"), false); err != nil {
+		return fail("fromDate must be an RFC 3339 time or YYYY-MM-DD")
 	}
 
-	if filter.To, err = revisionDate(c.Query("to_date"), true); err != nil {
-		return fail("to_date must be an RFC 3339 time or YYYY-MM-DD")
+	if filter.To, err = revisionDate(c.Query("toDate"), true); err != nil {
+		return fail("toDate must be an RFC 3339 time or YYYY-MM-DD")
 	}
 
 	includeDiff := true
 
-	if raw := strings.TrimSpace(c.Query("include_diff")); raw != "" {
+	if raw := strings.TrimSpace(c.Query("includeDiff")); raw != "" {
 		if includeDiff, err = strconv.ParseBool(raw); err != nil {
-			return fail("include_diff must be true or false")
+			return fail("includeDiff must be true or false")
 		}
 	}
 

@@ -21,7 +21,7 @@ code := BuildResponseCode(201, ServiceComments, CaseSuccess) // 2010301
   "ok": true,
   "code": 2010301,
   "data": {},
-  "meta": { "request_id": "…" },
+  "meta": { "requestId": "…" },
   "error": null
 }
 ```

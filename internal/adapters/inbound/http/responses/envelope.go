@@ -24,7 +24,7 @@ type Envelope struct {
 
 // Meta is the non-paginated success/error meta (request correlation only).
 type Meta struct {
-	RequestID string `json:"request_id,omitempty"`
+	RequestID string `json:"requestId,omitempty"`
 }
 
 // PageLinks is Laravel-style pagination link URLs (null when unavailable).
@@ -37,12 +37,12 @@ type PageLinks struct {
 
 // PaginationMeta is Laravel-style length-aware pagination meta.
 type PaginationMeta struct {
-	RequestID   string `json:"request_id,omitempty"`
-	CurrentPage int    `json:"current_page"`
+	RequestID   string `json:"requestId,omitempty"`
+	CurrentPage int    `json:"currentPage"`
 	From        *int   `json:"from"`
-	LastPage    int    `json:"last_page"`
+	LastPage    int    `json:"lastPage"`
 	Path        string `json:"path"`
-	PerPage     int    `json:"per_page"`
+	PerPage     int    `json:"perPage"`
 	To          *int   `json:"to"`
 	Total       int64  `json:"total"`
 }

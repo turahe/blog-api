@@ -84,11 +84,11 @@ func TestGetPostSEOListsEveryField(t *testing.T) {
 	require.Equal(t, nethttp.StatusOK, w.Code, w.Body.String())
 
 	data := dataOf(body)
-	assert.Equal(t, postID.String(), data["post_id"])
-	assert.Equal(t, "T", data["seo_title"])
-	assert.Empty(t, data["seo_description"])
-	assert.Nil(t, data["og_image_id"])
-	assert.Equal(t, []any{}, data["seo_keywords"])
+	assert.Equal(t, postID.String(), data["postId"])
+	assert.Equal(t, "T", data["seoTitle"])
+	assert.Empty(t, data["seoDescription"])
+	assert.Nil(t, data["ogImageId"])
+	assert.Equal(t, []any{}, data["seoKeywords"])
 	assert.Equal(t, []any{}, data["warnings"])
 	assert.True(t, svc.unrestricted)
 }
@@ -102,7 +102,7 @@ func TestUpdatePostSEOBindsTriStateImages(t *testing.T) {
 	w, _ := runProfile(t, adminUpdatePostSEOHandler(svc, seoTestAccess(false, true)), profileRequest{
 		method: nethttp.MethodPut, target: "/", param: uuid.NewString(), user: &testUserID,
 		contentType: "application/json",
-		body:        `{"seo_title":"New","og_image_id":"` + image.String() + `","twitter_image_id":null,"twitter_card":"summary"}`,
+		body:        `{"seoTitle":"New","ogImageId":"` + image.String() + `","twitterImageId":null,"twitterCard":"summary"}`,
 	})
 	require.Equal(t, nethttp.StatusOK, w.Code, w.Body.String())
 
@@ -150,14 +150,14 @@ func TestUpdatePostSEOErrors(t *testing.T) {
 			details, _ := errBody["details"].([]any)
 			require.Len(t, details, 1)
 			first, _ := details[0].(map[string]any)
-			assert.Equal(t, "seo_title", first["field"])
+			assert.Equal(t, "seoTitle", first["field"])
 			assert.Equal(t, postdomain.SEOCodeMarkup, first["code"])
 		}
 	}
 
 	w, body := runProfile(t, adminUpdatePostSEOHandler(&fakeSEO{}, seoTestAccess(false, false)), profileRequest{
 		method: nethttp.MethodPut, target: "/", param: uuid.NewString(), user: &testUserID,
-		contentType: "application/json", body: `{"og_image_id":"not-a-uuid"}`,
+		contentType: "application/json", body: `{"ogImageId":"not-a-uuid"}`,
 	})
 	require.Equal(t, nethttp.StatusBadRequest, w.Code)
 	assert.Equal(t, responses.ErrorCodeValidation, errorCode(body))
@@ -170,7 +170,7 @@ func TestPreviewPostSEOAcceptsDraftFields(t *testing.T) {
 
 	w, body := runProfile(t, adminPreviewPostSEOHandler(svc, seoTestAccess(false, false)), profileRequest{
 		method: nethttp.MethodPost, target: "/", param: uuid.NewString(), user: &testUserID,
-		contentType: "application/json", body: `{"title":"Draft","seo_description":"D"}`,
+		contentType: "application/json", body: `{"title":"Draft","seoDescription":"D"}`,
 	})
 	require.Equal(t, nethttp.StatusOK, w.Code, w.Body.String())
 
@@ -179,7 +179,7 @@ func TestPreviewPostSEOAcceptsDraftFields(t *testing.T) {
 	require.NotNil(t, svc.draft.Patch.Description)
 	assert.Equal(t, "D", *svc.draft.Patch.Description)
 
-	search, _ := dataOf(body)["search_preview"].(map[string]any)
+	search, _ := dataOf(body)["searchPreview"].(map[string]any)
 	assert.Equal(t, "Preview", search["title"])
 
 	w, _ = runProfile(t, adminPreviewPostSEOHandler(svc, seoTestAccess(false, false)), profileRequest{

@@ -102,9 +102,9 @@ func TestContractOperationIsRegistered(t *testing.T) {
 	require.NoError(t, json.Unmarshal(recorder.Body.Bytes(), &envelope))
 	require.Equal(t, "operation.not_implemented", envelope.Error.Code)
 	require.Equal(t, map[string]any{
-		"operation_id": "auth.oauth.callback",
-		"route_group":  "auth",
-		"auth_mode":    "none",
+		"operationId": "auth.oauth.callback",
+		"routeGroup":  "auth",
+		"authMode":    "none",
 	}, envelope.Error.Details)
 }
 

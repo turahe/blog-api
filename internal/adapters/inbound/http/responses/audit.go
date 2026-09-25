@@ -21,31 +21,31 @@ func OwnerActivity(entry auditdomain.Entry) gin.H {
 		"category":     entry.Category,
 		"action":       entry.Action,
 		"result":       entry.Result,
-		"ip_prefix":    ipPrefix(entry.IP),
+		"ipPrefix":     ipPrefix(entry.IP),
 		"device":       device(entry.UserAgent),
 		"impersonated": entry.ImpersonatorID != nil,
-		"occurred_at":  entry.OccurredAt,
+		"occurredAt":   entry.OccurredAt,
 	}
 }
 
 // AdminActivity is the full audit entry.
 func AdminActivity(entry auditdomain.Entry) gin.H {
 	return gin.H{
-		"id":              entry.UUID,
-		"action":          entry.Action,
-		"category":        nullable(entry.Category),
-		"result":          entry.Result,
-		"status":          entry.Status,
-		"actor_id":        entry.ActorID,
-		"impersonator_id": entry.ImpersonatorID,
-		"resource_type":   nullable(entry.ResourceType),
-		"resource_id":     entry.ResourceID,
-		"changes":         entry.Changes,
-		"metadata":        entry.Metadata,
-		"ip":              nullable(entry.IP),
-		"user_agent":      nullable(entry.UserAgent),
-		"request_id":      nullable(entry.RequestID),
-		"occurred_at":     entry.OccurredAt,
+		"id":             entry.UUID,
+		"action":         entry.Action,
+		"category":       nullable(entry.Category),
+		"result":         entry.Result,
+		"status":         entry.Status,
+		"actorId":        entry.ActorID,
+		"impersonatorId": entry.ImpersonatorID,
+		"resourceType":   nullable(entry.ResourceType),
+		"resourceId":     entry.ResourceID,
+		"changes":        entry.Changes,
+		"metadata":       entry.Metadata,
+		"ip":             nullable(entry.IP),
+		"userAgent":      nullable(entry.UserAgent),
+		"requestId":      nullable(entry.RequestID),
+		"occurredAt":     entry.OccurredAt,
 	}
 }
 
