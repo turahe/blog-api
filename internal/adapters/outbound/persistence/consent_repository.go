@@ -132,22 +132,39 @@ func (r *ConsentRepository) Save(ctx context.Context, c consentdomain.Consent) e
 		c.UUID, c.SubjectUUID, string(c.Purpose), string(c.Status), c.PolicyVersion, c.DecidedAt, c.WithdrawnAt).Error
 }
 
-// DeleteForUser deletes the subjects linked to the user with their raw analytics events and
-// first-seen records; their consents cascade.
-func (r *ConsentRepository) DeleteForUser(ctx context.Context, userID uuid.UUID) (int64, error) {
-	var deleted int64
-
-	err := conn(ctx, r.db).Raw(`
+// deleteUserSubjects deletes the consent subjects of the user whose id is userID (an SQL
+// expression) with their raw analytics events and first-seen records, and counts the subjects;
+// their consents cascade.
+func deleteUserSubjects(userID string) string {
+	return `
 WITH gone AS (
-	DELETE FROM consent_subjects WHERE user_id = `+idOf("users")+` RETURNING uuid
-),
+	DELETE FROM consent_subjects WHERE user_id = ` + userID + ` RETURNING uuid
+),` + subjectEventDeletes + `
+SELECT count(*) FROM gone`
+}
+
+// subjectEventDeletes are CTEs deleting the raw analytics events and first-seen records of the
+// subjects in the CTE gone.
+const subjectEventDeletes = `
 page_views AS (DELETE FROM analytics_page_views WHERE subject_uuid IN (SELECT uuid FROM gone)),
 time_spent AS (DELETE FROM analytics_time_spent WHERE subject_uuid IN (SELECT uuid FROM gone)),
 navigation AS (DELETE FROM analytics_navigation WHERE subject_uuid IN (SELECT uuid FROM gone)),
 searches AS (DELETE FROM analytics_searches WHERE subject_uuid IN (SELECT uuid FROM gone)),
 clicks AS (DELETE FROM analytics_search_clicks WHERE subject_uuid IN (SELECT uuid FROM gone)),
-first_seen AS (DELETE FROM analytics_subject_first_seen WHERE subject_uuid IN (SELECT uuid FROM gone))
-SELECT count(*) FROM gone`, userID).Scan(&deleted).Error
+first_seen AS (DELETE FROM analytics_subject_first_seen WHERE subject_uuid IN (SELECT uuid FROM gone))`
+
+// DeleteSubjectEvents deletes the raw analytics events and first-seen record of the subject.
+func (r *ConsentRepository) DeleteSubjectEvents(ctx context.Context, subjectID uuid.UUID) error {
+	return conn(ctx, r.db).Exec(`WITH gone AS (SELECT CAST(? AS uuid) AS uuid),`+subjectEventDeletes+`
+SELECT count(*) FROM gone`, subjectID).Error
+}
+
+// DeleteForUser deletes the subjects linked to the user with their raw analytics events and
+// first-seen records; their consents cascade.
+func (r *ConsentRepository) DeleteForUser(ctx context.Context, userID uuid.UUID) (int64, error) {
+	var deleted int64
+
+	err := conn(ctx, r.db).Raw(deleteUserSubjects(idOf("users")), userID).Scan(&deleted).Error
 
 	return deleted, err
 }

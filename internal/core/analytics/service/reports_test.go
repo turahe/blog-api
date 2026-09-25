@@ -46,20 +46,12 @@ func (f *fakeReportRepo) Transitions(context.Context, domain.Selection, int) ([]
 	return nil, nil
 }
 
-func (f *fakeReportRepo) EntryPages(context.Context, domain.Selection, int) ([]domain.PathCount, error) {
-	return nil, nil
+func (f *fakeReportRepo) EntryExitPages(context.Context, domain.Selection, int) ([]domain.PathCount, []domain.PathCount, error) {
+	return nil, nil, nil
 }
 
-func (f *fakeReportRepo) ExitPages(context.Context, domain.Selection, int) ([]domain.PathCount, error) {
-	return nil, nil
-}
-
-func (f *fakeReportRepo) Queries(context.Context, domain.Selection, bool, int) ([]domain.QueryRow, error) {
-	return nil, nil
-}
-
-func (f *fakeReportRepo) QueryTotals(context.Context, domain.Selection) (domain.QueryRow, error) {
-	return domain.QueryRow{ClickSeconds: 30, SearchesWithClick: 3}, nil
+func (f *fakeReportRepo) SearchQueries(context.Context, domain.Selection, int) (domain.SearchQueries, error) {
+	return domain.SearchQueries{Totals: domain.QueryRow{ClickSeconds: 30, SearchesWithClick: 3}}, nil
 }
 
 func (f *fakeReportRepo) Positions(context.Context, domain.Selection, int) ([]domain.PositionRow, error) {
@@ -192,11 +184,12 @@ func TestReportsRejectInvalidQueries(t *testing.T) {
 	t.Parallel()
 
 	cases := map[string]domain.ReportQuery{
-		"from after to": {From: date("2026-09-10"), To: date("2026-09-01")},
-		"too long":      {From: date("2024-01-01"), To: date("2026-01-02")},
-		"bad grain":     {Grain: "hour"},
-		"limit":         {Limit: domain.MaxReportLimit + 1},
-		"sort":          {Sort: "random"},
+		"from after to":  {From: date("2026-09-10"), To: date("2026-09-01")},
+		"too long":       {From: date("2024-01-01"), To: date("2026-01-02")},
+		"daily too long": {From: date("2026-01-01"), To: date("2026-04-03"), Grain: domain.GrainDay},
+		"bad grain":      {Grain: "hour"},
+		"limit":          {Limit: domain.MaxReportLimit + 1},
+		"sort":           {Sort: "random"},
 	}
 
 	for name, q := range cases {
@@ -208,4 +201,14 @@ func TestReportsRejectInvalidQueries(t *testing.T) {
 		From: date("2024-01-01"), To: date("2025-12-31"),
 	})
 	require.NoError(t, err, "731 days is the longest range")
+
+	_, err = newTestReports(&fakeReportRepo{}).Overview(context.Background(), domain.ReportQuery{
+		From: date("2026-01-01"), To: date("2026-04-03"), Grain: domain.GrainWeek,
+	})
+	require.NoError(t, err, "longer ranges read weekly or monthly rollups")
+
+	_, err = newTestReports(&fakeReportRepo{}).Overview(context.Background(), domain.ReportQuery{
+		From: date("2026-01-01"), To: date("2026-04-02"), Grain: domain.GrainDay,
+	})
+	require.NoError(t, err, "92 days is the longest daily range")
 }

@@ -168,9 +168,17 @@ func (s *Service) apply(
 	return out, nil
 }
 
+// save stores c and records its event. Withdrawing analytics also deletes the analytics events
+// already stored under the subject.
 func (s *Service) save(ctx context.Context, c domain.Consent) error {
 	if err := s.repo.Save(ctx, c); err != nil {
 		return err
+	}
+
+	if c.Purpose == domain.PurposeAnalytics && c.Status == domain.StatusWithdrawn {
+		if err := s.repo.DeleteSubjectEvents(ctx, c.SubjectUUID); err != nil {
+			return err
+		}
 	}
 
 	return s.events.Record(ctx, consentEvent(c))

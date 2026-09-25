@@ -99,13 +99,13 @@ Spec: [analytics-dashboard.md](../features/analytics-dashboard.md)
 
 ## Cross-cutting
 
-- [ ] Bind analytics ingest and admin analytics handlers in `routes.Register*`, annotate them,
+- [x] Bind analytics ingest and admin analytics handlers in `routes.Register*`, annotate them,
       then `make swagger` + `make routes-check`
-- [ ] Load test ingest at expected peak write volume
-- [ ] Query-performance tests on rollup reads with realistic row counts
-- [ ] Privacy review: retention, anonymisation, and export scope
-- [ ] Verify ingest endpoints cannot be used to enumerate content or users
-- [ ] Add analytics dashboards or alerts to the operational runbook
+- [x] Load test ingest at expected peak write volume
+- [x] Query-performance tests on rollup reads with realistic row counts
+- [x] Privacy review: retention, anonymisation, and export scope
+- [x] Verify ingest endpoints cannot be used to enumerate content or users
+- [x] Add analytics dashboards or alerts to the operational runbook
 
 ## References
 

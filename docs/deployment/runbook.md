@@ -79,3 +79,78 @@ replaying an already handled message is safe.
 requests open. Raise `HTTP_MAX_INFLIGHT` only when the database pool (`DB_POOL_MAX_OPEN`) and
 memory have headroom; shedding exists so a replica fails fast instead of timing out every
 request.
+
+## Analytics
+
+Analytics never blocks a page: ingest answers `202` and a background writer inserts events in
+batches, so trouble shows up as lost or stale numbers rather than failed requests. Details:
+[analytics.md](../backend/analytics.md).
+
+**Alerts worth wiring:**
+
+| Signal | Suggested alert |
+| --- | --- |
+| `rate(blog_analytics_events_dropped_total[5m]) > 0` for 10 minutes | Events are being lost |
+| `app scheduler status` shows a `LAST ERROR` for `analytics-rollup`, or its `LAST STARTED` is older than 1 hour | Dashboards are going stale |
+| Log `scheduled job failed` with `job=analytics-exports` or `job=analytics-retention` | Exports or pruning stopped |
+| Log `analytics visitor salt unavailable` for more than a few minutes | Unique-visitor counts drift |
+| `429` rate on `/api/v1/analytics/ingest/*` well above its usual level | Limit too tight, or abuse |
+
+### Dropped analytics events
+
+**Signals:** `blog_analytics_events_dropped_total` rises; API logs `analytics queue full`,
+`analytics insert failed`, or `analytics writer closed` (at most one line every few seconds,
+counts only).
+
+**Do:**
+
+1. `analytics insert failed` means the database refused the batch: check its health and the
+   error attached to the log line (a failed migration shows up here as a missing table).
+2. `analytics queue full` means the writer cannot keep up with the replica's traffic. Check
+   database latency first, then scale API replicas out (each has its own writer) or raise
+   `ANALYTICS_QUEUE_SIZE` when memory allows.
+3. `analytics writer closed` during a deploy is expected: events arriving while a replica
+   shuts down are dropped.
+4. Lost events are not replayed. Rollups count what was stored, so note the gap for readers
+   of the dashboards.
+
+### Stale dashboards or failed analytics jobs
+
+**Signals:** the dashboard stops moving; `app scheduler status` shows a `LAST ERROR` for an
+`analytics-*` job; logs show `scheduled job failed`.
+
+**Do:**
+
+1. Check that one `app scheduler` is running. Jobs take a PostgreSQL advisory lock, so extra
+   schedulers are safe but idle.
+2. Fix the reported error and run the job once with `app scheduler run analytics-rollup`
+   (or `analytics-exports`, `analytics-retention`).
+3. The rollup job only keeps today and yesterday current. After an outage longer than a day, or
+   after restoring raw events, recompute the gap with
+   `app analytics rollup --from YYYY-MM-DD --to YYYY-MM-DD`; it is idempotent.
+4. A failed export is retried 3 times and then shows `failed` with its `last_error`; the
+   requester can queue a new one.
+5. If `analytics-retention` stays broken, raw events and old daily rollups stop being pruned,
+   which breaks the published retention promise: treat it as a privacy issue, not only a disk
+   one.
+
+### Visitor salt unavailable
+
+**Signals:** API logs `analytics visitor salt unavailable; using a replica-local salt`.
+
+**Impact:** each replica keys anonymous visitor hashes with its own salt for the day, so one
+visitor behind a load balancer may be counted once per replica until the shared salt loads.
+Ingest keeps working, and each replica retries every 10 seconds.
+
+**Do:** fix database connectivity from the API. Nothing needs cleaning up afterwards; the
+affected day's unique-visitor counts are slightly high.
+
+### Load test before a traffic change
+
+Before a launch or a capacity change, run
+`app analytics loadtest --url https://staging.example --rate 500 --duration 5m --metrics-url
+https://staging.example:9090/metrics` against a staging stack (it stores real events under
+`/loadtest/...`; set `ANALYTICS_INGEST_PER_MINUTE=0` there or pass `--spread` from a trusted
+proxy). It fails on any non-`202` answer, an accepted rate below 95% of the target, p99 above
+250 ms, or dropped events. See
+[analytics.md](../backend/analytics.md#testing-strategy).

@@ -33,6 +33,14 @@ type IdentityHasher interface {
 	MAC(value string) string
 }
 
+// SaltStore keeps one random salt per UTC day for anonymous visitor hashes, shared by every
+// API replica.
+type SaltStore interface {
+	// DailySalt returns the salt of day, storing fresh when day has none yet, and deletes the
+	// salts of days before keepFrom.
+	DailySalt(ctx context.Context, day string, fresh []byte, keepFrom string) ([]byte, error)
+}
+
 // RollupRepository builds rollups from raw events. Every method is idempotent.
 type RollupRepository interface {
 	// EarliestEvent returns the oldest stored raw page view or search time.
@@ -60,13 +68,9 @@ type ReportRepository interface {
 	// over prev); the latter two leave out the folded remainder.
 	Pages(ctx context.Context, cur, prev domain.Selection, sort string, limit int) ([]domain.PageRow, error)
 	Transitions(ctx context.Context, sel domain.Selection, limit int) ([]domain.TransitionRow, error)
-	EntryPages(ctx context.Context, sel domain.Selection, limit int) ([]domain.PathCount, error)
-	ExitPages(ctx context.Context, sel domain.Selection, limit int) ([]domain.PathCount, error)
-	// Queries orders by searches, or by zero-result searches (leaving out the remainder)
-	// when zeroResults is set.
-	Queries(ctx context.Context, sel domain.Selection, zeroResults bool, limit int) ([]domain.QueryRow, error)
-	// QueryTotals sums every query row, including the folded remainder.
-	QueryTotals(ctx context.Context, sel domain.Selection) (domain.QueryRow, error)
+	// EntryExitPages returns the pages most sessions started on and ended on.
+	EntryExitPages(ctx context.Context, sel domain.Selection, limit int) (entries, exits []domain.PathCount, err error)
+	SearchQueries(ctx context.Context, sel domain.Selection, limit int) (domain.SearchQueries, error)
 	Positions(ctx context.Context, sel domain.Selection, limit int) ([]domain.PositionRow, error)
 	ClickedResults(ctx context.Context, sel domain.Selection, limit int) ([]domain.ResultRow, error)
 	// Cohorts returns the cohorts of the local days first through last, oldest first.
@@ -134,6 +138,8 @@ type RetentionRepository interface {
 	PruneRaw(ctx context.Context, before time.Time, limit int) (int64, error)
 	// PruneDayRollups deletes daily rollups of periods starting before the local date day.
 	PruneDayRollups(ctx context.Context, day string) (int64, error)
+	// PruneSalts deletes the visitor salts of UTC days before keepFrom.
+	PruneSalts(ctx context.Context, keepFrom string) (int64, error)
 }
 
 // RetentionSettings returns how long analytics data is kept.

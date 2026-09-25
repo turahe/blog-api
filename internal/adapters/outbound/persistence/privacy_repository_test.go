@@ -106,6 +106,8 @@ func TestPrivacyDataExportAndErase(t *testing.T) {
 	require.Len(t, doc.Comments, 1)
 	require.Len(t, doc.Consents, 1)
 
+	subject, session := seedSubjectEvents(t, tx, userID)
+
 	require.NoError(t, data.EraseUser(ctx, userID, now))
 	require.NoError(t, data.EraseUser(ctx, userID, now), "erasing again is harmless")
 
@@ -134,6 +136,15 @@ func TestPrivacyDataExportAndErase(t *testing.T) {
 		require.Equal(t, want, got, query)
 	}
 
+	var subjectRows, anonymousRows, firstSeen int64
+	require.NoError(t, tx.Raw(`SELECT count(*) FROM analytics_page_views WHERE subject_uuid = ?`, subject).Row().Scan(&subjectRows))
+	require.NoError(t, tx.Raw(`SELECT count(*) FROM analytics_page_views WHERE session_id = ? AND subject_uuid IS NULL`, session).
+		Row().Scan(&anonymousRows))
+	require.NoError(t, tx.Raw(`SELECT count(*) FROM analytics_subject_first_seen WHERE subject_uuid = ?`, subject).Row().Scan(&firstSeen))
+	require.Zero(t, subjectRows, "the erased user's analytics events go with their consent subject")
+	require.Zero(t, firstSeen)
+	require.Equal(t, int64(1), anonymousRows, "unlinked events are not the user's")
+
 	comments, err := NewCommentRepository(tx).List(ctx, commentdomain.ListFilter{AuthorUUID: &userID, Page: 1, PerPage: 10})
 	require.NoError(t, err)
 	require.Len(t, comments.Items, 1)
@@ -142,6 +153,27 @@ func TestPrivacyDataExportAndErase(t *testing.T) {
 	_, err = data.ExportUser(ctx, uuid.New(), now)
 	require.ErrorIs(t, err, errUserGone)
 	require.ErrorIs(t, data.EraseUser(ctx, uuid.New(), now), errUserGone)
+}
+
+// seedSubjectEvents gives the user's consent subject a page view and a first-seen record, and
+// adds an unlinked page view in the same session.
+func seedSubjectEvents(t *testing.T, tx *gorm.DB, userID uuid.UUID) (subject, session uuid.UUID) {
+	t.Helper()
+
+	session = uuid.New()
+
+	require.NoError(t, tx.Raw(`SELECT uuid FROM consent_subjects WHERE user_id = `+idOf("users"), userID).Row().Scan(&subject))
+
+	for _, owner := range []*uuid.UUID{&subject, nil} {
+		require.NoError(t, tx.Exec(`INSERT INTO analytics_page_views
+			(uuid, subject_uuid, visitor_hash, session_id, path, device_type, browser, occurred_at)
+			VALUES (gen_random_uuid(), ?, repeat('a', 64), ?, '/', 'desktop', 'Firefox', now())`, owner, session).Error)
+	}
+
+	require.NoError(t, tx.Exec(`INSERT INTO analytics_subject_first_seen (subject_uuid, first_seen_at) VALUES (?, now())`,
+		subject).Error)
+
+	return subject, session
 }
 
 // seedPersonalData gives the user a profile, activity, an admin audit row, a session, a

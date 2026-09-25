@@ -109,54 +109,82 @@ GROUP BY 1, 2, 3 ORDER BY 4 DESC, 1, 2, 3 LIMIT ?`, selArgs(sel, limit)...).Scan
 	return rows, err
 }
 
-// EntryPages returns the pages most sessions started on.
-func (r *AnalyticsReportRepository) EntryPages(ctx context.Context, sel domain.Selection, limit int) ([]domain.PathCount, error) {
-	return r.pathCounts(ctx, "entries", sel, limit)
-}
-
-// ExitPages returns the pages most sessions ended on.
-func (r *AnalyticsReportRepository) ExitPages(ctx context.Context, sel domain.Selection, limit int) ([]domain.PathCount, error) {
-	return r.pathCounts(ctx, "exits", sel, limit)
-}
-
-func (r *AnalyticsReportRepository) pathCounts(ctx context.Context, column string, sel domain.Selection, limit int) ([]domain.PathCount, error) {
-	var rows []domain.PathCount
-
-	err := conn(ctx, r.db).Raw(`SELECT path, sum(`+column+`) AS count
-FROM analytics_rollup_pages WHERE `+inWindow+`
-GROUP BY path HAVING sum(`+column+`) > 0 ORDER BY 2 DESC, path LIMIT ?`, selArgs(sel, limit)...).Scan(&rows).Error
-
-	return rows, err
-}
-
-// Queries returns the top queries by searches, or by zero-result searches.
-func (r *AnalyticsReportRepository) Queries(ctx context.Context, sel domain.Selection, zeroResults bool, limit int) ([]domain.QueryRow, error) {
-	having, order := "true", "sum(searches) DESC, query"
-	if zeroResults {
-		having, order = "sum(zero_results) > 0 AND query <> '"+domain.Other+"'", "sum(zero_results) DESC, query"
+// EntryExitPages returns the pages most sessions started on and ended on, from one scan.
+func (r *AnalyticsReportRepository) EntryExitPages(
+	ctx context.Context, sel domain.Selection, limit int,
+) ([]domain.PathCount, []domain.PathCount, error) {
+	var rows []struct {
+		List string
+		domain.PathCount
 	}
 
-	var rows []domain.QueryRow
+	err := conn(ctx, r.db).Raw(`
+WITH t AS (
+	SELECT path, sum(entries) AS entries, sum(exits) AS exits
+	FROM analytics_rollup_pages WHERE `+inWindow+` GROUP BY path
+)
+SELECT list, path, count FROM (
+	(SELECT 'entry' AS list, row_number() OVER (ORDER BY entries DESC, path) AS rank, path, entries AS count
+		FROM t WHERE entries > 0 ORDER BY rank LIMIT ?)
+	UNION ALL
+	(SELECT 'exit', row_number() OVER (ORDER BY exits DESC, path), path, exits
+		FROM t WHERE exits > 0 ORDER BY 2 LIMIT ?)
+) lists ORDER BY list, rank`, selArgs(sel, limit, limit)...).Scan(&rows).Error
 
-	err := conn(ctx, r.db).Raw(`SELECT query, sum(searches) AS searches, sum(visitors) AS visitors,
-	sum(zero_results) AS zero_results, sum(searches_with_click) AS searches_with_click, sum(clicks) AS clicks,
-	sum(click_seconds) AS click_seconds
-FROM analytics_rollup_searches WHERE `+inWindow+`
-GROUP BY query HAVING `+having+` ORDER BY `+order+` LIMIT ?`, selArgs(sel, limit)...).Scan(&rows).Error
+	var entries, exits []domain.PathCount
 
-	return rows, err
+	for _, row := range rows {
+		if row.List == "entry" {
+			entries = append(entries, row.PathCount)
+		} else {
+			exits = append(exits, row.PathCount)
+		}
+	}
+
+	return entries, exits, err
 }
 
-// QueryTotals sums every query row of the selection.
-func (r *AnalyticsReportRepository) QueryTotals(ctx context.Context, sel domain.Selection) (domain.QueryRow, error) {
-	var row domain.QueryRow
+// SearchQueries returns the query totals, the top queries by searches, and the top queries by
+// zero-result searches, from one scan.
+func (r *AnalyticsReportRepository) SearchQueries(ctx context.Context, sel domain.Selection, limit int) (domain.SearchQueries, error) {
+	var rows []struct {
+		List string
+		domain.QueryRow
+	}
 
-	err := conn(ctx, r.db).Raw(`SELECT coalesce(sum(searches), 0) AS searches, coalesce(sum(visitors), 0) AS visitors,
-	coalesce(sum(zero_results), 0) AS zero_results, coalesce(sum(searches_with_click), 0) AS searches_with_click,
-	coalesce(sum(clicks), 0) AS clicks, coalesce(sum(click_seconds), 0) AS click_seconds
-FROM analytics_rollup_searches WHERE `+inWindow, selArgs(sel)...).Scan(&row).Error
+	err := conn(ctx, r.db).Raw(`
+WITH q AS (
+	SELECT query, sum(searches) AS searches, sum(visitors) AS visitors, sum(zero_results) AS zero_results,
+		sum(searches_with_click) AS searches_with_click, sum(clicks) AS clicks, sum(click_seconds) AS click_seconds
+	FROM analytics_rollup_searches WHERE `+inWindow+` GROUP BY query
+)
+SELECT list, query, searches, visitors, zero_results, searches_with_click, clicks, click_seconds FROM (
+	SELECT 'total' AS list, 0::bigint AS rank, '' AS query, coalesce(sum(searches), 0) AS searches,
+		coalesce(sum(visitors), 0) AS visitors, coalesce(sum(zero_results), 0) AS zero_results,
+		coalesce(sum(searches_with_click), 0) AS searches_with_click, coalesce(sum(clicks), 0) AS clicks,
+		coalesce(sum(click_seconds), 0) AS click_seconds
+	FROM q
+	UNION ALL
+	(SELECT 'top', row_number() OVER (ORDER BY searches DESC, query), q.* FROM q ORDER BY 2 LIMIT ?)
+	UNION ALL
+	(SELECT 'zero', row_number() OVER (ORDER BY zero_results DESC, query), q.* FROM q
+		WHERE zero_results > 0 AND query <> ? ORDER BY 2 LIMIT ?)
+) lists ORDER BY list, rank`, selArgs(sel, limit, domain.Other, limit)...).Scan(&rows).Error
 
-	return row, err
+	var out domain.SearchQueries
+
+	for _, row := range rows {
+		switch row.List {
+		case "total":
+			out.Totals = row.QueryRow
+		case "top":
+			out.Top = append(out.Top, row.QueryRow)
+		default:
+			out.ZeroResults = append(out.ZeroResults, row.QueryRow)
+		}
+	}
+
+	return out, err
 }
 
 // Positions returns clicks per result position, top position first.

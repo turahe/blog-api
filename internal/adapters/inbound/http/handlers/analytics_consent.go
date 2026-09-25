@@ -37,7 +37,7 @@ type settingsValues interface {
 // storeConsentHandler godoc
 //
 //	@Summary		Store analytics consent
-//	@Description	Records a decision per purpose (analytics, authenticated_analytics) with the policy version the visitor saw. Send the X-Consent-Token from an earlier response to update that subject; without it (or with an unknown token) a new subject is created and its token is returned once, with 201. Refusing a granted purpose withdraws it. authenticated_analytics needs a signed-in user and granted analytics, and links the subject to that user.
+//	@Description	Records a decision per purpose (analytics, authenticated_analytics) with the policy version the visitor saw. Send the X-Consent-Token from an earlier response to update that subject; without it (or with an unknown token) a new subject is created and its token is returned once, with 201. Refusing a granted purpose withdraws it; withdrawing analytics deletes the analytics events already stored for the subject. authenticated_analytics needs a signed-in user and granted analytics, and links the subject to that user.
 //	@Tags			analytics
 //	@Accept			json
 //	@Produce		json
@@ -101,7 +101,7 @@ func getConsentHandler(consent consentAPI) gin.HandlerFunc {
 // withdrawConsentHandler godoc
 //
 //	@Summary		Withdraw analytics consent
-//	@Description	Withdraws one consent. Prove ownership with the subject's X-Consent-Token, or as the signed-in user the subject is linked to; otherwise 404. Withdrawing analytics also withdraws authenticated_analytics and unlinks the user. Withdrawing a consent that is not granted changes nothing.
+//	@Description	Withdraws one consent. Prove ownership with the subject's X-Consent-Token, or as the signed-in user the subject is linked to; otherwise 404. Withdrawing analytics also withdraws authenticated_analytics, unlinks the user, and deletes the analytics events already stored for the subject. Withdrawing a consent that is not granted changes nothing.
 //	@Tags			analytics
 //	@Produce		json
 //	@Param			param1			path		string	true	"consent UUID"

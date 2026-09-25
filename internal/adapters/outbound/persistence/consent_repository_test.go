@@ -57,3 +57,27 @@ func TestConsentRepositoryStoreWithdrawAndErase(t *testing.T) {
 	_, err = svc.Current(ctx, state.Token)
 	require.ErrorIs(t, err, consentdomain.ErrNotFound)
 }
+
+func TestWithdrawingAnalyticsDeletesTheSubjectsEvents(t *testing.T) {
+	t.Parallel()
+
+	tx := integrationTx(t)
+	ctx := t.Context()
+	svc := consentservice.New(NewConsentRepository(tx), system.UUIDGenerator{}, system.Clock{})
+	user := insertUser(t, tx)
+
+	state, err := svc.Store(ctx, "", &user, map[consentdomain.Purpose]bool{
+		consentdomain.PurposeAnalytics: true, consentdomain.PurposeAuthenticatedAnalytics: true,
+	}, "2026-09")
+	require.NoError(t, err)
+
+	subject, session := seedSubjectEvents(t, tx, user)
+
+	_, err = svc.Store(ctx, state.Token, nil, map[consentdomain.Purpose]bool{consentdomain.PurposeAnalytics: false}, "2026-09")
+	require.NoError(t, err)
+
+	require.Zero(t, countWhere(t, tx, "analytics_page_views", "subject_uuid = ?", subject))
+	require.Zero(t, countWhere(t, tx, "analytics_subject_first_seen", "subject_uuid = ?", subject))
+	require.Equal(t, int64(1), countWhere(t, tx, "analytics_page_views", "session_id = ? AND subject_uuid IS NULL", session),
+		"unlinked events stay")
+}

@@ -942,7 +942,7 @@ When the single ERD above is too dense for a specific discussion, slice it by do
 | **Newsletter** | `newsletter_subscribers`, `newsletter_list_memberships`, `newsletter_issues`, `newsletter_provider_syncs`, `newsletter_consent_audit` |
 | **Media** | `media_assets`, `media_transforms`, `post_media` |
 | **Notifications** | `notifications`, `notification_preferences` |
-| **Analytics** | `analytics_page_views`, `analytics_time_spent`, `analytics_navigation`, `analytics_searches`, `analytics_search_clicks`; derived rollups (not drawn): `analytics_rollup_*`, `analytics_subject_first_seen`, `analytics_rollup_state`; `analytics_exports` (admin rollup exports, FK `user_id` → `users`) — see [analytics.md](./analytics.md#rollups) |
+| **Analytics** | `analytics_page_views`, `analytics_time_spent`, `analytics_navigation`, `analytics_searches`, `analytics_search_clicks`; derived rollups (not drawn): `analytics_rollup_*`, `analytics_subject_first_seen`, `analytics_rollup_state`, `analytics_salts` (daily visitor salts, today and yesterday only); `analytics_exports` (admin rollup exports, FK `user_id` → `users`) — see [analytics.md](./analytics.md#rollups) |
 | **Configuration/System** | `settings`, `settings_history`, `impersonation_sessions`, `audit_logs`, `outbox_events` |
 
 ## 4. Renderability Notes & Verification

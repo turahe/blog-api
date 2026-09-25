@@ -53,6 +53,22 @@ make infra-up-messaging
 make test-brokers
 ```
 
+## Analytics load and report performance
+
+Two analytics tests are too slow for every run and are skipped unless opted in. Both also need
+`TEST_DATABASE_URL`:
+
+- `TEST_ANALYTICS_LOAD=1 go test ./internal/bootstrap -run TestAnalyticsIngestSustainsPeakLoad`
+  sends 500 ingest events per second for 10 seconds through the real router and writer and
+  requires every event to be accepted and stored with a p99 under 250 ms. It deletes its rows
+  afterwards.
+- `TEST_ANALYTICS_PERF=1 go test ./internal/adapters/outbound/persistence -run
+  TestAnalyticsReportsStayFastOnTwoYearsOfRollups` seeds two years of rollups in a rolled-back
+  transaction and requires each report to answer within 300 ms.
+
+Run them after changing the ingest path, the writer, rollup tables or indexes, or report
+queries. Targets and measurements: [analytics.md](../backend/analytics.md#testing-strategy).
+
 ## What to mock
 
 | Dependency | Mock? |

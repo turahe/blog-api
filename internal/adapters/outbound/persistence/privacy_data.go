@@ -92,7 +92,7 @@ func (d *PrivacyData) ExportUser(ctx context.Context, userID uuid.UUID, at time.
 var eraseStatements = []string{
 	`DELETE FROM audit_logs WHERE actor_id = @id AND category IS NOT NULL`,
 	`UPDATE audit_logs SET ip_address = NULL, user_agent = NULL, request_id = NULL, metadata = '{}'::jsonb WHERE actor_id = @id`,
-	`DELETE FROM consent_subjects WHERE user_id = @id`,
+	deleteUserSubjects("@id"),
 	`DELETE FROM refresh_sessions WHERE user_id = @id`,
 	`DELETE FROM password_reset_tokens WHERE user_id = @id`,
 	`DELETE FROM user_two_factor_backup_codes WHERE user_id = @id`,

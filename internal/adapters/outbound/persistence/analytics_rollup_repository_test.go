@@ -26,8 +26,9 @@ type rollupFixture struct {
 }
 
 // seedRollupDay stores two sessions on rollupDay: a consented visitor reading /a then /b and
-// searching "go" (clicked after 10s), and an anonymous visitor bouncing on /a from a link
-// after a zero-result search. The consented visitor returns the next day.
+// searching "go" (clicked after 10s), and an anonymous visitor bouncing on /a from a link.
+// Both also search "go" and, without results, "nothing". The consented visitor returns the
+// next day.
 func seedRollupDay(t *testing.T, tx *gorm.DB) rollupFixture {
 	t.Helper()
 
@@ -66,13 +67,17 @@ func seedRollupDay(t *testing.T, tx *gorm.DB) rollupFixture {
 	}
 	empty := other(analyticsdomain.KindSearch, anon, at(11, 1, 0))
 	empty.Search = &analyticsdomain.Search{Query: "nothing", ResultCount: 0}
+	emptyToo := other(analyticsdomain.KindSearch, known, at(10, 3, 0))
+	emptyToo.Search = &analyticsdomain.Search{Query: "nothing", ResultCount: 0}
+	foundToo := other(analyticsdomain.KindSearch, anon, at(11, 0, 30))
+	foundToo.Search = &analyticsdomain.Search{Query: "go", ResultCount: 3}
 
 	events := []analyticsdomain.Event{
 		view(known, "/a", "", at(10, 0, 0)),
 		view(known, "/b", "", at(10, 1, 0)),
 		view(anon, "/a", "https://news.example/story", at(11, 0, 0)),
 		view(known, "/a", "", at(34, 0, 0)),
-		spent, entry, onward, found, click, empty,
+		spent, entry, onward, found, click, empty, emptyToo, foundToo,
 	}
 	require.NoError(t, NewAnalyticsRepository(tx).InsertBatch(t.Context(), events))
 
@@ -126,8 +131,8 @@ func TestAnalyticsRollupsSummariseADay(t *testing.T) {
 	assert.Equal(t, int64(1), site.Bounces)
 	assert.Equal(t, int64(30), site.FocusSeconds)
 	assert.Equal(t, int64(1), site.FocusViews)
-	assert.Equal(t, int64(2), site.Searches)
-	assert.Equal(t, int64(1), site.ZeroResultSearches)
+	assert.Equal(t, int64(4), site.Searches)
+	assert.Equal(t, int64(2), site.ZeroResultSearches)
 	assert.Equal(t, int64(1), site.SearchesWithClick)
 	assert.Equal(t, int64(1), site.SearchClicks)
 	assert.Equal(t, int64(1), site.ConsentedVisitors)
@@ -147,8 +152,8 @@ WHERE grain = 'day' AND period_start = ?`)
 
 	searches := rollupRows(t, tx, `SELECT query AS key, searches, zero_results, searches_with_click, clicks, click_seconds
 FROM analytics_rollup_searches WHERE grain = 'day' AND period_start = ?`)
-	assert.Equal(t, rollupRow{Key: "go", Searches: 1, SearchesWithClick: 1, Clicks: 1, ClickSeconds: 10}, searches["go"])
-	assert.Equal(t, rollupRow{Key: "(other)", Searches: 1, ZeroResults: 1}, searches["(other)"])
+	assert.Equal(t, rollupRow{Key: "go", Searches: 2, SearchesWithClick: 1, Clicks: 1, ClickSeconds: 10}, searches["go"])
+	assert.Equal(t, rollupRow{Key: "(other)", Searches: 2, ZeroResults: 2}, searches["(other)"], "with a cap of 1 \"nothing\" folds")
 
 	assert.Equal(t, int64(2), countWhere(t, tx, "analytics_rollup_navigation", "grain = 'day' AND period_start = ?", day.Day()))
 	assert.Equal(t, int64(1), countWhere(t, tx, "analytics_rollup_search_positions", "period_start = ? AND position = 2", day.Day()))
@@ -212,6 +217,62 @@ func TestAnalyticsRollupCohorts(t *testing.T) {
 
 	require.NoError(t, repo.DeleteFrom(ctx, rollupDay.Format(time.DateOnly)))
 	assert.Zero(t, countWhere(t, tx, "analytics_rollup_cohorts", "cohort_day = ?", rollupDay.Format(time.DateOnly)))
+}
+
+// TestAnalyticsRollupsKeepOnlySharedQueries checks that a query is kept by name only when
+// MinQueryVisitors distinct visitors searched it on one day.
+func TestAnalyticsRollupsKeepOnlySharedQueries(t *testing.T) {
+	t.Parallel()
+
+	tx := integrationTx(t)
+	ctx := t.Context()
+	monday := time.Date(2021, 4, 5, 9, 0, 0, 0, time.UTC)
+
+	visitor := func(hash string) analyticsdomain.Visitor {
+		return analyticsdomain.Visitor{Hash: strings.Repeat(hash, 64), SessionID: uuid.New()}
+	}
+	search := func(v analyticsdomain.Visitor, query string, when time.Time) analyticsdomain.Event {
+		return analyticsdomain.Event{
+			Kind: analyticsdomain.KindSearch, UUID: uuid.New(), Visitor: v, OccurredAt: when,
+			Search: &analyticsdomain.Search{Query: query, ResultCount: 1},
+		}
+	}
+
+	a, b, c := visitor("a"), visitor("b"), visitor("c")
+	lone := search(a, "jane doe 555-0100", monday)
+	events := []analyticsdomain.Event{
+		search(a, "golang", monday), search(b, "golang", monday.Add(time.Hour)),
+		lone, search(a, "jane doe 555-0100", monday.Add(time.Hour)),
+		search(a, "spread", monday), search(c, "spread", monday.AddDate(0, 0, 1)),
+		{
+			Kind: analyticsdomain.KindSearchClick, UUID: uuid.New(), Visitor: a, OccurredAt: monday.Add(time.Minute),
+			SearchClick: &analyticsdomain.SearchClick{
+				SearchUUID: lone.UUID, Position: 1, ResourceType: analyticsdomain.ResourcePost, ResourceUUID: uuid.New(),
+			},
+		},
+	}
+	require.NoError(t, NewAnalyticsRepository(tx).InsertBatch(ctx, events))
+
+	repo := NewAnalyticsRollupRepository(tx)
+	week := analyticsdomain.PeriodOf(analyticsdomain.GrainWeek, monday, time.UTC)
+	require.NoError(t, repo.RecomputePeriod(ctx, week, analyticsdomain.RollupTopN, time.Now()))
+
+	var queries []struct {
+		Query    string
+		Searches int64
+	}
+	require.NoError(t, tx.Raw(`SELECT query, searches FROM analytics_rollup_searches WHERE grain = 'week' AND period_start = ?
+		ORDER BY query`, week.Day()).Scan(&queries).Error)
+	require.Len(t, queries, 2)
+	assert.Equal(t, analyticsdomain.Other, queries[0].Query)
+	assert.Equal(t, int64(4), queries[0].Searches, "one visitor's query, and one shared only across days, fold")
+	assert.Equal(t, "golang", queries[1].Query)
+	assert.Equal(t, int64(2), queries[1].Searches)
+
+	assert.Zero(t, countWhere(t, tx, "analytics_rollup_search_results", "grain = 'week' AND period_start = ?", week.Day()),
+		"clicked results of a folded query are not kept")
+	assert.Equal(t, int64(1), countWhere(t, tx, "analytics_rollup_search_positions", "grain = 'week' AND period_start = ?",
+		week.Day()), "positions carry no query")
 }
 
 type fixedZone string

@@ -27,4 +27,6 @@ type Repository interface {
 	Save(ctx context.Context, consent domain.Consent) error
 	// DeleteForUser deletes the subjects linked to the user and their consents.
 	DeleteForUser(ctx context.Context, userID uuid.UUID) (int64, error)
+	// DeleteSubjectEvents deletes the raw analytics events and first-seen record of the subject.
+	DeleteSubjectEvents(ctx context.Context, subjectID uuid.UUID) error
 }

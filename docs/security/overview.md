@@ -73,11 +73,15 @@ needs, and lets the data subject, and only the data subject, decide on consent.
 - **Analytics telemetry.** Raw events store neither the IP address nor the user agent: only a
   path without its query string, a device class, a browser family, an optional country from a
   trusted proxy header, and a visitor hash. For a visitor without granted consent that hash is an
-  HMAC of the day, IP, and user agent, so their visits cannot be linked across days or to an
-  account; with no `APP_ENCRYPTION_KEY` the HMAC key is random per process and never stored.
-  Ingest answers `202` whether or not an event is kept (bots, prefetches, and refusing subjects
-  are dropped), so it cannot be used to probe users or content. See
-  [analytics.md](../backend/analytics.md).
+  HMAC of a random per-day salt, the IP, and the user agent, so their visits cannot be linked
+  across days or to an account, and once the salt is destroyed (after a day) not even a holder of
+  `APP_ENCRYPTION_KEY` can test a guessed IP against old hashes; with no `APP_ENCRYPTION_KEY` the
+  HMAC key is random per process and never stored. Search queries, which visitors type freely,
+  are kept by name in rollups and exports only when two distinct visitors searched them on one
+  day. Withdrawing analytics consent deletes the subject's stored events. Ingest answers `202`
+  whether or not an event is kept (bots, prefetches, and refusing subjects are dropped), so it
+  cannot be used to probe users or content. See [analytics.md](../backend/analytics.md), whose
+  privacy review lists what is kept and why.
 - **Retention.** Audit entries are kept for `AUDIT_RETENTION_DAYS` (395). Data exports stay in
   object storage for `PRIVACY_EXPORT_RETENTION` (72h); the download link is presigned for at most
   `PRIVACY_EXPORT_URL_TTL` (15m) and never past the export's own expiry, and the response is

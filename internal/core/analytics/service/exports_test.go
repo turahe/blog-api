@@ -237,6 +237,17 @@ func TestExportRequestWidensToWholePeriods(t *testing.T) {
 	assert.Contains(t, f.repo.exports, view.UUID)
 }
 
+func TestExportRequestAllowsTwoYearsOfDays(t *testing.T) {
+	t.Parallel()
+
+	f := newExportFixture(t)
+
+	view, err := f.svc.Request(t.Context(), f.actor, exportQuery("2024-09-01", "2026-08-31", domain.GrainDay))
+	require.NoError(t, err, "the dashboard's daily cap does not apply to exports")
+	assert.Equal(t, "2024-09-01", view.FirstDay)
+	assert.Equal(t, "2026-08-31", view.LastDay)
+}
+
 func TestExportRequestRefusals(t *testing.T) {
 	t.Parallel()
 

@@ -13,6 +13,13 @@ type fakeRetentionRepo struct {
 	rawLeft    int64
 	rawBefore  []time.Time
 	rollupDays []string
+	saltsFrom  string
+}
+
+func (f *fakeRetentionRepo) PruneSalts(_ context.Context, keepFrom string) (int64, error) {
+	f.saltsFrom = keepFrom
+
+	return 2, nil
 }
 
 func (f *fakeRetentionRepo) PruneRaw(_ context.Context, before time.Time, limit int) (int64, error) {
@@ -55,6 +62,8 @@ func TestRetentionRunPrunesInBatches(t *testing.T) {
 	assert.Equal(t, []string{"2024-08-25"}, repo.rollupDays)
 	assert.Equal(t, "2024-08-25", result.RollupsBefore)
 	assert.Equal(t, int64(7), result.RollupsDeleted)
+	assert.Equal(t, "2026-09-24", repo.saltsFrom, "only today's and yesterday's salts survive")
+	assert.Equal(t, int64(2), result.SaltsDeleted)
 }
 
 func TestRetentionRunKeepsDailyRollupsForeverAtZero(t *testing.T) {

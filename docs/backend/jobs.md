@@ -21,7 +21,6 @@ Jobs handle asynchronous and retryable work that should not block request-respon
 - roll analytics events up into daily, weekly, and monthly aggregates (`analytics-rollup`)
 - build admin analytics exports and prune analytics data (`analytics-exports`,
   `analytics-retention`)
-- erase analytics data per withdrawn consent token
 - expire impersonation sessions (periodic sweeper)
 - rebuild settings cache after invalidation
 
@@ -66,7 +65,7 @@ in `last_error`; the job is tried again at its next interval.
 | `newsletter-tokens-prune` | 1h | Deletes newsletter confirm, unsubscribe, and preferences tokens 30 days past expiry |
 | `analytics-rollup` | 15m | Recomputes the analytics rollups of the periods containing today or yesterday and the retention cohorts of the last 31 days; rebuilds everything the raw events cover on its first run or after `site.timezone` changes. See [analytics.md](analytics.md#aggregation) |
 | `analytics-exports` | 1m | Builds queued admin analytics exports (up to 2 per run, 3 attempts each; a job stuck running for 30 minutes is retried) and deletes archives past `ANALYTICS_EXPORT_RETENTION`. See [analytics.md](analytics.md#export) |
-| `analytics-retention` | 1h | Deletes raw analytics events past `analytics.raw_retention_days` (never the current or previous month or the last 31 days) and daily rollups past `analytics.rollup_day_retention_months`; weekly and monthly rollups are kept. See [analytics.md](analytics.md#retention) |
+| `analytics-retention` | 1h | Deletes anonymous visitor salts older than yesterday (UTC), raw analytics events past `analytics.raw_retention_days` (never the current or previous month or the last 31 days) and daily rollups past `analytics.rollup_day_retention_months`; weekly and monthly rollups are kept. See [analytics.md](analytics.md#retention) |
 | `media-orphans` | 1h | Deletes the object and row of uploads never completed 24h after their presign expired, and of assets soft-deleted longer than `MEDIA_PURGE_AFTER` (up to 200 of each per run); skipped when media storage is not configured. See [media.md](media.md#orphan-cleanup) |
 
 Newsletter issues are sent by the `newsletter-dispatch` consumer in `app worker`, not by the

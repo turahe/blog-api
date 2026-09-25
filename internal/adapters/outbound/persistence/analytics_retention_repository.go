@@ -51,6 +51,13 @@ func (r *AnalyticsRetentionRepository) PruneRaw(ctx context.Context, before time
 	return deleted, nil
 }
 
+// PruneSalts deletes the visitor salts of UTC days before keepFrom.
+func (r *AnalyticsRetentionRepository) PruneSalts(ctx context.Context, keepFrom string) (int64, error) {
+	result := conn(ctx, r.db).Exec(pruneSalts, keepFrom)
+
+	return result.RowsAffected, result.Error
+}
+
 // PruneDayRollups deletes daily rollups of periods starting before the local date day.
 func (r *AnalyticsRetentionRepository) PruneDayRollups(ctx context.Context, day string) (int64, error) {
 	var deleted int64

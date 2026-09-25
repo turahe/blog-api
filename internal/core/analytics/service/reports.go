@@ -146,11 +146,7 @@ func (r *Reports) Navigation(ctx context.Context, q domain.ReportQuery) (Navigat
 		return out, err
 	}
 
-	if out.Entries, err = r.repo.EntryPages(ctx, sel, limit); err != nil {
-		return out, err
-	}
-
-	out.Exits, err = r.repo.ExitPages(ctx, sel, limit)
+	out.Entries, out.Exits, err = r.repo.EntryExitPages(ctx, sel, limit)
 
 	return out, err
 }
@@ -189,17 +185,12 @@ func (r *Reports) Search(ctx context.Context, q domain.ReportQuery) (SearchRepor
 		return out, err
 	}
 
-	if out.ClickTime, err = r.repo.QueryTotals(ctx, sel); err != nil {
+	queries, err := r.repo.SearchQueries(ctx, sel, limit)
+	if err != nil {
 		return out, err
 	}
 
-	if out.Queries, err = r.repo.Queries(ctx, sel, false, limit); err != nil {
-		return out, err
-	}
-
-	if out.ZeroResults, err = r.repo.Queries(ctx, sel, true, limit); err != nil {
-		return out, err
-	}
+	out.ClickTime, out.Queries, out.ZeroResults = queries.Totals, queries.Top, queries.ZeroResults
 
 	if out.Positions, err = r.repo.Positions(ctx, sel, domain.MaxReportLimit); err != nil {
 		return out, err
@@ -254,8 +245,16 @@ func fill(w domain.Window, rows []domain.SiteRow) ([]domain.SiteRow, domain.Tota
 }
 
 // resolve validates the query and turns it into the current and previous windows.
+// resolve is resolveHeader with the dashboard's cap on daily ranges; exports run in the
+// background and may read two years of days.
 func (r *Reports) resolve(ctx context.Context, q domain.ReportQuery) (Header, error) {
-	return resolveHeader(ctx, r.tz, r.clock, q)
+	header, err := resolveHeader(ctx, r.tz, r.clock, q)
+	if err == nil && header.Window.Grain == domain.GrainDay && len(header.Window.Periods) > domain.MaxDailyReportDays {
+		return Header{}, fmt.Errorf("%w: daily reports cover at most %d days; use grain week or month",
+			domain.ErrValidation, domain.MaxDailyReportDays)
+	}
+
+	return header, err
 }
 
 // resolveHeader validates q and turns it into whole periods of the site time zone.

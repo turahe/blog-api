@@ -1,5 +1,37 @@
 # Changelog
 
+## 2026-09-25 — Analytics load, performance, and privacy review
+
+### Added
+
+- `app analytics loadtest` sends ingest traffic at a fixed rate (default 500 events per second)
+  and fails on non-`202` answers, a low accepted rate, a slow p99, or (with `--metrics-url`) a
+  rise in `blog_analytics_events_dropped_total`.
+- Opt-in tests: `TEST_ANALYTICS_LOAD=1` proves 500 events per second end to end with no drops,
+  and `TEST_ANALYTICS_PERF=1` keeps reports under 300 ms on two years of rollups. An
+  enumeration test shows ingest answers identically for existing and missing users, paths,
+  result ids, and tokens.
+- Runbook section for analytics: dropped events, stale dashboards or failed jobs, salt outages,
+  load testing, and suggested alerts.
+
+### Changed
+
+- Daily reports cover at most 92 days (`400` otherwise; use `grain=week` or `month`). Exports
+  are unaffected.
+- Navigation and search reports read each rollup table once instead of twice.
+
+### Security
+
+- Anonymous visitor hashes now include a random per-day salt stored in `analytics_salts`
+  (migration 00035) and destroyed after a day by `analytics-retention`, so old hashes cannot be
+  recomputed even with `APP_ENCRYPTION_KEY`.
+- Search queries appear by name in rollups and exports only when at least two distinct visitors
+  searched them on one day; the rest count as `(other)`.
+- Withdrawing analytics consent (DELETE, or refusing a granted purpose) deletes the subject's
+  stored raw events and first-seen records.
+- Fixed: account erasure deleted analytics consents but left the subjects' raw events and
+  first-seen records behind; it now deletes them.
+
 ## 2026-09-25 — Analytics export and retention
 
 ### Added

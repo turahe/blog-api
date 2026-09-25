@@ -109,7 +109,7 @@ func TestVisitorHashes(t *testing.T) {
 	require.Len(t, events, 3)
 	assert.Equal(t, &subject, events[0].Visitor.SubjectUUID)
 	assert.Contains(t, events[0].Visitor.Hash, "analytics:subject:")
-	assert.Contains(t, events[1].Visitor.Hash, "analytics:visitor:2026-09-25:")
+	assert.Contains(t, events[1].Visitor.Hash, "analytics:visitor:", "keyed with the day's salt, not the date")
 	assert.NotEqual(t, events[1].Visitor.Hash, events[2].Visitor.Hash, "anonymous visitors cannot be linked across days")
 
 	for _, e := range events {

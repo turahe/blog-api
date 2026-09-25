@@ -296,7 +296,7 @@
                             "month"
                         ],
                         "type": "string",
-                        "description": "period length (default by range: up to 92 days day, up to 366 week, else month)",
+                        "description": "period length (default by range: up to 92 days day, up to 366 week, else month); day covers at most 92 days",
                         "name": "grain",
                         "in": "query"
                     },
@@ -4389,7 +4389,7 @@
                 }
             },
             "post": {
-                "description": "Records a decision per purpose (analytics, authenticated_analytics) with the policy version the visitor saw. Send the X-Consent-Token from an earlier response to update that subject; without it (or with an unknown token) a new subject is created and its token is returned once, with 201. Refusing a granted purpose withdraws it. authenticated_analytics needs a signed-in user and granted analytics, and links the subject to that user.",
+                "description": "Records a decision per purpose (analytics, authenticated_analytics) with the policy version the visitor saw. Send the X-Consent-Token from an earlier response to update that subject; without it (or with an unknown token) a new subject is created and its token is returned once, with 201. Refusing a granted purpose withdraws it; withdrawing analytics deletes the analytics events already stored for the subject. authenticated_analytics needs a signed-in user and granted analytics, and links the subject to that user.",
                 "consumes": [
                     "application/json"
                 ],
@@ -4447,7 +4447,7 @@
         },
         "/api/v1/analytics/consent/{param1}": {
             "delete": {
-                "description": "Withdraws one consent. Prove ownership with the subject's X-Consent-Token, or as the signed-in user the subject is linked to; otherwise 404. Withdrawing analytics also withdraws authenticated_analytics and unlinks the user. Withdrawing a consent that is not granted changes nothing.",
+                "description": "Withdraws one consent. Prove ownership with the subject's X-Consent-Token, or as the signed-in user the subject is linked to; otherwise 404. Withdrawing analytics also withdraws authenticated_analytics, unlinks the user, and deletes the analytics events already stored for the subject. Withdrawing a consent that is not granted changes nothing.",
                 "produces": [
                     "application/json"
                 ],

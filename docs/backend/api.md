@@ -416,7 +416,8 @@ Each item has `id`, `type`, `title`, `body`, `preview`, `data` (links such as `p
   `GET /api/v1/admin/analytics/search` needs `analytics.search.read`. Admins and editors hold
   both.
 - Shared query: `from`/`to` (inclusive `YYYY-MM-DD` dates in `site.timezone`, default the last 30
-  days, at most 731), `grain` (`day`/`week`/`month`, picked from the range when omitted),
+  days, at most 731), `grain` (`day`/`week`/`month`, picked from the range when omitted; `day`
+  covers at most 92 days),
   `compare` (`previous` by default, or `none`), `limit` (1–100, default 20), and pages' `sort`
   (`views`/`time`/`rising`).
 - Reports cover whole periods and read rollups only. Range visitor totals are sums of

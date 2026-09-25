@@ -80,7 +80,7 @@ func TestAnalyticsReportsReadRollups(t *testing.T) {
 
 	search, err := reports.Search(ctx, reportQuery(""))
 	require.NoError(t, err)
-	assert.Equal(t, int64(2), search.Totals.Searches)
+	assert.Equal(t, int64(4), search.Totals.Searches)
 	assert.Equal(t, int64(10), search.ClickTime.ClickSeconds)
 	assert.Equal(t, []analyticsdomain.PositionRow{{Position: 2, Clicks: 1}}, search.Positions)
 	require.Len(t, search.ZeroResults, 1)

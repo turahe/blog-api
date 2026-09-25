@@ -16,8 +16,8 @@ const (
 	retentionMaxBatches = 200
 )
 
-// Retention deletes raw events and daily rollups past their retention. Weekly and monthly
-// rollups, cohorts, and first-seen times are kept forever.
+// Retention deletes raw events, daily rollups, and visitor salts past their retention. Weekly
+// and monthly rollups, cohorts, and first-seen times are kept forever.
 type Retention struct {
 	repo     ports.RetentionRepository
 	settings ports.RetentionSettings
@@ -37,11 +37,12 @@ type RetentionResult struct {
 	RawDeleted     int64
 	RollupsBefore  string
 	RollupsDeleted int64
+	SaltsDeleted   int64
 }
 
-// Run deletes raw events older than analytics.raw_retention_days (but never those the
-// aggregator may still recompute from) and daily rollups older than
-// analytics.rollup_day_retention_months.
+// Run deletes visitor salts older than yesterday (UTC), raw events older than
+// analytics.raw_retention_days (but never those the aggregator may still recompute from), and
+// daily rollups older than analytics.rollup_day_retention_months.
 func (r *Retention) Run(ctx context.Context) (RetentionResult, error) {
 	var result RetentionResult
 
@@ -66,6 +67,10 @@ func (r *Retention) Run(ctx context.Context) (RetentionResult, error) {
 	}
 
 	now := r.clock.Now()
+	if result.SaltsDeleted, err = r.repo.PruneSalts(ctx, domain.SaltKeepFrom(now)); err != nil {
+		return result, err
+	}
+
 	result.RawBefore = domain.RawRetentionCutoff(now, loc, days)
 
 	for range retentionMaxBatches {

@@ -128,6 +128,11 @@ period's first local date in the `site.timezone` setting.
 - **Capped dimensions.** Paths, referrer hosts, transitions, and queries keep the top 1000 of
   each period by volume; the rest fold into one `(other)` row, so totals still add up. Clicked
   results keep the top 1000 and drop the rest.
+- **Shared queries only.** Query text is typed by visitors and can hold names or contact
+  details, so a query is kept by name only when at least 2 distinct visitors searched it on one
+  UTC day of the period (`MinQueryVisitors`); anything rarer folds into `(other)`, and its
+  clicked results are not kept. Visitors are told apart only within a day because anonymous
+  hashes change daily, so one person repeating a query across a week does not qualify it.
 - **Search clicks** count toward the period of their search, whenever they happen. A click
   whose search was never stored is ignored.
 - **Retention cohorts** cover consented visitors only: an anonymous visitor has no identity that
@@ -211,10 +216,17 @@ optional and is generated when omitted.
 
 - A subject that granted analytics: `visitor_hash` is an HMAC of the subject id, stable across
   days, so retention can follow it. `subject_uuid` is stored for erasure.
-- Anyone else: `visitor_hash` is an HMAC of the day, client IP, and user agent. The same visitor
-  gets an unrelated hash the next day, so anonymous visits cannot be linked across days.
+- Anyone else: `visitor_hash` is an HMAC of the day's salt, client IP, and user agent. The salt
+  is 32 random bytes per UTC day in `analytics_salts` (migration 00035), created by the first
+  replica that needs it and cached by each. Salts older than yesterday are deleted (when a new
+  day's salt is created and by the hourly retention job), after which nobody, including an
+  operator holding `APP_ENCRYPTION_KEY`, can test a guessed IP and user agent against that day's
+  hashes. The same visitor gets an unrelated hash the next day.
 - The HMAC key derives from `APP_ENCRYPTION_KEY`. Without it, each API process uses a random key
-  held in memory, so anonymous unique counts across replicas (or restarts) are approximate.
+  held in memory, so anonymous unique counts across replicas (or restarts) are approximate. The
+  same holds for a day's hashes while PostgreSQL cannot hand out the salt: the replica uses a
+  stand-in salt of its own, logs `analytics visitor salt unavailable`, and retries every 10
+  seconds.
 - The country comes from `ANALYTICS_COUNTRY_HEADER` (for example `CF-IPCountry`), read only when
   the request's immediate peer is in `APP_TRUSTED_PROXIES`. `XX` and `T1` are treated as unknown.
 - Device class and browser family come from the user agent, which is then discarded.
@@ -243,7 +255,7 @@ All five reports share one query:
 | Param | Default | Meaning |
 | --- | --- | --- |
 | `from`, `to` | the 30 days through today | inclusive dates (`YYYY-MM-DD`) in the `site.timezone` setting; at most 731 days |
-| `grain` | from the range: up to 92 days `day`, up to 366 `week`, else `month` | the rollup grain |
+| `grain` | from the range: up to 92 days `day`, up to 366 `week`, else `month` | the rollup grain; `day` covers at most 92 days (`400` beyond) so a report scans a bounded number of rows |
 | `compare` | `previous` | `previous` also returns the same number of periods just before the window; `none` skips it |
 | `limit` | 20 | rows per list, 1–100 (pages, navigation, search) |
 | `sort` | `views` | pages only: `views`, `time`, or `rising` |
@@ -287,7 +299,7 @@ All five reports share one query:
 - `POST /api/v1/analytics/consent`
   - grant or reject consent with scope flags
 - `DELETE /api/v1/analytics/consent/{id}`
-  - withdraw consent and mark records eligible for erasure
+  - withdraw consent; withdrawing `analytics` deletes the subject's stored events
 
 #### Implementation
 
@@ -300,6 +312,9 @@ All five reports share one query:
   `analytics_consents` with status (`granted`, `rejected`, `withdrawn`), policy version, and
   decision time. Refusing a previously granted purpose records `withdrawn`; a first refusal
   records `rejected`. Unchanged decisions are not rewritten.
+- Withdrawing `analytics` (through `DELETE` or by `POST`ing `false` after a grant) deletes, in
+  the same transaction, every raw event carrying the subject's `subject_uuid` and its
+  `analytics_subject_first_seen` row. Rollups keep their counts, which identify no one.
 - `authenticated_analytics` requires a signed-in user and a granted `analytics` consent. Granting
   it links the subject to the user; refusing or withdrawing it unlinks them. Withdrawing
   `analytics` also withdraws `authenticated_analytics`.
@@ -379,7 +394,8 @@ reconnects simply gets a fresh summary: live data has no replay.
   exported; a clicked result carries only its resource type and UUID.
 - **Window.** Same rules as the dashboard: `from` and `to` are dates in the site time zone,
   widened to whole periods of `grain` (picked from the range length when omitted), at most 731
-  days. Visitors are distinct within one period only.
+  days. The dashboard's 92-day cap on `day` does not apply: an export may hold two years of days.
+  Visitors are distinct within one period only.
 - **Step-up.** The body must carry the caller's current password, and a TOTP or backup code when
   two-factor is enabled; a failure is `403 analytics.step_up_required`. Every request, refused or
   not, is audited as `admin.analytics.export` with the window (and failure reason).
@@ -404,11 +420,12 @@ reconnects simply gets a fresh summary: live data has no replay.
 | Raw events (all five tables) | 90 days | `analytics.raw_retention_days` (1–730) | Never the current or previous month or the last 31 days |
 | Daily rollups | 25 months | `analytics.rollup_day_retention_months` (0–120, 0 = forever) | Independent of raw retention |
 | Weekly and monthly rollups, cohorts | forever | — | Contain no identifiers |
-| First-seen times (`analytics_subject_first_seen`) | forever | — | Deleted with the subject on erasure |
+| First-seen times (`analytics_subject_first_seen`) | forever | — | Deleted with the subject on erasure or analytics withdrawal |
+| Visitor salts (`analytics_salts`) | today and yesterday (UTC) | — | Older salts are destroyed, so older anonymous hashes cannot be recomputed |
 | Export archives | 72 hours | `ANALYTICS_EXPORT_RETENTION` | Rows stay as the export history |
 
-The `analytics-retention` job (hourly) deletes raw events stored before local midnight of the
-cutoff day, 5000 rows per table per batch and at most 200 batches per run, then daily rollups of
+The `analytics-retention` job (hourly) deletes visitor salts older than yesterday (UTC), raw
+events stored before local midnight of the cutoff day, 5000 rows per table per batch and at most 200 batches per run, then daily rollups of
 periods starting before the rollup cutoff. Both are computed in the site time zone. Because
 rollups outlive raw events, `app analytics rollup` cannot rebuild a pruned period: it skips days
 before the oldest remaining event.
@@ -479,10 +496,27 @@ Invalidation triggers:
 Hard rules for the backend:
 
 - consent token is pseudonymous; never join directly to `users.id` unless the user explicitly opts into authenticated analytics (separate scope)
-- allow deletion pipeline: mark tokens as erased, then delete/mask raw events and rebuild affected aggregates. Account erasure deletes the user's consent subjects and, in the same statement, every raw event carrying their `subject_uuid`; anonymised events carry no link and are not affected
+- deletion: account erasure deletes the user's consent subjects and, in the same statement, every raw event and first-seen row carrying their `subject_uuid`; withdrawing `analytics` does the same for the subject. Anonymised events carry no link and are not affected
 - export pipeline: admin exports contain rollups only (no raw events or identifiers), sit behind
   a password (and 2FA) step-up, and are served through short-lived presigned links
 - never log raw event payloads at INFO or DEBUG levels; keep structured logs metric-only or hash-only
+
+### Privacy review (2026-09-25)
+
+Scope: what is stored, for how long, how visitors are identified, and what leaves the system.
+
+| Area | Finding | Outcome |
+| --- | --- | --- |
+| Account erasure | Erasure deleted the user's consent subjects but not the raw events and first-seen rows tagged with them | Fixed: erasure now deletes them in the same statement |
+| Consent withdrawal | Past events of a withdrawing subject stayed until raw retention | Changed: withdrawing `analytics` deletes them and the first-seen row |
+| Anonymous visitor hash | Keyed only with the long-lived `APP_ENCRYPTION_KEY`, so a key holder could test a guessed IP and user agent against any past day | Changed: a random per-day salt, destroyed after a day, is part of the hash |
+| Search queries in rollups | Free text kept by name in rollups (daily 25 months, weekly and monthly forever) and exports, even when one person typed it | Changed: kept by name only when 2 distinct visitors searched it on one day |
+| Paths in rollups | Paths are kept by name forever; the query string and fragment are already dropped at ingest | Accepted. Frontends must not put secrets (reset tokens, emails) in paths |
+| Raw retention | 90 days by default, never under the recompute window (current and previous month, last 31 days) | Accepted |
+| Referrers | Raw events keep scheme, host, and path (no query) until raw retention; rollups keep the host | Accepted |
+| Exports | Rollups only, with query and path text subject to the rules above; password and 2FA step-up, audited, 15-minute links, archives deleted after 72 hours | Accepted |
+| Live view | Paths and queries of the last 30 minutes, in memory only, for editors | Accepted |
+| Ingest enumeration | Answers do not depend on content, users, bearer tokens, or unknown or refused consent tokens | Accepted; pinned by `TestAnalyticsIngestCannotEnumerateContentOrUsers` |
 
 ## Testing Strategy
 
@@ -502,6 +536,26 @@ Hard rules for the backend:
 
 ### Performance Tests
 
-- ingestion endpoint throughput with realistic batch sizes
-- dashboard overview query latency for 30-day and 90-day windows
-- SSE fan-out under a realistic number of concurrent admin clients
+Both are opt-in, need `TEST_DATABASE_URL`, and should run without `-race`:
+
+- **Ingest peak.** The target is 500 events per second across the five ingest routes with no
+  dropped events. `TEST_ANALYTICS_LOAD=1 go test ./internal/bootstrap -run
+  TestAnalyticsIngestSustainsPeakLoad` sends that for 10 seconds through the real router and
+  writer (default queue, batch, and flush settings) into PostgreSQL and requires every response
+  to be `202`, an accepted rate of at least 95% of the target, p99 under 250 ms, no drops, and
+  every event stored (heartbeats merge per page view). On a laptop it measured p99 under 1 ms.
+  Its rows are deleted afterwards.
+- **Report latency.** `TEST_ANALYTICS_PERF=1 go test ./internal/adapters/outbound/persistence
+  -run TestAnalyticsReportsStayFastOnTwoYearsOfRollups` seeds two years of rollups at the
+  per-period caps (about 730k daily rows each for pages, transitions, and queries, plus weekly
+  and monthly rows) inside a rolled-back transaction and requires every report to answer within
+  300 ms (median of three) at 30 and 92 days daily, 365 and 731 days weekly, and 731 days
+  monthly. It measured at most about 160 ms. Longer daily ranges are refused because their scans
+  grow past the budget (about 1.4 s for navigation over 731 days).
+
+Against a running stack, `app analytics loadtest --url http://host:8080 --rate 500 --duration
+60s [--metrics-url http://host:9090/metrics] [--spread 200]` sends the same traffic mix and
+fails on any non-`202` answer, a low accepted rate, a slow p99, or (with `--metrics-url`) a
+rise in `blog_analytics_events_dropped_total`. It stores real events under a `/loadtest/...`
+path prefix, so point it at a disposable or staging stack, with `ANALYTICS_INGEST_PER_MINUTE=0`
+or with `--spread` from a proxy listed in `APP_TRUSTED_PROXIES`.

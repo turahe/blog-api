@@ -19,7 +19,8 @@ import (
 )
 
 // newAnalytics starts the background writer for raw analytics events and returns the ingest
-// service that feeds it. Visitor hashes are keyed with APP_ENCRYPTION_KEY when it is set.
+// service that feeds it. Visitor hashes are keyed with APP_ENCRYPTION_KEY when it is set, and
+// anonymous ones also with the day's salt shared through PostgreSQL.
 func newAnalytics(
 	cfg config.Config, db *database.Database, onDrop func(int), logger *slog.Logger,
 ) (*analyticsservice.Ingest, *analyticsservice.Writer) {
@@ -28,7 +29,10 @@ func newAnalytics(
 		OnDrop:    onDrop,
 	})
 
-	return analyticsservice.NewIngest(writer, identityHasher(cfg), system.UUIDGenerator{}, system.Clock{}), writer
+	ingest := analyticsservice.NewIngest(writer, identityHasher(cfg), system.UUIDGenerator{}, system.Clock{}).
+		WithSalts(persistence.NewAnalyticsSaltRepository(db.GORM), logger)
+
+	return ingest, writer
 }
 
 // newAnalyticsLive feeds this replica's live view from the broadcast bus and has ingest announce

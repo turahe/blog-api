@@ -25,6 +25,13 @@ type memRepo struct {
 	subjects map[uuid.UUID]domain.Subject
 	byHash   map[string]uuid.UUID
 	consents map[uuid.UUID]domain.Consent
+	erased   []uuid.UUID
+}
+
+func (m *memRepo) DeleteSubjectEvents(_ context.Context, subject uuid.UUID) error {
+	m.erased = append(m.erased, subject)
+
+	return nil
 }
 
 func newMemRepo() *memRepo {
@@ -159,13 +166,15 @@ func TestStoreCreatesSubjectAndReturnsTokenOnce(t *testing.T) {
 func TestRefusingGrantedConsentWithdrawsIt(t *testing.T) {
 	t.Parallel()
 
-	svc, _, events := newService()
+	svc, repo, events := newService()
 
 	state, err := svc.Store(t.Context(), "", nil, map[domain.Purpose]bool{domain.PurposeAnalytics: true}, "v1")
 	require.NoError(t, err)
+	assert.Empty(t, repo.erased)
 
 	state, err = svc.Store(t.Context(), state.Token, nil, map[domain.Purpose]bool{domain.PurposeAnalytics: false}, "v1")
 	require.NoError(t, err)
+	assert.Equal(t, []uuid.UUID{state.Subject.UUID}, repo.erased, "withdrawing analytics deletes the events already stored")
 
 	require.Len(t, state.Consents, 1)
 	assert.Equal(t, domain.StatusWithdrawn, state.Consents[0].Status)
@@ -234,6 +243,7 @@ func TestAuthenticatedAnalyticsLinksAndWithdrawUnlinks(t *testing.T) {
 		domain.PurposeAnalytics: domain.StatusWithdrawn, domain.PurposeAuthenticatedAnalytics: domain.StatusWithdrawn,
 	}, statuses(current.Consents))
 	assert.Nil(t, repo.subjects[state.Subject.UUID].UserUUID)
+	assert.Equal(t, []uuid.UUID{state.Subject.UUID}, repo.erased, "once, for the analytics purpose")
 }
 
 func TestDecision(t *testing.T) {

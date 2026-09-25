@@ -10,8 +10,11 @@ const (
 
 // Report limits.
 const (
-	DefaultReportDays  = 30
-	MaxReportDays      = 731
+	DefaultReportDays = 30
+	MaxReportDays     = 731
+	// MaxDailyReportDays is the longest dashboard range at day grain; longer ranges read
+	// weekly or monthly rollups so a report scans a bounded number of rows.
+	MaxDailyReportDays = 92
 	DefaultReportLimit = 20
 	MaxReportLimit     = 100
 )
@@ -43,7 +46,7 @@ func ValidGrain(g Grain) bool {
 // year, monthly beyond.
 func AutoGrain(days int) Grain {
 	switch {
-	case days <= 92:
+	case days <= MaxDailyReportDays:
 		return GrainDay
 	case days <= 366:
 		return GrainWeek
@@ -144,6 +147,14 @@ type TransitionRow struct {
 type PathCount struct {
 	Path  string
 	Count int64
+}
+
+// SearchQueries are the query lists of a search report.
+type SearchQueries struct {
+	// Totals sums every query row, including the folded remainder.
+	Totals QueryRow
+	// Top orders by searches; ZeroResults by zero-result searches, leaving out the remainder.
+	Top, ZeroResults []QueryRow
 }
 
 // QueryRow is a search query summed over a window.

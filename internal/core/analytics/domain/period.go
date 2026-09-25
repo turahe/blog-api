@@ -19,6 +19,10 @@ var Grains = []Grain{GrainDay, GrainWeek, GrainMonth}
 // period keeps; the rest are folded into Other (clicked results are simply cut).
 const RollupTopN = 1000
 
+// MinQueryVisitors is how many distinct visitors must have searched a query on one day for
+// rollups to keep it by name; rarer queries fold into Other.
+const MinQueryVisitors = 2
+
 // Other is the folded remainder of a capped dimension. Real paths start with "/" and cannot
 // collide with it.
 const Other = "(other)"

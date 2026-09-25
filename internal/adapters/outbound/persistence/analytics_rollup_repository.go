@@ -93,7 +93,7 @@ SET first_seen_at = LEAST(analytics_subject_first_seen.first_seen_at, EXCLUDED.f
 func (r *AnalyticsRollupRepository) RecomputePeriod(ctx context.Context, period domain.Period, topN int, now time.Time) error {
 	params := map[string]any{
 		"grain": string(period.Grain), "period": period.Day(), "from": period.From, "to": period.To,
-		"n": topN, "now": now.UTC(), "other": domain.Other,
+		"n": topN, "now": now.UTC(), "other": domain.Other, "k": domain.MinQueryVisitors,
 	}
 
 	return conn(ctx, r.db).Transaction(func(tx *gorm.DB) error {
@@ -145,6 +145,14 @@ SELECT CAST(@day AS date), (SELECT count(*) FROM cohort)`+returns.String()+`, CA
 ON CONFLICT (cohort_day) DO UPDATE SET size = EXCLUDED.size, day1 = EXCLUDED.day1, day7 = EXCLUDED.day7,
 	day30 = EXCLUDED.day30, computed_at = EXCLUDED.computed_at`, params).Error
 }
+
+// sharedQueries lists the queries of the period that at least @k distinct visitors searched on
+// one UTC day. Anonymous visitor hashes change every UTC day, so visitors are only told apart
+// within a day; a query one person typed is never kept by name.
+const sharedQueries = `shared AS (
+	SELECT DISTINCT query FROM analytics_searches WHERE occurred_at >= @from AND occurred_at < @to
+	GROUP BY query, (occurred_at AT TIME ZONE 'UTC')::date HAVING count(DISTINCT visitor_hash) >= @k
+)`
 
 // rollupQueries fill rollupTables, in the same order, for the period bound to the named
 // parameters @grain, @period, @from, and @to.
@@ -248,8 +256,13 @@ c AS (
 	SELECT search_uuid, count(*) AS clicks, min(occurred_at) AS first_click
 	FROM analytics_search_clicks WHERE search_uuid IN (SELECT uuid FROM s) GROUP BY search_uuid
 ),
-ranked AS (SELECT query, row_number() OVER (ORDER BY count(*) DESC, query) AS rank FROM s GROUP BY query)
-SELECT CAST(@grain AS text), CAST(@period AS date), CASE WHEN r.rank <= @n THEN s.query ELSE @other END,
+` + sharedQueries + `,
+ranked AS (
+	SELECT s.query, sh.query IS NOT NULL AS shared,
+		row_number() OVER (ORDER BY sh.query IS NOT NULL DESC, count(*) DESC, s.query) AS rank
+	FROM s LEFT JOIN shared sh ON sh.query = s.query GROUP BY s.query, sh.query
+)
+SELECT CAST(@grain AS text), CAST(@period AS date), CASE WHEN r.shared AND r.rank <= @n THEN s.query ELSE @other END,
 	count(*), count(DISTINCT s.visitor_hash), count(*) FILTER (WHERE s.result_count = 0),
 	count(c.search_uuid), coalesce(sum(c.clicks), 0),
 	coalesce(sum(greatest(extract(epoch FROM c.first_click - s.occurred_at), 0)), 0)::bigint
@@ -265,9 +278,10 @@ GROUP BY c.position`,
 
 	// analytics_rollup_search_results
 	`INSERT INTO analytics_rollup_search_results (grain, period_start, query, resource_type, resource_uuid, clicks)
+WITH ` + sharedQueries + `
 SELECT CAST(@grain AS text), CAST(@period AS date), s.query, c.resource_type, c.resource_uuid, count(*)
 FROM analytics_search_clicks c JOIN analytics_searches s ON s.uuid = c.search_uuid
-WHERE s.occurred_at >= @from AND s.occurred_at < @to
+WHERE s.occurred_at >= @from AND s.occurred_at < @to AND s.query IN (SELECT query FROM shared)
 GROUP BY 3, 4, 5
 ORDER BY count(*) DESC, 3, 4, 5
 LIMIT @n`,

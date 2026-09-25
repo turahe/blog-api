@@ -29,8 +29,8 @@ type analyticsReportsAPI interface {
 //	@Produce		json
 //	@Param			from	query		string	false	"first day, YYYY-MM-DD (default 29 days before to)"
 //	@Param			to		query		string	false	"last day, YYYY-MM-DD (default today)"
-//	@Param			grain	query		string	false	"period length (default by range: up to 92 days day, up to 366 week, else month)"	Enums(day, week, month)
-//	@Param			compare	query		string	false	"compare with the previous window"													Enums(previous, none)	default(previous)
+//	@Param			grain	query		string	false	"period length (default by range: up to 92 days day, up to 366 week, else month); day covers at most 92 days"	Enums(day, week, month)
+//	@Param			compare	query		string	false	"compare with the previous window"																				Enums(previous, none)	default(previous)
 //	@Success		200		{object}	responses.Envelope
 //	@Failure		400		{object}	responses.Envelope
 //	@Failure		401		{object}	responses.Envelope

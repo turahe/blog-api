@@ -8,6 +8,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"fmt"
+	"log/slog"
 	"time"
 
 	"github.com/google/uuid"
@@ -88,6 +89,7 @@ type Ingest struct {
 	sink   ports.Sink
 	live   ports.LiveSink
 	hasher ports.IdentityHasher
+	salts  *dailySalts
 	ids    IDGenerator
 	clock  Clock
 }
@@ -99,7 +101,16 @@ func NewIngest(sink ports.Sink, hasher ports.IdentityHasher, ids IDGenerator, cl
 		hasher = newProcessHasher()
 	}
 
-	return &Ingest{sink: sink, hasher: hasher, ids: ids, clock: clock}
+	return &Ingest{sink: sink, hasher: hasher, salts: &dailySalts{}, ids: ids, clock: clock}
+}
+
+// WithSalts shares the daily salts of anonymous visitor hashes through store, so every
+// replica hashes a visitor alike and a destroyed salt makes its day's hashes unrecomputable.
+// Store failures are logged to logger, which may be nil.
+func (s *Ingest) WithSalts(store ports.SaltStore, logger *slog.Logger) *Ingest {
+	s.salts = &dailySalts{store: store, logger: logger}
+
+	return s
 }
 
 // WithLive also announces every accepted event to the live view.
@@ -110,7 +121,7 @@ func (s *Ingest) WithLive(live ports.LiveSink) *Ingest {
 }
 
 // PageView records a page load and returns its id.
-func (s *Ingest) PageView(_ context.Context, meta Meta, in PageViewInput) (uuid.UUID, error) {
+func (s *Ingest) PageView(ctx context.Context, meta Meta, in PageViewInput) (uuid.UUID, error) {
 	path, err := domain.NormalizePath(in.Path)
 	if err != nil {
 		return uuid.Nil, err
@@ -118,7 +129,7 @@ func (s *Ingest) PageView(_ context.Context, meta Meta, in PageViewInput) (uuid.
 
 	agent := domain.ClassifyAgent(meta.UserAgent)
 
-	return s.accept(meta, agent, in.ID, in.SessionID, domain.Event{
+	return s.accept(ctx, meta, agent, in.ID, in.SessionID, domain.Event{
 		Kind: domain.KindPageView,
 		PageView: &domain.PageView{
 			Path: path, Referrer: domain.NormalizeReferrer(in.Referrer), Country: domain.NormalizeCountry(meta.Country),
@@ -128,7 +139,7 @@ func (s *Ingest) PageView(_ context.Context, meta Meta, in PageViewInput) (uuid.
 }
 
 // TimeSpent records a heartbeat for a page view and returns the page view id.
-func (s *Ingest) TimeSpent(_ context.Context, meta Meta, in TimeSpentInput) (uuid.UUID, error) {
+func (s *Ingest) TimeSpent(ctx context.Context, meta Meta, in TimeSpentInput) (uuid.UUID, error) {
 	if in.ViewID == uuid.Nil {
 		return uuid.Nil, fmt.Errorf("%w: view_id is required", domain.ErrValidation)
 	}
@@ -138,14 +149,14 @@ func (s *Ingest) TimeSpent(_ context.Context, meta Meta, in TimeSpentInput) (uui
 		return uuid.Nil, err
 	}
 
-	return s.accept(meta, domain.ClassifyAgent(meta.UserAgent), in.ViewID, in.SessionID, domain.Event{
+	return s.accept(ctx, meta, domain.ClassifyAgent(meta.UserAgent), in.ViewID, in.SessionID, domain.Event{
 		Kind:      domain.KindTimeSpent,
 		TimeSpent: &domain.TimeSpent{Path: path, FocusSeconds: domain.ClampFocus(in.FocusSeconds)},
 	})
 }
 
 // Navigation records a move between pages and returns its id.
-func (s *Ingest) Navigation(_ context.Context, meta Meta, in NavigationInput) (uuid.UUID, error) {
+func (s *Ingest) Navigation(ctx context.Context, meta Meta, in NavigationInput) (uuid.UUID, error) {
 	to, err := domain.NormalizePath(in.To)
 	if err != nil {
 		return uuid.Nil, err
@@ -163,14 +174,14 @@ func (s *Ingest) Navigation(_ context.Context, meta Meta, in NavigationInput) (u
 		return uuid.Nil, fmt.Errorf("%w: unknown transition %q", domain.ErrValidation, in.Transition)
 	}
 
-	return s.accept(meta, domain.ClassifyAgent(meta.UserAgent), in.ID, in.SessionID, domain.Event{
+	return s.accept(ctx, meta, domain.ClassifyAgent(meta.UserAgent), in.ID, in.SessionID, domain.Event{
 		Kind:       domain.KindNavigation,
 		Navigation: &domain.Navigation{From: from, To: to, Transition: transition},
 	})
 }
 
 // Search records a search and returns the id its clicks refer to.
-func (s *Ingest) Search(_ context.Context, meta Meta, in SearchInput) (uuid.UUID, error) {
+func (s *Ingest) Search(ctx context.Context, meta Meta, in SearchInput) (uuid.UUID, error) {
 	query, err := domain.NormalizeQuery(in.Query)
 	if err != nil {
 		return uuid.Nil, err
@@ -185,7 +196,7 @@ func (s *Ingest) Search(_ context.Context, meta Meta, in SearchInput) (uuid.UUID
 		return uuid.Nil, err
 	}
 
-	return s.accept(meta, domain.ClassifyAgent(meta.UserAgent), in.ID, in.SessionID, domain.Event{
+	return s.accept(ctx, meta, domain.ClassifyAgent(meta.UserAgent), in.ID, in.SessionID, domain.Event{
 		Kind: domain.KindSearch,
 		Search: &domain.Search{
 			Query: query, ResultCount: min(in.ResultCount, domain.MaxResultCount), Filters: filters,
@@ -194,7 +205,7 @@ func (s *Ingest) Search(_ context.Context, meta Meta, in SearchInput) (uuid.UUID
 }
 
 // SearchClick records a click on a search result and returns its id.
-func (s *Ingest) SearchClick(_ context.Context, meta Meta, in SearchClickInput) (uuid.UUID, error) {
+func (s *Ingest) SearchClick(ctx context.Context, meta Meta, in SearchClickInput) (uuid.UUID, error) {
 	if in.SearchID == uuid.Nil || in.ResourceID == uuid.Nil {
 		return uuid.Nil, fmt.Errorf("%w: search_id and resource_id are required", domain.ErrValidation)
 	}
@@ -208,7 +219,7 @@ func (s *Ingest) SearchClick(_ context.Context, meta Meta, in SearchClickInput) 
 		return uuid.Nil, fmt.Errorf("%w: unknown resource_type %q", domain.ErrValidation, in.ResourceType)
 	}
 
-	return s.accept(meta, domain.ClassifyAgent(meta.UserAgent), in.ID, in.SessionID, domain.Event{
+	return s.accept(ctx, meta, domain.ClassifyAgent(meta.UserAgent), in.ID, in.SessionID, domain.Event{
 		Kind: domain.KindSearchClick,
 		SearchClick: &domain.SearchClick{
 			SearchUUID: in.SearchID, Position: min(in.Position, domain.MaxPosition),
@@ -219,7 +230,9 @@ func (s *Ingest) SearchClick(_ context.Context, meta Meta, in SearchClickInput) 
 
 // accept completes event and queues it, unless it comes from a bot, a prefetch, or a
 // subject that refused analytics. Either way the caller gets the same answer.
-func (s *Ingest) accept(meta Meta, agent domain.Agent, id, session uuid.UUID, event domain.Event) (uuid.UUID, error) {
+func (s *Ingest) accept(
+	ctx context.Context, meta Meta, agent domain.Agent, id, session uuid.UUID, event domain.Event,
+) (uuid.UUID, error) {
 	if session == uuid.Nil {
 		return uuid.Nil, fmt.Errorf("%w: session_id is required", domain.ErrValidation)
 	}
@@ -234,7 +247,7 @@ func (s *Ingest) accept(meta Meta, agent domain.Agent, id, session uuid.UUID, ev
 
 	now := s.clock.Now().UTC()
 	event.UUID, event.OccurredAt = id, now
-	event.Visitor = domain.Visitor{SubjectUUID: meta.Subject, Hash: s.visitorHash(meta, now), SessionID: session}
+	event.Visitor = domain.Visitor{SubjectUUID: meta.Subject, Hash: s.visitorHash(ctx, meta, now), SessionID: session}
 
 	s.sink.Enqueue(event)
 
@@ -246,13 +259,16 @@ func (s *Ingest) accept(meta Meta, agent domain.Agent, id, session uuid.UUID, ev
 }
 
 // visitorHash is stable for a consent subject. For anyone else it keys the IP and user agent
-// with the day, so the same visitor gets an unrelated hash tomorrow.
-func (s *Ingest) visitorHash(meta Meta, at time.Time) string {
+// with the day's random salt, so the same visitor gets an unrelated hash tomorrow and, once the
+// salt is destroyed, nobody can test a guessed IP and user agent against a past day.
+func (s *Ingest) visitorHash(ctx context.Context, meta Meta, at time.Time) string {
 	if meta.Subject != nil {
 		return s.hasher.MAC("analytics:subject:" + meta.Subject.String())
 	}
 
-	return s.hasher.MAC("analytics:visitor:" + at.Format(time.DateOnly) + ":" + meta.IP + ":" + meta.UserAgent)
+	salt := hex.EncodeToString(s.salts.at(ctx, at))
+
+	return s.hasher.MAC("analytics:visitor:" + salt + ":" + meta.IP + ":" + meta.UserAgent)
 }
 
 // processHasher keys hashes with a random key that lives only in this process.
