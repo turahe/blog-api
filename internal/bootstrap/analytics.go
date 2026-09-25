@@ -35,6 +35,11 @@ func NewAnalyticsAggregator(db *database.Database) *analyticsservice.Aggregator 
 	return analyticsservice.NewAggregator(persistence.NewAnalyticsRollupRepository(db.GORM), siteTimezone{settings}, system.Clock{})
 }
 
+// newAnalyticsReports returns the admin dashboard reports, read from rollups in the site time zone.
+func newAnalyticsReports(db *database.Database, settings *settingsservice.Service) *analyticsservice.Reports {
+	return analyticsservice.NewReports(persistence.NewAnalyticsReportRepository(db.GORM), siteTimezone{settings}, system.Clock{})
+}
+
 type siteTimezone struct {
 	settings *settingsservice.Service
 }

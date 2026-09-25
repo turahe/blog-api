@@ -28,6 +28,8 @@ func TestSeededGrantsMatchHandlerFallbackRoles(t *testing.T) {
 		permNewsletterIssuesEdit:            editors,
 		permNewsletterIssuesSend:            editors,
 		permMediaUsageRead:                  editors,
+		permAnalyticsRead:                   editors,
+		permAnalyticsSearchRead:             editors,
 		permRevisionsViewAll:                editors,
 		permRevisionsView:                   authors,
 		permRevisionsRestore:                authors,

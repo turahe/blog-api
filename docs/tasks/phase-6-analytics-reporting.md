@@ -9,9 +9,9 @@ Index: [README.md](./README.md).
 
 ## Status
 
-**In progress** — telemetry ingest and the aggregation pipeline are done: the five ingest routes
-store raw events and `app scheduler` rolls them up. The seven admin analytics operations still
-return `501`.
+**In progress** — telemetry ingest, the aggregation pipeline, and dashboard reporting are done:
+the five ingest routes store raw events, `app scheduler` rolls them up, and the five admin
+reports read the rollups. The realtime stream and export still return `501`.
 
 ## Epic: telemetry ingest
 
@@ -48,14 +48,17 @@ return `501`.
 
 ## Epic: admin dashboard reporting
 
-- [ ] `admin.analytics.overview` — `GET /api/v1/admin/analytics/overview`
-- [ ] `admin.analytics.pages` — `GET /api/v1/admin/analytics/pages`
-- [ ] `admin.analytics.navigation` — `GET /api/v1/admin/analytics/navigation`
-- [ ] `admin.analytics.retention` — `GET /api/v1/admin/analytics/retention`
-- [ ] `admin.analytics.search` — `GET /api/v1/admin/analytics/search` with CTR
-- [ ] Serve every dashboard read from rollups, never from raw events
-- [ ] Consistent date-range, timezone, and comparison-period semantics across operations
-- [ ] Casbin permission for `analytics.read`
+- [x] `admin.analytics.overview` — `GET /api/v1/admin/analytics/overview`
+- [x] `admin.analytics.pages` — `GET /api/v1/admin/analytics/pages`
+- [x] `admin.analytics.navigation` — `GET /api/v1/admin/analytics/navigation`
+- [x] `admin.analytics.retention` — `GET /api/v1/admin/analytics/retention`
+- [x] `admin.analytics.search` — `GET /api/v1/admin/analytics/search` with CTR
+- [x] Serve every dashboard read from rollups, never from raw events
+- [x] Consistent date-range, timezone, and comparison-period semantics across operations
+  (whole periods in `site.timezone`, labelled visitor sums, `compare=previous|none`) — see
+  [analytics.md](../backend/analytics.md#admin-dashboard-rbac-protected)
+- [x] Casbin permission for `analytics.read` (plus `analytics.search.read`; seeded for admins and
+  editors)
 
 Spec: [analytics-dashboard.md](../features/analytics-dashboard.md)
 

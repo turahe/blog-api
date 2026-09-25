@@ -43,6 +43,29 @@ type RollupRepository interface {
 	RecomputeCohort(ctx context.Context, cohort domain.Cohort, now time.Time) error
 }
 
+// ReportRepository reads rollups for the admin dashboard. Lists are ordered by their main
+// measure, largest first.
+type ReportRepository interface {
+	SiteRows(ctx context.Context, sel domain.Selection) ([]domain.SiteRow, error)
+	Referrers(ctx context.Context, sel domain.Selection, limit int) ([]domain.ReferrerRow, error)
+	Dimensions(ctx context.Context, sel domain.Selection) ([]domain.DimensionRow, error)
+	// Pages orders by domain.SortViews, SortTime (average focus), or SortRising (views gained
+	// over prev); the latter two leave out the folded remainder.
+	Pages(ctx context.Context, cur, prev domain.Selection, sort string, limit int) ([]domain.PageRow, error)
+	Transitions(ctx context.Context, sel domain.Selection, limit int) ([]domain.TransitionRow, error)
+	EntryPages(ctx context.Context, sel domain.Selection, limit int) ([]domain.PathCount, error)
+	ExitPages(ctx context.Context, sel domain.Selection, limit int) ([]domain.PathCount, error)
+	// Queries orders by searches, or by zero-result searches (leaving out the remainder)
+	// when zeroResults is set.
+	Queries(ctx context.Context, sel domain.Selection, zeroResults bool, limit int) ([]domain.QueryRow, error)
+	// QueryTotals sums every query row, including the folded remainder.
+	QueryTotals(ctx context.Context, sel domain.Selection) (domain.QueryRow, error)
+	Positions(ctx context.Context, sel domain.Selection, limit int) ([]domain.PositionRow, error)
+	ClickedResults(ctx context.Context, sel domain.Selection, limit int) ([]domain.ResultRow, error)
+	// Cohorts returns the cohorts of the local days first through last, oldest first.
+	Cohorts(ctx context.Context, first, last string) ([]domain.CohortRow, error)
+}
+
 // TimezoneSource returns the site time zone rollups are bucketed in.
 type TimezoneSource interface {
 	Timezone(ctx context.Context) (string, error)

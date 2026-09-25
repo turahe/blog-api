@@ -1,7 +1,10 @@
 package requests
 
 import (
+	"time"
+
 	"github.com/google/uuid"
+	analyticsdomain "github.com/turahe/blog-api/internal/core/analytics/domain"
 	analyticsservice "github.com/turahe/blog-api/internal/core/analytics/service"
 )
 
@@ -89,6 +92,36 @@ func (r IngestSearchClick) Input() analyticsservice.SearchClickInput {
 		ID: optionalUUID(r.ID), SessionID: optionalUUID(r.SessionID), SearchID: optionalUUID(r.SearchID),
 		Position: r.Position, ResourceType: r.ResourceType, ResourceID: optionalUUID(r.ResourceID),
 	}
+}
+
+// AnalyticsReport is the query of the admin analytics reports. from and to are inclusive dates
+// (YYYY-MM-DD) in the site time zone; the default is the last 30 days through today. grain is
+// picked from the range length when omitted; compare defaults to previous.
+type AnalyticsReport struct {
+	From    string `form:"from"    binding:"omitempty,datetime=2006-01-02"`
+	To      string `form:"to"      binding:"omitempty,datetime=2006-01-02"`
+	Grain   string `form:"grain"   binding:"omitempty,oneof=day week month"`
+	Compare string `form:"compare" binding:"omitempty,oneof=previous none"`
+	Limit   int    `form:"limit"   binding:"omitempty,min=1,max=100"`
+	Sort    string `form:"sort"    binding:"omitempty,oneof=views time rising"`
+}
+
+// Query converts the request for the reports service.
+func (r AnalyticsReport) Query() analyticsdomain.ReportQuery {
+	return analyticsdomain.ReportQuery{
+		From: optionalDate(r.From), To: optionalDate(r.To), Grain: analyticsdomain.Grain(r.Grain),
+		Compare: r.Compare != "none", Limit: r.Limit, Sort: r.Sort,
+	}
+}
+
+// optionalDate parses a validated YYYY-MM-DD field; empty is the zero time.
+func optionalDate(s string) time.Time {
+	t, err := time.Parse(time.DateOnly, s)
+	if err != nil {
+		return time.Time{}
+	}
+
+	return t
 }
 
 // optionalUUID parses a validated uuid field; empty (or invalid) is uuid.Nil.

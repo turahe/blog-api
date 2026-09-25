@@ -216,17 +216,60 @@ optional and is generated when omitted.
 
 ### Admin Dashboard (RBAC Protected)
 
-- `GET /api/v1/admin/analytics/overview`
-  - stat cards + trend series (7/30/90 day windows)
-  - query params: `window`, `start_date`, `end_date`, `path`, `country`
-- `GET /api/v1/admin/analytics/pages`
-  - popular pages, top by time spent, rising pages
-- `GET /api/v1/admin/analytics/navigation`
-  - section flows, top entry/exit paths
-- `GET /api/v1/admin/analytics/retention`
-  - cohort retention views for new vs returning
-- `GET /api/v1/admin/analytics/search`
-  - top queries, CTR stats, zero-result queries, position CTR
+Every report reads the rollup tables only, never raw events, so a report costs the same whatever
+the traffic and raw pruning never changes a figure.
+
+| Route | Permission | Contents |
+| --- | --- | --- |
+| `GET /api/v1/admin/analytics/overview` | `analytics.read` | totals, a series per period, top 10 traffic sources, country/device/browser |
+| `GET /api/v1/admin/analytics/pages` | `analytics.read` | top pages by views, average focus time (`sort=time`), or views gained (`sort=rising`) |
+| `GET /api/v1/admin/analytics/navigation` | `analytics.read` | top steps between pages with their transition type, top entry and exit pages |
+| `GET /api/v1/admin/analytics/retention` | `analytics.read` | daily cohorts with day 1/7/30 returns, weighted rates, new versus returning |
+| `GET /api/v1/admin/analytics/search` | `analytics.search.read` | search totals and series, CTR, time to first click, top and zero-result queries, clicks per position, top clicked results |
+
+Admins hold every permission; editors are seeded with `analytics.read` and
+`analytics.search.read` (rerun `app seed` on existing databases). Without an RBAC enforcer the
+handlers fall back to the admin and editor roles. Export stays admin-only.
+
+#### Query parameters
+
+All five reports share one query:
+
+| Param | Default | Meaning |
+| --- | --- | --- |
+| `from`, `to` | the 30 days through today | inclusive dates (`YYYY-MM-DD`) in the `site.timezone` setting; at most 731 days |
+| `grain` | from the range: up to 92 days `day`, up to 366 `week`, else `month` | the rollup grain |
+| `compare` | `previous` | `previous` also returns the same number of periods just before the window; `none` skips it |
+| `limit` | 20 | rows per list, 1–100 (pages, navigation, search) |
+| `sort` | `views` | pages only: `views`, `time`, or `rising` |
+
+#### Semantics
+
+- **Whole periods.** A report covers every period of the grain that touches `from`..`to`, so a
+  weekly window starts on the Monday on or before `from` and a monthly one on the 1st. The
+  response echoes `timezone`, `grain`, `window` (`from`, `to`, `periods`), and `comparison`
+  (`from`, `to`, or `null` with `compare=none`), all as local dates.
+- **Series.** One point per period, zero-filled where no rollup row exists; each point's
+  `visitors` is exact for that period.
+- **Visitors over a range.** Unique visitors do not add up across periods, so range totals are
+  the sum of per-period uniques and are named after the grain: `visitor_days`,
+  `visitor_weeks`, or `visitor_months` (likewise `consented_visitor_*` and each list row's
+  visitors). When the window is a single period the true distinct count is also returned as
+  `visitors`. For a distinct count over a month, ask for `grain=month` on that month.
+- **Rates** (`bounce_rate`, `pages_per_session`, `avg_time_seconds`, `search_ctr`, `ctr`,
+  `avg_seconds_to_click`, retention `rates`, position `share`) are ratios of summed counts and
+  are `null` when the denominator is zero.
+- **Comparison.** `previous` holds the comparison window's totals; pages add `previous_views` and
+  `change` with `compare=previous` or `sort=rising`.
+- **The `(other)` row** folds everything outside a period's top 1000. It appears in view-ordered
+  page lists, query lists, and traffic sources, but never in `sort=time`, `sort=rising`, or
+  zero-result queries. Search totals and average time to click sum every row, `(other)`
+  included.
+- **Retention.** Cohorts are the consented visitors first seen on each day of the window. A
+  return day that has not ended yet is `null` and is left out of that rate's weighting.
+- **Freshness.** Rollups of the current and previous periods are rebuilt every 15 minutes, so
+  today lags by at most one run. Responses carry `Cache-Control: private, no-store`.
+
 - `GET /api/v1/admin/analytics/realtime/stream`
   - SSE endpoint for live activity stream
   - `events`: `realtime.page_view`, `realtime.search`, `realtime.summary`

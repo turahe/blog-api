@@ -78,6 +78,12 @@ type Analytics struct {
 	Navigation  gin.HandlerFunc
 	Search      gin.HandlerFunc
 	SearchClick gin.HandlerFunc
+	// Admin dashboard reports.
+	AdminOverview   gin.HandlerFunc
+	AdminPages      gin.HandlerFunc
+	AdminNavigation gin.HandlerFunc
+	AdminRetention  gin.HandlerFunc
+	AdminSearch     gin.HandlerFunc
 }
 
 // Settings holds admin settings handlers.

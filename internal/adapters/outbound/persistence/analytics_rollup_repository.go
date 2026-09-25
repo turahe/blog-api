@@ -146,8 +146,8 @@ ON CONFLICT (cohort_day) DO UPDATE SET size = EXCLUDED.size, day1 = EXCLUDED.day
 	day30 = EXCLUDED.day30, computed_at = EXCLUDED.computed_at`, params).Error
 }
 
-// rollupQueries fill rollupTables, in the same order, for the period bound to @grain,
-// @period, @from, and @to.
+// rollupQueries fill rollupTables, in the same order, for the period bound to the named
+// parameters @grain, @period, @from, and @to.
 var rollupQueries = []string{
 	// analytics_rollup_site
 	`INSERT INTO analytics_rollup_site (grain, period_start, views, visitors, sessions, bounces, focus_seconds,

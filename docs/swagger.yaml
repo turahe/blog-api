@@ -1073,6 +1073,304 @@ info:
   title: Blog API
   version: "1.0"
 paths:
+  /api/v1/admin/analytics/navigation:
+    get:
+      description: The most common steps between pages (with their transition type)
+        and the top entry and exit pages.
+      parameters:
+      - description: first day, YYYY-MM-DD
+        in: query
+        name: from
+        type: string
+      - description: last day, YYYY-MM-DD
+        in: query
+        name: to
+        type: string
+      - description: period length
+        enum:
+        - day
+        - week
+        - month
+        in: query
+        name: grain
+        type: string
+      - default: 20
+        description: rows
+        in: query
+        maximum: 100
+        minimum: 1
+        name: limit
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/responses.Envelope'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/responses.Envelope'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/responses.Envelope'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/responses.Envelope'
+      security:
+      - Bearer: []
+      summary: Analytics navigation
+      tags:
+      - admin
+  /api/v1/admin/analytics/overview:
+    get:
+      description: Totals, a series per period, the top 10 traffic sources, and audience
+        (country, device, browser) for whole periods of the site time zone. Visitors
+        are distinct within a period; a range total is the sum of per-period uniques,
+        named visitor_days, visitor_weeks, or visitor_months after the grain, and
+        plain visitors appears only when the window is a single period. previous holds
+        the same number of periods just before the window (null with compare=none).
+        Rates are null when their denominator is zero.
+      parameters:
+      - description: first day, YYYY-MM-DD (default 29 days before to)
+        in: query
+        name: from
+        type: string
+      - description: last day, YYYY-MM-DD (default today)
+        in: query
+        name: to
+        type: string
+      - description: 'period length (default by range: up to 92 days day, up to 366
+          week, else month)'
+        enum:
+        - day
+        - week
+        - month
+        in: query
+        name: grain
+        type: string
+      - default: previous
+        description: compare with the previous window
+        enum:
+        - previous
+        - none
+        in: query
+        name: compare
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/responses.Envelope'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/responses.Envelope'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/responses.Envelope'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/responses.Envelope'
+      security:
+      - Bearer: []
+      summary: Analytics overview
+      tags:
+      - admin
+  /api/v1/admin/analytics/pages:
+    get:
+      description: Top pages by views, average focus time (sort=time), or views gained
+        over the previous window (sort=rising). previous_views and change appear with
+        compare=previous or sort=rising. Pages outside the top 1000 of a period are
+        folded into (other), which only sort=views lists.
+      parameters:
+      - description: first day, YYYY-MM-DD
+        in: query
+        name: from
+        type: string
+      - description: last day, YYYY-MM-DD
+        in: query
+        name: to
+        type: string
+      - description: period length
+        enum:
+        - day
+        - week
+        - month
+        in: query
+        name: grain
+        type: string
+      - default: previous
+        description: compare
+        enum:
+        - previous
+        - none
+        in: query
+        name: compare
+        type: string
+      - default: views
+        description: order
+        enum:
+        - views
+        - time
+        - rising
+        in: query
+        name: sort
+        type: string
+      - default: 20
+        description: rows
+        in: query
+        maximum: 100
+        minimum: 1
+        name: limit
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/responses.Envelope'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/responses.Envelope'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/responses.Envelope'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/responses.Envelope'
+      security:
+      - Bearer: []
+      summary: Analytics pages
+      tags:
+      - admin
+  /api/v1/admin/analytics/retention:
+    get:
+      description: Daily cohorts of consented visitors first seen on each day of the
+        window, with how many returned on day 1, 7, and 30 (null until that day has
+        passed), weighted return rates over complete cohorts, and the new versus returning
+        split of consented visitors.
+      parameters:
+      - description: first day, YYYY-MM-DD
+        in: query
+        name: from
+        type: string
+      - description: last day, YYYY-MM-DD
+        in: query
+        name: to
+        type: string
+      - description: period length
+        enum:
+        - day
+        - week
+        - month
+        in: query
+        name: grain
+        type: string
+      - default: previous
+        description: compare
+        enum:
+        - previous
+        - none
+        in: query
+        name: compare
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/responses.Envelope'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/responses.Envelope'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/responses.Envelope'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/responses.Envelope'
+      security:
+      - Bearer: []
+      summary: Analytics retention
+      tags:
+      - admin
+  /api/v1/admin/analytics/search:
+    get:
+      description: Search totals and series, click-through rate, average seconds to
+        the first click, top and zero-result queries, clicks per result position,
+        and the most clicked results. Needs analytics.search.read.
+      parameters:
+      - description: first day, YYYY-MM-DD
+        in: query
+        name: from
+        type: string
+      - description: last day, YYYY-MM-DD
+        in: query
+        name: to
+        type: string
+      - description: period length
+        enum:
+        - day
+        - week
+        - month
+        in: query
+        name: grain
+        type: string
+      - default: previous
+        description: compare
+        enum:
+        - previous
+        - none
+        in: query
+        name: compare
+        type: string
+      - default: 20
+        description: rows
+        in: query
+        maximum: 100
+        minimum: 1
+        name: limit
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/responses.Envelope'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/responses.Envelope'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/responses.Envelope'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/responses.Envelope'
+      security:
+      - Bearer: []
+      summary: Analytics search
+      tags:
+      - admin
   /api/v1/admin/auth/login:
     post:
       consumes:

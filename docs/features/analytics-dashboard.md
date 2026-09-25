@@ -86,7 +86,7 @@ Compliance goals for GDPR and CCPA-like regimes:
 RBAC for analytics:
 
 - **admin** role: full access to all dashboards, filters, exports
-- **editor**: read-only summary views if enabled; no exports by default
+- **editor**: read-only reports (`analytics.read`, `analytics.search.read`); no exports
 - default policy: deny by default; only explicit permissions grant access
 
 Suggested permission keys:

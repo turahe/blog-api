@@ -410,6 +410,20 @@ Each item has `id`, `type`, `title`, `body`, `preview`, `data` (links such as `p
   `404 analytics.disabled`, `413 analytics.payload_too_large` (over 8 KiB), `429` over
   `ANALYTICS_INGEST_PER_MINUTE`. Details: [analytics.md](analytics.md#public-ingestion-consent-gated).
 
+### Analytics reports
+
+- `GET /api/v1/admin/analytics/{overview,pages,navigation,retention}` need `analytics.read`;
+  `GET /api/v1/admin/analytics/search` needs `analytics.search.read`. Admins and editors hold
+  both.
+- Shared query: `from`/`to` (inclusive `YYYY-MM-DD` dates in `site.timezone`, default the last 30
+  days, at most 731), `grain` (`day`/`week`/`month`, picked from the range when omitted),
+  `compare` (`previous` by default, or `none`), `limit` (1–100, default 20), and pages' `sort`
+  (`views`/`time`/`rising`).
+- Reports cover whole periods and read rollups only. Range visitor totals are sums of
+  per-period uniques named `visitor_days`/`visitor_weeks`/`visitor_months`; plain `visitors`
+  appears only for a one-period window. Details:
+  [analytics.md](analytics.md#admin-dashboard-rbac-protected).
+
 ## Main API Areas
 
 - auth

@@ -1,5 +1,23 @@
 # Changelog
 
+## 2026-09-25 — Analytics dashboard reports
+
+### Added
+
+- `GET /api/v1/admin/analytics/overview`, `/pages`, `/navigation`, `/retention`, and `/search`,
+  read from rollups only. They share `from`/`to` (inclusive dates in `site.timezone`, default
+  the last 30 days, at most 731), `grain` (picked from the range when omitted), `compare`
+  (`previous` by default, or `none`), and `limit`; pages also take `sort=views|time|rising`.
+- Reports cover whole periods. Each series point has exact visitors; range totals are sums of
+  per-period uniques labelled `visitor_days`, `visitor_weeks`, or `visitor_months`, with plain
+  `visitors` only for a one-period window. Rates are `null` without a denominator.
+
+### Security
+
+- New permissions `analytics.read` (overview, pages, navigation, retention) and
+  `analytics.search.read` (search), seeded for admins and editors. Rerun `app seed` on existing
+  databases. Export stays admin-only.
+
 ## 2026-09-25 — Analytics aggregation pipeline
 
 ### Added

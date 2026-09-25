@@ -107,9 +107,9 @@ Permissions are **registered** in code as a typed registry (seeded into `rbac_pe
 | `impersonation.start`                  | impersonation    | start       | all              | superadmin                   |
 | `impersonation.stop`                   | impersonation    | stop        | all              | superadmin                   |
 | `impersonation.audit.read`             | impersonation.audit| read      | all              | superadmin                   |
-| `analytics.read`                       | analytics        | read        | all              | admin+                       |
+| `analytics.read`                       | analytics        | read        | all              | editor+                      |
 | `analytics.export`                     | analytics        | export      | all              | admin+                       |
-| `analytics.search.read`                | analytics.search | read        | all              | admin+                       |
+| `analytics.search.read`                | analytics.search | read        | all              | editor+                      |
 | `analytics.realtime.read`              | analytics.realtime| read       | all              | admin+                       |
 
 ## Access & Security Rules
