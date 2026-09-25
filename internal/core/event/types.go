@@ -12,6 +12,10 @@ const (
 	PostSEOUpdated       = "blog.post.seo.updated"
 	PostSlugChanged      = "blog.post.slug_changed"
 
+	AnalyticsConsentGranted   = "analytics.consent.granted"
+	AnalyticsConsentRejected  = "analytics.consent.rejected"
+	AnalyticsConsentWithdrawn = "analytics.consent.withdrawn"
+
 	CommentCreated   = "blog.comment.created"
 	CommentModerated = "blog.comment.moderated"
 
@@ -32,4 +36,5 @@ const (
 	AggregateMedia    = "media"
 	AggregateEmail    = "email"
 	AggregateSettings = "settings"
+	AggregateConsent  = "consent"
 )

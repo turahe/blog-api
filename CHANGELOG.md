@@ -1,5 +1,23 @@
 # Changelog
 
+## 2026-09-25 — Analytics consent
+
+### Added
+
+- Pseudonymous analytics consent: `consent_subjects` (only the SHA-256 hash of the consent token is
+  stored) and `analytics_consents` (purpose, status, policy version, decision and withdrawal time).
+  See [analytics.md](docs/backend/analytics.md#implementation).
+- `POST /api/v1/analytics/consent` stores decisions for `analytics` and `authenticated_analytics`.
+  The first call issues a consent token (`201`), which clients send back in `X-Consent-Token`.
+  Rate limited to 20 requests per minute.
+- `GET /api/v1/analytics/consent` returns the current decisions for the token.
+- `DELETE /api/v1/analytics/consent/{id}` withdraws a consent; withdrawing `analytics` also
+  withdraws `authenticated_analytics` and unlinks the user.
+- Consent is enforced at the ingest boundary: `/api/v1/analytics/ingest/*` returns
+  `404 analytics.disabled` when `analytics.enabled` is off and `403 analytics.consent_required`
+  when consent is required but not granted.
+- Events `analytics.consent.granted`, `analytics.consent.rejected`, and `analytics.consent.withdrawn`.
+
 ## 2026-09-25 — Post SEO
 
 ### Added

@@ -37,6 +37,7 @@ import (
 	categoryservice "github.com/turahe/blog-api/internal/core/category/service"
 	commentports "github.com/turahe/blog-api/internal/core/comment/ports"
 	commentservice "github.com/turahe/blog-api/internal/core/comment/service"
+	consentservice "github.com/turahe/blog-api/internal/core/consent/service"
 	"github.com/turahe/blog-api/internal/core/event"
 	healthports "github.com/turahe/blog-api/internal/core/health/ports"
 	healthservice "github.com/turahe/blog-api/internal/core/health/service"
@@ -202,6 +203,7 @@ func NewRuntime(ctx context.Context, cfg config.Config, logger *slog.Logger, ver
 		Media:       media,
 		Comments:    comments, Notifications: inbox, NotificationStream: hub, SSEPingInterval: cfg.SSEPingInterval,
 		Settings:    settings,
+		Consent:     consentservice.New(persistence.NewConsentRepository(db.GORM), ids, clock).WithEvents(events),
 		RateLimiter: ratelimit.NewRedis(redisClient),
 		CommentRates: handlers.CommentRates{
 			CreatePerMinute:  cfg.CommentsCreatePerMinute,

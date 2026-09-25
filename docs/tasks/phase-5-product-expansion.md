@@ -8,8 +8,9 @@ Index: [README.md](./README.md).
 
 ## Status
 
-**In progress** — admin settings, post versioning, and post SEO are implemented. Impersonation and
-newsletter operations still return `501`; search and privacy management have no schema or service yet.
+**In progress** — admin settings, post versioning, post SEO, and analytics consent are implemented.
+Impersonation and newsletter operations still return `501`; search and the `/me` privacy, export,
+and erase endpoints have no schema or service yet.
 
 ## Decisions
 
@@ -108,15 +109,15 @@ Spec: [newsletter-subscriptions.md](../features/newsletter-subscriptions.md)
 
 ## Epic: privacy and consent management
 
-- [ ] Consent storage with purpose, version, and timestamp
-- [ ] `analytics.consent.store` — `POST /api/v1/analytics/consent`
-- [ ] `analytics.consent.get` — `GET /api/v1/analytics/consent`
-- [ ] `analytics.consent.withdraw` — `DELETE /api/v1/analytics/consent/{id}`
+- [x] Consent storage with purpose, version, and timestamp
+- [x] `analytics.consent.store` — `POST /api/v1/analytics/consent`
+- [x] `analytics.consent.get` — `GET /api/v1/analytics/consent`
+- [x] `analytics.consent.withdraw` — `DELETE /api/v1/analytics/consent/{id}`
 - [ ] `me.privacy.get` — `GET /api/v1/me/privacy`
 - [ ] `me.privacy.update` — `PUT /api/v1/me/privacy`
 - [ ] `me.activity.export` — `GET /api/v1/me/activity/export`
 - [ ] `me.activity.erase` — `POST /api/v1/me/activity/erase`
-- [ ] Enforce consent at the analytics ingest boundary, not only in the UI
+- [x] Enforce consent at the analytics ingest boundary, not only in the UI
 - [ ] Export and erase must run asynchronously with a retrievable result
 
 ## Epic: media pipeline improvements

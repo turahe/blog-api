@@ -47,8 +47,11 @@ type Deps struct {
 	Media          mediaports.Service
 	Comments       *commentservice.Service
 	Settings       settingsAPI
-	RateLimiter    middleware.Limiter
-	CommentRates   CommentRates
+	SettingsValues settingsValues
+	// Consent records analytics consent; nil keeps the consent routes as 501 stubs.
+	Consent      consentAPI
+	RateLimiter  middleware.Limiter
+	CommentRates CommentRates
 	// LoginPerMinute is the per-IP budget for auth.login; zero disables the limit.
 	LoginPerMinute int
 	Version        string
@@ -134,6 +137,7 @@ func NewControllers(deps Deps) routes.Controllers {
 	wireProfiles(&c.Users, deps)
 
 	c.Activity.MeList, c.Activity.AdminUserList = activityControllers(deps)
+	c.Analytics.ConsentStore, c.Analytics.ConsentGet, c.Analytics.ConsentWithdraw, c.Analytics.IngestGate = consentControllers(deps)
 	c.Notifications = notificationControllers(deps)
 
 	c.Posts = postControllers(deps)

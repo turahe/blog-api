@@ -25,6 +25,16 @@ type Controllers struct {
 
 	Notifications Notifications
 	Settings      Settings
+	Analytics     Analytics
+}
+
+// Analytics holds consent handlers and the gate in front of the ingestion routes.
+type Analytics struct {
+	ConsentStore    gin.HandlerFunc
+	ConsentGet      gin.HandlerFunc
+	ConsentWithdraw gin.HandlerFunc
+	// IngestGate runs before every ingestion route; nil leaves them ungated.
+	IngestGate gin.HandlerFunc
 }
 
 // Settings holds admin settings handlers.

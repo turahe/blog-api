@@ -2939,6 +2939,144 @@ const docTemplate = `{
                 }
             }
         },
+        "/api/v1/analytics/consent": {
+            "get": {
+                "description": "The current decisions of the subject identified by X-Consent-Token. An unknown or missing token is 404: treat it as no consent.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "analytics"
+                ],
+                "summary": "Get analytics consent",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "consent subject token",
+                        "name": "X-Consent-Token",
+                        "in": "header",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/responses.Envelope"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/responses.Envelope"
+                        }
+                    }
+                }
+            },
+            "post": {
+                "description": "Records a decision per purpose (analytics, authenticated_analytics) with the policy version the visitor saw. Send the X-Consent-Token from an earlier response to update that subject; without it (or with an unknown token) a new subject is created and its token is returned once, with 201. Refusing a granted purpose withdraws it. authenticated_analytics needs a signed-in user and granted analytics, and links the subject to that user.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "analytics"
+                ],
+                "summary": "Store analytics consent",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "consent subject token",
+                        "name": "X-Consent-Token",
+                        "in": "header"
+                    },
+                    {
+                        "description": "decisions",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/requests.StoreConsent"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/responses.Envelope"
+                        }
+                    },
+                    "201": {
+                        "description": "Created",
+                        "schema": {
+                            "$ref": "#/definitions/responses.Envelope"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/responses.Envelope"
+                        }
+                    },
+                    "429": {
+                        "description": "Too Many Requests",
+                        "schema": {
+                            "$ref": "#/definitions/responses.Envelope"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/analytics/consent/{param1}": {
+            "delete": {
+                "description": "Withdraws one consent. Prove ownership with the subject's X-Consent-Token, or as the signed-in user the subject is linked to; otherwise 404. Withdrawing analytics also withdraws authenticated_analytics and unlinks the user. Withdrawing a consent that is not granted changes nothing.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "analytics"
+                ],
+                "summary": "Withdraw analytics consent",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "consent UUID",
+                        "name": "param1",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "consent subject token",
+                        "name": "X-Consent-Token",
+                        "in": "header"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/responses.Envelope"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/responses.Envelope"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/responses.Envelope"
+                        }
+                    }
+                }
+            }
+        },
         "/api/v1/auth/2fa/challenge": {
             "post": {
                 "description": "Exchanges the challenge_token from POST /api/v1/auth/login and a 6-digit TOTP code\nor a backup code for a token pair. A challenge expires after 5 minutes or 5 wrong codes.",
@@ -5753,6 +5891,25 @@ const docTemplate = `{
                 },
                 "twitter": {
                     "type": "string"
+                }
+            }
+        },
+        "requests.StoreConsent": {
+            "type": "object",
+            "required": [
+                "policy_version",
+                "purposes"
+            ],
+            "properties": {
+                "policy_version": {
+                    "type": "string",
+                    "maxLength": 32
+                },
+                "purposes": {
+                    "type": "object",
+                    "additionalProperties": {
+                        "type": "boolean"
+                    }
                 }
             }
         },

@@ -4,16 +4,26 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
-// registerAnalytics binds analytics ingest/consent routes (stubs until implemented).
-func registerAnalytics(v1 gin.IRoutes, c Controllers) {
+// registerAnalytics binds consent routes and the consent-gated ingestion routes. Consent
+// accepts an optional token so a signed-in visitor can link authenticated analytics.
+func registerAnalytics(v1 *gin.RouterGroup, auth AuthMiddleware, c Controllers) {
 	g := GroupAnalytics
+
+	consent := v1.Group("")
+	consent.Use(auth.Optional...)
+	get(consent, "/analytics/consent", "analytics.consent.get", g, AuthNone, c, c.Analytics.ConsentGet)
+	post(consent, "/analytics/consent", "analytics.consent.store", g, AuthOptional, c, c.Analytics.ConsentStore)
+	del(consent, "/analytics/consent/:param1", "analytics.consent.withdraw", g, AuthOptional, c, c.Analytics.ConsentWithdraw)
+
+	ingest := v1.Group("")
+	if c.Analytics.IngestGate != nil {
+		ingest.Use(c.Analytics.IngestGate)
+	}
+
 	n := AuthNone
-	get(v1, "/analytics/consent", "analytics.consent.get", g, n, c, nil)
-	post(v1, "/analytics/consent", "analytics.consent.store", g, n, c, nil)
-	del(v1, "/analytics/consent/:param1", "analytics.consent.withdraw", g, n, c, nil)
-	post(v1, "/analytics/ingest/navigation", "analytics.ingest.navigation", g, n, c, nil)
-	post(v1, "/analytics/ingest/page-view", "analytics.ingest.page_view", g, n, c, nil)
-	post(v1, "/analytics/ingest/search", "analytics.ingest.search", g, n, c, nil)
-	post(v1, "/analytics/ingest/search-click", "analytics.ingest.search_click", g, n, c, nil)
-	post(v1, "/analytics/ingest/time-spent", "analytics.ingest.time_spent", g, n, c, nil)
+	post(ingest, "/analytics/ingest/navigation", "analytics.ingest.navigation", g, n, c, nil)
+	post(ingest, "/analytics/ingest/page-view", "analytics.ingest.page_view", g, n, c, nil)
+	post(ingest, "/analytics/ingest/search", "analytics.ingest.search", g, n, c, nil)
+	post(ingest, "/analytics/ingest/search-click", "analytics.ingest.search_click", g, n, c, nil)
+	post(ingest, "/analytics/ingest/time-spent", "analytics.ingest.time_spent", g, n, c, nil)
 }

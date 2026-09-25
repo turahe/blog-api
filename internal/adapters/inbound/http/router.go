@@ -17,6 +17,7 @@ import (
 	authservice "github.com/turahe/blog-api/internal/core/auth/service"
 	categoryservice "github.com/turahe/blog-api/internal/core/category/service"
 	commentservice "github.com/turahe/blog-api/internal/core/comment/service"
+	consentservice "github.com/turahe/blog-api/internal/core/consent/service"
 	healthports "github.com/turahe/blog-api/internal/core/health/ports"
 	mediaports "github.com/turahe/blog-api/internal/core/media/ports"
 	notificationservice "github.com/turahe/blog-api/internal/core/notification/service"
@@ -50,6 +51,7 @@ type Dependencies struct {
 	Media          mediaports.Service
 	Comments       *commentservice.Service
 	Settings       *settingsservice.Service // nil keeps the settings routes as 501 stubs
+	Consent        *consentservice.Service  // nil keeps the consent routes as 501 stubs
 	RateLimiter    middleware.Limiter
 	CommentRates   handlers.CommentRates
 	LoginPerMinute int
@@ -166,6 +168,11 @@ func optionalServices(controllerDeps *handlers.Deps, deps Dependencies) {
 
 	if deps.Settings != nil {
 		controllerDeps.Settings = deps.Settings
+		controllerDeps.SettingsValues = deps.Settings
+	}
+
+	if deps.Consent != nil {
+		controllerDeps.Consent = deps.Consent
 	}
 }
 

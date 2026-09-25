@@ -175,11 +175,35 @@ Note: store IP only temporarily (or masked/truncated) for geo lookup, never as a
 
 ### Consent Management
 
-- `GET /api/v1/analytics/consent/:token`
+- `GET /api/v1/analytics/consent`
 - `POST /api/v1/analytics/consent`
   - grant or reject consent with scope flags
-- `DELETE /api/v1/analytics/consent/:token`
+- `DELETE /api/v1/analytics/consent/{id}`
   - withdraw consent and mark records eligible for erasure
+
+#### Implementation
+
+- The browser identifies itself with an opaque consent token in the `X-Consent-Token` header.
+  The first `POST` without a valid token creates a pseudonymous subject and returns the token
+  once (`201`); later calls return `200` without it. Only the SHA-256 hash of the token is stored
+  (`consent_subjects.token_hash`).
+- Body: `{"purposes": {"analytics": true, "authenticated_analytics": false}, "policy_version": "2026-09"}`.
+  Purposes are `analytics` and `authenticated_analytics`. Each decision is stored per purpose in
+  `analytics_consents` with status (`granted`, `rejected`, `withdrawn`), policy version, and
+  decision time. Refusing a previously granted purpose records `withdrawn`; a first refusal
+  records `rejected`. Unchanged decisions are not rewritten.
+- `authenticated_analytics` requires a signed-in user and a granted `analytics` consent. Granting
+  it links the subject to the user; refusing or withdrawing it unlinks them. Withdrawing
+  `analytics` also withdraws `authenticated_analytics`.
+- `DELETE /analytics/consent/{id}` is allowed for the token holder or the linked user; anything
+  else is `404`. `POST` is rate limited to 20 requests per minute per client.
+- Ingest enforcement: every `/analytics/ingest/*` route passes through a gate before the handler.
+  `analytics.enabled=false` returns `404 analytics.disabled`; with
+  `analytics.consent_required=true`, a request without a token whose `analytics` consent is
+  granted returns `403 analytics.consent_required`. The ingest handlers themselves still return
+  `501` until Phase 6.
+- Each status change records `analytics.consent.granted`, `analytics.consent.rejected`, or
+  `analytics.consent.withdrawn` in the outbox.
 
 ## Real-Time Pipeline
 

@@ -410,6 +410,54 @@ channels:
       operationId: onAnalyticsRawEvent
       message:
         $ref: '#/components/messages/AnalyticsIngestRaw'
+  analytics.consent.granted:
+    description: A consent subject granted a purpose.
+    subscribe:
+      operationId: onAnalyticsConsentGranted
+      tags:
+      - name: analytics
+      - name: outbox
+      message:
+        $ref: '#/components/messages/AnalyticsConsentChanged'
+    publish:
+      operationId: publishAnalyticsConsentGranted
+      tags:
+      - name: analytics
+      - name: outbox
+      message:
+        $ref: '#/components/messages/AnalyticsConsentChanged'
+  analytics.consent.rejected:
+    description: A consent subject refused a purpose it had never granted.
+    subscribe:
+      operationId: onAnalyticsConsentRejected
+      tags:
+      - name: analytics
+      - name: outbox
+      message:
+        $ref: '#/components/messages/AnalyticsConsentChanged'
+    publish:
+      operationId: publishAnalyticsConsentRejected
+      tags:
+      - name: analytics
+      - name: outbox
+      message:
+        $ref: '#/components/messages/AnalyticsConsentChanged'
+  analytics.consent.withdrawn:
+    description: A consent subject revoked a purpose it had granted; ingestion for that purpose stops.
+    subscribe:
+      operationId: onAnalyticsConsentWithdrawn
+      tags:
+      - name: analytics
+      - name: outbox
+      message:
+        $ref: '#/components/messages/AnalyticsConsentChanged'
+    publish:
+      operationId: publishAnalyticsConsentWithdrawn
+      tags:
+      - name: analytics
+      - name: outbox
+      message:
+        $ref: '#/components/messages/AnalyticsConsentChanged'
   analytics.job.materialize_daily:
     description: Job topic for daily aggregate materialization jobs.
     subscribe:
@@ -1083,6 +1131,39 @@ components:
             type: string
             maxLength: 500
             nullable: true
+    AnalyticsConsentChanged:
+      traits:
+      - $ref: '#/components/messageTraits/EventEnvelope'
+      payload:
+        type: object
+        description: Carries no consent token and no user id; subjects are pseudonymous.
+        required:
+        - consent_id
+        - subject_id
+        - purpose
+        - status
+        - policy_version
+        properties:
+          consent_id:
+            type: string
+            format: uuid
+          subject_id:
+            type: string
+            format: uuid
+          purpose:
+            type: string
+            enum:
+            - analytics
+            - authenticated_analytics
+          status:
+            type: string
+            enum:
+            - granted
+            - rejected
+            - withdrawn
+          policy_version:
+            type: string
+            maxLength: 32
     PostSEOUpdated:
       traits:
       - $ref: '#/components/messageTraits/EventEnvelope'
