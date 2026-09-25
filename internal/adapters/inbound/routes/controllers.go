@@ -134,12 +134,13 @@ type Tags struct {
 
 // Media public and admin handlers.
 type Media struct {
-	PublicGet      gin.HandlerFunc
-	AdminCreate    gin.HandlerFunc
-	AdminComplete  gin.HandlerFunc
-	AdminList      gin.HandlerFunc
-	AdminTagsPatch gin.HandlerFunc
-	AdminDelete    gin.HandlerFunc
+	PublicGet       gin.HandlerFunc
+	PublicTransform gin.HandlerFunc
+	AdminCreate     gin.HandlerFunc
+	AdminComplete   gin.HandlerFunc
+	AdminList       gin.HandlerFunc
+	AdminTagsPatch  gin.HandlerFunc
+	AdminDelete     gin.HandlerFunc
 }
 
 // Comments public, self-service, and moderation handlers.

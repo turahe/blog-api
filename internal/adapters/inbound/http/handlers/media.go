@@ -211,6 +211,55 @@ func publicGetMediaHandler(media mediaports.Service) gin.HandlerFunc {
 	}
 }
 
+// transformRedirectCache bounds how long a cache may keep serving the redirect after the asset
+// is deleted; the signed URL itself expires after MEDIA_TRANSFORM_URL_TTL.
+const transformRedirectCache = "public, max-age=300"
+
+// publicTransformMediaHandler godoc
+//
+//	@Summary		Redirect to a resized image
+//	@Description	Validates the width against MEDIA_TRANSFORM_WIDTHS and redirects to a signed, expiring imgproxy URL. Images are never enlarged. Without imgproxy configured the endpoint answers 501.
+//	@Tags			public
+//	@Param			param1	path	string	true	"media UUID"
+//	@Param			w		query	int		true	"width in pixels, one of MEDIA_TRANSFORM_WIDTHS"
+//	@Param			format	query	string	false	"output format; omitted keeps the source format"	Enums(webp, avif, jpeg, png)
+//	@Success		302
+//	@Failure		400	{object}	responses.Envelope
+//	@Failure		404	{object}	responses.Envelope
+//	@Failure		501	{object}	responses.Envelope
+//	@Router			/api/v1/media/{param1}/transform [get]
+func publicTransformMediaHandler(media mediaports.Service) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		id, err := uuid.Parse(strings.TrimSpace(c.Param("param1")))
+		if err != nil {
+			responses.Failure(c, nethttp.StatusBadRequest, responses.ErrorCodeValidation, "Invalid media id")
+			return
+		}
+
+		width, err := strconv.Atoi(strings.TrimSpace(c.Query("w")))
+		if err != nil {
+			responses.Failure(c, nethttp.StatusBadRequest, responses.ErrorCodeValidation, "w must be an integer width")
+			return
+		}
+
+		target, err := media.TransformURL(c.Request.Context(), id, mediadomain.Transform{
+			Width:  width,
+			Format: strings.ToLower(strings.TrimSpace(c.Query("format"))),
+		})
+		if errors.Is(err, mediaservice.ErrTransformDisabled) {
+			responses.Failure(c, nethttp.StatusNotImplemented, "media.transform_disabled", "Image transforms are not configured")
+			return
+		}
+
+		if mapMediaError(c, err) {
+			return
+		}
+
+		c.Header("Cache-Control", transformRedirectCache)
+		c.Redirect(nethttp.StatusFound, target)
+	}
+}
+
 func parsePositiveInt(raw string, fallback int) int {
 	n, err := strconv.Atoi(strings.TrimSpace(raw))
 	if err != nil || n < 1 {

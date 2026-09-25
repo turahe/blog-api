@@ -165,12 +165,13 @@ func NewControllers(deps Deps) routes.Controllers {
 	if deps.Media != nil {
 		presignLimit := middleware.RateLimit(deps.RateLimiter, deps.Logger, "media.presign", 60, time.Minute)
 		c.Media = routes.Media{
-			PublicGet:      publicGetMediaHandler(deps.Media),
-			AdminCreate:    gate(deps, "media.create", authorRoles, chain(presignLimit, adminPresignMediaHandler(deps.Media))),
-			AdminComplete:  gate(deps, "media.create", authorRoles, adminCompleteMediaHandler(deps.Media)),
-			AdminList:      gate(deps, "media.create", authorRoles, adminListMediaHandler(deps.Media)),
-			AdminTagsPatch: gate(deps, "media.create", authorRoles, adminPatchMediaTagsHandler(deps.Media)),
-			AdminDelete:    gate(deps, "media.delete", editorRoles, adminDeleteMediaHandler(deps.Media)),
+			PublicGet:       publicGetMediaHandler(deps.Media),
+			PublicTransform: publicTransformMediaHandler(deps.Media),
+			AdminCreate:     gate(deps, "media.create", authorRoles, chain(presignLimit, adminPresignMediaHandler(deps.Media))),
+			AdminComplete:   gate(deps, "media.create", authorRoles, adminCompleteMediaHandler(deps.Media)),
+			AdminList:       gate(deps, "media.create", authorRoles, adminListMediaHandler(deps.Media)),
+			AdminTagsPatch:  gate(deps, "media.create", authorRoles, adminPatchMediaTagsHandler(deps.Media)),
+			AdminDelete:     gate(deps, "media.delete", editorRoles, adminDeleteMediaHandler(deps.Media)),
 		}
 	}
 

@@ -93,6 +93,11 @@ type Config struct {
 	MediaAllowedMIMETypes         []string
 	MediaMaxUploadBytes           int64
 	MediaPresignTTL               time.Duration
+	ImgproxyURL                   string
+	ImgproxyKey                   string
+	ImgproxySalt                  string
+	MediaTransformWidths          []int
+	MediaTransformURLTTL          time.Duration
 	CommentsGuestEnabled          bool
 	CommentsRequireApproval       bool
 	CommentsEditWindow            time.Duration
@@ -159,6 +164,31 @@ func ParseMIMEList(raw string) []string {
 	return splitCSV(raw)
 }
 
+// maxTransformWidth caps MEDIA_TRANSFORM_WIDTHS entries.
+const maxTransformWidth = 8192
+
+// ParseWidths parses a comma-separated list of transform widths. Any entry outside
+// 1..8192 makes the whole list invalid (nil), which ValidateMedia reports.
+func ParseWidths(raw string) []int {
+	var widths []int
+
+	for _, part := range splitCSV(raw) {
+		width, err := strconv.Atoi(part)
+		if err != nil || width < 1 || width > maxTransformWidth {
+			return nil
+		}
+
+		widths = append(widths, width)
+	}
+
+	return widths
+}
+
+// MediaTransformsEnabled reports whether media transforms are delegated to imgproxy.
+func (c Config) MediaTransformsEnabled() bool {
+	return c.MediaEnabled() && c.ImgproxyURL != ""
+}
+
 // MediaEnabled reports whether media storage credentials are configured.
 func (c Config) MediaEnabled() bool {
 	return strings.TrimSpace(c.S3Bucket) != "" &&
@@ -192,6 +222,26 @@ func (c Config) ValidateMedia() error {
 
 	if c.AvatarMaxBytes < 1 {
 		return errors.New("AVATAR_MAX_BYTES must be positive")
+	}
+
+	return c.validateTransforms()
+}
+
+func (c Config) validateTransforms() error {
+	if !c.MediaTransformsEnabled() {
+		return nil
+	}
+
+	if c.ImgproxyKey == "" || c.ImgproxySalt == "" {
+		return errors.New("IMGPROXY_KEY and IMGPROXY_SALT are required with IMGPROXY_URL")
+	}
+
+	if len(c.MediaTransformWidths) == 0 {
+		return errors.New("MEDIA_TRANSFORM_WIDTHS must list widths between 1 and 8192")
+	}
+
+	if c.MediaTransformURLTTL <= 0 {
+		return errors.New("MEDIA_TRANSFORM_URL_TTL must be positive")
 	}
 
 	return nil
@@ -451,6 +501,11 @@ func Load() (Config, error) {
 		S3Disk:                        strings.ToLower(env("S3_DISK", "minio")),
 		S3ForcePathStyle:              boolEnv("S3_FORCE_PATH_STYLE", true),
 		MediaAllowedMIMETypes:         ParseMIMEList(env("MEDIA_ALLOWED_MIME_TYPES", "image/jpeg,image/png,image/webp,image/gif")),
+		ImgproxyURL:                   strings.TrimSpace(env("IMGPROXY_URL", "")),
+		ImgproxyKey:                   strings.TrimSpace(env("IMGPROXY_KEY", "")),
+		ImgproxySalt:                  strings.TrimSpace(env("IMGPROXY_SALT", "")),
+		MediaTransformWidths:          ParseWidths(env("MEDIA_TRANSFORM_WIDTHS", "64,128,256,320,480,640,768,1024,1280,1536,1920")),
+		MediaTransformURLTTL:          duration("MEDIA_TRANSFORM_URL_TTL", 24*time.Hour),
 		MediaMaxUploadBytes:           int64(integer("MEDIA_MAX_UPLOAD_BYTES", 10<<20)),
 		MediaPresignTTL:               duration("MEDIA_PRESIGN_TTL", 15*time.Minute),
 		CommentsGuestEnabled:          boolEnv("COMMENTS_GUEST_ENABLED", false),
@@ -462,14 +517,6 @@ func Load() (Config, error) {
 		TurnstileSecretKey:            strings.TrimSpace(env("TURNSTILE_SECRET_KEY", "")),
 		SSEPingInterval:               duration("SSE_PING_INTERVAL", 15*time.Second),
 		SSEMaxConcurrentPerUser:       integer("SSE_MAX_CONCURRENT_PER_USER", 3),
-		OutboxBatchSize:               integer("OUTBOX_BATCH_SIZE", 100),
-		OutboxPollInterval:            duration("OUTBOX_POLL_INTERVAL", time.Second),
-		OutboxMaxAttempts:             integer("OUTBOX_MAX_ATTEMPTS", 10),
-		OutboxRetention:               duration("OUTBOX_RETENTION", 7*24*time.Hour),
-		ConsumerMaxRetries:            integer("CONSUMER_MAX_RETRIES", 3),
-		ConsumerRetryInterval:         duration("CONSUMER_RETRY_INTERVAL", time.Second),
-		ConsumerRetryMaxInterval:      duration("CONSUMER_RETRY_MAX_INTERVAL", 30*time.Second),
-		ConsumerDedupeRetention:       duration("CONSUMER_DEDUPE_RETENTION", 7*24*time.Hour),
 		CacheEnabled:                  boolEnv("CACHE_ENABLED", true),
 		CacheBypassHeader:             boolEnv("CACHE_BYPASS_HEADER", false),
 		CacheTTLPosts:                 duration("CACHE_TTL_POSTS", time.Minute),
@@ -489,6 +536,7 @@ func Load() (Config, error) {
 	}
 	cfg.SwaggerEnabled = boolEnv("APP_SWAGGER_ENABLED", cfg.Environment == "local")
 	cfg.SentryEnvironment = env("SENTRY_ENVIRONMENT", cfg.Environment)
+	cfg.loadWorker()
 
 	if err := cfg.loadJWTKeys(); err != nil {
 		return Config{}, err
@@ -499,6 +547,18 @@ func Load() (Config, error) {
 	}
 
 	return cfg, nil
+}
+
+// loadWorker reads the outbox relay and message consumer settings.
+func (c *Config) loadWorker() {
+	c.OutboxBatchSize = integer("OUTBOX_BATCH_SIZE", 100)
+	c.OutboxPollInterval = duration("OUTBOX_POLL_INTERVAL", time.Second)
+	c.OutboxMaxAttempts = integer("OUTBOX_MAX_ATTEMPTS", 10)
+	c.OutboxRetention = duration("OUTBOX_RETENTION", 7*24*time.Hour)
+	c.ConsumerMaxRetries = integer("CONSUMER_MAX_RETRIES", 3)
+	c.ConsumerRetryInterval = duration("CONSUMER_RETRY_INTERVAL", time.Second)
+	c.ConsumerRetryMaxInterval = duration("CONSUMER_RETRY_MAX_INTERVAL", 30*time.Second)
+	c.ConsumerDedupeRetention = duration("CONSUMER_DEDUPE_RETENTION", 7*24*time.Hour)
 }
 
 func (c *Config) loadJWTKeys() error {

@@ -292,6 +292,10 @@ delivery semantics are in [events.md](../backend/events.md).
 | `MEDIA_MAX_UPLOAD_BYTES` | `10485760` | No | Maximum declared upload size in bytes. |
 | `MEDIA_PRESIGN_TTL` | `15m` | No | Presigned URL lifetime. |
 | `AVATAR_MAX_BYTES` | `5242880` | No | Maximum avatar upload size (`POST /api/v1/me/avatar`); the smaller of this and `MEDIA_MAX_UPLOAD_BYTES` applies. Must be positive. |
+| `IMGPROXY_URL` | empty | For transforms | Public imgproxy origin (usually behind a CDN). Empty makes `GET /media/{id}/transform` answer `501`. |
+| `IMGPROXY_KEY` / `IMGPROXY_SALT` | empty | With `IMGPROXY_URL` | Hex signing key and salt; must equal imgproxy's own `IMGPROXY_KEY` / `IMGPROXY_SALT`. Secrets. |
+| `MEDIA_TRANSFORM_WIDTHS` | `64,128,256,320,480,640,768,1024,1280,1536,1920` | No | Allowed `w` values (1–8192). Keeps the number of variants per image bounded. |
+| `MEDIA_TRANSFORM_URL_TTL` | `24h` | No | Minimum lifetime of a signed transform URL; URLs expire between one and two TTLs after issue. |
 
 The bucket must already exist; the API never creates it. Avatar upload is available only
 when media is enabled.
@@ -391,6 +395,8 @@ cookies, request body, and credential-bearing headers are stripped before sendin
 - a selected message broker is unsupported or lacks its required variables.
 - media storage is enabled but `S3_DISK` is unsupported, the MIME allowlist is empty, or
   `MEDIA_MAX_UPLOAD_BYTES` / `MEDIA_PRESIGN_TTL` are not positive;
+- `IMGPROXY_URL` is set without `IMGPROXY_KEY` / `IMGPROXY_SALT`, `MEDIA_TRANSFORM_WIDTHS` has
+  an entry outside 1–8192, or `MEDIA_TRANSFORM_URL_TTL` is not positive;
 - `SENTRY_TRACES_SAMPLE_RATE` is outside `0`–`1`.
 
 Before deploying:

@@ -19,6 +19,7 @@ import (
 	"github.com/turahe/blog-api/internal/adapters/outbound/cache"
 	"github.com/turahe/blog-api/internal/adapters/outbound/captcha"
 	"github.com/turahe/blog-api/internal/adapters/outbound/challenge"
+	"github.com/turahe/blog-api/internal/adapters/outbound/imgproxy"
 	"github.com/turahe/blog-api/internal/adapters/outbound/mail"
 	"github.com/turahe/blog-api/internal/adapters/outbound/mailqueue"
 	"github.com/turahe/blog-api/internal/adapters/outbound/markdown"
@@ -290,7 +291,7 @@ func newMediaService(
 	mediaRepo := persistence.NewMediaRepository(db.GORM)
 	posts.WithMedia(persistence.NewPostMediaRepository(db.GORM), mediaRepo)
 
-	return mediaservice.New(
+	media := mediaservice.New(
 		mediaRepo,
 		objectStorage,
 		ids,
@@ -299,7 +300,24 @@ func newMediaService(
 		cfg.MediaAllowedMIMETypes,
 		cfg.MediaMaxUploadBytes,
 		cfg.MediaPresignTTL,
-	).WithCache(readCache).WithEvents(events), nil
+	).WithCache(readCache).WithEvents(events)
+
+	if cfg.MediaTransformsEnabled() {
+		signer, err := imgproxy.New(imgproxy.Config{
+			BaseURL: cfg.ImgproxyURL,
+			Key:     cfg.ImgproxyKey,
+			Salt:    cfg.ImgproxySalt,
+			Bucket:  cfg.S3Bucket,
+			TTL:     cfg.MediaTransformURLTTL,
+		})
+		if err != nil {
+			return nil, fmt.Errorf("media transforms: %w", err)
+		}
+
+		media.WithTransforms(signer, cfg.MediaTransformWidths)
+	}
+
+	return media, nil
 }
 
 // newProfileService wires profiles; avatars are enabled (non-zero max bytes) only with media storage.

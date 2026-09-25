@@ -3146,6 +3146,49 @@ paths:
       summary: Get ready media asset
       tags:
       - public
+  /api/v1/media/{param1}/transform:
+    get:
+      description: Validates the width against MEDIA_TRANSFORM_WIDTHS and redirects
+        to a signed, expiring imgproxy URL. Images are never enlarged. Without imgproxy
+        configured the endpoint answers 501.
+      parameters:
+      - description: media UUID
+        in: path
+        name: param1
+        required: true
+        type: string
+      - description: width in pixels, one of MEDIA_TRANSFORM_WIDTHS
+        in: query
+        name: w
+        required: true
+        type: integer
+      - description: output format; omitted keeps the source format
+        enum:
+        - webp
+        - avif
+        - jpeg
+        - png
+        in: query
+        name: format
+        type: string
+      responses:
+        "302":
+          description: Found
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/responses.Envelope'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/responses.Envelope'
+        "501":
+          description: Not Implemented
+          schema:
+            $ref: '#/definitions/responses.Envelope'
+      summary: Redirect to a resized image
+      tags:
+      - public
   /api/v1/posts:
     get:
       parameters:

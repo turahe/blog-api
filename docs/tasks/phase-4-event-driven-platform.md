@@ -13,7 +13,7 @@ transactional outbox is in place: post, comment, account, and media writes recor
 events in the same transaction, and the worker relays them with retries, parking, pruning,
 and metrics. Worker consumers run behind retry, a dead-letter topic, and a dedupe table; the
 first consumer sends queued emails. `app scheduler` runs pruning jobs once per interval across
-replicas.
+replicas. Image transforms are delegated to imgproxy.
 
 ## Epic: messaging transports
 
@@ -80,11 +80,15 @@ Design: [2026-07-30-messaging-brokers-design.md](../superpowers/specs/2026-07-30
 
 ## Epic: transformed media cache
 
-- [ ] Decide the transform pipeline: on-demand with cache, or asynchronous pre-generation
-- [ ] Cache transformed derivatives in object storage keyed by source ID plus transform params
-- [ ] Signed or validated transform parameters so the endpoint cannot be used to burn CPU
-- [ ] Invalidate derivatives when the source media is replaced or deleted
-- [ ] Document the strategy in [media.md](../backend/media.md)
+- [x] Decide the transform pipeline: on-demand with cache, or asynchronous pre-generation
+      (on demand in imgproxy behind a CDN; the API redirects to a signed URL)
+- [x] Cache transformed derivatives in object storage keyed by source ID plus transform params
+      (cached by the CDN per signed URL, which encodes the source key and the transform)
+- [x] Signed or validated transform parameters so the endpoint cannot be used to burn CPU
+      (`MEDIA_TRANSFORM_WIDTHS` allowlist, format allowlist, HMAC-signed imgproxy URLs)
+- [x] Invalidate derivatives when the source media is replaced or deleted (expiring URLs;
+      deleted media stops redirecting; new uploads get new keys)
+- [x] Document the strategy in [media.md](../backend/media.md#image-transforms-imgproxy)
 
 ## Epic: operational hardening
 

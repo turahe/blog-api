@@ -20,8 +20,9 @@ import (
 )
 
 type fakeMediaService struct {
-	presignFn  func(ctx context.Context, uploadedBy *uuid.UUID, filename, contentType string, sizeBytes int64, tags []string) (mediadomain.PresignResult, error)
-	completeFn func(ctx context.Context, id uuid.UUID) (mediadomain.MediaAsset, error)
+	presignFn   func(ctx context.Context, uploadedBy *uuid.UUID, filename, contentType string, sizeBytes int64, tags []string) (mediadomain.PresignResult, error)
+	completeFn  func(ctx context.Context, id uuid.UUID) (mediadomain.MediaAsset, error)
+	transformFn func(ctx context.Context, id uuid.UUID, t mediadomain.Transform) (string, error)
 }
 
 func (f *fakeMediaService) PresignUpload(ctx context.Context, uploadedBy *uuid.UUID, filename, contentType string, sizeBytes int64, tags []string) (mediadomain.PresignResult, error) {
@@ -54,6 +55,71 @@ func (f *fakeMediaService) UpdateTags(context.Context, uuid.UUID, []string) (med
 
 func (f *fakeMediaService) UploadImage(context.Context, mediadomain.ImageUpload) (mediadomain.MediaAsset, error) {
 	return mediadomain.MediaAsset{}, mediaservice.ErrValidation
+}
+
+func (f *fakeMediaService) TransformURL(ctx context.Context, id uuid.UUID, t mediadomain.Transform) (string, error) {
+	if f.transformFn == nil {
+		return "", mediaservice.ErrTransformDisabled
+	}
+
+	return f.transformFn(ctx, id, t)
+}
+
+func serveTransform(t *testing.T, svc *fakeMediaService, target string) *httptest.ResponseRecorder {
+	t.Helper()
+
+	gin.SetMode(gin.TestMode)
+
+	router := gin.New()
+	router.GET("/api/v1/media/:param1/transform", publicTransformMediaHandler(svc))
+
+	recorder := httptest.NewRecorder()
+	router.ServeHTTP(recorder, httptest.NewRequestWithContext(t.Context(), nethttp.MethodGet, target, nil))
+
+	return recorder
+}
+
+func TestMediaTransformRedirectsToSignedURL(t *testing.T) {
+	t.Parallel()
+
+	mediaID := uuid.MustParse("11111111-1111-1111-1111-111111111111")
+	svc := &fakeMediaService{transformFn: func(_ context.Context, id uuid.UUID, tr mediadomain.Transform) (string, error) {
+		require.Equal(t, mediaID, id)
+		require.Equal(t, mediadomain.Transform{Width: 256, Format: "webp"}, tr)
+
+		return "https://img.example.com/sig/exp:1/rs:fit:256:0/src.webp", nil
+	}}
+
+	recorder := serveTransform(t, svc, "/api/v1/media/"+mediaID.String()+"/transform?w=256&format=WEBP")
+	require.Equal(t, nethttp.StatusFound, recorder.Code)
+	require.Equal(t, "https://img.example.com/sig/exp:1/rs:fit:256:0/src.webp", recorder.Header().Get("Location"))
+	require.Equal(t, "public, max-age=300", recorder.Header().Get("Cache-Control"))
+}
+
+func TestMediaTransformErrors(t *testing.T) {
+	t.Parallel()
+
+	id := uuid.NewString()
+	validation := &fakeMediaService{transformFn: func(context.Context, uuid.UUID, mediadomain.Transform) (string, error) {
+		return "", mediaservice.ErrValidation
+	}}
+	missing := &fakeMediaService{transformFn: func(context.Context, uuid.UUID, mediadomain.Transform) (string, error) {
+		return "", mediaservice.ErrNotFound
+	}}
+
+	for name, tc := range map[string]struct {
+		svc    *fakeMediaService
+		target string
+		status int
+	}{
+		"disabled":         {&fakeMediaService{}, "/api/v1/media/" + id + "/transform?w=256", nethttp.StatusNotImplemented},
+		"bad id":           {validation, "/api/v1/media/nope/transform?w=256", nethttp.StatusBadRequest},
+		"missing width":    {validation, "/api/v1/media/" + id + "/transform", nethttp.StatusBadRequest},
+		"width not listed": {validation, "/api/v1/media/" + id + "/transform?w=257", nethttp.StatusBadRequest},
+		"not found":        {missing, "/api/v1/media/" + id + "/transform?w=256", nethttp.StatusNotFound},
+	} {
+		require.Equal(t, tc.status, serveTransform(t, tc.svc, tc.target).Code, name)
+	}
 }
 
 func TestMediaPresignHappyPath(t *testing.T) {

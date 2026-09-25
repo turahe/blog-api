@@ -50,6 +50,9 @@ type Service struct {
 	presignTTL time.Duration
 	cache      readcache.Cache
 	events     event.Unit
+
+	transformer     ports.Transformer
+	transformWidths []int
 }
 
 // New returns a Service enforcing the allowed MIME types and size limit.

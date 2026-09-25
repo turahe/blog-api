@@ -40,6 +40,12 @@ type PostMediaRepository interface {
 	ListByPostID(ctx context.Context, postID uuid.UUID) ([]mediadomain.PostMediaItem, error)
 }
 
+// Transformer returns a URL that serves asset resized per t. The URL must be signed so its
+// parameters cannot be changed, and should expire so deleted assets stop being served.
+type Transformer interface {
+	URL(asset mediadomain.MediaAsset, t mediadomain.Transform) (string, error)
+}
+
 // Service is the media use-case API consumed by HTTP handlers.
 type Service interface {
 	PresignUpload(ctx context.Context, uploadedBy *uuid.UUID, filename, contentType string, sizeBytes int64, tags []string) (mediadomain.PresignResult, error)
@@ -50,4 +56,5 @@ type Service interface {
 	Delete(ctx context.Context, id uuid.UUID) error
 	UpdateTags(ctx context.Context, id uuid.UUID, tags []string) (mediadomain.MediaAsset, error)
 	UploadImage(ctx context.Context, input mediadomain.ImageUpload) (mediadomain.MediaAsset, error)
+	TransformURL(ctx context.Context, id uuid.UUID, t mediadomain.Transform) (string, error)
 }

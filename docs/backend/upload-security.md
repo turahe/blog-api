@@ -76,9 +76,12 @@ Email change is rate limited separately (`email.change.request` 3/hour,
   (PDF) are not scanned.
 - **Presigned dimensions are not checked:** JPEG headers can sit beyond the 512-byte
   prefix. Dimensions are enforced on the avatar path only.
-- **Transforms are deferred** (`public.media.transform` stays a 501 stub), so there is no
-  on-the-fly decoding and no resize-based amplification. Avatar variants (64–512 px) are
-  deferred with it.
+- **Transforms run in imgproxy, not the API.** The API only validates `w` against
+  `MEDIA_TRANSFORM_WIDTHS` and `format` against webp/avif/jpeg/png, then redirects to a URL
+  signed with `IMGPROXY_KEY`/`IMGPROXY_SALT`, so clients cannot request other sizes or
+  sources. imgproxy caps decoding with `IMGPROXY_MAX_SRC_RESOLUTION` and
+  `IMGPROXY_MAX_SRC_FILE_SIZE`, never enlarges, and accepts only `s3://` sources. SVG is
+  not transformed.
 - **CSRF** does not apply: all upload routes take bearer tokens, not cookies.
 - Serve the bucket from a separate origin with `X-Content-Type-Options: nosniff` set at the
   CDN or bucket so browsers never second-guess the stored type.

@@ -17,7 +17,6 @@ func registerContractStubs(v1 *gin.RouterGroup, auth AuthMiddleware, c Controlle
 	self, req := GroupSelfService, AuthRequired
 	ag, ar := GroupAdmin, AuthRequired
 
-	get(none, "/media/:param1/transform", "public.media.transform", pub, n, c, nil)
 	get(none, "/newsletter/preferences/:param1", "public.newsletter.preferences.get", pub, n, c, nil)
 	get(none, "/posts/:param1/seo-meta", "public.posts.seo_meta", pub, n, c, nil)
 	patch(none, "/newsletter/preferences/:param1", "public.newsletter.preferences.patch", pub, n, c, nil)

@@ -68,7 +68,8 @@ visibility, per-user storage quota, and malware scanning are listed in
       defer — **deferred**: the route stays a `501` stub and avatars are served as the original
       image. Safe transforms need a non-cgo encoder, a decode budget, a variant cache, and a
       width allowlist; the preferred path is an image proxy or CDN in front of the bucket,
-      revisited with the Phase 4 worker. See [media.md](../backend/media.md#transform-decision-phase-2)
+      revisited with the Phase 4 worker. Implemented in Phase 4 through imgproxy; see
+      [media.md](../backend/media.md#image-transforms-imgproxy)
 - [x] Upload validation: MIME allowlist, size ceiling, and filename sanitisation
 - [x] Presigned-URL strategy documented in [media.md](../backend/media.md)
 - [x] Media relations migration `00006_media_relations.sql` (`post_media`, `cover_image_media_id`, avatar/category FKs)

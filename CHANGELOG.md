@@ -1,5 +1,18 @@
 # Changelog
 
+## 2026-09-25 — Image transforms via imgproxy
+
+### Added
+
+- `public.media.transform` (`GET /api/v1/media/{id}/transform?w=256&format=webp`) redirects to
+  a signed, expiring imgproxy URL. Widths come from `MEDIA_TRANSFORM_WIDTHS`; formats are
+  webp, avif, jpeg, and png; images are never enlarged; SVG is not transformed.
+- Config: `IMGPROXY_URL`, `IMGPROXY_KEY`, `IMGPROXY_SALT`, `MEDIA_TRANSFORM_WIDTHS`,
+  `MEDIA_TRANSFORM_URL_TTL`. Without `IMGPROXY_URL` the endpoint answers
+  `501 media.transform_disabled`.
+- `imgproxy` service in `compose.yaml` under the `imgproxy` profile, reading originals from
+  RustFS. See [media.md](docs/backend/media.md#image-transforms-imgproxy).
+
 ## 2026-09-25 — Scheduled jobs
 
 ### Added

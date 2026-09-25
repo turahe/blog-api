@@ -4031,6 +4031,66 @@ const docTemplate = `{
                 }
             }
         },
+        "/api/v1/media/{param1}/transform": {
+            "get": {
+                "description": "Validates the width against MEDIA_TRANSFORM_WIDTHS and redirects to a signed, expiring imgproxy URL. Images are never enlarged. Without imgproxy configured the endpoint answers 501.",
+                "tags": [
+                    "public"
+                ],
+                "summary": "Redirect to a resized image",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "media UUID",
+                        "name": "param1",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "integer",
+                        "description": "width in pixels, one of MEDIA_TRANSFORM_WIDTHS",
+                        "name": "w",
+                        "in": "query",
+                        "required": true
+                    },
+                    {
+                        "enum": [
+                            "webp",
+                            "avif",
+                            "jpeg",
+                            "png"
+                        ],
+                        "type": "string",
+                        "description": "output format; omitted keeps the source format",
+                        "name": "format",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "302": {
+                        "description": "Found"
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/responses.Envelope"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/responses.Envelope"
+                        }
+                    },
+                    "501": {
+                        "description": "Not Implemented",
+                        "schema": {
+                            "$ref": "#/definitions/responses.Envelope"
+                        }
+                    }
+                }
+            }
+        },
         "/api/v1/posts": {
             "get": {
                 "produces": [

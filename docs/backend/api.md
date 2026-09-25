@@ -235,7 +235,7 @@ Differences from the target rules below:
   `contact_phone` → `400 profile.field_unsupported` (it needs field encryption first).
   A display name is unique case-insensitively → `409 profile.display_name_taken`.
 - **Avatar:** multipart field `file`. The response is the stored media asset (the original
-  image); size variants are not produced while `public.media.transform` is deferred. Over
+  image); request sizes through `public.media.transform` (`?w=128`). Over
   `AVATAR_MAX_BYTES` → `413 profile.avatar_too_large`; storage down → `502
   storage_unavailable`; media disabled → the routes stay `501`. Replacing or deleting an
   avatar soft-deletes the previous asset when this user uploaded it.
@@ -345,7 +345,8 @@ Each item has `id`, `type`, `title`, `body`, `preview`, `data` (links such as `p
 
 ### Media
 
-- `public.media.transform` stays `501`; see the decision in [media.md](media.md#transform-decision-phase-2).
+- `public.media.transform` redirects to a signed imgproxy URL, or answers `501
+  media.transform_disabled` without `IMGPROXY_URL`; see [media.md](media.md#image-transforms-imgproxy).
 - Upload checks and residual risks: [upload-security.md](upload-security.md).
 
 ## Main API Areas
@@ -553,14 +554,13 @@ Full wire format, client integration, security, and scaling guidance is in the f
 - `GET /api/v1/tags`
 - `POST /api/v1/posts/:id/comments`
 - `GET /api/v1/media/:id`
-- `GET /api/v1/media/:id/transform?w=800&h=450&fit=cover&format=webp&quality=82`
+- `GET /api/v1/media/:id/transform?w=800&format=webp` (`302` to a signed imgproxy URL; `w` from `MEDIA_TRANSFORM_WIDTHS`)
 - `GET /api/v1/users/:username_or_id` (public profile; respects user_privacy_settings: 404 when private; filters contact details/email/activity via privacy toggles; `include=avatar,posts_preview,roles_brief` supported)
 
 ## Media Notes
 
 - media upload endpoints must validate content type, file size, and malware scan result
-- transformed media endpoints generate variants on demand
-- transformed responses may be cached in memory, Redis, object storage, or a combination
+- transformed media is generated on demand by imgproxy and cached by the CDN in front of it
 - when deleting or replacing media referenced by `users.avatar_id`, `posts.cover_image_media_id`, `post_media`, or `categories.image_id`, referential integrity rules must be respected (SET NULL or CASCADE depending on FK policy)
 - when exposing media associations on users, posts, and categories, prefer server-resolved media objects over raw URLs; use `include=` to opt in.
 

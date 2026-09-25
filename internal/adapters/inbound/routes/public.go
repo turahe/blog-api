@@ -15,4 +15,5 @@ func registerPublic(router gin.IRoutes, c Controllers) {
 	get(router, "/categories/:param1", "public.categories.get", g, n, c, c.Cats.PublicGet)
 	get(router, "/tags", "public.tags.list", g, n, c, c.Tags.PublicList)
 	get(router, "/media/:param1", "public.media.get", g, n, c, c.Media.PublicGet)
+	get(router, "/media/:param1/transform", "public.media.transform", g, n, c, c.Media.PublicTransform)
 }

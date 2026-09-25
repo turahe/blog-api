@@ -54,23 +54,41 @@ and the asset is stored `ready` with its width, height and SHA-256. The size cap
 `AVATAR_MAX_BYTES`. The bucket must exist before the first upload — locally, create
 `S3_BUCKET` in RustFS or MinIO once.
 
-**Deferred:** malware scan, outbox events, and on-the-fly transform (see below).
+**Deferred:** malware scan. Sizes come from the transform endpoint (see below).
 
-## Transform decision (Phase 2)
+## Image transforms (imgproxy)
 
-`public.media.transform` stays a `501` stub and avatar size variants (64–512 px) are not
-produced; clients use the original. Doing transforms properly needs work that does not belong
-in Phase 2:
+`GET /api/v1/media/{id}/transform?w=256&format=webp` (`public.media.transform`) answers
+`302` to a signed imgproxy URL. The API never decodes images: imgproxy fetches the original
+from the private bucket (`s3://S3_BUCKET/<storage_key>`), resizes, and encodes.
 
-- a non-cgo resizer and encoder (WebP encoding needs cgo or an external service),
-- a bounded worker pool and a decoded-pixel budget, because decoding is where image bombs and
-  CPU amplification happen,
-- a variant cache (Redis or object storage) and invalidation tied to media delete,
-- a parameter allowlist (fixed width steps) so the variant space cannot be enumerated.
+- `w` is required and must be in `MEDIA_TRANSFORM_WIDTHS`; the height follows the aspect
+  ratio and images are never enlarged. `format` is optional (`webp`, `avif`, `jpeg`, `png`);
+  omitted keeps the source format. Anything else is `400 validation_error`.
+- Only `ready` JPEG, PNG, GIF, WebP, and AVIF assets are transformed (SVG is `400`); other
+  assets are `404` like `public.media.get`.
+- The URL is signed with `IMGPROXY_KEY`/`IMGPROXY_SALT` (HMAC-SHA256 over salt and path), so
+  the parameters and source cannot be changed. It carries `exp:`: it expires between one and
+  two `MEDIA_TRANSFORM_URL_TTL` after issue and is identical within a TTL window, so caches
+  keep hitting.
+- Without `IMGPROXY_URL` the endpoint answers `501 media.transform_disabled`.
 
-The preferred direction is to delegate to a CDN or image proxy (imgproxy, Cloudflare Images)
-in front of the bucket rather than decode in the API process. Revisit together with the
-Phase 4 worker runtime.
+**Caching.** Put a CDN in front of imgproxy (`IMGPROXY_URL` is its public origin). The cache
+key is the URL, which already encodes the source key and the transform, so derivatives are
+cached per source and parameters without storing them in the bucket. imgproxy sends
+`Cache-Control: max-age=IMGPROXY_TTL`; keep it at or below `MEDIA_TRANSFORM_URL_TTL`. The
+redirect itself is `Cache-Control: public, max-age=300`.
+
+**Invalidation.** Deleting media makes the endpoint `404` at once (after the 300 s redirect
+cache). URLs already handed out keep working until their `exp`, at most two TTLs, and CDN
+copies until `IMGPROXY_TTL`. For immediate removal, purge the CDN by the asset's storage key.
+Uploads never overwrite an object (each asset has its own key), so a replaced image gets new
+URLs.
+
+**Operations.** Run imgproxy with `IMGPROXY_USE_S3=true`, the storage credentials,
+`IMGPROXY_ALLOWED_SOURCES=s3://`, and decode limits (`IMGPROXY_MAX_SRC_RESOLUTION`,
+`IMGPROXY_MAX_SRC_FILE_SIZE`). Locally: `docker compose --profile imgproxy up -d imgproxy`
+and `IMGPROXY_URL=http://127.0.0.1:8081`.
 
 ## Featured media on posts
 
