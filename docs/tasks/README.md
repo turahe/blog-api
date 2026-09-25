@@ -10,7 +10,7 @@ Each phase file says *what is left to build*; the goals below say *what each pha
 | 3 — Collaboration and Moderation | [phase-3-collaboration-moderation.md](./phase-3-collaboration-moderation.md) | Done | Comments, moderation, audit logging, notification hooks |
 | 4 — Event-Driven Platform | [phase-4-event-driven-platform.md](./phase-4-event-driven-platform.md) | Done | Watermill publishing, durable outbox, workers/jobs, media cache, ops hardening |
 | 5 — Product Expansion | [phase-5-product-expansion.md](./phase-5-product-expansion.md) | In progress | Richer admin UX, search, analytics dashboard, privacy/consent, media pipeline |
-| 6 — Analytics and Reporting | [phase-6-analytics-reporting.md](./phase-6-analytics-reporting.md) | Planned | Telemetry ingest, popular/retention widgets, search CTR, realtime admin views, export/retention |
+| 6 — Analytics and Reporting | [phase-6-analytics-reporting.md](./phase-6-analytics-reporting.md) | In progress | Telemetry ingest, popular/retention widgets, search CTR, realtime admin views, export/retention |
 
 ## Status legend
 

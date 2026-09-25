@@ -27,7 +27,7 @@ type consentAPI interface {
 	Store(ctx context.Context, token string, userID *uuid.UUID, decisions map[consentdomain.Purpose]bool, policyVersion string) (consentservice.State, error)
 	Current(ctx context.Context, token string) (consentservice.State, error)
 	Withdraw(ctx context.Context, token string, userID *uuid.UUID, consentID uuid.UUID) (consentdomain.Consent, error)
-	Allowed(ctx context.Context, token string, purpose consentdomain.Purpose) (bool, error)
+	Decision(ctx context.Context, token string, purpose consentdomain.Purpose) (consentservice.Decision, error)
 }
 
 type settingsValues interface {
@@ -130,7 +130,8 @@ func withdrawConsentHandler(consent consentAPI) gin.HandlerFunc {
 
 // analyticsIngestGate enforces the analytics settings and consent on ingestion routes:
 // with analytics.enabled off every request is 404, and with analytics.consent_required
-// on the X-Consent-Token subject must have granted analytics (403 otherwise).
+// on the X-Consent-Token subject must have granted analytics (403 otherwise). It passes the
+// granted subject, or the fact that the subject refused, on to the ingest handlers.
 func analyticsIngestGate(consent consentAPI, settings settingsValues) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		values, err := settings.Values(c.Request.Context())
@@ -148,21 +149,26 @@ func analyticsIngestGate(consent consentAPI, settings settingsValues) gin.Handle
 			return
 		}
 
-		if values.Bool("analytics.consent_required") {
-			allowed, err := consent.Allowed(c.Request.Context(), consentToken(c), consentdomain.PurposeAnalytics)
-			if err != nil {
-				responses.Internal(c, err, "Failed to check consent")
-				c.Abort()
+		decision, err := consent.Decision(c.Request.Context(), consentToken(c), consentdomain.PurposeAnalytics)
+		if err != nil {
+			responses.Internal(c, err, "Failed to check consent")
+			c.Abort()
 
-				return
-			}
+			return
+		}
 
-			if !allowed {
-				responses.Failure(c, nethttp.StatusForbidden, "analytics.consent_required", "Analytics consent has not been granted")
-				c.Abort()
+		if values.Bool("analytics.consent_required") && !decision.Granted() {
+			responses.Failure(c, nethttp.StatusForbidden, "analytics.consent_required", "Analytics consent has not been granted")
+			c.Abort()
 
-				return
-			}
+			return
+		}
+
+		switch {
+		case decision.Granted():
+			c.Set(contextAnalyticsSubject, decision.Subject)
+		case decision.Refused():
+			c.Set(contextAnalyticsRefused, true)
 		}
 
 		c.Next()

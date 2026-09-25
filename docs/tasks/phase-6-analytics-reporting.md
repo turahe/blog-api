@@ -9,23 +9,29 @@ Index: [README.md](./README.md).
 
 ## Status
 
-**Planned** — all 8 public analytics operations and all 7 admin analytics operations return
-`501`. There is no analytics schema, ingest path, or aggregation layer.
+**In progress** — telemetry ingest is done: the five ingest routes store raw events. The seven
+admin analytics operations still return `501`, and there is no aggregation layer yet.
 
 ## Epic: telemetry ingest
 
-- [ ] Analytics event schema and storage — see [analytics.md](../backend/analytics.md)
-- [ ] Analytics core module with an ingest port and a storage adapter
-- [ ] `analytics.ingest.page_view` — `POST /api/v1/analytics/ingest/page-view`
-- [ ] `analytics.ingest.time_spent` — `POST /api/v1/analytics/ingest/time-spent`
-- [ ] `analytics.ingest.navigation` — `POST /api/v1/analytics/ingest/navigation`
-- [ ] `analytics.ingest.search` — `POST /api/v1/analytics/ingest/search`
-- [ ] `analytics.ingest.search_click` — `POST /api/v1/analytics/ingest/search-click`
-- [ ] Reject or anonymise events when consent is absent (Phase 5 consent store)
-- [ ] Rate limit and size-cap unauthenticated ingest endpoints
-- [ ] Batch or buffer writes so ingest never blocks on a slow database
-- [ ] Bot and crawler filtering
-- [ ] Session or visitor identity that does not require storing raw IP addresses
+- [x] Analytics event schema and storage — see [analytics.md](../backend/analytics.md)
+      (migration 00032: one plain table per event type, deduplicated by client event id)
+- [x] Analytics core module with an ingest port and a storage adapter
+- [x] `analytics.ingest.page_view` — `POST /api/v1/analytics/ingest/page-view`
+- [x] `analytics.ingest.time_spent` — `POST /api/v1/analytics/ingest/time-spent`
+- [x] `analytics.ingest.navigation` — `POST /api/v1/analytics/ingest/navigation`
+- [x] `analytics.ingest.search` — `POST /api/v1/analytics/ingest/search`
+- [x] `analytics.ingest.search_click` — `POST /api/v1/analytics/ingest/search-click`
+- [x] Reject or anonymise events when consent is absent (Phase 5 consent store): `403` while
+      `analytics.consent_required` is on; otherwise stored without a subject link; refusals are
+      dropped
+- [x] Rate limit and size-cap unauthenticated ingest endpoints (`ANALYTICS_INGEST_PER_MINUTE`,
+      8 KiB)
+- [x] Batch or buffer writes so ingest never blocks on a slow database (bounded in-process queue,
+      `ANALYTICS_QUEUE_SIZE`, `blog_analytics_events_dropped_total`)
+- [x] Bot and crawler filtering (user agent, missing user agent, prefetch)
+- [x] Session or visitor identity that does not require storing raw IP addresses (subject HMAC,
+      or a daily HMAC of IP and user agent)
 
 ## Epic: aggregation pipeline
 

@@ -12,7 +12,7 @@ This ERD captures every PostgreSQL source-of-truth table for the **blog-api** mu
 3. **Content** — posts, categories (nested-set tree), tags, post↔tag joins, comments (nested-set), post revisions (append-only snapshot/diff history), and one-to-one per-post SEO configuration.
 4. **Media** — media assets (nested-set folder tree), derived image transforms with TTL caches, and post↔media attachment joins.
 5. **Notifications** — per-user notifications with read/unread state and notification-preference flags.
-6. **Analytics (optional hot-path table)** — page-view and time-on-page events for consent-based analytics.
+6. **Analytics** — raw page-view, time-on-page, navigation, search, and search-click events for consent-based analytics.
 7. **Configuration & Audit** — key/value settings with change history, append-only generic audit log, impersonation session state, and transactional outbox for reliable cross-service event delivery.
 8. **RBAC Audit & Enforcement** — append-only policy-mutation audit log and monthly-partitioned per-request enforcement events (SLO + investigations).
 
@@ -694,26 +694,65 @@ erDiagram
 
  analytics_page_views {
  bigint id PK
- uuid uuid UK "Public identifier"
- varchar consent_token "Opaque session-bucketed cookie PII-free"
- varchar session_id "Rolling 30-minute session identifier non-PII"
- varchar path "Max 1024 chars full path plus query optionally"
- varchar referrer "Max 1024 chars Referer header"
- char(2) country_code "ISO 3166 alpha-2"
+ uuid uuid UK "Client event id dedupe key"
+ uuid subject_uuid "Consent subject when analytics granted no FK"
+ varchar visitor_hash "64 hex HMAC subject or day plus IP plus UA"
+ uuid session_id "Client tab session"
+ varchar path "Max 512 no query or fragment"
+ varchar referrer "Max 512 scheme host path"
+ varchar country_code "ISO 3166 alpha-2 from trusted proxy header"
  varchar device_type "ENUM: desktop tablet mobile"
- bigint user_id FK
- datetime occurred_at "Client timestamp server skew-window validated"
+ varchar browser "Family only"
+ datetime occurred_at "Server receive time"
  }
 
  analytics_time_spent {
  bigint id PK
- uuid uuid UK "Public identifier"
- varchar consent_token "Matches analytics_page_views.consent_token"
- varchar session_id "Matches analytics_page_views.session_id"
- varchar path "1024 chars max"
+ uuid uuid UK "Page view id one row per view"
+ uuid subject_uuid "No FK"
+ varchar visitor_hash ""
+ uuid session_id ""
+ varchar path "Max 512"
+ int focus_seconds "0 to 14400 highest heartbeat wins"
  datetime started_at ""
- datetime ended_at "NULL still open heartbeat writing"
- int focus_seconds "Non-negative tab-visible-only time"
+ datetime last_seen_at ""
+ }
+
+ analytics_navigation {
+ bigint id PK
+ uuid uuid UK ""
+ uuid subject_uuid "No FK"
+ varchar visitor_hash ""
+ uuid session_id ""
+ varchar from_path "NULL for an entry"
+ varchar to_path ""
+ varchar transition_type "ENUM: internal external back_forward direct"
+ datetime occurred_at ""
+ }
+
+ analytics_searches {
+ bigint id PK
+ uuid uuid UK "search_id returned to the client"
+ uuid subject_uuid "No FK"
+ varchar visitor_hash ""
+ uuid session_id ""
+ varchar query "Normalised max 200"
+ int result_count ""
+ jsonb filters "category tag from to"
+ datetime occurred_at ""
+ }
+
+ analytics_search_clicks {
+ bigint id PK
+ uuid uuid UK ""
+ uuid subject_uuid "No FK"
+ varchar visitor_hash ""
+ uuid session_id ""
+ uuid search_uuid "Matches analytics_searches.uuid no FK"
+ int position "1 to 1000"
+ varchar resource_type "ENUM: post page category tag"
+ uuid resource_uuid ""
+ datetime occurred_at ""
  }
 
  %% ============================================================
@@ -871,8 +910,8 @@ erDiagram
  users ||--o{ notifications : "receives zero or more inbox notifications fan-out per recipient CASCADE user delete"
  notifications }o..o| users : "optionally triggered by one actor_user_id SET NULL when actor account removed"
  users ||--o{ notification_preferences : "has zero or more per-type delivery rows one row per notification_type unique composite user_id plus notification_type"
- analytics_page_views }o..o| users : "optionally attributed SET NULL anonymous consent token bridge"
- analytics_time_spent }o..o| analytics_page_views : "one or more dwell buckets per page view long-session writes multiple 30-second slabs"
+ analytics_time_spent |o..|| analytics_page_views : "at most one dwell row per page view sharing its uuid logical link"
+ analytics_search_clicks }o..o| analytics_searches : "zero or more clicks per search by search_uuid logical link"
 
  %% ============================================================
  %% RELATIONSHIPS — CONFIGURATION / SYSTEM / RBAC AUDIT
@@ -903,7 +942,7 @@ When the single ERD above is too dense for a specific discussion, slice it by do
 | **Newsletter** | `newsletter_subscribers`, `newsletter_list_memberships`, `newsletter_issues`, `newsletter_provider_syncs`, `newsletter_consent_audit` |
 | **Media** | `media_assets`, `media_transforms`, `post_media` |
 | **Notifications** | `notifications`, `notification_preferences` |
-| **Analytics** | `analytics_page_views`, `analytics_time_spent` |
+| **Analytics** | `analytics_page_views`, `analytics_time_spent`, `analytics_navigation`, `analytics_searches`, `analytics_search_clicks` |
 | **Configuration/System** | `settings`, `settings_history`, `impersonation_sessions`, `audit_logs`, `outbox_events` |
 
 ## 4. Renderability Notes & Verification

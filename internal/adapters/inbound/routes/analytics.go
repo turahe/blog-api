@@ -16,14 +16,16 @@ func registerAnalytics(v1 *gin.RouterGroup, auth AuthMiddleware, c Controllers) 
 	del(consent, "/analytics/consent/:param1", "analytics.consent.withdraw", g, AuthOptional, c, c.Analytics.ConsentWithdraw)
 
 	ingest := v1.Group("")
+	ingest.Use(c.Analytics.IngestLimits...)
+
 	if c.Analytics.IngestGate != nil {
 		ingest.Use(c.Analytics.IngestGate)
 	}
 
 	n := AuthNone
-	post(ingest, "/analytics/ingest/navigation", "analytics.ingest.navigation", g, n, c, nil)
-	post(ingest, "/analytics/ingest/page-view", "analytics.ingest.page_view", g, n, c, nil)
-	post(ingest, "/analytics/ingest/search", "analytics.ingest.search", g, n, c, nil)
-	post(ingest, "/analytics/ingest/search-click", "analytics.ingest.search_click", g, n, c, nil)
-	post(ingest, "/analytics/ingest/time-spent", "analytics.ingest.time_spent", g, n, c, nil)
+	post(ingest, "/analytics/ingest/navigation", "analytics.ingest.navigation", g, n, c, c.Analytics.Navigation)
+	post(ingest, "/analytics/ingest/page-view", "analytics.ingest.page_view", g, n, c, c.Analytics.PageView)
+	post(ingest, "/analytics/ingest/search", "analytics.ingest.search", g, n, c, c.Analytics.Search)
+	post(ingest, "/analytics/ingest/search-click", "analytics.ingest.search_click", g, n, c, c.Analytics.SearchClick)
+	post(ingest, "/analytics/ingest/time-spent", "analytics.ingest.time_spent", g, n, c, c.Analytics.TimeSpent)
 }

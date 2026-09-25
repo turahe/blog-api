@@ -246,6 +246,110 @@ definitions:
     required:
     - email_or_username
     type: object
+  requests.IngestNavigation:
+    properties:
+      from:
+        maxLength: 2048
+        type: string
+      id:
+        type: string
+      session_id:
+        type: string
+      to:
+        maxLength: 2048
+        type: string
+      transition:
+        enum:
+        - internal
+        - external
+        - back_forward
+        - direct
+        type: string
+    required:
+    - session_id
+    - to
+    - transition
+    type: object
+  requests.IngestPageView:
+    properties:
+      id:
+        type: string
+      path:
+        maxLength: 2048
+        type: string
+      referrer:
+        maxLength: 2048
+        type: string
+      session_id:
+        type: string
+    required:
+    - path
+    - session_id
+    type: object
+  requests.IngestSearch:
+    properties:
+      filters:
+        additionalProperties:
+          type: string
+        type: object
+      id:
+        type: string
+      query:
+        maxLength: 1000
+        type: string
+      result_count:
+        minimum: 0
+        type: integer
+      session_id:
+        type: string
+    required:
+    - query
+    - session_id
+    type: object
+  requests.IngestSearchClick:
+    properties:
+      id:
+        type: string
+      position:
+        minimum: 1
+        type: integer
+      resource_id:
+        type: string
+      resource_type:
+        enum:
+        - post
+        - page
+        - category
+        - tag
+        type: string
+      search_id:
+        type: string
+      session_id:
+        type: string
+    required:
+    - position
+    - resource_id
+    - resource_type
+    - search_id
+    - session_id
+    type: object
+  requests.IngestTimeSpent:
+    properties:
+      focus_seconds:
+        minimum: 0
+        type: integer
+      path:
+        maxLength: 2048
+        type: string
+      session_id:
+        type: string
+      view_id:
+        type: string
+    required:
+    - path
+    - session_id
+    - view_id
+    type: object
   requests.Login:
     properties:
       email:
@@ -3495,6 +3599,253 @@ paths:
           schema:
             $ref: '#/definitions/responses.Envelope'
       summary: Withdraw analytics consent
+      tags:
+      - analytics
+  /api/v1/analytics/ingest/navigation:
+    post:
+      consumes:
+      - application/json
+      description: A move from one page to another. from is omitted for an entry page;
+        transition is internal, external, back_forward, or direct. Accepted asynchronously
+        like page views.
+      parameters:
+      - description: consent subject token
+        in: header
+        name: X-Consent-Token
+        type: string
+      - description: navigation
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/requests.IngestNavigation'
+      produces:
+      - application/json
+      responses:
+        "202":
+          description: Accepted
+          schema:
+            $ref: '#/definitions/responses.Envelope'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/responses.Envelope'
+        "403":
+          description: analytics.consent_required
+          schema:
+            $ref: '#/definitions/responses.Envelope'
+        "404":
+          description: analytics.disabled
+          schema:
+            $ref: '#/definitions/responses.Envelope'
+        "413":
+          description: Request Entity Too Large
+          schema:
+            $ref: '#/definitions/responses.Envelope'
+        "429":
+          description: Too Many Requests
+          schema:
+            $ref: '#/definitions/responses.Envelope'
+      summary: Record a navigation
+      tags:
+      - analytics
+  /api/v1/analytics/ingest/page-view:
+    post:
+      consumes:
+      - application/json
+      description: 'Records a page load. The path''s query and fragment are dropped.
+        id (optional, a UUID) is the page view id that time-spent heartbeats refer
+        to; it is generated when omitted and returned either way. Events are written
+        asynchronously: 202 does not mean the event was stored (bots, prefetches,
+        and visitors who refused consent are dropped silently). With analytics.consent_required
+        on, a granted X-Consent-Token is required (403 analytics.consent_required);
+        without granted consent, events are stored without a link to any subject.'
+      parameters:
+      - description: consent subject token
+        in: header
+        name: X-Consent-Token
+        type: string
+      - description: page view
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/requests.IngestPageView'
+      produces:
+      - application/json
+      responses:
+        "202":
+          description: Accepted
+          schema:
+            $ref: '#/definitions/responses.Envelope'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/responses.Envelope'
+        "403":
+          description: analytics.consent_required
+          schema:
+            $ref: '#/definitions/responses.Envelope'
+        "404":
+          description: analytics.disabled
+          schema:
+            $ref: '#/definitions/responses.Envelope'
+        "413":
+          description: Request Entity Too Large
+          schema:
+            $ref: '#/definitions/responses.Envelope'
+        "429":
+          description: Too Many Requests
+          schema:
+            $ref: '#/definitions/responses.Envelope'
+      summary: Record a page view
+      tags:
+      - analytics
+  /api/v1/analytics/ingest/search:
+    post:
+      consumes:
+      - application/json
+      description: A search the visitor ran. The query is lowercased, whitespace-collapsed,
+        and cut to 200 characters. filters may hold category, tag, from, and to. The
+        response id (the client's id when sent) is the search_id to send with result
+        clicks. Accepted asynchronously like page views.
+      parameters:
+      - description: consent subject token
+        in: header
+        name: X-Consent-Token
+        type: string
+      - description: search
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/requests.IngestSearch'
+      produces:
+      - application/json
+      responses:
+        "202":
+          description: Accepted
+          schema:
+            $ref: '#/definitions/responses.Envelope'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/responses.Envelope'
+        "403":
+          description: analytics.consent_required
+          schema:
+            $ref: '#/definitions/responses.Envelope'
+        "404":
+          description: analytics.disabled
+          schema:
+            $ref: '#/definitions/responses.Envelope'
+        "413":
+          description: Request Entity Too Large
+          schema:
+            $ref: '#/definitions/responses.Envelope'
+        "429":
+          description: Too Many Requests
+          schema:
+            $ref: '#/definitions/responses.Envelope'
+      summary: Record a search
+      tags:
+      - analytics
+  /api/v1/analytics/ingest/search-click:
+    post:
+      consumes:
+      - application/json
+      description: A click on result position (from 1) of search search_id, pointing
+        at a post, page, category, or tag. Neither id is checked against stored data,
+        so the endpoint reveals nothing about what exists. Accepted asynchronously
+        like page views.
+      parameters:
+      - description: consent subject token
+        in: header
+        name: X-Consent-Token
+        type: string
+      - description: click
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/requests.IngestSearchClick'
+      produces:
+      - application/json
+      responses:
+        "202":
+          description: Accepted
+          schema:
+            $ref: '#/definitions/responses.Envelope'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/responses.Envelope'
+        "403":
+          description: analytics.consent_required
+          schema:
+            $ref: '#/definitions/responses.Envelope'
+        "404":
+          description: analytics.disabled
+          schema:
+            $ref: '#/definitions/responses.Envelope'
+        "413":
+          description: Request Entity Too Large
+          schema:
+            $ref: '#/definitions/responses.Envelope'
+        "429":
+          description: Too Many Requests
+          schema:
+            $ref: '#/definitions/responses.Envelope'
+      summary: Record a search result click
+      tags:
+      - analytics
+  /api/v1/analytics/ingest/time-spent:
+    post:
+      consumes:
+      - application/json
+      description: A heartbeat for page view view_id with the cumulative seconds the
+        page has been in focus (clamped to 4 hours). Send one every 15-30 seconds
+        while the page is visible and one on unload; the highest value is kept. Accepted
+        asynchronously like page views.
+      parameters:
+      - description: consent subject token
+        in: header
+        name: X-Consent-Token
+        type: string
+      - description: heartbeat
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/requests.IngestTimeSpent'
+      produces:
+      - application/json
+      responses:
+        "202":
+          description: Accepted
+          schema:
+            $ref: '#/definitions/responses.Envelope'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/responses.Envelope'
+        "403":
+          description: analytics.consent_required
+          schema:
+            $ref: '#/definitions/responses.Envelope'
+        "404":
+          description: analytics.disabled
+          schema:
+            $ref: '#/definitions/responses.Envelope'
+        "413":
+          description: Request Entity Too Large
+          schema:
+            $ref: '#/definitions/responses.Envelope'
+        "429":
+          description: Too Many Requests
+          schema:
+            $ref: '#/definitions/responses.Envelope'
+      summary: Record time spent on a page
       tags:
       - analytics
   /api/v1/auth/2fa/challenge:

@@ -3856,6 +3856,356 @@
                 }
             }
         },
+        "/api/v1/analytics/ingest/navigation": {
+            "post": {
+                "description": "A move from one page to another. from is omitted for an entry page; transition is internal, external, back_forward, or direct. Accepted asynchronously like page views.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "analytics"
+                ],
+                "summary": "Record a navigation",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "consent subject token",
+                        "name": "X-Consent-Token",
+                        "in": "header"
+                    },
+                    {
+                        "description": "navigation",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/requests.IngestNavigation"
+                        }
+                    }
+                ],
+                "responses": {
+                    "202": {
+                        "description": "Accepted",
+                        "schema": {
+                            "$ref": "#/definitions/responses.Envelope"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/responses.Envelope"
+                        }
+                    },
+                    "403": {
+                        "description": "analytics.consent_required",
+                        "schema": {
+                            "$ref": "#/definitions/responses.Envelope"
+                        }
+                    },
+                    "404": {
+                        "description": "analytics.disabled",
+                        "schema": {
+                            "$ref": "#/definitions/responses.Envelope"
+                        }
+                    },
+                    "413": {
+                        "description": "Request Entity Too Large",
+                        "schema": {
+                            "$ref": "#/definitions/responses.Envelope"
+                        }
+                    },
+                    "429": {
+                        "description": "Too Many Requests",
+                        "schema": {
+                            "$ref": "#/definitions/responses.Envelope"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/analytics/ingest/page-view": {
+            "post": {
+                "description": "Records a page load. The path's query and fragment are dropped. id (optional, a UUID) is the page view id that time-spent heartbeats refer to; it is generated when omitted and returned either way. Events are written asynchronously: 202 does not mean the event was stored (bots, prefetches, and visitors who refused consent are dropped silently). With analytics.consent_required on, a granted X-Consent-Token is required (403 analytics.consent_required); without granted consent, events are stored without a link to any subject.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "analytics"
+                ],
+                "summary": "Record a page view",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "consent subject token",
+                        "name": "X-Consent-Token",
+                        "in": "header"
+                    },
+                    {
+                        "description": "page view",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/requests.IngestPageView"
+                        }
+                    }
+                ],
+                "responses": {
+                    "202": {
+                        "description": "Accepted",
+                        "schema": {
+                            "$ref": "#/definitions/responses.Envelope"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/responses.Envelope"
+                        }
+                    },
+                    "403": {
+                        "description": "analytics.consent_required",
+                        "schema": {
+                            "$ref": "#/definitions/responses.Envelope"
+                        }
+                    },
+                    "404": {
+                        "description": "analytics.disabled",
+                        "schema": {
+                            "$ref": "#/definitions/responses.Envelope"
+                        }
+                    },
+                    "413": {
+                        "description": "Request Entity Too Large",
+                        "schema": {
+                            "$ref": "#/definitions/responses.Envelope"
+                        }
+                    },
+                    "429": {
+                        "description": "Too Many Requests",
+                        "schema": {
+                            "$ref": "#/definitions/responses.Envelope"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/analytics/ingest/search": {
+            "post": {
+                "description": "A search the visitor ran. The query is lowercased, whitespace-collapsed, and cut to 200 characters. filters may hold category, tag, from, and to. The response id (the client's id when sent) is the search_id to send with result clicks. Accepted asynchronously like page views.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "analytics"
+                ],
+                "summary": "Record a search",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "consent subject token",
+                        "name": "X-Consent-Token",
+                        "in": "header"
+                    },
+                    {
+                        "description": "search",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/requests.IngestSearch"
+                        }
+                    }
+                ],
+                "responses": {
+                    "202": {
+                        "description": "Accepted",
+                        "schema": {
+                            "$ref": "#/definitions/responses.Envelope"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/responses.Envelope"
+                        }
+                    },
+                    "403": {
+                        "description": "analytics.consent_required",
+                        "schema": {
+                            "$ref": "#/definitions/responses.Envelope"
+                        }
+                    },
+                    "404": {
+                        "description": "analytics.disabled",
+                        "schema": {
+                            "$ref": "#/definitions/responses.Envelope"
+                        }
+                    },
+                    "413": {
+                        "description": "Request Entity Too Large",
+                        "schema": {
+                            "$ref": "#/definitions/responses.Envelope"
+                        }
+                    },
+                    "429": {
+                        "description": "Too Many Requests",
+                        "schema": {
+                            "$ref": "#/definitions/responses.Envelope"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/analytics/ingest/search-click": {
+            "post": {
+                "description": "A click on result position (from 1) of search search_id, pointing at a post, page, category, or tag. Neither id is checked against stored data, so the endpoint reveals nothing about what exists. Accepted asynchronously like page views.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "analytics"
+                ],
+                "summary": "Record a search result click",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "consent subject token",
+                        "name": "X-Consent-Token",
+                        "in": "header"
+                    },
+                    {
+                        "description": "click",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/requests.IngestSearchClick"
+                        }
+                    }
+                ],
+                "responses": {
+                    "202": {
+                        "description": "Accepted",
+                        "schema": {
+                            "$ref": "#/definitions/responses.Envelope"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/responses.Envelope"
+                        }
+                    },
+                    "403": {
+                        "description": "analytics.consent_required",
+                        "schema": {
+                            "$ref": "#/definitions/responses.Envelope"
+                        }
+                    },
+                    "404": {
+                        "description": "analytics.disabled",
+                        "schema": {
+                            "$ref": "#/definitions/responses.Envelope"
+                        }
+                    },
+                    "413": {
+                        "description": "Request Entity Too Large",
+                        "schema": {
+                            "$ref": "#/definitions/responses.Envelope"
+                        }
+                    },
+                    "429": {
+                        "description": "Too Many Requests",
+                        "schema": {
+                            "$ref": "#/definitions/responses.Envelope"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/analytics/ingest/time-spent": {
+            "post": {
+                "description": "A heartbeat for page view view_id with the cumulative seconds the page has been in focus (clamped to 4 hours). Send one every 15-30 seconds while the page is visible and one on unload; the highest value is kept. Accepted asynchronously like page views.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "analytics"
+                ],
+                "summary": "Record time spent on a page",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "consent subject token",
+                        "name": "X-Consent-Token",
+                        "in": "header"
+                    },
+                    {
+                        "description": "heartbeat",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/requests.IngestTimeSpent"
+                        }
+                    }
+                ],
+                "responses": {
+                    "202": {
+                        "description": "Accepted",
+                        "schema": {
+                            "$ref": "#/definitions/responses.Envelope"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/responses.Envelope"
+                        }
+                    },
+                    "403": {
+                        "description": "analytics.consent_required",
+                        "schema": {
+                            "$ref": "#/definitions/responses.Envelope"
+                        }
+                    },
+                    "404": {
+                        "description": "analytics.disabled",
+                        "schema": {
+                            "$ref": "#/definitions/responses.Envelope"
+                        }
+                    },
+                    "413": {
+                        "description": "Request Entity Too Large",
+                        "schema": {
+                            "$ref": "#/definitions/responses.Envelope"
+                        }
+                    },
+                    "429": {
+                        "description": "Too Many Requests",
+                        "schema": {
+                            "$ref": "#/definitions/responses.Envelope"
+                        }
+                    }
+                }
+            }
+        },
         "/api/v1/auth/2fa/challenge": {
             "post": {
                 "description": "Exchanges the challenge_token from POST /api/v1/auth/login and a 6-digit TOTP code\nor a backup code for a token pair. A challenge expires after 5 minutes or 5 wrong codes.",
@@ -7096,6 +7446,152 @@
             ],
             "properties": {
                 "email_or_username": {
+                    "type": "string"
+                }
+            }
+        },
+        "requests.IngestNavigation": {
+            "type": "object",
+            "required": [
+                "session_id",
+                "to",
+                "transition"
+            ],
+            "properties": {
+                "from": {
+                    "type": "string",
+                    "maxLength": 2048
+                },
+                "id": {
+                    "type": "string"
+                },
+                "session_id": {
+                    "type": "string"
+                },
+                "to": {
+                    "type": "string",
+                    "maxLength": 2048
+                },
+                "transition": {
+                    "type": "string",
+                    "enum": [
+                        "internal",
+                        "external",
+                        "back_forward",
+                        "direct"
+                    ]
+                }
+            }
+        },
+        "requests.IngestPageView": {
+            "type": "object",
+            "required": [
+                "path",
+                "session_id"
+            ],
+            "properties": {
+                "id": {
+                    "type": "string"
+                },
+                "path": {
+                    "type": "string",
+                    "maxLength": 2048
+                },
+                "referrer": {
+                    "type": "string",
+                    "maxLength": 2048
+                },
+                "session_id": {
+                    "type": "string"
+                }
+            }
+        },
+        "requests.IngestSearch": {
+            "type": "object",
+            "required": [
+                "query",
+                "session_id"
+            ],
+            "properties": {
+                "filters": {
+                    "type": "object",
+                    "additionalProperties": {
+                        "type": "string"
+                    }
+                },
+                "id": {
+                    "type": "string"
+                },
+                "query": {
+                    "type": "string",
+                    "maxLength": 1000
+                },
+                "result_count": {
+                    "type": "integer",
+                    "minimum": 0
+                },
+                "session_id": {
+                    "type": "string"
+                }
+            }
+        },
+        "requests.IngestSearchClick": {
+            "type": "object",
+            "required": [
+                "position",
+                "resource_id",
+                "resource_type",
+                "search_id",
+                "session_id"
+            ],
+            "properties": {
+                "id": {
+                    "type": "string"
+                },
+                "position": {
+                    "type": "integer",
+                    "minimum": 1
+                },
+                "resource_id": {
+                    "type": "string"
+                },
+                "resource_type": {
+                    "type": "string",
+                    "enum": [
+                        "post",
+                        "page",
+                        "category",
+                        "tag"
+                    ]
+                },
+                "search_id": {
+                    "type": "string"
+                },
+                "session_id": {
+                    "type": "string"
+                }
+            }
+        },
+        "requests.IngestTimeSpent": {
+            "type": "object",
+            "required": [
+                "path",
+                "session_id",
+                "view_id"
+            ],
+            "properties": {
+                "focus_seconds": {
+                    "type": "integer",
+                    "minimum": 0
+                },
+                "path": {
+                    "type": "string",
+                    "maxLength": 2048
+                },
+                "session_id": {
+                    "type": "string"
+                },
+                "view_id": {
                     "type": "string"
                 }
             }

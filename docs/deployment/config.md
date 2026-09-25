@@ -84,6 +84,9 @@ Do not use `0.0.0.0/0`, `*`, or arbitrary client-controlled addresses in
 | `OAUTH_REDIRECT_URIS` | empty | For OAuth | Comma-separated allowlist of client callback URLs, matched exactly. Each must be an absolute `http(s)` URL without a fragment, and `https` in production. Register the same URLs with the provider. |
 | `AUDIT_RETENTION_DAYS` | `395` | No | Days audit rows are kept; `app audit prune` and the hourly `audit-prune` job in `app scheduler` delete older rows. Must be positive. |
 | `AUDIT_QUEUE_SIZE` | `1024` | No | Entries buffered for the background audit writer. When full, new entries are dropped and counted in `blog_audit_entries_dropped_total`. Must be positive. |
+| `ANALYTICS_INGEST_PER_MINUTE` | `300` | No | Requests per minute per client IP across the five `/analytics/ingest/*` routes; `0` disables the limit. See [analytics.md](../backend/analytics.md). |
+| `ANALYTICS_QUEUE_SIZE` | `10000` | No | Events buffered for the background analytics writer. When full, new events are dropped and counted in `blog_analytics_events_dropped_total`. Must be positive. |
+| `ANALYTICS_COUNTRY_HEADER` | empty | No | Header carrying the visitor's ISO country code from the edge proxy (for example `CF-IPCountry`). Read only from peers in `APP_TRUSTED_PROXIES`, which must be set. Empty stores no country. |
 | `IMPERSONATION_TTL` | `1h` | No | Lifetime of an impersonation session and its token; never renewed. `5m`–`2h`. See [impersonation.md](../backend/impersonation.md). |
 | `NEWSLETTER_PROVIDER` | `smtp` | No | Newsletter issue sender: `smtp` (the SMTP settings, from `app worker`) or `custom_http` (signed JSON gateway). See [newsletter.md](../backend/newsletter.md). |
 | `NEWSLETTER_HTTP_ENDPOINT` | — | With `custom_http` | Gateway URL for deliveries and contact syncs; must be `https` in production. Credentials and query are never shown by the admin API. |
@@ -128,6 +131,9 @@ port off the public load balancer. Series use the `blog_` prefix:
 - `blog_http_requests_in_flight`, `blog_build_info{version}`
 - `blog_audit_entries_dropped_total`: audit entries lost to a full queue or a failed insert;
   alert when it increases
+- `blog_analytics_events_dropped_total`: analytics events lost to a full queue or a failed
+  insert; a steady rise means the writer cannot keep up (raise `ANALYTICS_QUEUE_SIZE` or check
+  the database)
 - `blog_db_*` connection-pool stats, plus Go runtime (`go_*`) and process (`process_*`) series
 
 ## Database

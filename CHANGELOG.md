@@ -1,5 +1,37 @@
 # Changelog
 
+## 2026-09-25 — Analytics telemetry ingest
+
+### Added
+
+- The five `/api/v1/analytics/ingest/*` routes (page view, time spent, navigation, search,
+  search click) store raw events and answer `202 {"id": ...}`. The search id is the `search_id`
+  for clicks, and the page view id is the `view_id` for time-spent heartbeats.
+- Migration 00032: `analytics_page_views`, `analytics_time_spent`, `analytics_navigation`,
+  `analytics_searches`, `analytics_search_clicks`. Events are deduplicated by client id; time
+  spent keeps one row per page view with the highest focus time.
+- Events are written by a background batch writer from a bounded queue
+  (`ANALYTICS_QUEUE_SIZE`, default 10000). Losses are counted in
+  `blog_analytics_events_dropped_total`.
+- Ingest is limited to `ANALYTICS_INGEST_PER_MINUTE` requests per client IP (default 300) and
+  8 KiB per body (`413 analytics.payload_too_large`).
+- `ANALYTICS_COUNTRY_HEADER` records the country from an edge proxy header, only from
+  `APP_TRUSTED_PROXIES`.
+
+### Changed
+
+- With `analytics.consent_required` off, events without granted consent are stored with no
+  subject link, and events from a subject that rejected or withdrew analytics are dropped.
+- Account erasure also deletes the raw analytics events linked to the account's consent subjects.
+
+### Security
+
+- No IP address or user agent is stored. The visitor hash is an HMAC of the consent subject, or
+  for anyone else of the day, IP, and user agent, so anonymous visits cannot be linked across
+  days. Paths lose their query string and referrers keep only scheme, host, and path.
+- Bots, clients without a user agent, and prefetches are dropped. Ingest answers the same way
+  whether or not an event is kept.
+
 ## 2026-09-25 — Phase 5 security review: impersonation, privacy, and tokens
 
 ### Added

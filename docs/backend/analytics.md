@@ -79,51 +79,25 @@ Note: store IP only temporarily (or masked/truncated) for geo lookup, never as a
   - withdrawn_at
   - last_seen_at
 
-- `analytics_page_views`
-  - id
-  - consent_token_id
-  - session_id
-  - path
-  - referrer
-  - country_code
-  - device_type
-  - user_agent_bucket
-  - occurred_at
+Raw events (migration 00032). Every table has `uuid` (the client's dedupe key: a retried event
+is ignored), `subject_uuid` (the consent subject, set only when it granted analytics),
+`visitor_hash` (64 hex characters, see [Visitor identity](#visitor-identity)), and `session_id`
+(the client's session). No IP address or user agent is stored. `subject_uuid` and `search_uuid`
+have no foreign keys, so a batch never fails because a subject was erased or a click arrived
+before its search.
 
-- `analytics_time_spent`
-  - id
-  - consent_token_id
-  - session_id
-  - path
-  - started_at
-  - ended_at
-  - focus_seconds
+- `analytics_page_views`: `path`, `referrer` (scheme, host, and path only), `country_code`,
+  `device_type` (`desktop`, `tablet`, `mobile`), `browser` (family), `occurred_at`
+- `analytics_time_spent`: one row per page view (`uuid` is the page view's). `path`,
+  `focus_seconds` (0–14400, the highest heartbeat wins), `started_at`, `last_seen_at`
+- `analytics_navigation`: `from_path` (null for an entry), `to_path`, `transition_type`
+  (`internal`, `external`, `back_forward`, `direct`), `occurred_at`
+- `analytics_searches`: `query` (normalised), `result_count`, `filters` (JSONB: `category`,
+  `tag`, `from`, `to`), `occurred_at`
+- `analytics_search_clicks`: `search_uuid`, `position` (1–1000), `resource_type` (`post`,
+  `page`, `category`, `tag`), `resource_uuid`, `occurred_at`
 
-- `analytics_navigation`
-  - id
-  - consent_token_id
-  - session_id
-  - from_path
-  - to_path
-  - transition_type
-  - occurred_at
-
-- `analytics_searches`
-  - id
-  - consent_token_id
-  - session_id
-  - normalized_query
-  - result_count
-  - filters_jsonb
-  - occurred_at
-
-- `analytics_search_clicks`
-  - id
-  - search_id (FK)
-  - position
-  - clicked_resource_type
-  - clicked_resource_id
-  - clicked_at
+Times are the server's receive time, never the client's clock.
 
 - `analytics_aggregates_daily`
   - date
@@ -144,14 +118,50 @@ Note: store IP only temporarily (or masked/truncated) for geo lookup, never as a
 
 ### Public Ingestion (Consent-Gated)
 
-- `POST /api/v1/analytics/ingest/page-view`
-  - accepts single batched page view record
-  - 403 if consent is rejected/withdrawn
-- `POST /api/v1/analytics/ingest/time-spent`
-  - accepts heartbeat or final duration
-- `POST /api/v1/analytics/ingest/navigation`
-- `POST /api/v1/analytics/ingest/search`
-- `POST /api/v1/analytics/ingest/search-click`
+Each request carries one event and returns `202` with `{"id": "<uuid>"}`. Every event needs a
+`session_id` (a UUID the client generates per tab and rotates after 30 minutes idle); `id` is
+optional and is generated when omitted.
+
+- `POST /api/v1/analytics/ingest/page-view`: `path`, `referrer`. The returned id is the page
+  view id for time-spent heartbeats.
+- `POST /api/v1/analytics/ingest/time-spent`: `view_id`, `path`, `focus_seconds` (cumulative).
+  Send one every 15–30 seconds while visible and one on unload (`navigator.sendBeacon` cannot
+  set headers, so use `fetch` with `keepalive: true`).
+- `POST /api/v1/analytics/ingest/navigation`: `from` (omit for an entry), `to`, `transition`.
+- `POST /api/v1/analytics/ingest/search`: `query`, `result_count`, `filters`. The returned id is
+  the `search_id` for clicks.
+- `POST /api/v1/analytics/ingest/search-click`: `search_id`, `position`, `resource_type`,
+  `resource_id`.
+
+#### Ingest pipeline
+
+1. A body over 8 KiB is `413 analytics.payload_too_large`; more than
+   `ANALYTICS_INGEST_PER_MINUTE` requests per client IP (default 300, shared by the five routes)
+   is `429`. Both checks run before the consent lookup.
+2. The consent gate (see [Implementation](#implementation)) decides between a granted subject,
+   an anonymous visitor, and a refusal.
+3. The service validates and normalises the event. It drops, while still answering `202`,
+   events from bots and scripted clients (user agent match, or no user agent), prefetches
+   (`Sec-Purpose`/`Purpose: prefetch`), and refusing subjects. The answer never depends on
+   whether a path, post, or search exists, so the endpoints cannot be used to probe content or
+   users.
+4. The event goes into a bounded in-process queue (`ANALYTICS_QUEUE_SIZE`, default 10000). A
+   background writer inserts batches of up to 500 every second with one multi-row statement per
+   table. A full queue or a failed insert drops events and counts them in
+   `blog_analytics_events_dropped_total`; shutdown flushes the queue for up to 5 seconds. Events
+   still queued when a process crashes are lost: at most about one second of traffic.
+
+#### Visitor identity
+
+- A subject that granted analytics: `visitor_hash` is an HMAC of the subject id, stable across
+  days, so retention can follow it. `subject_uuid` is stored for erasure.
+- Anyone else: `visitor_hash` is an HMAC of the day, client IP, and user agent. The same visitor
+  gets an unrelated hash the next day, so anonymous visits cannot be linked across days.
+- The HMAC key derives from `APP_ENCRYPTION_KEY`. Without it, each API process uses a random key
+  held in memory, so anonymous unique counts across replicas (or restarts) are approximate.
+- The country comes from `ANALYTICS_COUNTRY_HEADER` (for example `CF-IPCountry`), read only when
+  the request's immediate peer is in `APP_TRUSTED_PROXIES`. `XX` and `T1` are treated as unknown.
+- Device class and browser family come from the user agent, which is then discarded.
 
 ### Admin Dashboard (RBAC Protected)
 
@@ -200,8 +210,9 @@ Note: store IP only temporarily (or masked/truncated) for geo lookup, never as a
 - Ingest enforcement: every `/analytics/ingest/*` route passes through a gate before the handler.
   `analytics.enabled=false` returns `404 analytics.disabled`; with
   `analytics.consent_required=true`, a request without a token whose `analytics` consent is
-  granted returns `403 analytics.consent_required`. The ingest handlers themselves still return
-  `501` until Phase 6.
+  granted returns `403 analytics.consent_required`. With it off, events without granted consent
+  are stored anonymised (no subject link), and events from a subject that rejected or withdrew
+  analytics are accepted and dropped.
 - Each status change records `analytics.consent.granted`, `analytics.consent.rejected`, or
   `analytics.consent.withdrawn` in the outbox.
 
@@ -210,8 +221,8 @@ Note: store IP only temporarily (or masked/truncated) for geo lookup, never as a
 Recommendation for live dashboard:
 
 1. Ingestion API validates consent.
-2. On success, persist raw event (write path).
-3. Enqueue `analytics.event.ingested` via Watermill outbox.
+2. On success, queue the raw event for the batched writer (write path).
+3. Hand accepted events to the live counters in process (no outbox; see [Events](#events)).
 4. Async handlers:
    - update Redis counters for live counts (last 5 min, last hour)
    - fan out per-topic events to admin SSE stream via pub/sub
@@ -224,15 +235,11 @@ Domain and integration events:
 - `analytics.consent.granted`
 - `analytics.consent.rejected`
 - `analytics.consent.withdrawn`
-- `analytics.page_view.ingested`
-- `analytics.time_spent.ingested`
-- `analytics.navigation.ingested`
-- `analytics.search.ingested`
-- `analytics.search_click.ingested`
 - `analytics.realtime.summary.tick`
 - `analytics.aggregation.daily.completed`
 
-Use the outbox pattern for persistence-to-event consistency.
+Consent events go through the outbox. Ingested events do not: an outbox row per event would put
+a database write back on the ingest path. There are no `analytics.*.ingested` events.
 
 ## Jobs and Workers
 
@@ -253,11 +260,16 @@ Run background work via:
 
 Validation rules:
 
-- reject payloads longer than configured max size
-- normalize `path` to canonical form, reject malformed URLs / suspicious characters
-- clamp time-spent values within realistic min/max bounds
-- clamp search result positions to 1..N range
-- reject or drop events when consent token is invalid, rejected, or withdrawn
+- reject payloads over 8 KiB (`413`)
+- `path` must start with `/`; the query and fragment are dropped, repeated slashes collapse, a
+  trailing slash is removed, whitespace or control characters are rejected, and the result is at
+  most 512 bytes
+- `referrer` keeps only an http(s) scheme, host, and path; anything else is dropped
+- search queries are lowercased, whitespace-collapsed, stripped of control characters, and cut to
+  200 characters
+- `focus_seconds` is clamped to 0..14400, `position` to 1..1000, `result_count` to 0..1000000
+- unknown `transition`, `resource_type`, or filter keys are `400`
+- events from a subject that rejected or withdrew consent are dropped
 
 Error handling:
 
@@ -286,7 +298,7 @@ Invalidation triggers:
 Hard rules for the backend:
 
 - consent token is pseudonymous; never join directly to `users.id` unless the user explicitly opts into authenticated analytics (separate scope)
-- allow deletion pipeline: mark tokens as erased, then delete/mask raw events and rebuild affected aggregates
+- allow deletion pipeline: mark tokens as erased, then delete/mask raw events and rebuild affected aggregates. Account erasure deletes the user's consent subjects and, in the same statement, every raw event carrying their `subject_uuid`; anonymised events carry no link and are not affected
 - export pipeline: return only records tied to a consent token proof, signed or token-protected
 - never log raw event payloads at INFO or DEBUG levels; keep structured logs metric-only or hash-only
 

@@ -236,6 +236,46 @@ func TestAuthenticatedAnalyticsLinksAndWithdrawUnlinks(t *testing.T) {
 	assert.Nil(t, repo.subjects[state.Subject.UUID].UserUUID)
 }
 
+func TestDecision(t *testing.T) {
+	t.Parallel()
+
+	svc, repo, _ := newService()
+
+	for _, token := range []string{"", "unknown"} {
+		d, err := svc.Decision(t.Context(), token, domain.PurposeAnalytics)
+		require.NoError(t, err)
+		assert.Equal(t, Decision{}, d, token)
+		assert.False(t, d.Granted() || d.Refused())
+	}
+
+	state, err := svc.Store(t.Context(), "", nil, map[domain.Purpose]bool{domain.PurposeAnalytics: true}, "v1")
+	require.NoError(t, err)
+
+	earlier := now.Add(-time.Hour)
+	subject := repo.subjects[state.Subject.UUID]
+	subject.LastSeenAt = earlier
+	repo.subjects[state.Subject.UUID] = subject
+
+	d, err := svc.Decision(t.Context(), state.Token, domain.PurposeAnalytics)
+	require.NoError(t, err)
+	assert.Equal(t, Decision{Subject: state.Subject.UUID, Status: domain.StatusGranted, Found: true}, d)
+	assert.True(t, d.Granted())
+	assert.Equal(t, earlier, repo.subjects[state.Subject.UUID].LastSeenAt, "a decision lookup writes nothing")
+
+	d, err = svc.Decision(t.Context(), state.Token, domain.PurposeAuthenticatedAnalytics)
+	require.NoError(t, err)
+	assert.True(t, d.Found)
+	assert.Empty(t, d.Status, "no decision yet for this purpose")
+
+	_, err = svc.Store(t.Context(), state.Token, nil, map[domain.Purpose]bool{domain.PurposeAnalytics: false}, "v1")
+	require.NoError(t, err)
+
+	d, err = svc.Decision(t.Context(), state.Token, domain.PurposeAnalytics)
+	require.NoError(t, err)
+	assert.True(t, d.Refused())
+	assert.False(t, d.Granted())
+}
+
 func TestAllowed(t *testing.T) {
 	t.Parallel()
 

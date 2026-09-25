@@ -70,10 +70,19 @@ needs, and lets the data subject, and only the data subject, decide on consent.
   Without the key it falls back to plain SHA-256, which is reversible, and startup logs a warning.
   Rows written before the key was set keep their old hashes, so a guest may flag the same comment
   once more after the switch.
+- **Analytics telemetry.** Raw events store neither the IP address nor the user agent: only a
+  path without its query string, a device class, a browser family, an optional country from a
+  trusted proxy header, and a visitor hash. For a visitor without granted consent that hash is an
+  HMAC of the day, IP, and user agent, so their visits cannot be linked across days or to an
+  account; with no `APP_ENCRYPTION_KEY` the HMAC key is random per process and never stored.
+  Ingest answers `202` whether or not an event is kept (bots, prefetches, and refusing subjects
+  are dropped), so it cannot be used to probe users or content. See
+  [analytics.md](../backend/analytics.md).
 - **Retention.** Audit entries are kept for `AUDIT_RETENTION_DAYS` (395). Data exports stay in
   object storage for `PRIVACY_EXPORT_RETENTION` (72h); the download link is presigned for at most
   `PRIVACY_EXPORT_URL_TTL` (15m) and never past the export's own expiry, and the response is
-  `no-store`. Erasure anonymizes the account, deletes its analytics consents, and erases its
+  `no-store`. Erasure anonymizes the account, deletes its analytics consents and the raw events
+  linked to them, and erases its
   newsletter subscriber (personal data, feedback, and IP hashes cleared; tokens deleted), keeping
   only the append-only consent history the law requires.
 - **Impersonation.** Staff acting as a user are bound to their own sign-in, see a response header

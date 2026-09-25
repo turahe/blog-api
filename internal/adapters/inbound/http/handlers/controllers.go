@@ -60,9 +60,17 @@ type Deps struct {
 	Settings       settingsAPI
 	SettingsValues settingsValues
 	// Consent records analytics consent; nil keeps the consent routes as 501 stubs.
-	Consent      consentAPI
-	RateLimiter  middleware.Limiter
-	CommentRates CommentRates
+	Consent consentAPI
+	// AnalyticsIngest accepts telemetry; nil keeps the ingest routes as 501 stubs.
+	AnalyticsIngest analyticsIngestAPI
+	// AnalyticsIngestPerMinute is the per-IP budget shared by the ingest routes; zero disables it.
+	AnalyticsIngestPerMinute int
+	// AnalyticsCountryHeader names the proxy header carrying the visitor's country; empty disables it.
+	AnalyticsCountryHeader string
+	// TrustedProxies are the peers allowed to set AnalyticsCountryHeader.
+	TrustedProxies []string
+	RateLimiter    middleware.Limiter
+	CommentRates   CommentRates
 	// LoginPerMinute is the per-IP budget for auth.login; zero disables the limit.
 	LoginPerMinute int
 	Version        string
@@ -150,6 +158,7 @@ func NewControllers(deps Deps) routes.Controllers {
 
 	c.Activity.MeList, c.Activity.AdminUserList = activityControllers(deps)
 	c.Analytics.ConsentStore, c.Analytics.ConsentGet, c.Analytics.ConsentWithdraw, c.Analytics.IngestGate = consentControllers(deps)
+	analyticsIngestControllers(deps, &c.Analytics)
 	c.Notifications = notificationControllers(deps)
 	c.Impersonation = impersonationControllers(deps)
 	c.Newsletter = newsletterControllers(deps)

@@ -271,6 +271,54 @@ func (s *Service) Allowed(ctx context.Context, token string, purpose domain.Purp
 	return false, nil
 }
 
+// Decision is a subject's standing for one purpose. Found is false for a missing or unknown
+// token; Status is empty when the subject never decided on the purpose.
+type Decision struct {
+	Subject uuid.UUID
+	Status  domain.Status
+	Found   bool
+}
+
+// Granted reports whether the purpose is granted.
+func (d Decision) Granted() bool { return d.Status == domain.StatusGranted }
+
+// Refused reports whether the subject rejected or withdrew the purpose.
+func (d Decision) Refused() bool {
+	return d.Status == domain.StatusRejected || d.Status == domain.StatusWithdrawn
+}
+
+// Decision returns the standing of the subject identified by token for purpose. Unlike
+// Current it does not record the subject as seen, so the ingest hot path only reads.
+func (s *Service) Decision(ctx context.Context, token string, purpose domain.Purpose) (Decision, error) {
+	if token == "" {
+		return Decision{}, nil
+	}
+
+	subject, err := s.repo.SubjectByToken(ctx, domain.HashToken(token))
+	if errors.Is(err, domain.ErrNotFound) {
+		return Decision{}, nil
+	}
+
+	if err != nil {
+		return Decision{}, err
+	}
+
+	consents, err := s.repo.List(ctx, subject.UUID)
+	if err != nil {
+		return Decision{}, err
+	}
+
+	decision := Decision{Subject: subject.UUID, Found: true}
+
+	for _, c := range consents {
+		if c.Purpose == purpose {
+			decision.Status = c.Status
+		}
+	}
+
+	return decision, nil
+}
+
 // DeleteForUser removes the consent subjects linked to the user, for account erasure.
 func (s *Service) DeleteForUser(ctx context.Context, userID uuid.UUID) (int64, error) {
 	return s.repo.DeleteForUser(ctx, userID)

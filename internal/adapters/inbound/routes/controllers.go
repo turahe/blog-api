@@ -64,13 +64,20 @@ type Impersonation struct {
 	Current gin.HandlerFunc
 }
 
-// Analytics holds consent handlers and the gate in front of the ingestion routes.
+// Analytics holds consent and ingestion handlers and the gate in front of ingestion.
 type Analytics struct {
 	ConsentStore    gin.HandlerFunc
 	ConsentGet      gin.HandlerFunc
 	ConsentWithdraw gin.HandlerFunc
+	// IngestLimits run first on every ingestion route (body size, rate limit), before the gate.
+	IngestLimits gin.HandlersChain
 	// IngestGate runs before every ingestion route; nil leaves them ungated.
-	IngestGate gin.HandlerFunc
+	IngestGate  gin.HandlerFunc
+	PageView    gin.HandlerFunc
+	TimeSpent   gin.HandlerFunc
+	Navigation  gin.HandlerFunc
+	Search      gin.HandlerFunc
+	SearchClick gin.HandlerFunc
 }
 
 // Settings holds admin settings handlers.

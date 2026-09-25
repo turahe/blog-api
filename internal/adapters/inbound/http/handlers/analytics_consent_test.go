@@ -22,7 +22,8 @@ type fakeConsent struct {
 	decisions map[consentdomain.Purpose]bool
 	version   string
 	newToken  string
-	allowed   bool
+	subject   uuid.UUID
+	status    consentdomain.Status // analytics status Decision reports; empty for an unknown token
 	err       error
 }
 
@@ -46,9 +47,13 @@ func (f *fakeConsent) Withdraw(_ context.Context, token string, user *uuid.UUID,
 	return consentdomain.Consent{UUID: id, Status: consentdomain.StatusWithdrawn}, f.err
 }
 
-func (f *fakeConsent) Allowed(_ context.Context, token string, _ consentdomain.Purpose) (bool, error) {
+func (f *fakeConsent) Decision(_ context.Context, token string, _ consentdomain.Purpose) (consentservice.Decision, error) {
 	f.token = token
-	return f.allowed, f.err
+	if f.status == "" {
+		return consentservice.Decision{}, f.err
+	}
+
+	return consentservice.Decision{Subject: f.subject, Status: f.status, Found: true}, f.err
 }
 
 type fakeSettingsValues map[string]any
@@ -129,7 +134,18 @@ func TestGetAndWithdrawConsent(t *testing.T) {
 func TestAnalyticsIngestGate(t *testing.T) {
 	t.Parallel()
 
-	next := func(c *gin.Context) { c.String(nethttp.StatusAccepted, "next") }
+	// next echoes what the gate handed on: the granted subject, or "refused".
+	next := func(c *gin.Context) {
+		switch subject, ok := c.Get(contextAnalyticsSubject); {
+		case ok:
+			id, _ := subject.(uuid.UUID)
+			c.String(nethttp.StatusAccepted, id.String())
+		case c.GetBool(contextAnalyticsRefused):
+			c.String(nethttp.StatusAccepted, "refused")
+		default:
+			c.String(nethttp.StatusAccepted, "anonymous")
+		}
+	}
 	run := func(svc *fakeConsent, settings fakeSettingsValues, token string) *httptest.ResponseRecorder {
 		gate := analyticsIngestGate(svc, settings)
 
@@ -143,15 +159,25 @@ func TestAnalyticsIngestGate(t *testing.T) {
 		}, profileRequest{method: nethttp.MethodPost, target: "/"})
 	}
 
-	enabled := fakeSettingsValues{"analytics.enabled": true, "analytics.consent_required": true}
+	required := fakeSettingsValues{"analytics.enabled": true, "analytics.consent_required": true}
+	optional := fakeSettingsValues{"analytics.enabled": true, "analytics.consent_required": false}
+	granted := func() *fakeConsent { return &fakeConsent{subject: uuid.New(), status: consentdomain.StatusGranted} }
 
-	assert.Equal(t, nethttp.StatusNotFound, run(&fakeConsent{allowed: true}, fakeSettingsValues{}, "tok").Code)
-	assert.Equal(t, nethttp.StatusForbidden, run(&fakeConsent{}, enabled, "tok").Code)
+	assert.Equal(t, nethttp.StatusNotFound, run(granted(), fakeSettingsValues{}, "tok").Code)
+	assert.Equal(t, nethttp.StatusForbidden, run(&fakeConsent{}, required, "tok").Code)
+	assert.Equal(t, nethttp.StatusForbidden, run(&fakeConsent{status: consentdomain.StatusWithdrawn}, required, "tok").Code)
 
-	svc := &fakeConsent{allowed: true}
-	assert.Equal(t, nethttp.StatusAccepted, run(svc, enabled, "tok").Code)
+	svc := granted()
+	w := run(svc, required, "tok")
+	assert.Equal(t, nethttp.StatusAccepted, w.Code)
+	assert.Equal(t, svc.subject.String(), w.Body.String())
 	assert.Equal(t, "tok", svc.token)
 
-	optional := fakeSettingsValues{"analytics.enabled": true, "analytics.consent_required": false}
-	assert.Equal(t, nethttp.StatusAccepted, run(&fakeConsent{}, optional, "").Code)
+	assert.Equal(t, "anonymous", run(&fakeConsent{}, optional, "").Body.String())
+	assert.Equal(t, "refused", run(&fakeConsent{status: consentdomain.StatusRejected}, optional, "tok").Body.String(),
+		"an explicit refusal is honoured even when consent is not required")
+	assert.Equal(t, svc.subject.String(), run(svc, optional, "tok").Body.String())
+
+	svc.err = assert.AnError
+	assert.Equal(t, nethttp.StatusInternalServerError, run(svc, optional, "tok").Code)
 }

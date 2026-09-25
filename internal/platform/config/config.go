@@ -113,6 +113,9 @@ type Config struct {
 	NewsletterHTTPEndpoint        string
 	NewsletterHTTPSecret          string
 	NewsletterSendBatch           int
+	AnalyticsIngestPerMinute      int
+	AnalyticsQueueSize            int
+	AnalyticsCountryHeader        string
 	CommentsGuestEnabled          bool
 	CommentsRequireApproval       bool
 	CommentsEditWindow            time.Duration
@@ -639,6 +642,7 @@ func load(withJWTKeys bool) (Config, error) {
 	cfg.loadMedia()
 	cfg.loadWorker()
 	cfg.loadNewsletter()
+	cfg.loadAnalytics()
 	cfg.loadKafkaSecurity()
 
 	if withJWTKeys {
@@ -742,7 +746,7 @@ func (c *Config) validate() error {
 		return fmt.Errorf("invalid database pool limits: idle=%d open=%d", c.DBMaxIdle, c.DBMaxOpen)
 	}
 
-	for _, check := range []func() error{c.ValidateRedis, c.ValidateMessaging, c.ValidateMedia, c.ValidateSentry, c.ValidateCache, c.ValidateOAuth, c.ValidateAudit, c.ValidateSearch, c.ValidateImpersonation, c.ValidateNewsletter} {
+	for _, check := range []func() error{c.ValidateRedis, c.ValidateMessaging, c.ValidateMedia, c.ValidateSentry, c.ValidateCache, c.ValidateOAuth, c.ValidateAudit, c.ValidateSearch, c.ValidateImpersonation, c.ValidateNewsletter, c.ValidateAnalytics} {
 		if err := check(); err != nil {
 			return err
 		}

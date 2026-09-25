@@ -401,6 +401,15 @@ Each item has `id`, `type`, `title`, `body`, `preview`, `data` (links such as `p
   provider config (`422 newsletter.not_configured`). Details:
   [newsletter.md](newsletter.md).
 
+### Analytics ingest
+
+- The five `/api/v1/analytics/ingest/*` routes take one JSON event each and answer `202
+  {"id": "<uuid>"}` with `Cache-Control: no-store`, including when the event is dropped (bot,
+  prefetch, refused consent).
+- `400` validation, `403 analytics.consent_required` (consent required and not granted),
+  `404 analytics.disabled`, `413 analytics.payload_too_large` (over 8 KiB), `429` over
+  `ANALYTICS_INGEST_PER_MINUTE`. Details: [analytics.md](analytics.md#public-ingestion-consent-gated).
+
 ## Main API Areas
 
 - auth

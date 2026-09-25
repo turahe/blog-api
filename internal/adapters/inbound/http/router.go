@@ -12,6 +12,7 @@ import (
 	"github.com/turahe/blog-api/internal/adapters/inbound/http/swagger"
 	"github.com/turahe/blog-api/internal/adapters/inbound/realtime"
 	"github.com/turahe/blog-api/internal/adapters/inbound/routes"
+	analyticsservice "github.com/turahe/blog-api/internal/core/analytics/service"
 	auditports "github.com/turahe/blog-api/internal/core/audit/ports"
 	auditservice "github.com/turahe/blog-api/internal/core/audit/service"
 	authports "github.com/turahe/blog-api/internal/core/auth/ports"
@@ -56,6 +57,10 @@ type Dependencies struct {
 	Comments       *commentservice.Service
 	Settings       *settingsservice.Service // nil keeps the settings routes as 501 stubs
 	Consent        *consentservice.Service  // nil keeps the consent routes as 501 stubs
+	// AnalyticsIngest accepts telemetry; nil keeps the ingest routes as 501 stubs.
+	AnalyticsIngest          *analyticsservice.Ingest
+	AnalyticsIngestPerMinute int
+	AnalyticsCountryHeader   string
 	// PrivacyRequests queues data exports and erasures; nil keeps the routes as 501 stubs.
 	PrivacyRequests *privacyservice.Service
 	// Impersonation serves /admin/impersonation and verifies impersonation tokens; nil keeps
@@ -213,6 +218,13 @@ func optionalServices(controllerDeps *handlers.Deps, deps Dependencies) {
 
 	if deps.Consent != nil {
 		controllerDeps.Consent = deps.Consent
+	}
+
+	if deps.AnalyticsIngest != nil {
+		controllerDeps.AnalyticsIngest = deps.AnalyticsIngest
+		controllerDeps.AnalyticsIngestPerMinute = deps.AnalyticsIngestPerMinute
+		controllerDeps.AnalyticsCountryHeader = deps.AnalyticsCountryHeader
+		controllerDeps.TrustedProxies = deps.TrustedProxies
 	}
 }
 

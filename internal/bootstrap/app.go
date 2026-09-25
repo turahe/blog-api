@@ -32,6 +32,7 @@ import (
 	"github.com/turahe/blog-api/internal/adapters/outbound/ratelimit"
 	outboundrbac "github.com/turahe/blog-api/internal/adapters/outbound/rbac"
 	"github.com/turahe/blog-api/internal/adapters/outbound/storage"
+	analyticsservice "github.com/turahe/blog-api/internal/core/analytics/service"
 	auditservice "github.com/turahe/blog-api/internal/core/audit/service"
 	authports "github.com/turahe/blog-api/internal/core/auth/ports"
 	authservice "github.com/turahe/blog-api/internal/core/auth/service"
@@ -84,7 +85,9 @@ type Runtime struct {
 	// the caller starts it and Close stops it.
 	PolicySync *outboundrbac.PolicySync
 	// Audit writes audit entries in the background; Close flushes it.
-	Audit      *auditservice.Recorder
+	Audit *auditservice.Recorder
+	// Analytics writes raw analytics events in the background; Close flushes it.
+	Analytics  *analyticsservice.Writer
 	Auth       *authservice.AuthService
 	Users      *userservice.UserService
 	Posts      *postservice.PostService
@@ -153,11 +156,7 @@ func NewRuntime(ctx context.Context, cfg config.Config, logger *slog.Logger, ver
 	posts := newPostService(cfg, db, postsRepo, ids, clock, cacheOrNil, inbox, events, settings)
 	userSvc := userservice.New(users)
 
-	categories := categoryservice.New(categoriesRepo, ids, clock).WithCache(cacheOrNil)
-	if err := categories.RebuildAll(ctx); err != nil {
-		logger.Warn("category tree rebuild failed at startup", "error", err)
-	}
-
+	categories := newCategoryService(ctx, categoriesRepo, ids, clock, cacheOrNil, logger)
 	tags := tagservice.New(tagsRepo, ids, clock).WithCache(cacheOrNil)
 	posts.WithTags(tags).WithSearch(newPostSearch(ctx, cfg, db, logger))
 
@@ -180,8 +179,9 @@ func NewRuntime(ctx context.Context, cfg config.Config, logger *slog.Logger, ver
 	roleStore := outboundrbac.NewRoleStore(db.GORM, enforcer).WithNotifier(policySync)
 	auth.WithRoles(roleStore).WithAccessCheck(enforcer)
 
-	metricsServer, recorder, onAuditDrop := newMetrics(cfg, db, version)
-	auditRecorder, activity := newAudit(cfg, db, onAuditDrop, logger)
+	metricsServer, recorder, drops := newMetrics(cfg, db, version)
+	auditRecorder, activity := newAudit(cfg, db, drops.audit, logger)
+	analyticsIngest, analyticsWriter := newAnalytics(cfg, db, drops.analytics, logger)
 	newsletter := NewNewsletterService(cfg, db, events, settings, logger)
 
 	router, err := httpadapter.NewRouter(httpadapter.Dependencies{
@@ -205,8 +205,10 @@ func NewRuntime(ctx context.Context, cfg config.Config, logger *slog.Logger, ver
 		Settings: settings, Newsletter: newsletter,
 		NewsletterProvider: NewsletterProvider(cfg),
 		Consent:            consentservice.New(persistence.NewConsentRepository(db.GORM), ids, clock).WithEvents(events),
-		PrivacyRequests:    NewPrivacyService(ctx, cfg, db, auth, events, cacheOrNil, logger).WithModuleErasers(newsletter),
-		RateLimiter:        ratelimit.NewRedis(redisClient),
+		AnalyticsIngest:    analyticsIngest, AnalyticsIngestPerMinute: cfg.AnalyticsIngestPerMinute,
+		AnalyticsCountryHeader: cfg.AnalyticsCountryHeader,
+		PrivacyRequests:        NewPrivacyService(ctx, cfg, db, auth, events, cacheOrNil, logger).WithModuleErasers(newsletter),
+		RateLimiter:            ratelimit.NewRedis(redisClient),
 		CommentRates: handlers.CommentRates{
 			CreatePerMinute:  cfg.CommentsCreatePerMinute,
 			ActionsPerMinute: cfg.CommentsActionsPerMinute,
@@ -223,9 +225,23 @@ func NewRuntime(ctx context.Context, cfg config.Config, logger *slog.Logger, ver
 	return &Runtime{
 		Config: cfg, Database: db, Redis: redisClient, Cache: readCache,
 		Auth: auth, Users: userSvc, Posts: posts, Categories: categories, Media: media,
-		MetricsServer: metricsServer, PolicySync: policySync, Audit: auditRecorder,
+		MetricsServer: metricsServer, PolicySync: policySync, Audit: auditRecorder, Analytics: analyticsWriter,
 		NotificationBus: notificationBus, Server: newServer(cfg, router, hub),
 	}, nil
+}
+
+// newCategoryService builds the category service and repairs the nested-set tree; a failed
+// repair is logged, not fatal.
+func newCategoryService(
+	ctx context.Context, repo *persistence.CategoryRepository, ids system.UUIDGenerator, clock system.Clock,
+	cache readcache.Cache, logger *slog.Logger,
+) *categoryservice.CategoryService {
+	categories := categoryservice.New(repo, ids, clock).WithCache(cache)
+	if err := categories.RebuildAll(ctx); err != nil {
+		logger.Warn("category tree rebuild failed at startup", "error", err)
+	}
+
+	return categories
 }
 
 // newServer builds the HTTP server. There is no write timeout because notification streams
@@ -436,16 +452,23 @@ func newInbox(cfg config.Config, db *database.Database, clock system.Clock, logg
 		WithTemplates(persistence.NewNotificationTemplateRepository(db.GORM))
 }
 
-// newMetrics returns the Prometheus server, request recorder, and audit drop
-// counter, or nils when METRICS_ADDR is empty.
-func newMetrics(cfg config.Config, db *database.Database, version string) (*nethttp.Server, middleware.MetricsRecorder, func(int)) {
+// dropCounters count what the background writers lose; nil funcs when metrics are off.
+type dropCounters struct {
+	audit     func(int)
+	analytics func(int)
+}
+
+// newMetrics returns the Prometheus server, request recorder, and drop counters, or nils
+// when METRICS_ADDR is empty.
+func newMetrics(cfg config.Config, db *database.Database, version string) (*nethttp.Server, middleware.MetricsRecorder, dropCounters) {
 	if cfg.MetricsAddr == "" {
-		return nil, nil, nil
+		return nil, nil, dropCounters{}
 	}
 
 	appMetrics := metrics.New(db.SQL, version)
 
-	return appMetrics.NewServer(cfg.MetricsAddr), appMetrics, appMetrics.AuditDropped
+	return appMetrics.NewServer(cfg.MetricsAddr), appMetrics,
+		dropCounters{audit: appMetrics.AuditDropped, analytics: appMetrics.AnalyticsDropped}
 }
 
 // newAudit starts the background audit writer and the activity query service.
@@ -687,6 +710,15 @@ func (r *Runtime) Close() error {
 		ctx, cancel := context.WithTimeout(context.Background(), auditFlushTimeout)
 		if err := r.Audit.Close(ctx); err != nil {
 			errs = append(errs, fmt.Errorf("flush audit log: %w", err))
+		}
+
+		cancel()
+	}
+
+	if r.Analytics != nil {
+		ctx, cancel := context.WithTimeout(context.Background(), auditFlushTimeout)
+		if err := r.Analytics.Close(ctx); err != nil {
+			errs = append(errs, fmt.Errorf("flush analytics events: %w", err))
 		}
 
 		cancel()

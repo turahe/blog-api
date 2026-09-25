@@ -23,6 +23,8 @@ type Metrics struct {
 	inflight prometheus.Gauge
 	dropped  prometheus.Counter
 
+	analyticsDropped prometheus.Counter
+
 	outboxPublished prometheus.Counter
 	outboxFailed    *prometheus.CounterVec
 	outboxPending   prometheus.Gauge
@@ -56,6 +58,11 @@ func New(db *sql.DB, version string) *Metrics {
 			Namespace: namespace,
 			Name:      "audit_entries_dropped_total",
 			Help:      "Audit entries lost to a full queue or a failed insert.",
+		}),
+		analyticsDropped: prometheus.NewCounter(prometheus.CounterOpts{
+			Namespace: namespace,
+			Name:      "analytics_events_dropped_total",
+			Help:      "Analytics events lost to a full ingest queue or a failed insert.",
 		}),
 		outboxPublished: prometheus.NewCounter(prometheus.CounterOpts{
 			Namespace: namespace,
@@ -95,7 +102,7 @@ func New(db *sql.DB, version string) *Metrics {
 	registry.MustRegister(
 		collectors.NewGoCollector(),
 		collectors.NewProcessCollector(collectors.ProcessCollectorOpts{}),
-		m.requests, m.duration, m.inflight, m.dropped, build,
+		m.requests, m.duration, m.inflight, m.dropped, m.analyticsDropped, build,
 		m.outboxPublished, m.outboxFailed, m.outboxPending, m.outboxParked, m.outboxLag,
 	)
 
@@ -132,6 +139,11 @@ func (m *Metrics) ObserveHTTP(method, route string, status int, elapsed time.Dur
 // AuditDropped counts n audit entries that were not stored.
 func (m *Metrics) AuditDropped(n int) {
 	m.dropped.Add(float64(n))
+}
+
+// AnalyticsDropped counts n analytics events that were not stored.
+func (m *Metrics) AnalyticsDropped(n int) {
+	m.analyticsDropped.Add(float64(n))
 }
 
 // OutboxPublished counts one relayed event.

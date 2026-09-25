@@ -132,10 +132,23 @@ func (r *ConsentRepository) Save(ctx context.Context, c consentdomain.Consent) e
 		c.UUID, c.SubjectUUID, string(c.Purpose), string(c.Status), c.PolicyVersion, c.DecidedAt, c.WithdrawnAt).Error
 }
 
-// DeleteForUser deletes the subjects linked to the user; their consents cascade.
+// DeleteForUser deletes the subjects linked to the user with their raw analytics events;
+// their consents cascade.
 func (r *ConsentRepository) DeleteForUser(ctx context.Context, userID uuid.UUID) (int64, error) {
-	result := conn(ctx, r.db).Exec(`DELETE FROM consent_subjects WHERE user_id = `+idOf("users"), userID)
-	return result.RowsAffected, result.Error
+	var deleted int64
+
+	err := conn(ctx, r.db).Raw(`
+WITH gone AS (
+	DELETE FROM consent_subjects WHERE user_id = `+idOf("users")+` RETURNING uuid
+),
+page_views AS (DELETE FROM analytics_page_views WHERE subject_uuid IN (SELECT uuid FROM gone)),
+time_spent AS (DELETE FROM analytics_time_spent WHERE subject_uuid IN (SELECT uuid FROM gone)),
+navigation AS (DELETE FROM analytics_navigation WHERE subject_uuid IN (SELECT uuid FROM gone)),
+searches AS (DELETE FROM analytics_searches WHERE subject_uuid IN (SELECT uuid FROM gone)),
+clicks AS (DELETE FROM analytics_search_clicks WHERE subject_uuid IN (SELECT uuid FROM gone))
+SELECT count(*) FROM gone`, userID).Scan(&deleted).Error
+
+	return deleted, err
 }
 
 func mapConsent(row consentRow) consentdomain.Consent {
