@@ -42,6 +42,8 @@ const (
 	newsletterTokenRetention = 30 * 24 * time.Hour
 	// mediaPurgeBatch bounds how many abandoned and how many deleted assets one run purges.
 	mediaPurgeBatch = 200
+	// analyticsRollupEvery is how stale today's analytics rollups may get.
+	analyticsRollupEvery = 15 * time.Minute
 )
 
 func newSchedulerCmd() *cobra.Command {
@@ -196,6 +198,7 @@ func scheduledJobs(
 	privacy := bootstrap.NewPrivacyService(ctx, cfg, db, nil,
 		event.Unit{Tx: persistence.NewTransactor(db.GORM)}, readCache, logger).WithModuleErasers(newsletter)
 	impersonation := bootstrap.NewImpersonationService(cfg, db, bootstrap.NewEvents(cfg, db), nil, nil)
+	aggregator := bootstrap.NewAnalyticsAggregator(db)
 
 	jobs := []scheduler.Job{
 		{Name: "audit-prune", Every: time.Hour, Run: func(ctx context.Context) error {
@@ -238,6 +241,14 @@ func scheduledJobs(
 		}},
 		{Name: "newsletter-tokens-prune", Every: time.Hour, Run: func(ctx context.Context) error {
 			return logPruned(ctx, logger, "newsletter tokens")(newsletter.PruneTokens(ctx, newsletterTokenRetention))
+		}},
+		{Name: "analytics-rollup", Every: analyticsRollupEvery, Run: func(ctx context.Context) error {
+			result, err := aggregator.Run(ctx)
+			if result.Rebuilt {
+				logger.InfoContext(ctx, "rebuilt analytics rollups", "periods", result.Periods, "cohorts", result.Cohorts)
+			}
+
+			return err
 		}},
 	}
 

@@ -132,6 +132,7 @@ func TestAccountErasureDeletesTheSubjectsAnalyticsEvents(t *testing.T) {
 		}
 	}
 	require.NoError(t, repo.InsertBatch(ctx, []analyticsdomain.Event{pageView(linked.Subject.UUID), pageView(other.Subject.UUID)}))
+	require.NoError(t, NewAnalyticsRollupRepository(tx).RefreshFirstSeen(ctx, time.Now().Add(-time.Hour), time.Now().Add(time.Hour)))
 
 	removed, err := consent.DeleteForUser(ctx, user)
 	require.NoError(t, err)
@@ -139,4 +140,6 @@ func TestAccountErasureDeletesTheSubjectsAnalyticsEvents(t *testing.T) {
 
 	assert.Zero(t, countWhere(t, tx, "analytics_page_views", "subject_uuid = ?", linked.Subject.UUID))
 	assert.Equal(t, int64(1), countWhere(t, tx, "analytics_page_views", "subject_uuid = ?", other.Subject.UUID))
+	assert.Zero(t, countWhere(t, tx, "analytics_subject_first_seen", "subject_uuid = ?", linked.Subject.UUID))
+	assert.Equal(t, int64(1), countWhere(t, tx, "analytics_subject_first_seen", "subject_uuid = ?", other.Subject.UUID))
 }

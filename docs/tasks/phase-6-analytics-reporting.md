@@ -9,8 +9,9 @@ Index: [README.md](./README.md).
 
 ## Status
 
-**In progress** — telemetry ingest is done: the five ingest routes store raw events. The seven
-admin analytics operations still return `501`, and there is no aggregation layer yet.
+**In progress** — telemetry ingest and the aggregation pipeline are done: the five ingest routes
+store raw events and `app scheduler` rolls them up. The seven admin analytics operations still
+return `501`.
 
 ## Epic: telemetry ingest
 
@@ -35,11 +36,15 @@ admin analytics operations still return `501`, and there is no aggregation layer
 
 ## Epic: aggregation pipeline
 
-- [ ] Rollup tables for daily, weekly, and monthly grains
-- [ ] Scheduled aggregation job running on the Phase 4 worker
-- [ ] Idempotent recompute for a given time window
-- [ ] Late-event handling policy for the current window
-- [ ] Backfill command for recomputing history
+- [x] Rollup tables for daily, weekly, and monthly grains (migration 00033, bucketed in
+      `site.timezone`; top 1000 per capped dimension plus `(other)`; consented-visitor cohorts)
+- [x] Scheduled aggregation job running on the Phase 4 worker (`analytics-rollup` in
+      `app scheduler`, every 15 minutes)
+- [x] Idempotent recompute for a given time window (each period replaced in one transaction
+      under an advisory lock)
+- [x] Late-event handling policy for the current window (events are timed on receipt; each run
+      also recomputes yesterday's periods, then they close)
+- [x] Backfill command for recomputing history (`app analytics rollup --from --to`)
 
 ## Epic: admin dashboard reporting
 

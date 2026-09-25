@@ -99,20 +99,71 @@ before its search.
 
 Times are the server's receive time, never the client's clock.
 
-- `analytics_aggregates_daily`
-  - date
-  - metric_key (e.g. `page_views`, `unique_sessions`, `search_ctr`)
-  - dimensions (JSONB for path, country, role, etc.)
-  - value_numeric
-  - value_jsonb
-  - unique key: (date, metric_key, dimensions_hash)
+### Rollups
 
-### Indexing Recommendations
+Dashboards read rollups (migration 00033), never raw events. Each rollup row belongs to a
+period: `grain` is `day`, `week` (ISO, Monday to Sunday), or `month`, and `period_start` is the
+period's first local date in the `site.timezone` setting.
 
-- btree on time columns for time-range filters
-- composite index on (metric_key, date) for aggregates
-- hash or GIN on dimensions for complex dashboard filters
-- index on consent_token_id for right-to-erasure workflows
+| Table | One row per period and | Measures |
+| --- | --- | --- |
+| `analytics_rollup_site` | (period) | views, visitors, sessions, bounces (sessions with one page view), focus seconds and time-spent rows, searches, zero-result searches, searches with a click, search clicks, consented visitors, new consented visitors |
+| `analytics_rollup_pages` | path | views, visitors, entries, exits, focus seconds and rows |
+| `analytics_rollup_referrers` | referrer host of each session's first view (`(direct)` without one) | sessions, visitors |
+| `analytics_rollup_dimensions` | `country` (`(unknown)` without one), `device`, or `browser` value | views, visitors |
+| `analytics_rollup_navigation` | from path (`(entrance)` for entries), to path, transition | transitions |
+| `analytics_rollup_searches` | query | searches, visitors, zero results, searches with a click, clicks, seconds to first click (summed) |
+| `analytics_rollup_search_positions` | clicked position | clicks |
+| `analytics_rollup_search_results` | query and clicked resource | clicks |
+| `analytics_rollup_cohorts` | local day consented visitors were first seen | size, and how many had a page view on day 1, 7, and 30 (NULL until that day ends) |
+
+- **Unique visitors** are exact distinct visitor hashes for each grain, not sums of days. An
+  anonymous visitor's hash changes daily, so one seen on three days of a week counts three times
+  in that week; consented visitors count once.
+- **Capped dimensions.** Paths, referrer hosts, transitions, and queries keep the top 1000 of
+  each period by volume; the rest fold into one `(other)` row, so totals still add up. Clicked
+  results keep the top 1000 and drop the rest.
+- **Search clicks** count toward the period of their search, whenever they happen. A click
+  whose search was never stored is ignored.
+- **Retention cohorts** cover consented visitors only: an anonymous visitor has no identity that
+  lasts past a day. `analytics_subject_first_seen` keeps each consented subject's first page
+  view past raw-event retention, so a returning visitor is not counted as new again; it is
+  deleted with the subject on erasure. `new_visitors` and `consented_visitors` in the site rollup
+  give the new versus returning split.
+- The rollups hold counts only, with no visitor hashes or subject ids.
+
+#### Aggregation
+
+The `analytics-rollup` job in `app scheduler` runs every 15 minutes:
+
+1. It recomputes every period containing today or yesterday (the day, week, and month of each),
+   and the cohorts of the last 31 days. Recomputing a period replaces all of its rows in one
+   transaction, so runs are idempotent; an advisory lock per period keeps a concurrent backfill
+   from interleaving.
+2. **Late events.** Events are timed when the API receives them, so none can land in an older
+   period; including yesterday covers events still buffered at midnight and a run that failed
+   just before it. A period closes for good once it no longer contains today or yesterday.
+3. **Time zone.** The zone the rollups were built in is stored in `analytics_rollup_state`. On
+   the first run, or after `site.timezone` changes, the job rebuilds every period and cohort
+   starting on or after the oldest raw event's local day. Older periods keep the boundaries of
+   the previous zone, because their raw events are gone.
+
+`app analytics rollup --from YYYY-MM-DD [--to YYYY-MM-DD]` recomputes the periods overlapping
+those dates (read in the site zone) and the cohorts that change within them; use it after
+restoring raw events or when the job failed for more than a day. Days before the oldest raw
+event and after today are skipped. A week or month that started before the oldest raw event is
+recomputed from the events that remain, so it can shrink.
+
+Raw-event retention must keep every open period and the cohort window: the planned pruning job
+(see [Jobs and Workers](#jobs-and-workers)) must not delete events from the current or previous
+month or the last 31 days, whatever `analytics.raw_retention_days` says.
+
+### Indexing
+
+- raw events: btree on `occurred_at` (`started_at` for time spent), a partial index on
+  `subject_uuid` for erasure, and `search_uuid` on clicks
+- rollups: primary keys lead with `(grain, period_start)`, which every dashboard range read
+  filters on
 
 ## API Endpoints
 
@@ -226,7 +277,8 @@ Recommendation for live dashboard:
 4. Async handlers:
    - update Redis counters for live counts (last 5 min, last hour)
    - fan out per-topic events to admin SSE stream via pub/sub
-5. Periodic `app scheduler` jobs roll up raw events into `analytics_aggregates_daily` for 7/30/90-day performance.
+5. The `analytics-rollup` job in `app scheduler` rolls raw events up into the
+   [rollups](#rollups) that historical views read.
 
 ## Events
 
@@ -236,25 +288,19 @@ Domain and integration events:
 - `analytics.consent.rejected`
 - `analytics.consent.withdrawn`
 - `analytics.realtime.summary.tick`
-- `analytics.aggregation.daily.completed`
 
 Consent events go through the outbox. Ingested events do not: an outbox row per event would put
-a database write back on the ingest path. There are no `analytics.*.ingested` events.
+a database write back on the ingest path. There are no `analytics.*.ingested` events, and
+rollups publish nothing: dashboards read the rollup tables directly.
 
 ## Jobs and Workers
 
-- `analytics_ingestion_cleanup`
-  - periodically drop queued events whose consent was rejected or withdrawn
-- `analytics_daily_rollup`
-  - roll up raw events into daily aggregates for 7/30/90-day views
-- `analytics_retention_refresh`
-  - refresh cohort retention materializations
-- `analytics_privacy_retention`
-  - enforce raw event retention and right-to-erasure schedules
+- `analytics-rollup` (`app scheduler`, every 15 minutes): builds the rollups and cohorts; see
+  [Aggregation](#aggregation).
+- Raw-event pruning under `analytics.raw_retention_days`: planned with the export and retention
+  epic.
 
-Run background work via:
-- `app worker` (Watermill consumers for async fan-out and rollups triggered by events)
-- `app scheduler` (cron for nightly rollups, retention, periodic counter flushes)
+Events refused by consent are dropped before they are queued, so no cleanup job is needed.
 
 ## Validation and Error Handling
 

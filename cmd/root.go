@@ -81,6 +81,8 @@ func newRootCmd() *cobra.Command {
 	revisionsCmd.GroupID = groupData
 	searchCmd := newSearchCmd()
 	searchCmd.GroupID = groupData
+	analyticsCmd := newAnalyticsCmd()
+	analyticsCmd.GroupID = groupData
 
 	doctorCmd := newDoctorCmd()
 	doctorCmd.GroupID = groupOps
@@ -97,6 +99,7 @@ func newRootCmd() *cobra.Command {
 		outboxCmd,
 		revisionsCmd,
 		searchCmd,
+		analyticsCmd,
 		doctorCmd,
 		versionCmd,
 	)

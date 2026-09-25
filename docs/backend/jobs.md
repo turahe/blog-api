@@ -18,7 +18,7 @@ Jobs handle asynchronous and retryable work that should not block request-respon
 - process moderation side effects
 - run periodic cleanup for expired session or recovery state
 - clean orphaned media metadata and storage objects (`media-orphans`)
-- materialize daily analytics aggregates
+- roll analytics events up into daily, weekly, and monthly aggregates (`analytics-rollup`)
 - erase analytics data per withdrawn consent token
 - expire impersonation sessions (periodic sweeper)
 - rebuild settings cache after invalidation
@@ -39,6 +39,9 @@ Jobs handle asynchronous and retryable work that should not block request-respon
 - prune audit rows once with `app audit prune [--older-than-days N]`
 - rebuild the post search index after changing `SEARCH_LANGUAGE` with `app search reindex`
   (see [search.md](search.md))
+- recompute analytics rollups for a date range with
+  `app analytics rollup --from YYYY-MM-DD [--to YYYY-MM-DD]` (see
+  [analytics.md](analytics.md#aggregation))
 - validate worker/scheduler health before startup using `app doctor`
 
 ## Scheduled Jobs
@@ -59,6 +62,7 @@ in `last_error`; the job is tried again at its next interval.
 | `impersonation-expire` | 1m | Closes impersonation sessions past `expires_at` (up to 500 per run) and records `blog.impersonation.expired`; the tokens already stopped working at expiry |
 | `newsletter-release` | 1m | Queues scheduled newsletter issues whose `send_at` has passed (up to 50 per run) and records `blog.newsletter.issue.send_requested` |
 | `newsletter-tokens-prune` | 1h | Deletes newsletter confirm, unsubscribe, and preferences tokens 30 days past expiry |
+| `analytics-rollup` | 15m | Recomputes the analytics rollups of the periods containing today or yesterday and the retention cohorts of the last 31 days; rebuilds everything the raw events cover on its first run or after `site.timezone` changes. See [analytics.md](analytics.md#aggregation) |
 | `media-orphans` | 1h | Deletes the object and row of uploads never completed 24h after their presign expired, and of assets soft-deleted longer than `MEDIA_PURGE_AFTER` (up to 200 of each per run); skipped when media storage is not configured. See [media.md](media.md#orphan-cleanup) |
 
 Newsletter issues are sent by the `newsletter-dispatch` consumer in `app worker`, not by the

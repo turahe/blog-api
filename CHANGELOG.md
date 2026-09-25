@@ -1,5 +1,24 @@
 # Changelog
 
+## 2026-09-25 — Analytics aggregation pipeline
+
+### Added
+
+- Migration 00033: daily, weekly (ISO), and monthly analytics rollups bucketed in the
+  `site.timezone` setting, covering the site, pages, referrer hosts, country/device/browser,
+  navigation, searches, search positions, and clicked results, plus retention cohorts of
+  consented visitors (day 1, 7, and 30). Unique visitors are exact per grain. Paths, referrers,
+  transitions, and queries keep the top 1000 per period and fold the rest into `(other)`.
+- The `analytics-rollup` job in `app scheduler` (every 15 minutes) recomputes the periods
+  containing today or yesterday and the last 31 days of cohorts. It rebuilds everything the raw
+  events cover on its first run or after `site.timezone` changes.
+- `app analytics rollup --from YYYY-MM-DD [--to YYYY-MM-DD]` recomputes a range of days.
+
+### Security
+
+- Rollups hold counts only. The first-seen record of each consented visitor, kept for new versus
+  returning counts, is deleted with the account on erasure.
+
 ## 2026-09-25 — Analytics telemetry ingest
 
 ### Added

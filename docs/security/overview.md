@@ -81,8 +81,8 @@ needs, and lets the data subject, and only the data subject, decide on consent.
 - **Retention.** Audit entries are kept for `AUDIT_RETENTION_DAYS` (395). Data exports stay in
   object storage for `PRIVACY_EXPORT_RETENTION` (72h); the download link is presigned for at most
   `PRIVACY_EXPORT_URL_TTL` (15m) and never past the export's own expiry, and the response is
-  `no-store`. Erasure anonymizes the account, deletes its analytics consents and the raw events
-  linked to them, and erases its
+  `no-store`. Erasure anonymizes the account, deletes its analytics consents with the raw events
+  and first-seen records linked to them (rollups hold only counts), and erases its
   newsletter subscriber (personal data, feedback, and IP hashes cleared; tokens deleted), keeping
   only the append-only consent history the law requires.
 - **Impersonation.** Staff acting as a user are bound to their own sign-in, see a response header
