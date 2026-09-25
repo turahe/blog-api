@@ -26,6 +26,9 @@ var (
 	ErrIneligible     = errors.New("user cannot be impersonated")
 	ErrAlreadyActive  = errors.New("an impersonation session is already active")
 	ErrNotFound       = errors.New("impersonation session not found")
+	// ErrSignInRequired means the caller's token does not name the sign-in (refresh-session
+	// family) the impersonation would be bound to; refreshing the token supplies it.
+	ErrSignInRequired = errors.New("impersonation requires a token from a current sign-in")
 	// ErrEnded means an impersonation token's session is over (stopped, expired, or revoked).
 	ErrEnded = errors.New("impersonation session ended")
 )
@@ -49,6 +52,8 @@ const (
 	EndManual  EndReason = "manual_exit"
 	EndExpired EndReason = "expired"
 	EndPolicy  EndReason = "policy"
+	// EndBaseSession: the impersonator's own sign-in ended (logout, revocation, or expiry).
+	EndBaseSession EndReason = "parent_session_expired"
 )
 
 // Session is one impersonation: Actor acts as Target until ExpiresAt or until it ends.
@@ -64,13 +69,24 @@ type Session struct {
 	ExpiresAt  time.Time
 	EndedAt    *time.Time
 	EndReason  *EndReason
+	// BaseFamilyID is the refresh-session family of the impersonator's own sign-in; the
+	// session lasts only as long as that sign-in does.
+	BaseFamilyID uuid.UUID
 	// ParticipantsActive is filled on reads: both the actor and the target accounts are active.
 	ParticipantsActive bool
+	// BaseSessionUntil is filled on reads: the latest expiry among the base family's unrevoked
+	// refresh sessions, nil when there are none.
+	BaseSessionUntil *time.Time
 }
 
 // ActiveAt reports whether the session still backs its token at now.
 func (s Session) ActiveAt(now time.Time) bool {
 	return s.State == StateActive && now.Before(s.ExpiresAt)
+}
+
+// BaseSessionActiveAt reports whether the impersonator is still signed in at now.
+func (s Session) BaseSessionActiveAt(now time.Time) bool {
+	return s.BaseSessionUntil != nil && now.Before(*s.BaseSessionUntil)
 }
 
 // Grants are a user's roles and the permissions those roles give.

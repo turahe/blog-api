@@ -27,6 +27,17 @@ func (seqIDs) New() uuid.UUID { return uuid.New() }
 
 type fakeRepo struct {
 	sessions map[uuid.UUID]domain.Session
+	// signIns maps a refresh-session family to its latest unrevoked expiry.
+	signIns map[uuid.UUID]time.Time
+}
+
+func (r *fakeRepo) read(s domain.Session) domain.Session {
+	s.BaseSessionUntil = nil
+	if until, ok := r.signIns[s.BaseFamilyID]; ok {
+		s.BaseSessionUntil = &until
+	}
+
+	return s
 }
 
 func (r *fakeRepo) Create(_ context.Context, s domain.Session) error {
@@ -48,13 +59,13 @@ func (r *fakeRepo) Get(_ context.Context, id uuid.UUID) (domain.Session, error) 
 		return domain.Session{}, domain.ErrNotFound
 	}
 
-	return s, nil
+	return r.read(s), nil
 }
 
 func (r *fakeRepo) ActiveForActor(_ context.Context, actorID uuid.UUID) (domain.Session, bool, error) {
 	for _, s := range r.sessions {
 		if s.ActorUUID == actorID && s.State == domain.StateActive {
-			return s, true, nil
+			return r.read(s), true, nil
 		}
 	}
 
@@ -140,6 +151,7 @@ type fixture struct {
 	stepUp  *fakeStepUp
 	actor   uuid.UUID
 	target  uuid.UUID
+	family  uuid.UUID
 	started func(t *testing.T) service.Started
 }
 
@@ -147,7 +159,7 @@ func newFixture(t *testing.T) *fixture {
 	t.Helper()
 
 	f := &fixture{
-		repo:   &fakeRepo{sessions: map[uuid.UUID]domain.Session{}},
+		repo:   &fakeRepo{sessions: map[uuid.UUID]domain.Session{}, signIns: map[uuid.UUID]time.Time{}},
 		users:  fakeUsers{},
 		perms:  fakePerms{},
 		tokens: &fakeTokens{},
@@ -156,7 +168,9 @@ func newFixture(t *testing.T) *fixture {
 		stepUp: &fakeStepUp{},
 		actor:  uuid.New(),
 		target: uuid.New(),
+		family: uuid.New(),
 	}
+	f.repo.signIns[f.family] = epoch.Add(24 * time.Hour)
 	f.users[f.actor] = userdomain.User{UUID: f.actor, Status: userdomain.StatusActive}
 	f.users[f.target] = userdomain.User{UUID: f.target, Email: "t@example.com", Username: "target", Status: userdomain.StatusActive}
 	f.perms[f.actor] = domain.Grants{Roles: []string{"support"}, Permissions: []string{domain.PermissionStart, "posts.read", "comments.moderate"}}
@@ -178,7 +192,9 @@ func newFixture(t *testing.T) *fixture {
 }
 
 func (f *fixture) input() service.StartInput {
-	return service.StartInput{ActorID: f.actor, TargetID: f.target, Reason: "  ticket #4521 login issue  ", Password: "pw"}
+	return service.StartInput{
+		ActorID: f.actor, TargetID: f.target, BaseFamilyID: f.family, Reason: "  ticket #4521 login issue  ", Password: "pw",
+	}
 }
 
 func TestStartIssuesSessionBoundToken(t *testing.T) {
@@ -199,6 +215,8 @@ func TestStartIssuesSessionBoundToken(t *testing.T) {
 	assert.Equal(t, f.actor, *claims.Actor)
 	assert.Equal(t, out.Session.UUID.String(), claims.SessionID)
 	assert.Equal(t, out.Session.ExpiresAt, claims.ExpiresAt)
+	assert.Equal(t, uuid.Nil, claims.FamilyID)
+	assert.Equal(t, f.family, f.repo.sessions[out.Session.UUID].BaseFamilyID)
 	assert.Equal(t, []string{event.ImpersonationStarted}, f.events.types)
 }
 
@@ -214,6 +232,7 @@ func TestStartRejections(t *testing.T) {
 			f.perms[f.actor] = domain.Grants{Permissions: []string{"posts.read"}}
 		}, domain.ErrForbidden},
 		"failed step-up": {func(f *fixture, _ *service.StartInput) { f.stepUp.fail = true }, domain.ErrStepUpRequired},
+		"no sign-in":     {func(_ *fixture, in *service.StartInput) { in.BaseFamilyID = uuid.Nil }, domain.ErrSignInRequired},
 		"self":           {func(f *fixture, in *service.StartInput) { in.TargetID = f.actor }, domain.ErrIneligible},
 		"missing target": {func(_ *fixture, in *service.StartInput) { in.TargetID = uuid.New() }, domain.ErrIneligible},
 		"suspended target": {func(f *fixture, _ *service.StartInput) {
@@ -256,6 +275,43 @@ func TestStartRejectsSecondActiveSession(t *testing.T) {
 
 	_, err := f.svc.Start(t.Context(), f.input())
 	require.ErrorIs(t, err, domain.ErrAlreadyActive)
+}
+
+func TestStartClosesALapsedSession(t *testing.T) {
+	t.Parallel()
+
+	cases := map[string]struct {
+		lapse  func(f *fixture)
+		state  domain.State
+		reason domain.EndReason
+		event  string
+	}{
+		"expired": {func(f *fixture) { f.clock.now = epoch.Add(2 * time.Hour) }, domain.StateExpired, domain.EndExpired, event.ImpersonationExpired},
+		"signed out": {
+			func(f *fixture) { delete(f.repo.signIns, f.family) }, domain.StateRevoked, domain.EndBaseSession, event.ImpersonationRevoked,
+		},
+	}
+
+	for name, tc := range cases {
+		t.Run(name, func(t *testing.T) {
+			t.Parallel()
+
+			f := newFixture(t)
+			first := f.started(t)
+			tc.lapse(f)
+
+			f.family = uuid.New()
+			f.repo.signIns[f.family] = f.clock.now.Add(time.Hour)
+			second := f.started(t)
+
+			old := f.repo.sessions[first.Session.UUID]
+			assert.Equal(t, tc.state, old.State)
+			require.NotNil(t, old.EndReason)
+			assert.Equal(t, tc.reason, *old.EndReason)
+			assert.Equal(t, domain.StateActive, f.repo.sessions[second.Session.UUID].State)
+			assert.Equal(t, []string{event.ImpersonationStarted, tc.event, event.ImpersonationStarted}, f.events.types)
+		})
+	}
 }
 
 func TestVerify(t *testing.T) {
@@ -315,6 +371,30 @@ func TestVerify(t *testing.T) {
 		require.ErrorIs(t, f.svc.Verify(t.Context(), out.Session.UUID.String(), f.actor, f.target), domain.ErrEnded)
 		assert.Equal(t, domain.StateRevoked, f.repo.sessions[out.Session.UUID].State)
 	})
+
+	baseEnds := map[string]func(f *fixture){
+		"signed out":       func(f *fixture) { delete(f.repo.signIns, f.family) },
+		"sign-in expired":  func(f *fixture) { f.clock.now = f.repo.signIns[f.family] },
+		"sign-in replaced": func(f *fixture) { f.repo.signIns = map[uuid.UUID]time.Time{uuid.New(): epoch.Add(time.Hour)} },
+	}
+	for name, end := range baseEnds {
+		t.Run("base "+name+" revokes", func(t *testing.T) {
+			t.Parallel()
+
+			f := newFixture(t)
+			f.repo.signIns[f.family] = epoch.Add(30 * time.Minute)
+			out := f.started(t)
+			end(f)
+
+			require.ErrorIs(t, f.svc.Verify(t.Context(), out.Session.UUID.String(), f.actor, f.target), domain.ErrEnded)
+
+			s := f.repo.sessions[out.Session.UUID]
+			assert.Equal(t, domain.StateRevoked, s.State)
+			require.NotNil(t, s.EndReason)
+			assert.Equal(t, domain.EndBaseSession, *s.EndReason)
+			assert.Equal(t, []string{event.ImpersonationStarted, event.ImpersonationRevoked}, f.events.types)
+		})
+	}
 }
 
 func TestStopAndCurrent(t *testing.T) {

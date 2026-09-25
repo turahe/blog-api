@@ -30,7 +30,7 @@ func notificationControllers(deps Deps) routes.Notifications {
 	return routes.Notifications{
 		List:   meNotificationsListHandler(deps.Notifications),
 		Read:   meNotificationReadHandler(deps.Notifications),
-		Stream: meNotificationsStreamHandler(deps.NotificationStream, deps.SSEPingInterval),
+		Stream: meNotificationsStreamHandler(deps.NotificationStream, deps.SSEPingInterval, deps.Impersonation),
 	}
 }
 

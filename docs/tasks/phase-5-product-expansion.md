@@ -151,12 +151,12 @@ Spec: [newsletter-subscriptions.md](../features/newsletter-subscriptions.md)
 
 ## Cross-cutting
 
-- [ ] Bind admin, newsletter, and privacy handlers in `routes.Register*`, annotate them, then
+- [x] Bind admin, newsletter, and privacy handlers in `routes.Register*`, annotate them, then
       `make swagger` + `make routes-check`
-- [ ] Authorization tests for every new admin operation
-- [ ] Impersonation-specific security review and audit assertions
-- [ ] Token-handling review for newsletter and privacy tokens
-- [ ] Document the privacy stance in [overview.md](../security/overview.md)
+- [x] Authorization tests for every new admin operation
+- [x] Impersonation-specific security review and audit assertions
+- [x] Token-handling review for newsletter and privacy tokens
+- [x] Document the privacy stance in [overview.md](../security/overview.md)
 
 ## References
 

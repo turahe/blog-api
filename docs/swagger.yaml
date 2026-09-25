@@ -1420,6 +1420,7 @@ paths:
         the caller's current password, and a TOTP or backup code when the caller has two-factor
         enabled. The target must be active, must not be an administrator or able to impersonate, and
         every permission the target has must be one the caller has. One active session per caller.
+        The session ends with the caller's own sign-in (logout, revocation, or refresh-session expiry).
       parameters:
       - description: target, reason, and step-up proof
         in: body
@@ -1439,7 +1440,8 @@ paths:
           schema:
             $ref: '#/definitions/responses.Envelope'
         "401":
-          description: Unauthorized
+          description: unauthorized, impersonation.sign_in_required (refresh the token
+            first)
           schema:
             $ref: '#/definitions/responses.Envelope'
         "403":
@@ -4658,10 +4660,11 @@ paths:
         stream.opened`, sends `event: notification.created` for each new notice (id
         is the notification id), `event: ping` when idle, `event: error` with code
         fanout.buffer_full when events were dropped for a slow client, and `event:
-        stream.closed` before a server shutdown. There is no replay: after reconnecting,
-        call GET /api/v1/me/notifications to fill gaps. Returns 429 notifications.stream_limit
-        (with Retry-After) past the per-user limit and 503 notifications.stream_unavailable
-        without a message broker.'
+        stream.closed` before a server shutdown (code shutdown) or once the impersonation
+        session behind the token ends (code impersonation_ended). There is no replay:
+        after reconnecting, call GET /api/v1/me/notifications to fill gaps. Returns
+        429 notifications.stream_limit (with Retry-After) past the per-user limit
+        and 503 notifications.stream_unavailable without a message broker.'
       produces:
       - text/event-stream
       responses:

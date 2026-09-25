@@ -161,10 +161,24 @@ func (d fakeData) ExportUser(_ context.Context, userID uuid.UUID, _ time.Time) (
 	return []byte(`{"account":{"id":"` + userID.String() + `"}}`), d.err
 }
 
-type fakeEraser struct{ erased []uuid.UUID }
+type fakeEraser struct {
+	erased []uuid.UUID
+	err    error
+	order  *[]string
+	name   string
+}
 
 func (e *fakeEraser) EraseUser(_ context.Context, userID uuid.UUID, _ time.Time) error {
+	if e.order != nil {
+		*e.order = append(*e.order, e.name)
+	}
+
+	if e.err != nil {
+		return e.err
+	}
+
 	e.erased = append(e.erased, userID)
+
 	return nil
 }
 
@@ -319,6 +333,49 @@ func TestEraseRequiresPasswordAndPurgesArchives(t *testing.T) {
 	latest, err := f.repo.Latest(ctx, user, domain.KindErase)
 	require.NoError(t, err)
 	require.Equal(t, domain.StatusCompleted, latest.Status)
+}
+
+func TestEraseRunsModuleErasersBeforeTheAccount(t *testing.T) {
+	t.Parallel()
+
+	f := newFixture(fakeData{})
+	ctx, user := t.Context(), uuid.New()
+
+	var order []string
+
+	newsletter := &fakeEraser{order: &order, name: "newsletter"}
+	f.eraser.order, f.eraser.name = &order, "account"
+	f.svc.WithModuleErasers(newsletter)
+
+	_, _, err := f.svc.RequestErase(ctx, user, "correct horse")
+	require.NoError(t, err)
+
+	done, err := f.svc.ProcessPending(ctx, 10)
+	require.NoError(t, err)
+	require.Equal(t, 1, done)
+	require.Equal(t, []string{"newsletter", "account"}, order)
+	require.Equal(t, []uuid.UUID{user}, newsletter.erased)
+	require.Equal(t, []uuid.UUID{user}, f.eraser.erased)
+}
+
+func TestEraseFailsWhenAModuleEraserFails(t *testing.T) {
+	t.Parallel()
+
+	f := newFixture(fakeData{})
+	ctx, user := t.Context(), uuid.New()
+	f.svc.WithModuleErasers(&fakeEraser{err: errors.New("newsletter down")})
+
+	_, _, err := f.svc.RequestErase(ctx, user, "correct horse")
+	require.NoError(t, err)
+
+	done, err := f.svc.ProcessPending(ctx, 10)
+	require.ErrorContains(t, err, "newsletter down")
+	require.Zero(t, done)
+	require.Empty(t, f.eraser.erased, "the account is not anonymized while module data remains")
+
+	latest, err := f.repo.Latest(ctx, user, domain.KindErase)
+	require.NoError(t, err)
+	require.NotEqual(t, domain.StatusCompleted, latest.Status, "the request is retried")
 }
 
 func TestStaleRunningRequestIsReclaimed(t *testing.T) {

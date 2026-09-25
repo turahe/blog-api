@@ -36,7 +36,8 @@ func NewNewsletterService(
 	deps := newsletterservice.Deps{
 		Repo: persistence.NewNewsletterRepository(db.GORM), IDs: system.UUIDGenerator{}, Clock: system.Clock{},
 		Links: links, Markdown: markdown.NewNewsletter(), Events: events, Logger: logger,
-		Accounts: newslettermail.NewAccounts(persistence.NewUserRepository(db.GORM)),
+		Accounts:       newslettermail.NewAccounts(persistence.NewUserRepository(db.GORM)),
+		IdentityHasher: identityHasher(cfg),
 	}
 
 	if mailer := NewTransactionalMailer(cfg, db, newsletterBox(cfg, logger), logger); mailer != nil {

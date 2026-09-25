@@ -32,12 +32,16 @@ type impersonationRow struct {
 	ExpiresAt          time.Time
 	EndedAt            *time.Time
 	EndReason          *string
+	BaseFamilyID       *uuid.UUID
 	ParticipantsActive bool
+	BaseSessionUntil   *time.Time
 }
 
 const impersonationSelect = `SELECT s.uuid, a.uuid AS actor_uuid, t.uuid AS target_uuid, s.state, s.reason,
-	s.ip_address, s.user_agent, s.started_at, s.expires_at, s.ended_at, s.end_reason,
-	(a.status = 'active' AND a.deleted_at IS NULL AND t.status = 'active' AND t.deleted_at IS NULL) AS participants_active
+	s.ip_address, s.user_agent, s.started_at, s.expires_at, s.ended_at, s.end_reason, s.base_family_id,
+	(a.status = 'active' AND a.deleted_at IS NULL AND t.status = 'active' AND t.deleted_at IS NULL) AS participants_active,
+	(SELECT max(r.expires_at) FROM refresh_sessions r
+		WHERE r.user_id = s.actor_id AND r.family_id = s.base_family_id AND r.revoked_at IS NULL) AS base_session_until
 	FROM impersonation_sessions s JOIN users a ON a.id = s.actor_id JOIN users t ON t.id = s.target_id`
 
 // Create inserts an active session; a second active session for the same actor is
@@ -46,10 +50,11 @@ const impersonationSelect = `SELECT s.uuid, a.uuid AS actor_uuid, t.uuid AS targ
 func (r *ImpersonationRepository) Create(ctx context.Context, s impdomain.Session) error {
 	err := conn(ctx, r.db).Transaction(func(tx *gorm.DB) error {
 		return tx.Exec(`
-		INSERT INTO impersonation_sessions (uuid, actor_id, target_id, state, reason, ip_address, user_agent, started_at, expires_at)
-		VALUES (?, `+idOf("users")+`, `+idOf("users")+`, ?, ?, ?, ?, ?, ?)`,
+		INSERT INTO impersonation_sessions (uuid, actor_id, target_id, state, reason, ip_address, user_agent,
+			started_at, expires_at, base_family_id)
+		VALUES (?, `+idOf("users")+`, `+idOf("users")+`, ?, ?, ?, ?, ?, ?, ?)`,
 			s.UUID, s.ActorUUID, s.TargetUUID, string(s.State), s.Reason, nullableString(s.IP), nullableString(s.UserAgent),
-			s.StartedAt, s.ExpiresAt).Error
+			s.StartedAt, s.ExpiresAt, nullableUUID(s.BaseFamilyID)).Error
 	})
 	if isUniqueViolation(err) {
 		return impdomain.ErrAlreadyActive
@@ -99,6 +104,14 @@ func (r *ImpersonationRepository) Expired(ctx context.Context, now time.Time, li
 		ORDER BY s.expires_at, s.id LIMIT ?`, now, limit)
 }
 
+func nullableUUID(id uuid.UUID) *uuid.UUID {
+	if id == uuid.Nil {
+		return nil
+	}
+
+	return &id
+}
+
 func (r *ImpersonationRepository) list(ctx context.Context, query string, args ...any) ([]impdomain.Session, error) {
 	var rows []impersonationRow
 	if err := conn(ctx, r.db).Raw(query, args...).Scan(&rows).Error; err != nil {
@@ -112,8 +125,12 @@ func (r *ImpersonationRepository) list(ctx context.Context, query string, args .
 			State: impdomain.State(row.State), Reason: row.Reason,
 			IP: derefString(row.IPAddress), UserAgent: derefString(row.UserAgent),
 			StartedAt: row.StartedAt, ExpiresAt: row.ExpiresAt, EndedAt: row.EndedAt,
-			ParticipantsActive: row.ParticipantsActive,
+			ParticipantsActive: row.ParticipantsActive, BaseSessionUntil: row.BaseSessionUntil,
 		}
+		if row.BaseFamilyID != nil {
+			s.BaseFamilyID = *row.BaseFamilyID
+		}
+
 		if row.EndReason != nil {
 			reason := impdomain.EndReason(*row.EndReason)
 			s.EndReason = &reason

@@ -284,8 +284,8 @@ Differences from the target rules below:
   the same request. Within about a minute `app scheduler` deletes the user's activity feed,
   analytics consents, sessions, reset tokens, 2FA, OAuth identities, notifications, profile,
   privacy settings, and export archives; scrubs the email (`erased+<uuid>@invalid`), username, name
-  (`Deleted user`), password, and avatar; scrubs guest details from the user's comments; and
-  sets `status = deleted`. Posts and comments stay, shown as "Deleted user"; the remaining audit
+  (`Deleted user`), password, and avatar; scrubs guest details from the user's comments; erases
+  the newsletter subscriber linked to the account; and sets `status = deleted`. Posts and comments stay, shown as "Deleted user"; the remaining audit
   rows the user performed keep the actor id but lose IP, user agent, request id, and metadata. Queuing records `user.activity.erasure_requested`. It cannot
   be undone.
 - **Not yet enforced:** 2FA or password step-up on admin patch and avatar delete, CSRF (all
@@ -575,15 +575,18 @@ Implemented; details in [impersonation.md](./impersonation.md).
   has 2FA enabled; rate limited to 10 per minute. The target must be active, not an administrator
   or impersonator, and hold no permission the caller lacks. Returns `201` with a Bearer token
   (`sub` = target, `act.sub` = caller, no refresh token) valid until the session's `expires_at`
+  or until the caller's own sign-in ends; a caller token without a sign-in family (`fam`) is
+  `401 impersonation.sign_in_required`
 - `POST /api/v1/admin/impersonation/stop` ends the session of the impersonation token sent, or the
   caller's active session; no permission needed; `404 impersonation.not_found` when there is none
 - `GET /api/v1/admin/impersonation/current` returns `{active, session}` (`session` may be null)
 - an impersonation token acts as the target for RBAC and ownership, is re-checked against the
   session on every request (`401 auth.impersonation_ended` once it is over), and is refused with
   `403 impersonation.forbidden_action` on password, email, 2FA, OAuth, privacy, export, erase,
-  logout, refresh, and starting another impersonation
-- every action taken with an impersonation token is audited with `impersonator_id` and the
-  session id
+  analytics consent, newsletter self-service, logout, refresh, and starting another
+  impersonation; responses carry `X-Impersonation-Session`
+- every request made with an impersonation token, reads included, is audited with
+  `impersonator_id` and the session id
 
 ## Admin Post Revision Endpoint Rules
 

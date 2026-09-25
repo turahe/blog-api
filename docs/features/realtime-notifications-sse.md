@@ -24,7 +24,7 @@ What the server does today (`handlers/notifications_stream.go`, `adapters/inboun
 | --- | --- |
 | Auth | Bearer token only (`AuthRequired`); no cookie or CSRF path |
 | Handshake | `retry: 5000`, then `event: stream.opened` with `stream_id`, `user_id`, `server_ts`, `retry_ms`, `channels`, `replay_applied: false`, `replay_count: 0` |
-| Events | `notification.created` (`id:` is the notification id; `data` has `id`, `type`, `title`, `body`, `preview`, `data`, `actor_id`, `created_at`), `ping` every `SSE_PING_INTERVAL` (default `15s`), `error` with `fanout.buffer_full` and `dropped_count`, `stream.closed` with `code: shutdown` and `retry_ms: 15000` |
+| Events | `notification.created` (`id:` is the notification id; `data` has `id`, `type`, `title`, `body`, `preview`, `data`, `actor_id`, `created_at`), `ping` every `SSE_PING_INTERVAL` (default `15s`), `error` with `fanout.buffer_full` and `dropped_count`, `stream.closed` with `code: shutdown` and `retry_ms: 15000`, or with `code: impersonation_ended` (no retry) when the impersonation session behind the token ends |
 | Limits | `SSE_MAX_CONCURRENT_PER_USER` (default 3) per API process; the next stream gets `429 notifications.stream_limit` with `Retry-After: 60` |
 | Slow clients | 512 queued events per stream; further events are dropped for that stream only and reported in the next `error` frame |
 | Cleanup | The stream ends when the client disconnects (request context done) or a write fails; `app serve` shutdown sends `stream.closed` to every stream first |
@@ -649,6 +649,7 @@ or inside `event: error` / `event: stream.closed` frames:
 | `auth.expired` | `event: stream.closed` | session / JWT timed out during a long-lived stream | 15 000 ms |
 | `session.revoked` | `event: stream.closed` | admin revoked or user logged out everywhere | 15 000 ms |
 | `shutdown` | `event: stream.closed` | server shutting down gracefully | 15 000 ms |
+| `impersonation_ended` | `event: stream.closed` | the impersonation session behind the token was stopped, expired, or revoked; checked before every event and heartbeat | none (switch back to the staff token) |
 | `maintenance` | `event: stream.closed` | deployment slot swap or controlled drain | 60 000 ms |
 | `sse.channel_unknown` | `event: error` | `?channels=` contained an unsupported channel string | current frame only |
 | `internal.server_error` | 5xx envelope / `event: error` | unexpected panics recovered by the SSE writer middleware | 30 000 ms jittered |

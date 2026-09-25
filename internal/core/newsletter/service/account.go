@@ -76,7 +76,7 @@ func (s *Service) MySubscribe(ctx context.Context, in MySubscribeInput) (Prefere
 
 		if !found {
 			name, _ := cleanName(account.Name)
-			sub = s.newSubscriber(email, name, domain.FormatHTML, domain.SourceAccount, hashIdentity(in.IP), in.UserAgent)
+			sub = s.newSubscriber(email, name, domain.FormatHTML, domain.SourceAccount, s.hashIdentity(in.IP), in.UserAgent)
 		}
 
 		sub.UserID, subID = &in.UserID, sub.UUID
@@ -88,10 +88,10 @@ func (s *Service) MySubscribe(ctx context.Context, in MySubscribeInput) (Prefere
 		}
 
 		if account.EmailVerified && !cfg.DoubleOptInRequired {
-			return s.joinNow(ctx, &sub, lists, !found, hashIdentity(in.IP))
+			return s.joinNow(ctx, &sub, lists, !found, s.hashIdentity(in.IP))
 		}
 
-		confirm, err = s.requestConfirmation(ctx, &sub, lists, cfg, !found, hashIdentity(in.IP), string(domain.SourceAccount))
+		confirm, err = s.requestConfirmation(ctx, &sub, lists, cfg, !found, s.hashIdentity(in.IP), string(domain.SourceAccount))
 
 		return err
 	})
@@ -174,7 +174,7 @@ func (s *Service) MyUnsubscribe(ctx context.Context, userID uuid.UUID, lists []s
 		source := string(domain.SourceAccount)
 
 		if len(lists) == 0 {
-			return s.unsubscribeAll(ctx, &sub, source, reason, feedback, hashIdentity(ip), nil)
+			return s.unsubscribeAll(ctx, &sub, source, reason, feedback, s.hashIdentity(ip), nil)
 		}
 
 		leaving, err := s.resolveExact(ctx, lists)
@@ -190,7 +190,7 @@ func (s *Service) MyUnsubscribe(ctx context.Context, userID uuid.UUID, lists []s
 			}
 		}
 
-		return s.applyChoices(ctx, &sub, nil, &keep, source, hashIdentity(ip), nil)
+		return s.applyChoices(ctx, &sub, nil, &keep, source, s.hashIdentity(ip), nil)
 	})
 	if err != nil {
 		return Preferences{}, err

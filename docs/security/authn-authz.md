@@ -47,12 +47,15 @@ Require recent password re-verify or 2FA for:
   permissions are all ones you hold; one active session per staff member
 - a separate access token with `sub` = target, RFC 8693 `act.sub` = staff member, and `sid` =
   session; `IMPERSONATION_TTL` (default 1h, 5m–2h), no refresh token, no renewal
-- every request re-checks the session (active, unexpired, participants active, permission still
-  held); stop takes effect immediately
-- refused for credential, 2FA, OAuth, privacy, export, erase, logout, refresh, and chained
-  impersonation operations (`403 impersonation.forbidden_action`)
-- every action is audited with `impersonator_id` and the session id; lifecycle events go to the
-  outbox
+- the session is bound to the staff member's sign-in: ordinary access tokens carry `fam` (their
+  refresh-session family), and impersonation ends once that family has no live refresh session
+  (logout, password change or reset, token reuse, expiry)
+- every request re-checks the session (active, unexpired, base sign-in live, participants active,
+  permission still held); stop takes effect immediately, and an open notification stream closes
+- refused for credential, 2FA, OAuth, privacy, export, erase, consent, newsletter self-service,
+  logout, refresh, and chained impersonation operations (`403 impersonation.forbidden_action`)
+- every request, reads included, is audited with `impersonator_id` and the session id; lifecycle
+  events go to the outbox
 
 Details: [impersonation.md](../backend/impersonation.md), [rbac-casbin.md](../backend/rbac-casbin.md).
 

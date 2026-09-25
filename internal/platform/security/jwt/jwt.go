@@ -74,6 +74,7 @@ type accessClaims struct {
 	Username  string     `json:"username"`
 	Act       *actClaims `json:"act,omitempty"`
 	SessionID string     `json:"sid,omitempty"`
+	Family    string     `json:"fam,omitempty"`
 	jwtlib.RegisteredClaims
 }
 
@@ -85,14 +86,25 @@ type actClaims struct {
 // IssueAccess signs an ES256 access token for the user; claims.Actor makes it an
 // impersonation token.
 func (s *Service) IssueAccess(claims authdomain.AccessClaims) (string, error) {
-	var act *actClaims
+	var (
+		act    *actClaims
+		family string
+	)
 
 	if claims.Actor != nil {
 		if claims.SessionID == "" {
 			return "", errors.New("impersonation token requires a session id")
 		}
 
+		if claims.FamilyID != uuid.Nil {
+			return "", errors.New("impersonation token cannot name a sign-in family")
+		}
+
 		act = &actClaims{Subject: claims.Actor.String()}
+	}
+
+	if claims.FamilyID != uuid.Nil {
+		family = claims.FamilyID.String()
 	}
 
 	token := jwtlib.NewWithClaims(jwtlib.SigningMethodES256, accessClaims{
@@ -100,6 +112,7 @@ func (s *Service) IssueAccess(claims authdomain.AccessClaims) (string, error) {
 		Username:  claims.Username,
 		Act:       act,
 		SessionID: claims.SessionID,
+		Family:    family,
 		RegisteredClaims: jwtlib.RegisteredClaims{
 			Subject:   claims.Subject.String(),
 			Issuer:    s.issuer,
@@ -141,6 +154,11 @@ func (s *Service) ParseAccess(token string) (authdomain.AccessClaims, error) {
 		return authdomain.AccessClaims{}, err
 	}
 
+	family, err := parseFamily(claims)
+	if err != nil {
+		return authdomain.AccessClaims{}, err
+	}
+
 	var exp, iat time.Time
 	if claims.ExpiresAt != nil {
 		exp = claims.ExpiresAt.Time
@@ -159,7 +177,22 @@ func (s *Service) ParseAccess(token string) (authdomain.AccessClaims, error) {
 		ID:        claims.ID,
 		Actor:     actor,
 		SessionID: claims.SessionID,
+		FamilyID:  family,
 	}, nil
+}
+
+// parseFamily rejects a malformed fam claim and one on an impersonation token.
+func parseFamily(claims *accessClaims) (uuid.UUID, error) {
+	if claims.Family == "" {
+		return uuid.Nil, nil
+	}
+
+	family, err := uuid.Parse(claims.Family)
+	if err != nil || family == uuid.Nil || claims.Act != nil {
+		return uuid.Nil, authdomain.ErrInvalidToken
+	}
+
+	return family, nil
 }
 
 // parseActor rejects a malformed act claim, and a session id without one, so an

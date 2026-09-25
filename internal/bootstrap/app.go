@@ -182,6 +182,7 @@ func NewRuntime(ctx context.Context, cfg config.Config, logger *slog.Logger, ver
 
 	metricsServer, recorder, onAuditDrop := newMetrics(cfg, db, version)
 	auditRecorder, activity := newAudit(cfg, db, onAuditDrop, logger)
+	newsletter := NewNewsletterService(cfg, db, events, settings, logger)
 
 	router, err := httpadapter.NewRouter(httpadapter.Dependencies{
 		Metrics:     recorder,
@@ -201,10 +202,10 @@ func NewRuntime(ctx context.Context, cfg config.Config, logger *slog.Logger, ver
 		RBAC:          enforcer,
 		Posts:         posts, Categories: categories, Tags: tags, Media: media,
 		Comments: comments, Notifications: inbox, NotificationStream: hub, SSEPingInterval: cfg.SSEPingInterval,
-		Settings: settings, Newsletter: NewNewsletterService(cfg, db, events, settings, logger),
+		Settings: settings, Newsletter: newsletter,
 		NewsletterProvider: NewsletterProvider(cfg),
 		Consent:            consentservice.New(persistence.NewConsentRepository(db.GORM), ids, clock).WithEvents(events),
-		PrivacyRequests:    NewPrivacyService(ctx, cfg, db, auth, events, cacheOrNil, logger),
+		PrivacyRequests:    NewPrivacyService(ctx, cfg, db, auth, events, cacheOrNil, logger).WithModuleErasers(newsletter),
 		RateLimiter:        ratelimit.NewRedis(redisClient),
 		CommentRates: handlers.CommentRates{
 			CreatePerMinute:  cfg.CommentsCreatePerMinute,
@@ -406,6 +407,7 @@ func newCommentService(
 		Renderer:        markdown.New(),
 		Notifier:        notifier,
 		Events:          events,
+		IdentityHasher:  identityHasher(cfg),
 	}
 	if cfg.TurnstileSecretKey != "" {
 		commentCfg.Captcha = captcha.NewTurnstile(cfg.TurnstileSecretKey, "", nil)
@@ -510,13 +512,24 @@ func newSecretBox(cfg config.Config, logger *slog.Logger) (authports.SecretBox, 
 	box, err := NewSecretBox(cfg)
 	if err != nil || box == nil {
 		if err == nil {
-			logger.Warn("APP_ENCRYPTION_KEY is not set; two-factor enrollment is disabled")
+			logger.Warn("APP_ENCRYPTION_KEY is not set; two-factor enrollment is disabled and stored IP hashes are unkeyed")
 		}
 
 		return nil, err
 	}
 
 	return box, nil
+}
+
+// identityHasher returns the APP_ENCRYPTION_KEY box that keys stored IP hashes, or a nil
+// interface (plain SHA-256) when the key is unset. Config validation rejects a malformed key.
+func identityHasher(cfg config.Config) commentports.IdentityHasher {
+	box, err := NewSecretBox(cfg)
+	if err != nil || box == nil {
+		return nil
+	}
+
+	return box
 }
 
 // NewSecretBox returns the APP_ENCRYPTION_KEY box, or nil when the key is unset.

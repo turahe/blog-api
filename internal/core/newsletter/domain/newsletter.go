@@ -330,6 +330,8 @@ const (
 const (
 	ConsentSourceToken    = "token"
 	ConsentSourceProvider = "provider"
+	// ConsentSourcePrivacy is the account owner's erasure request.
+	ConsentSourcePrivacy = "privacy_request"
 )
 
 // ConsentEvent is one immutable record in a subscriber's consent history.

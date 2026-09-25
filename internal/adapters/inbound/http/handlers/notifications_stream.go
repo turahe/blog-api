@@ -10,6 +10,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
+	"github.com/turahe/blog-api/internal/adapters/inbound/http/middleware"
 	"github.com/turahe/blog-api/internal/adapters/inbound/http/responses"
 	"github.com/turahe/blog-api/internal/adapters/inbound/realtime"
 	notificationdomain "github.com/turahe/blog-api/internal/core/notification/domain"
@@ -33,7 +34,7 @@ type notificationStreamHub interface {
 // meNotificationsStreamHandler godoc
 //
 //	@Summary		Stream my notifications
-//	@Description	Server-sent events. The stream opens with `retry: 5000` and `event: stream.opened`, sends `event: notification.created` for each new notice (id is the notification id), `event: ping` when idle, `event: error` with code fanout.buffer_full when events were dropped for a slow client, and `event: stream.closed` before a server shutdown. There is no replay: after reconnecting, call GET /api/v1/me/notifications to fill gaps. Returns 429 notifications.stream_limit (with Retry-After) past the per-user limit and 503 notifications.stream_unavailable without a message broker.
+//	@Description	Server-sent events. The stream opens with `retry: 5000` and `event: stream.opened`, sends `event: notification.created` for each new notice (id is the notification id), `event: ping` when idle, `event: error` with code fanout.buffer_full when events were dropped for a slow client, and `event: stream.closed` before a server shutdown (code shutdown) or once the impersonation session behind the token ends (code impersonation_ended). There is no replay: after reconnecting, call GET /api/v1/me/notifications to fill gaps. Returns 429 notifications.stream_limit (with Retry-After) past the per-user limit and 503 notifications.stream_unavailable without a message broker.
 //	@Tags			me
 //	@Produce		text/event-stream
 //	@Success		200	{string}	string	"event stream"
@@ -42,7 +43,7 @@ type notificationStreamHub interface {
 //	@Failure		503	{object}	responses.Envelope
 //	@Security		Bearer
 //	@Router			/api/v1/me/notifications/stream [get]
-func meNotificationsStreamHandler(hub notificationStreamHub, ping time.Duration) gin.HandlerFunc {
+func meNotificationsStreamHandler(hub notificationStreamHub, ping time.Duration, sessions middleware.ImpersonationVerifier) gin.HandlerFunc {
 	if ping < time.Second {
 		ping = defaultStreamPing
 	}
@@ -80,13 +81,41 @@ func meNotificationsStreamHandler(hub notificationStreamHub, ping time.Duration)
 		header.Set("X-Accel-Buffering", "no")
 		c.Status(nethttp.StatusOK)
 
-		streamNotifications(c, conn, userID, ping)
+		streamNotifications(c, conn, userID, ping, impersonationAlive(c, sessions, userID))
 	}
 }
 
-// streamNotifications writes frames until the client leaves, the hub shuts down, or a
-// write fails.
-func streamNotifications(c *gin.Context, conn *realtime.Conn, userID uuid.UUID, ping time.Duration) {
+// impersonationAlive returns nil for a normal token. For an impersonation token it returns a
+// check that the session is still active: the token was verified only when the stream opened,
+// and a stopped or expired session must stop receiving the target's notices.
+func impersonationAlive(c *gin.Context, sessions middleware.ImpersonationVerifier, userID uuid.UUID) func() bool {
+	imp, ok := middleware.CurrentImpersonation(c)
+	if !ok {
+		return nil
+	}
+
+	return func() bool {
+		return sessions != nil && sessions.Verify(c.Request.Context(), imp.SessionID.String(), imp.ActorID, userID) == nil
+	}
+}
+
+// checkSession writes stream.closed and returns errImpersonationEnded once alive reports the
+// impersonation session over.
+func checkSession(w io.Writer, alive func() bool) error {
+	if alive == nil || alive() {
+		return nil
+	}
+
+	_ = writeFrame(w, "stream.closed", uuid.NewString(), gin.H{"code": "impersonation_ended"})
+
+	return errImpersonationEnded
+}
+
+var errImpersonationEnded = errors.New("impersonation session ended")
+
+// streamNotifications writes frames until the client leaves, the hub shuts down, an
+// impersonation session ends, or a write fails.
+func streamNotifications(c *gin.Context, conn *realtime.Conn, userID uuid.UUID, ping time.Duration, alive func() bool) {
 	w := c.Writer
 
 	opened := gin.H{
@@ -118,16 +147,25 @@ func streamNotifications(c *gin.Context, conn *realtime.Conn, userID uuid.UUID, 
 
 			return
 		case n := <-conn.Events():
-			if err = writeDropped(w, conn); err == nil {
+			if err = checkSession(w, alive); err == nil {
+				err = writeDropped(w, conn)
+			}
+
+			if err == nil {
 				err = writeFrame(w, "notification.created", n.UUID.String(), streamNotification(n))
 			}
 		case now := <-ticker.C:
-			if err = writeDropped(w, conn); err == nil {
+			if err = checkSession(w, alive); err == nil {
+				err = writeDropped(w, conn)
+			}
+
+			if err == nil {
 				err = writeFrame(w, "ping", "", gin.H{"ts": now.UTC()})
 			}
 		}
 
 		if err != nil {
+			w.Flush()
 			return
 		}
 

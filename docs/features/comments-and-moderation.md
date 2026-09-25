@@ -53,7 +53,8 @@ and rate limits to combat abuse.
   scrubs content after retention (retention: `comments.retention_deleted_days`).
 - **Flags and auto-escalation**: A comment with `flag_count >= site settings threshold` is
   automatically status=`flagged` and added to the moderation queue. Duplicate flags from the
-  same identity (user id or SHA-256(IP+UA) for guests) collapse to one.
+  same identity (user id, or a hash of IP + UA for guests: HMAC-SHA256 keyed from
+  `APP_ENCRYPTION_KEY`, plain SHA-256 without it) collapse to one.
 - **Moderation audit**: Every `approve/reject/spam/restore/unspam/soft_delete/hard_delete`
   action writes a `comment_moderation_log` row with before/after snapshots, `moderator_user_id`,
   `reason`, and `notify_author` flag.

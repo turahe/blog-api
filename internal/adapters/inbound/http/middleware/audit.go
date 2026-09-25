@@ -44,7 +44,8 @@ var auditFailures = map[string]bool{
 // recorded as failures (validation, permission, version conflict), not only auth
 // rejections, together with the reasons the service attaches.
 var auditAttempts = map[string]bool{
-	"admin.settings.put": true,
+	"admin.settings.put":        true,
+	"admin.impersonation.start": true,
 }
 
 // auditCategories maps operations to the user-facing activity categories shown on
@@ -94,12 +95,14 @@ var resourceTypes = map[string]string{
 
 // Audit records one entry per audited mutating request after the handler
 // returns: admin and self-service changes that succeeded, authentication events
-// (including rejected logins), and public changes by a signed-in user. Handlers
-// and services annotate the entry through the audit package. Recording never
+// (including rejected logins), and public changes by a signed-in user. Every
+// request made with an impersonation token is recorded, reads and failures
+// included, so what staff saw as the user is accounted for. Handlers and
+// services annotate the entry through the audit package. Recording never
 // blocks the request.
 func Audit(writer auditports.Writer) gin.HandlerFunc {
 	return func(c *gin.Context) {
-		if writer == nil || !isMutating(c.Request.Method) {
+		if writer == nil {
 			c.Next()
 			return
 		}
@@ -110,7 +113,7 @@ func Audit(writer auditports.Writer) gin.HandlerFunc {
 		c.Next()
 
 		route, ok := routes.RouteOf(c)
-		if !ok {
+		if !ok || (!isMutating(c.Request.Method) && !impersonating(c)) {
 			return
 		}
 
@@ -130,7 +133,7 @@ func auditEntry(c *gin.Context, route routes.Route, scope *audit.Scope) (auditdo
 		actor, signedIn = *id, true
 	}
 
-	if !audited(route, status, success, signedIn) {
+	if !impersonating(c) && !audited(route, status, success, signedIn) {
 		return auditdomain.Entry{}, false
 	}
 
@@ -158,7 +161,20 @@ func auditEntry(c *gin.Context, route routes.Route, scope *audit.Scope) (auditdo
 	scope.Apply(&entry)
 	markImpersonation(c, &entry)
 
+	if c.GetBool(contextImpersonationRefused) {
+		if entry.Metadata == nil {
+			entry.Metadata = map[string]any{}
+		}
+
+		entry.Metadata["failure_reason"] = ErrorCodeImpersonationForbidden
+	}
+
 	return entry, true
+}
+
+func impersonating(c *gin.Context) bool {
+	_, ok := CurrentImpersonation(c)
+	return ok
 }
 
 // markImpersonation records the staff member behind an impersonation token, unless the

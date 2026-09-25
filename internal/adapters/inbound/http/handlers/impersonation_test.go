@@ -45,6 +45,14 @@ func (f *fakeImpersonation) Current(_ context.Context, actorID uuid.UUID, sessio
 	return f.session, f.active, f.err
 }
 
+func (f *fakeImpersonation) Verify(context.Context, string, uuid.UUID, uuid.UUID) error {
+	if f.active {
+		return nil
+	}
+
+	return impdomain.ErrEnded
+}
+
 // runImpersonation runs handler as claims (an impersonation token when claims.Actor is set).
 func runImpersonation(t *testing.T, handler gin.HandlerFunc, method, body string, claims authdomain.AccessClaims) (int, map[string]any) {
 	t.Helper()
@@ -89,7 +97,7 @@ func TestStartImpersonationHandler(t *testing.T) {
 
 	session, target := impersonationFixture()
 	valid := `{"target_user_id":"` + target.UUID.String() + `","reason":"ticket #4521 cannot publish","current_password":"pw","two_factor_code":"123456"}`
-	staff := authdomain.AccessClaims{Subject: testUserID}
+	staff := authdomain.AccessClaims{Subject: testUserID, FamilyID: uuid.New()}
 
 	t.Run("issues the token", func(t *testing.T) {
 		t.Parallel()
@@ -110,6 +118,7 @@ func TestStartImpersonationHandler(t *testing.T) {
 		assert.Equal(t, target.UUID, fake.input.TargetID)
 		assert.Equal(t, "pw", fake.input.Password)
 		assert.Equal(t, "123456", fake.input.Code)
+		assert.Equal(t, staff.FamilyID, fake.input.BaseFamilyID, "the session is bound to the caller's sign-in")
 	})
 
 	t.Run("validates the body", func(t *testing.T) {
@@ -135,6 +144,7 @@ func TestStartImpersonationHandler(t *testing.T) {
 		"ineligible":     {impdomain.ErrIneligible, nethttp.StatusUnprocessableEntity, "impersonation.target_ineligible"},
 		"already active": {impdomain.ErrAlreadyActive, nethttp.StatusConflict, "impersonation.already_active"},
 		"forbidden":      {impdomain.ErrForbidden, nethttp.StatusForbidden, "rbac.forbidden"},
+		"no sign-in":     {impdomain.ErrSignInRequired, nethttp.StatusUnauthorized, "impersonation.sign_in_required"},
 	} {
 		t.Run(name, func(t *testing.T) {
 			t.Parallel()

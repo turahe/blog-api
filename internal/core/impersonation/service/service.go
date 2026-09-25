@@ -67,13 +67,16 @@ func (s *Service) WithEvents(events event.Unit) *Service {
 
 // StartInput is a request to impersonate TargetID.
 type StartInput struct {
-	ActorID   uuid.UUID
-	TargetID  uuid.UUID
-	Reason    string
-	Password  string
-	Code      string
-	IP        string
-	UserAgent string
+	ActorID  uuid.UUID
+	TargetID uuid.UUID
+	// BaseFamilyID is the refresh-session family of the actor's token; the session ends when
+	// that sign-in does.
+	BaseFamilyID uuid.UUID
+	Reason       string
+	Password     string
+	Code         string
+	IP           string
+	UserAgent    string
 }
 
 // Started is a new session, its target, and the token that acts as the target.
@@ -85,7 +88,13 @@ type Started struct {
 
 // Start checks the actor's permission, step-up proof, and the target's eligibility, then opens
 // a session and signs a token for it that expires with the session.
-func (s *Service) Start(ctx context.Context, in StartInput) (Started, error) {
+func (s *Service) Start(ctx context.Context, in StartInput) (started Started, err error) {
+	defer func() {
+		if err != nil {
+			audit.AddMetadata(ctx, "failure_reason", startFailure(err))
+		}
+	}()
+
 	reason := strings.TrimSpace(in.Reason)
 	if n := utf8.RuneCountInString(reason); n < domain.MinReasonLength || n > domain.MaxReasonLength {
 		return Started{}, fmt.Errorf("%w: reason must be %d-%d characters", domain.ErrValidation,
@@ -95,22 +104,8 @@ func (s *Service) Start(ctx context.Context, in StartInput) (Started, error) {
 	audit.SetResource(ctx, auditdomain.ResourceUser, in.TargetID)
 	audit.AddMetadata(ctx, "reason", reason)
 
-	allowed, err := s.perms.Enforce(ctx, in.ActorID, domain.PermissionStart)
-	if err != nil {
+	if err := s.authorizeStart(ctx, in); err != nil {
 		return Started{}, err
-	}
-
-	if !allowed {
-		return Started{}, domain.ErrForbidden
-	}
-
-	verified, err := s.stepUp.VerifyStepUp(ctx, in.ActorID, in.Password, in.Code)
-	if err != nil {
-		return Started{}, err
-	}
-
-	if !verified {
-		return Started{}, domain.ErrStepUpRequired
 	}
 
 	target, err := s.eligibleTarget(ctx, in.ActorID, in.TargetID)
@@ -119,9 +114,14 @@ func (s *Service) Start(ctx context.Context, in StartInput) (Started, error) {
 	}
 
 	now := s.clock.Now()
+	if err := s.closeLapsed(ctx, in.ActorID, now); err != nil {
+		return Started{}, err
+	}
+
 	session := domain.Session{
 		UUID: s.ids.New(), ActorUUID: in.ActorID, TargetUUID: in.TargetID, State: domain.StateActive,
 		Reason: reason, IP: in.IP, UserAgent: in.UserAgent, StartedAt: now, ExpiresAt: now.Add(s.cfg.TTL),
+		BaseFamilyID: in.BaseFamilyID,
 	}
 
 	var token string
@@ -149,6 +149,72 @@ func (s *Service) Start(ctx context.Context, in StartInput) (Started, error) {
 	audit.AddMetadata(ctx, "impersonation_session_id", session.UUID.String())
 
 	return Started{Session: session, Target: target, AccessToken: token}, nil
+}
+
+// authorizeStart checks the actor's permission, the step-up proof, and that the request comes
+// from a sign-in the session can be bound to.
+func (s *Service) authorizeStart(ctx context.Context, in StartInput) error {
+	allowed, err := s.perms.Enforce(ctx, in.ActorID, domain.PermissionStart)
+	if err != nil {
+		return err
+	}
+
+	if !allowed {
+		return domain.ErrForbidden
+	}
+
+	verified, err := s.stepUp.VerifyStepUp(ctx, in.ActorID, in.Password, in.Code)
+	if err != nil {
+		return err
+	}
+
+	if !verified {
+		return domain.ErrStepUpRequired
+	}
+
+	if in.BaseFamilyID == uuid.Nil {
+		return domain.ErrSignInRequired
+	}
+
+	return nil
+}
+
+// startFailure names why Start refused, for the audit entry of the attempt.
+func startFailure(err error) string {
+	switch {
+	case errors.Is(err, domain.ErrValidation):
+		return "validation"
+	case errors.Is(err, domain.ErrForbidden):
+		return "forbidden"
+	case errors.Is(err, domain.ErrStepUpRequired):
+		return "step_up_required"
+	case errors.Is(err, domain.ErrSignInRequired):
+		return "sign_in_required"
+	case errors.Is(err, domain.ErrIneligible):
+		return "target_ineligible"
+	case errors.Is(err, domain.ErrAlreadyActive):
+		return "already_active"
+	default:
+		return "error"
+	}
+}
+
+// closeLapsed ends the actor's active session when it no longer backs a usable token, so a
+// session nobody closed yet does not block a new one.
+func (s *Service) closeLapsed(ctx context.Context, actorID uuid.UUID, now time.Time) error {
+	session, ok, err := s.repo.ActiveForActor(ctx, actorID)
+	if err != nil || !ok {
+		return err
+	}
+
+	switch {
+	case !session.ActiveAt(now):
+		_, err = s.end(ctx, session, domain.StateExpired, domain.EndExpired, now)
+	case !session.BaseSessionActiveAt(now):
+		_, err = s.end(ctx, session, domain.StateRevoked, domain.EndBaseSession, now)
+	}
+
+	return err
 }
 
 // eligibleTarget returns the target when the actor may impersonate it.
@@ -188,8 +254,8 @@ func (s *Service) eligibleTarget(ctx context.Context, actorID, targetID uuid.UUI
 }
 
 // Verify accepts an impersonation token's session only while it is active, unexpired, bound to
-// the same actor and target, both accounts are active, and the actor may still impersonate.
-// A session that fails a policy check is revoked; an expired one is closed.
+// the same actor and target, the actor is still signed in, both accounts are active, and the
+// actor may still impersonate. A session that fails a check is revoked; an expired one is closed.
 func (s *Service) Verify(ctx context.Context, sessionID string, actorID, targetID uuid.UUID) error {
 	id, err := uuid.Parse(sessionID)
 	if err != nil {
@@ -216,6 +282,10 @@ func (s *Service) Verify(ctx context.Context, sessionID string, actorID, targetI
 	now := s.clock.Now()
 	if !session.ActiveAt(now) {
 		return s.endAndDeny(ctx, session, domain.StateExpired, domain.EndExpired, now)
+	}
+
+	if !session.BaseSessionActiveAt(now) {
+		return s.endAndDeny(ctx, session, domain.StateRevoked, domain.EndBaseSession, now)
 	}
 
 	allowed := session.ParticipantsActive
@@ -343,9 +413,10 @@ func (s *Service) end(ctx context.Context, session domain.Session, state domain.
 }
 
 var endEvents = map[domain.EndReason]string{
-	domain.EndManual:  event.ImpersonationExited,
-	domain.EndExpired: event.ImpersonationExpired,
-	domain.EndPolicy:  event.ImpersonationRevoked,
+	domain.EndManual:      event.ImpersonationExited,
+	domain.EndExpired:     event.ImpersonationExpired,
+	domain.EndPolicy:      event.ImpersonationRevoked,
+	domain.EndBaseSession: event.ImpersonationRevoked,
 }
 
 // lifecyclePayload is ImpersonationLifecycle in docs/architecture/asyncapi.yaml.

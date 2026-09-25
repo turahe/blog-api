@@ -22,6 +22,7 @@ type impersonationAPI interface {
 	Start(ctx context.Context, in impservice.StartInput) (impservice.Started, error)
 	Stop(ctx context.Context, actorID uuid.UUID, sessionID *uuid.UUID) (impdomain.Session, error)
 	Current(ctx context.Context, actorID uuid.UUID, sessionID *uuid.UUID) (impdomain.Session, bool, error)
+	Verify(ctx context.Context, sessionID string, actorID, targetID uuid.UUID) error
 }
 
 // impersonationControllers wires the impersonation handlers when the service is present.
@@ -50,13 +51,14 @@ func impersonationControllers(deps Deps) routes.Impersonation {
 //	@Description	the caller's current password, and a TOTP or backup code when the caller has two-factor
 //	@Description	enabled. The target must be active, must not be an administrator or able to impersonate, and
 //	@Description	every permission the target has must be one the caller has. One active session per caller.
+//	@Description	The session ends with the caller's own sign-in (logout, revocation, or refresh-session expiry).
 //	@Tags			admin
 //	@Accept			json
 //	@Produce		json
 //	@Param			body	body		requests.StartImpersonation	true	"target, reason, and step-up proof"
 //	@Success		201		{object}	responses.Envelope
 //	@Failure		400		{object}	responses.Envelope
-//	@Failure		401		{object}	responses.Envelope
+//	@Failure		401		{object}	responses.Envelope	"unauthorized, impersonation.sign_in_required (refresh the token first)"
 //	@Failure		403		{object}	responses.Envelope	"rbac.forbidden, impersonation.step_up_required, impersonation.forbidden_action"
 //	@Failure		409		{object}	responses.Envelope	"impersonation.already_active"
 //	@Failure		422		{object}	responses.Envelope	"impersonation.target_ineligible"
@@ -77,7 +79,8 @@ func adminStartImpersonationHandler(imp impersonationAPI) gin.HandlerFunc {
 
 		started, err := imp.Start(c.Request.Context(), impservice.StartInput{
 			ActorID: actorID, TargetID: uuid.MustParse(body.TargetUserID), Reason: body.Reason,
-			Password: body.CurrentPassword, Code: body.TwoFactorCode,
+			BaseFamilyID: middleware.CurrentSignInFamily(c),
+			Password:     body.CurrentPassword, Code: body.TwoFactorCode,
 			IP: c.ClientIP(), UserAgent: c.Request.UserAgent(),
 		})
 		if writeImpersonationError(c, err) {
@@ -185,6 +188,9 @@ func writeImpersonationError(c *gin.Context, err error) bool {
 	case errors.Is(err, impdomain.ErrStepUpRequired):
 		status, opts.Case, opts.Code = nethttp.StatusForbidden, responses.CaseForbidden, "impersonation.step_up_required"
 		opts.Message = "Confirm with your current password and, when two-factor is enabled, a code"
+	case errors.Is(err, impdomain.ErrSignInRequired):
+		status, opts.Case, opts.Code = nethttp.StatusUnauthorized, responses.CaseUnauthorized, "impersonation.sign_in_required"
+		opts.Message = "Refresh your access token or sign in again before impersonating"
 	case errors.Is(err, impdomain.ErrIneligible):
 		status, opts.Case, opts.Code = nethttp.StatusUnprocessableEntity, responses.CaseUnprocessable, "impersonation.target_ineligible"
 		opts.Message = "This user cannot be impersonated"

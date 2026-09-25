@@ -77,6 +77,8 @@ type Deps struct {
 	Accounts ports.Accounts
 	Events   event.Unit
 	Logger   *slog.Logger
+	// IdentityHasher keys stored IP hashes; nil falls back to plain SHA-256.
+	IdentityHasher ports.IdentityHasher
 }
 
 // Service implements the newsletter use cases.
@@ -172,14 +174,14 @@ func (s *Service) Subscribe(ctx context.Context, in SubscribeInput) error {
 		}
 
 		if !found {
-			sub = s.newSubscriber(email, name, format, domain.SourcePublic, hashIdentity(in.IP), in.UserAgent)
+			sub = s.newSubscriber(email, name, format, domain.SourcePublic, s.hashIdentity(in.IP), in.UserAgent)
 		}
 
 		if sub.Suppressed() {
 			return nil
 		}
 
-		confirm, err = s.requestConfirmation(ctx, &sub, lists, cfg, !found, hashIdentity(in.IP), string(domain.SourcePublic))
+		confirm, err = s.requestConfirmation(ctx, &sub, lists, cfg, !found, s.hashIdentity(in.IP), string(domain.SourcePublic))
 
 		return err
 	})
@@ -287,7 +289,7 @@ func (s *Service) Confirm(ctx context.Context, raw, ip string) (domain.Subscribe
 			sub.SetMembership(slug, domain.MembershipActive, now)
 		}
 
-		events := []domain.ConsentEvent{s.consent(sub, domain.ConsentConfirmed, "", domain.ConsentSourceToken, hashIdentity(ip), now)}
+		events := []domain.ConsentEvent{s.consent(sub, domain.ConsentConfirmed, "", domain.ConsentSourceToken, s.hashIdentity(ip), now)}
 		events = append(events, s.listEvents(sub, domain.ConsentListJoined, joined, domain.ConsentSourceToken, now)...)
 
 		if sub.Status != domain.StatusActive {
@@ -370,7 +372,7 @@ func (s *Service) ResendConfirm(ctx context.Context, rawEmail, ip string) error 
 			return err
 		}
 
-		confirm, err = s.requestConfirmation(ctx, &sub, nil, cfg, false, hashIdentity(ip), string(domain.SourcePublic))
+		confirm, err = s.requestConfirmation(ctx, &sub, nil, cfg, false, s.hashIdentity(ip), string(domain.SourcePublic))
 
 		return err
 	})
@@ -412,7 +414,7 @@ func (s *Service) Unsubscribe(ctx context.Context, in UnsubscribeInput) error {
 			return domain.ErrTokenInvalid
 		}
 
-		return s.unsubscribeAll(ctx, &sub, domain.ConsentSourceToken, in.ReasonCode, in.Feedback, hashIdentity(in.IP), nil)
+		return s.unsubscribeAll(ctx, &sub, domain.ConsentSourceToken, in.ReasonCode, in.Feedback, s.hashIdentity(in.IP), nil)
 	})
 }
 
@@ -517,7 +519,7 @@ func (s *Service) UpdatePreferences(ctx context.Context, raw string, in Preferen
 			return domain.ErrTokenInvalid
 		}
 
-		ipHash := hashIdentity(in.IP)
+		ipHash := s.hashIdentity(in.IP)
 		if in.UnsubscribeAll {
 			return s.unsubscribeAll(ctx, &sub, domain.ConsentSourceToken, "", "", ipHash, nil)
 		}
@@ -852,9 +854,13 @@ func hashToken(raw string) string {
 	return hex.EncodeToString(sum[:])
 }
 
-func hashIdentity(value string) string {
+func (s *Service) hashIdentity(value string) string {
 	if value == "" {
 		return ""
+	}
+
+	if s.IdentityHasher != nil {
+		return s.IdentityHasher.MAC(value)
 	}
 
 	sum := sha256.Sum256([]byte(value))

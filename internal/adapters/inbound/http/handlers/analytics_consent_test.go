@@ -75,6 +75,7 @@ func TestStoreConsentCreatesOrUpdates(t *testing.T) {
 	})
 	require.Equal(t, nethttp.StatusCreated, w.Code, w.Body.String())
 	assert.Equal(t, "secret", dataOf(body)["token"])
+	assert.Equal(t, "no-store", w.Header().Get("Cache-Control"), "the response carries the subject token")
 	assert.Equal(t, map[consentdomain.Purpose]bool{
 		consentdomain.PurposeAnalytics: true, consentdomain.PurposeAuthenticatedAnalytics: false,
 	}, svc.decisions)
@@ -107,6 +108,7 @@ func TestGetAndWithdrawConsent(t *testing.T) {
 	w, _ := runProfile(t, withConsentToken(getConsentHandler(svc), "tok"), profileRequest{method: nethttp.MethodGet, target: "/"})
 	require.Equal(t, nethttp.StatusOK, w.Code)
 	assert.Equal(t, "tok", svc.token)
+	assert.Equal(t, "no-store", w.Header().Get("Cache-Control"), "state is keyed by a header shared caches ignore")
 
 	id := uuid.New()
 	w, body := runProfile(t, withConsentToken(withdrawConsentHandler(svc), "tok"), profileRequest{

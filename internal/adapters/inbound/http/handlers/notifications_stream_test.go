@@ -6,6 +6,7 @@ import (
 	nethttp "net/http"
 	"net/http/httptest"
 	"strings"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -14,6 +15,8 @@ import (
 	"github.com/stretchr/testify/require"
 	"github.com/turahe/blog-api/internal/adapters/inbound/http/middleware"
 	"github.com/turahe/blog-api/internal/adapters/inbound/realtime"
+	authdomain "github.com/turahe/blog-api/internal/core/auth/domain"
+	impdomain "github.com/turahe/blog-api/internal/core/impersonation/domain"
 	notificationdomain "github.com/turahe/blog-api/internal/core/notification/domain"
 )
 
@@ -23,7 +26,7 @@ func streamServer(t *testing.T, hub notificationStreamHub, user uuid.UUID) *http
 
 	router := gin.New()
 	router.GET("/stream", func(c *gin.Context) { c.Set(middleware.ContextUserIDKey, user) },
-		meNotificationsStreamHandler(hub, time.Second))
+		meNotificationsStreamHandler(hub, time.Second, nil))
 
 	server := httptest.NewServer(router)
 	t.Cleanup(server.Close)
@@ -142,12 +145,68 @@ func TestNotificationStreamShutdown(t *testing.T) {
 	require.Contains(t, frame[2], `"code":"shutdown"`)
 }
 
+type toggleVerifier struct {
+	active atomic.Bool
+	calls  atomic.Int32
+}
+
+func (v *toggleVerifier) Verify(context.Context, string, uuid.UUID, uuid.UUID) error {
+	v.calls.Add(1)
+
+	if v.active.Load() {
+		return nil
+	}
+
+	return impdomain.ErrEnded
+}
+
+func TestNotificationStreamClosesWhenImpersonationEnds(t *testing.T) {
+	t.Parallel()
+	gin.SetMode(gin.TestMode)
+
+	hub := realtime.NewHub(1, 8)
+	target, actor := uuid.New(), uuid.New()
+	verifier := &toggleVerifier{}
+	verifier.active.Store(true)
+
+	router := gin.New()
+	router.GET("/stream", func(c *gin.Context) {
+		c.Set(middleware.ContextUserIDKey, target)
+		c.Set(middleware.ContextClaimsKey, authdomain.AccessClaims{Subject: target, Actor: &actor, SessionID: uuid.NewString()})
+	}, meNotificationsStreamHandler(hub, time.Hour, verifier))
+
+	server := httptest.NewServer(router)
+	t.Cleanup(server.Close)
+
+	resp, err := server.Client().Do(streamRequest(t, server))
+	require.NoError(t, err)
+
+	defer func() { _ = resp.Body.Close() }()
+
+	body := bufio.NewReader(resp.Body)
+	readFrame(t, body)
+	readFrame(t, body)
+
+	hub.Deliver(notificationdomain.Notification{UUID: uuid.New(), UserUUID: target, Type: "first"})
+	require.Equal(t, "event: notification.created", readFrame(t, body)[0], "delivered while the session is active")
+
+	verifier.active.Store(false)
+	hub.Deliver(notificationdomain.Notification{UUID: uuid.New(), UserUUID: target, Type: "second"})
+
+	closed := readFrame(t, body)
+	require.Equal(t, "event: stream.closed", closed[0])
+	require.Contains(t, closed[2], `"code":"impersonation_ended"`)
+	require.NotContains(t, closed[2], "second")
+	require.Eventually(t, func() bool { return hub.Connections() == 0 }, 5*time.Second, 10*time.Millisecond)
+	require.EqualValues(t, 2, verifier.calls.Load(), "checked before every frame")
+}
+
 func TestNotificationStreamUnavailableWithoutHub(t *testing.T) {
 	t.Parallel()
 
 	user := uuid.New()
 
-	w, body := runProfile(t, meNotificationsStreamHandler(nil, 0), profileRequest{
+	w, body := runProfile(t, meNotificationsStreamHandler(nil, 0, nil), profileRequest{
 		method: nethttp.MethodGet, target: "/me/notifications/stream", user: &user,
 	})
 

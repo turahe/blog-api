@@ -70,6 +70,7 @@ func storeConsentHandler(consent consentAPI) gin.HandlerFunc {
 			status = nethttp.StatusCreated
 		}
 
+		c.Header("Cache-Control", "no-store")
 		responses.SuccessFor(c, status, responses.ServiceAnalytics, responses.CaseSuccess, responses.ConsentState(state))
 	}
 }
@@ -86,6 +87,8 @@ func storeConsentHandler(consent consentAPI) gin.HandlerFunc {
 //	@Router			/api/v1/analytics/consent [get]
 func getConsentHandler(consent consentAPI) gin.HandlerFunc {
 	return func(c *gin.Context) {
+		c.Header("Cache-Control", "no-store")
+
 		state, err := consent.Current(c.Request.Context(), consentToken(c))
 		if mapConsentError(c, err) {
 			return
@@ -120,6 +123,7 @@ func withdrawConsentHandler(consent consentAPI) gin.HandlerFunc {
 			return
 		}
 
+		c.Header("Cache-Control", "no-store")
 		responses.SuccessFor(c, nethttp.StatusOK, responses.ServiceAnalytics, responses.CaseSuccess, responses.Consent(withdrawn))
 	}
 }

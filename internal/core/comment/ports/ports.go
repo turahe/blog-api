@@ -14,6 +14,12 @@ type Renderer interface {
 	Render(markdown string) string
 }
 
+// IdentityHasher keys the hashes of client IPs, so a leaked table cannot be reversed by
+// hashing the small IPv4 space.
+type IdentityHasher interface {
+	MAC(value string) string
+}
+
 // CaptchaVerifier checks a human-verification token. ok is false for a missing, invalid,
 // or reused token; err means the provider could not be asked.
 type CaptchaVerifier interface {

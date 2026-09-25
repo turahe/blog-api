@@ -23,10 +23,10 @@ func TestIssueAndParseAccess(t *testing.T) {
 	svc := newTestService(t)
 
 	now := time.Now().UTC()
-	subject := uuid.New()
+	subject, family := uuid.New(), uuid.New()
 	raw, err := svc.IssueAccess(authdomain.AccessClaims{
 		Subject: subject, Email: "a@example.com", Username: "a",
-		ExpiresAt: now.Add(time.Minute), IssuedAt: now, ID: uuid.NewString(),
+		ExpiresAt: now.Add(time.Minute), IssuedAt: now, ID: uuid.NewString(), FamilyID: family,
 	})
 	require.NoError(t, err)
 
@@ -34,6 +34,7 @@ func TestIssueAndParseAccess(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, subject, claims.Subject)
 	require.Equal(t, "a@example.com", claims.Email)
+	require.Equal(t, family, claims.FamilyID)
 }
 
 func TestImpersonationTokenCarriesActorAndSession(t *testing.T) {
@@ -56,6 +57,11 @@ func TestImpersonationTokenCarriesActorAndSession(t *testing.T) {
 
 	_, err = svc.IssueAccess(authdomain.AccessClaims{Subject: subject, ExpiresAt: now.Add(time.Minute), Actor: &actor})
 	require.Error(t, err, "an impersonation token needs a session id")
+
+	_, err = svc.IssueAccess(authdomain.AccessClaims{
+		Subject: subject, ExpiresAt: now.Add(time.Minute), Actor: &actor, SessionID: "s-1", FamilyID: uuid.New(),
+	})
+	require.Error(t, err, "an impersonation token is not a sign-in of its own")
 
 	plain, err := svc.ParseAccess(mustIssue(t, svc, authdomain.AccessClaims{Subject: subject, ExpiresAt: now.Add(time.Minute)}))
 	require.NoError(t, err)
@@ -81,6 +87,9 @@ func TestParseAccessRejectsMalformedActClaims(t *testing.T) {
 		"act not a uuid":    {"act": map[string]any{"sub": "admin"}, "sid": "s-1"},
 		"actor is subject":  {"act": map[string]any{"sub": subject}, "sid": "s-1"},
 		"act missing a sub": {"act": map[string]any{}, "sid": "s-1"},
+		"fam not a uuid":    {"fam": "family"},
+		"fam is nil uuid":   {"fam": uuid.Nil.String()},
+		"fam with act":      {"act": map[string]any{"sub": uuid.NewString()}, "sid": "s-1", "fam": uuid.NewString()},
 	} {
 		claims := jwtlib.MapClaims{}
 		maps.Copy(claims, registered)

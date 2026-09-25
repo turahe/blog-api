@@ -169,7 +169,9 @@ Unknown addresses are ignored and responses never echo addresses.
 
 `DELETE /admin/newsletter/subscribers/{id}` unsubscribes by default; `?mode=hard_delete` erases
 the address, name, IP hash, user agent, and consent feedback but keeps the row, its `erased`
-status, and the consent history for suppression. CSV cells that start with `=`, `+`, `-`, `@`,
+status, and the consent history for suppression. Account erasure (`POST /api/v1/me/activity/erase`)
+does the same to the subscriber linked to the account, in the same transaction, recording the
+consent event with source `privacy_request`. CSV cells that start with `=`, `+`, `-`, `@`,
 tab, or carriage return are prefixed with `'` so spreadsheets do not run them as formulas.
 Admin writes go to the audit log.
 
@@ -188,7 +190,9 @@ Migration 00030:
 | `newsletter_issues`, `newsletter_issue_lists` | issues and their target lists |
 | `newsletter_deliveries` | one row per issue and recipient: claim, attempts, outcome |
 
-IP addresses are stored only as SHA-256 hashes, as comments store them.
+IP addresses are stored only as hashes, as comments store them: HMAC-SHA256 under a key derived
+from `APP_ENCRYPTION_KEY`, or plain SHA-256 when the key is unset (see
+[Privacy stance](../security/overview.md#privacy-stance)).
 
 ## Events
 

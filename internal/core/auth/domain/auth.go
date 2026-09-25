@@ -128,6 +128,9 @@ type AccessClaims struct {
 	// act claim). SessionID then names the impersonation session the token belongs to.
 	Actor     *uuid.UUID
 	SessionID string
+	// FamilyID is the refresh-session family (the sign-in) an ordinary token was issued for;
+	// nil on impersonation tokens.
+	FamilyID uuid.UUID
 }
 
 // Impersonating reports whether the token acts on behalf of Subject.

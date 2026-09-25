@@ -52,6 +52,8 @@ type Config struct {
 	Notifier ports.Notifier
 	// Events records comment events in the same transaction as each write.
 	Events event.Unit
+	// IdentityHasher keys stored IP hashes; nil falls back to plain SHA-256.
+	IdentityHasher ports.IdentityHasher
 }
 
 // Service implements comment use cases.
@@ -116,7 +118,7 @@ func (s *Service) Create(ctx context.Context, in CreateInput) (commentdomain.Com
 		AuthorUUID:  in.AuthorUUID,
 		Content:     content,
 		ContentHTML: s.cfg.Renderer.Render(content),
-		IPHash:      hashIdentity(in.ClientIP),
+		IPHash:      s.hashIdentity(in.ClientIP),
 		UserAgent:   truncateRunes(strings.TrimSpace(in.UserAgent), maxUserAgentRunes),
 	}
 
@@ -344,7 +346,7 @@ func (s *Service) Flag(ctx context.Context, in FlagInput) error {
 		CreatedAt:    s.clock.Now(),
 	}
 	if in.ReporterUUID == nil {
-		flag.ReporterIPHash = hashIdentity(in.ClientIP + "|" + in.UserAgent)
+		flag.ReporterIPHash = s.hashIdentity(in.ClientIP + "|" + in.UserAgent)
 	}
 
 	_, err = s.repo.AddFlag(ctx, flag, s.cfg.FlagThreshold)
@@ -525,9 +527,13 @@ func normalizePage(page, perPage int) (int, int) {
 	return page, perPage
 }
 
-func hashIdentity(value string) string {
+func (s *Service) hashIdentity(value string) string {
 	if value == "" {
 		return ""
+	}
+
+	if s.cfg.IdentityHasher != nil {
+		return s.cfg.IdentityHasher.MAC(value)
 	}
 
 	sum := sha256.Sum256([]byte(value))

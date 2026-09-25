@@ -235,6 +235,28 @@ func TestCreateByUserIsApprovedAndHashesIP(t *testing.T) {
 	require.NotContains(t, got.IPHash, "203.0.113.9")
 }
 
+type prefixHasher struct{}
+
+func (prefixHasher) MAC(value string) string { return "mac:" + value }
+
+func TestIdentityHashesAreKeyedWhenAHasherIsSet(t *testing.T) {
+	t.Parallel()
+
+	f := newFixture(Config{IdentityHasher: prefixHasher{}})
+
+	got, err := f.svc.Create(context.Background(), CreateInput{
+		PostUUID: f.post, AuthorUUID: &f.user, Content: "hello", ClientIP: "203.0.113.9",
+	})
+	require.NoError(t, err)
+	require.Equal(t, "mac:203.0.113.9", got.IPHash)
+
+	require.NoError(t, f.svc.Flag(context.Background(), FlagInput{
+		CommentUUID: got.UUID, Reason: "spam", ClientIP: "198.51.100.1", UserAgent: "curl",
+	}))
+	require.Len(t, f.repo.flags, 1)
+	require.Equal(t, "mac:198.51.100.1|curl", f.repo.flags[0].ReporterIPHash)
+}
+
 func TestCreateRequireApprovalStartsPending(t *testing.T) {
 	t.Parallel()
 

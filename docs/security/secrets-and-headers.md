@@ -14,7 +14,7 @@ Source of truth for local keys: [.env.example](../../.env.example).
 | `DB_PASSWORD` | least privilege DB role in staging/prod; never commit real value |
 | `REDIS_PASSWORD` | store as a secret; network-restrict Redis and require AUTH outside local environments |
 | `S3_*` | scoped bucket credentials; no admin cloud keys in the API |
-| `APP_ENCRYPTION_KEY` | 32 bytes; encrypts TOTP secrets, phone numbers, and queued email commands. The worker needs the same key to send email. Rotating it strands in-flight email commands (they are dead-lettered as undecryptable), so drain `notification.email.requested` and the outbox first |
+| `APP_ENCRYPTION_KEY` | 32 bytes; encrypts TOTP secrets, phone numbers, and queued email commands, and keys the HMAC of backup codes and stored client-IP hashes. The worker needs the same key to send email. Rotating it strands in-flight email commands (they are dead-lettered as undecryptable), so drain `notification.email.requested` and the outbox first |
 | `RABBITMQ_URL` | carries the password; use `amqps://` outside local networks and a vhost-scoped user limited to the blog exchanges |
 | `KAFKA_SASL_PASSWORD` | secret store only; production requires `KAFKA_TLS=true` with SASL. Grant the user only the `MESSAGE_TOPIC_PREFIX` topics and the consumer group |
 | `GOOGLE_PUBSUB_CREDENTIALS_SOURCE` | prefer `workload-identity`; a `path:` key file must stay out of the image |

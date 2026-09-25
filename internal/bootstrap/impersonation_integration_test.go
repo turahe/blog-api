@@ -1,6 +1,8 @@
 package bootstrap_test
 
 import (
+	"context"
+	"log/slog"
 	nethttp "net/http"
 	"strings"
 	"testing"
@@ -11,6 +13,7 @@ import (
 	httpadapter "github.com/turahe/blog-api/internal/adapters/inbound/http"
 	"github.com/turahe/blog-api/internal/adapters/outbound/persistence"
 	outboundrbac "github.com/turahe/blog-api/internal/adapters/outbound/rbac"
+	auditservice "github.com/turahe/blog-api/internal/core/audit/service"
 	authservice "github.com/turahe/blog-api/internal/core/auth/service"
 	impdomain "github.com/turahe/blog-api/internal/core/impersonation/domain"
 	impservice "github.com/turahe/blog-api/internal/core/impersonation/service"
@@ -32,7 +35,7 @@ type impersonationStack struct {
 	target uuid.UUID
 }
 
-func newImpersonationStack(t *testing.T) *impersonationStack {
+func newImpersonationStack(t *testing.T, extra ...func(tx *gorm.DB, deps *httpadapter.Dependencies)) *impersonationStack {
 	t.Helper()
 
 	var target uuid.UUID
@@ -75,6 +78,10 @@ func newImpersonationStack(t *testing.T) *impersonationStack {
 		deps.Impersonation = impservice.New(persistence.NewImpersonationRepository(tx), users,
 			grantsAndEnforcer{enforcer, roles}, auth, auth, uuidGen{}, clock,
 			impservice.Config{TTL: time.Hour, AdminRole: rbacdomain.ProtectedRole})
+
+		for _, extend := range extra {
+			extend(tx, deps)
+		}
 	})
 	s.clock = clock
 
@@ -130,6 +137,160 @@ func TestImpersonationLifecycle(t *testing.T) {
 	require.Equal(t, "exited", r.data["state"])
 
 	r = s.do(t, nethttp.MethodGet, "/api/v1/me", token, nil)
+	require.Equal(t, nethttp.StatusUnauthorized, r.status)
+	require.Equal(t, "auth.impersonation_ended", r.code)
+}
+
+type auditRow struct {
+	Action       string
+	Actor        *uuid.UUID
+	Impersonator *uuid.UUID
+	Resource     *uuid.UUID
+	Session      *string
+	Failure      *string
+	Reason       *string
+}
+
+func TestImpersonationAuditTrail(t *testing.T) {
+	t.Parallel()
+
+	var recorder *auditservice.Recorder
+
+	s := newImpersonationStack(t, func(tx *gorm.DB, deps *httpadapter.Dependencies) {
+		recorder = auditservice.NewRecorder(persistence.NewAuditRepository(tx), slog.New(slog.DiscardHandler),
+			auditservice.RecorderOptions{FlushInterval: time.Hour})
+		deps.Audit = recorder
+	})
+	staff, _ := s.login(t)
+
+	var staffID uuid.UUID
+	require.NoError(t, s.tx.Raw("SELECT uuid FROM users WHERE email = ?", s.email).Row().Scan(&staffID))
+
+	require.Equal(t, nethttp.StatusForbidden, s.start(t, staff, "wrong password").status)
+
+	r := s.start(t, staff, cyclePassword)
+	require.Equal(t, nethttp.StatusCreated, r.status, r.code)
+
+	token, _ := r.data["access_token"].(string)
+	session, _ := r.data["session"].(map[string]any)
+	sessionID, _ := session["impersonation_session_id"].(string)
+
+	require.Equal(t, nethttp.StatusOK, s.do(t, nethttp.MethodGet, "/api/v1/me", token, nil).status)
+	require.Equal(t, nethttp.StatusOK, s.do(t, nethttp.MethodGet, "/api/v1/me", staff, nil).status)
+
+	r = s.do(t, nethttp.MethodPut, "/api/v1/me/password", token, map[string]any{"current_password": "x", "new_password": "y"})
+	require.Equal(t, "impersonation.forbidden_action", r.code)
+
+	require.Equal(t, nethttp.StatusOK, s.do(t, nethttp.MethodPost, "/api/v1/admin/impersonation/stop", token, nil).status)
+
+	ctx, cancel := context.WithTimeout(t.Context(), 5*time.Second)
+	defer cancel()
+
+	require.NoError(t, recorder.Close(ctx))
+
+	var rows []auditRow
+	require.NoError(t, s.tx.Raw(`SELECT a.action, actor.uuid AS actor, imp.uuid AS impersonator, a.resource_id AS resource,
+			a.metadata->>'impersonation_session_id' AS session, a.metadata->>'failure_reason' AS failure,
+			a.metadata->>'reason' AS reason
+		FROM audit_logs a
+		LEFT JOIN users actor ON actor.id = a.actor_id
+		LEFT JOIN users imp ON imp.id = a.impersonator_id
+		WHERE a.actor_id IN (SELECT id FROM users WHERE uuid IN (?, ?))
+		ORDER BY a.id`, staffID, s.target).Scan(&rows).Error)
+
+	byOutcome := map[string]auditRow{}
+	reads := 0
+
+	for _, row := range rows {
+		if row.Action == "me.get" {
+			reads++
+		}
+
+		key := row.Action
+		if row.Failure != nil {
+			key += "/" + *row.Failure
+		}
+
+		byOutcome[key] = row
+	}
+
+	failed := byOutcome["admin.impersonation.start/step_up_required"]
+	require.Equal(t, &staffID, failed.Actor, "a refused start is recorded against the staff member")
+	require.Equal(t, &s.target, failed.Resource)
+
+	started := byOutcome["admin.impersonation.start"]
+	require.Equal(t, &staffID, started.Actor)
+	require.Equal(t, &s.target, started.Resource)
+	require.Equal(t, &sessionID, started.Session)
+	require.Equal(t, "ticket #4521 cannot publish", *started.Reason)
+
+	require.Equal(t, 1, reads, "the impersonated read is recorded; the staff member's own is not")
+
+	read := byOutcome["me.get"]
+	require.Equal(t, &s.target, read.Actor)
+	require.Equal(t, &staffID, read.Impersonator)
+	require.Equal(t, &sessionID, read.Session)
+
+	refused := byOutcome["me.password.update/impersonation.forbidden_action"]
+	require.Equal(t, &s.target, refused.Actor, "actions under impersonation act as the target")
+	require.Equal(t, &staffID, refused.Impersonator)
+	require.Equal(t, &sessionID, refused.Session)
+
+	stopped := byOutcome["admin.impersonation.stop"]
+	require.Equal(t, &staffID, stopped.Actor, "stopping is attributed to the staff member")
+	require.Nil(t, stopped.Impersonator)
+	require.Equal(t, &sessionID, stopped.Session)
+}
+
+func TestImpersonationEndsWhenStaffSignsOut(t *testing.T) {
+	t.Parallel()
+
+	s := newImpersonationStack(t)
+	staff, refresh := s.login(t)
+
+	r := s.start(t, staff, cyclePassword)
+	require.Equal(t, nethttp.StatusCreated, r.status, r.code)
+
+	token, _ := r.data["access_token"].(string)
+	require.Equal(t, nethttp.StatusOK, s.do(t, nethttp.MethodGet, "/api/v1/me", token, nil).status)
+
+	r = s.do(t, nethttp.MethodPost, "/api/v1/auth/logout", staff, map[string]any{"refresh_token": refresh})
+	require.Equal(t, nethttp.StatusOK, r.status, r.code)
+
+	r = s.do(t, nethttp.MethodGet, "/api/v1/me", token, nil)
+	require.Equal(t, nethttp.StatusUnauthorized, r.status)
+	require.Equal(t, "auth.impersonation_ended", r.code)
+
+	var state, reason string
+	require.NoError(t, s.tx.Raw(`SELECT s.state, s.end_reason FROM impersonation_sessions s
+		JOIN users u ON u.id = s.target_id WHERE u.uuid = ?`, s.target).Row().Scan(&state, &reason))
+	require.Equal(t, "revoked", state)
+	require.Equal(t, "parent_session_expired", reason)
+
+	again, _ := s.login(t)
+	r = s.start(t, again, cyclePassword)
+	require.Equal(t, nethttp.StatusCreated, r.status, "a new sign-in can impersonate again: %s", r.code)
+}
+
+func TestImpersonationStartClosesSessionOfEndedSignIn(t *testing.T) {
+	t.Parallel()
+
+	s := newImpersonationStack(t)
+	staff, refresh := s.login(t)
+
+	r := s.start(t, staff, cyclePassword)
+	require.Equal(t, nethttp.StatusCreated, r.status, r.code)
+
+	first, _ := r.data["access_token"].(string)
+
+	r = s.do(t, nethttp.MethodPost, "/api/v1/auth/logout", staff, map[string]any{"refresh_token": refresh})
+	require.Equal(t, nethttp.StatusOK, r.status, r.code)
+
+	again, _ := s.login(t)
+	r = s.start(t, again, cyclePassword)
+	require.Equal(t, nethttp.StatusCreated, r.status, "the unused session of the old sign-in does not block: %s", r.code)
+
+	r = s.do(t, nethttp.MethodGet, "/api/v1/me", first, nil)
 	require.Equal(t, nethttp.StatusUnauthorized, r.status)
 	require.Equal(t, "auth.impersonation_ended", r.code)
 }

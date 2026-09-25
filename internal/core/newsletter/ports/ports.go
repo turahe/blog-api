@@ -147,6 +147,12 @@ type Captcha interface {
 	Verify(ctx context.Context, token, remoteIP string) (bool, error)
 }
 
+// IdentityHasher keys the hashes of client IPs kept as consent evidence, so a leaked table
+// cannot be reversed by hashing the small IPv4 space.
+type IdentityHasher interface {
+	MAC(value string) string
+}
+
 // Account is the signed-in user's address.
 type Account struct {
 	Email         string

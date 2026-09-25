@@ -2,6 +2,7 @@ package service
 
 import (
 	"context"
+	"errors"
 	"slices"
 	"time"
 
@@ -157,24 +158,46 @@ func (s *Service) DeleteSubscriber(ctx context.Context, actor, id uuid.UUID, mod
 			return s.unsubscribeAll(ctx, &sub, source, "", "", "", &actor)
 		}
 
-		now := s.Clock.Now()
-		if err := s.Repo.EraseSubscriber(ctx, id, now); err != nil {
-			return err
-		}
-
-		if err := s.Repo.AppendConsent(ctx, s.consent(sub, domain.ConsentErased, "", source, "", now)); err != nil {
-			return err
-		}
-
-		sub.Status = domain.StatusErased
-
-		return s.Events.Record(ctx, subscriberEvent(sub, "erased", &actor, now))
+		return s.erase(ctx, sub, source, &actor, s.Clock.Now())
 	})
 	if err != nil {
 		return SubscriberDetail{}, err
 	}
 
 	return s.Subscriber(ctx, id)
+}
+
+// EraseUser erases the subscriber linked to the account, if any, as part of the account's
+// erasure. It runs in the caller's transaction when there is one.
+func (s *Service) EraseUser(ctx context.Context, userID uuid.UUID, at time.Time) error {
+	return s.Events.InTx(ctx, func(ctx context.Context) error {
+		sub, err := s.Repo.SubscriberByUser(ctx, userID)
+		if errors.Is(err, domain.ErrNotFound) {
+			return nil
+		}
+
+		if err != nil || sub.Status == domain.StatusErased {
+			return err
+		}
+
+		return s.erase(ctx, sub, domain.ConsentSourcePrivacy, nil, at)
+	})
+}
+
+// erase clears the subscriber's personal data and records the erasure in its consent history
+// and as a change event.
+func (s *Service) erase(ctx context.Context, sub domain.Subscriber, source string, actor *uuid.UUID, at time.Time) error {
+	if err := s.Repo.EraseSubscriber(ctx, sub.UUID, at); err != nil {
+		return err
+	}
+
+	if err := s.Repo.AppendConsent(ctx, s.consent(sub, domain.ConsentErased, "", source, "", at)); err != nil {
+		return err
+	}
+
+	sub.Status = domain.StatusErased
+
+	return s.Events.Record(ctx, subscriberEvent(sub, "erased", actor, at))
 }
 
 // IssueInput creates an issue. Status is draft (default), scheduled (needs SendAt), or queued

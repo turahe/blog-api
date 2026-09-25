@@ -1,5 +1,39 @@
 # Changelog
 
+## 2026-09-25 — Phase 5 security review: impersonation, privacy, and tokens
+
+### Added
+
+- Impersonation is bound to the staff member's own sign-in. Ordinary access tokens carry a `fam`
+  claim (their refresh-session family, kept across rotation); `start` records it (migration
+  00031, `impersonation_sessions.base_family_id`), and the impersonation token stops working once
+  that sign-in is logged out, revoked, or expired (`end_reason: parent_session_expired`). A token
+  without `fam`, such as one issued before this release, gets
+  `401 impersonation.sign_in_required` from `start` until it is refreshed.
+- Every request made with an impersonation token is audited, reads included. Refused actions are
+  recorded as failures with `failure_reason: impersonation.forbidden_action`, and refused starts
+  with the reason (`step_up_required`, `target_ineligible`, …).
+- Responses to impersonated requests carry `X-Impersonation-Session`, and an open notification
+  stream sends `stream.closed` (`code: impersonation_ended`) and closes when the session ends.
+- Account erasure also erases the newsletter subscriber linked to the account, in the same
+  transaction, with a consent-history entry (source `privacy_request`) and a
+  `blog.newsletter.subscriber.changed` event for provider sync.
+- Authorization tests for every Phase 5 admin operation, and a test that the seeded role grants
+  match the handlers' fallback roles.
+- Privacy stance in [overview.md](docs/security/overview.md#privacy-stance).
+
+### Changed
+
+- Impersonation tokens can no longer give or withdraw analytics consent or change newsletter
+  subscriptions (`me.newsletter.subscribe`, `me.newsletter.unsubscribe`,
+  `analytics.consent.store`, `analytics.consent.withdraw`).
+- Stored client-IP hashes (comments, guest flags, newsletter consent evidence) are HMAC-SHA256
+  under a key derived from `APP_ENCRYPTION_KEY`. Without the key they stay plain SHA-256 and
+  startup warns. Existing rows keep their old hashes.
+- Analytics consent responses are `Cache-Control: no-store`.
+- A session that expired or lost its base sign-in without being closed no longer blocks starting
+  a new one.
+
 ## 2026-09-25 — Media variants, orphan cleanup, and storage usage
 
 ### Added

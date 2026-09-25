@@ -217,7 +217,7 @@ func (fakeHasher) Compare(hash, password string) bool   { return hash == "hash:"
 type fakeTokens struct{}
 
 func (fakeTokens) IssueAccess(claims authdomain.AccessClaims) (string, error) {
-	return "access:" + claims.Subject.String(), nil
+	return "access:" + claims.Subject.String() + ":" + claims.FamilyID.String(), nil
 }
 
 func (fakeTokens) ParseAccess(string) (authdomain.AccessClaims, error) {
@@ -265,6 +265,14 @@ func TestLoginIssuesTokenPair(t *testing.T) {
 	require.Nil(t, res.Challenge)
 	require.NotEmpty(t, res.Tokens.AccessToken)
 	require.NotEmpty(t, res.Tokens.RefreshToken)
+
+	session := sessions.byHash["hash-"+res.Tokens.RefreshToken]
+	require.Equal(t, "access:"+id.String()+":"+session.FamilyID.String(), res.Tokens.AccessToken,
+		"the access token names the sign-in it belongs to")
+
+	rotated, err := svc.Refresh(context.Background(), res.Tokens.RefreshToken, "ua", "127.0.0.1")
+	require.NoError(t, err)
+	require.Equal(t, res.Tokens.AccessToken, rotated.AccessToken, "rotation keeps the sign-in family")
 }
 
 func TestLoginRejectsBadPassword(t *testing.T) {

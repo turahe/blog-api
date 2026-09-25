@@ -698,7 +698,7 @@
                         "Bearer": []
                     }
                 ],
-                "description": "Opens an impersonation session and returns a Bearer token that acts as the target until\nexpires_at (IMPERSONATION_TTL, never renewed; no refresh token). Requires impersonation.start,\nthe caller's current password, and a TOTP or backup code when the caller has two-factor\nenabled. The target must be active, must not be an administrator or able to impersonate, and\nevery permission the target has must be one the caller has. One active session per caller.",
+                "description": "Opens an impersonation session and returns a Bearer token that acts as the target until\nexpires_at (IMPERSONATION_TTL, never renewed; no refresh token). Requires impersonation.start,\nthe caller's current password, and a TOTP or backup code when the caller has two-factor\nenabled. The target must be active, must not be an administrator or able to impersonate, and\nevery permission the target has must be one the caller has. One active session per caller.\nThe session ends with the caller's own sign-in (logout, revocation, or refresh-session expiry).",
                 "consumes": [
                     "application/json"
                 ],
@@ -734,7 +734,7 @@
                         }
                     },
                     "401": {
-                        "description": "Unauthorized",
+                        "description": "unauthorized, impersonation.sign_in_required (refresh the token first)",
                         "schema": {
                             "$ref": "#/definitions/responses.Envelope"
                         }
@@ -5562,7 +5562,7 @@
                         "Bearer": []
                     }
                 ],
-                "description": "Server-sent events. The stream opens with `retry: 5000` and `event: stream.opened`, sends `event: notification.created` for each new notice (id is the notification id), `event: ping` when idle, `event: error` with code fanout.buffer_full when events were dropped for a slow client, and `event: stream.closed` before a server shutdown. There is no replay: after reconnecting, call GET /api/v1/me/notifications to fill gaps. Returns 429 notifications.stream_limit (with Retry-After) past the per-user limit and 503 notifications.stream_unavailable without a message broker.",
+                "description": "Server-sent events. The stream opens with `retry: 5000` and `event: stream.opened`, sends `event: notification.created` for each new notice (id is the notification id), `event: ping` when idle, `event: error` with code fanout.buffer_full when events were dropped for a slow client, and `event: stream.closed` before a server shutdown (code shutdown) or once the impersonation session behind the token ends (code impersonation_ended). There is no replay: after reconnecting, call GET /api/v1/me/notifications to fill gaps. Returns 429 notifications.stream_limit (with Retry-After) past the per-user limit and 503 notifications.stream_unavailable without a message broker.",
                 "produces": [
                     "text/event-stream"
                 ],

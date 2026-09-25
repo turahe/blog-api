@@ -342,6 +342,7 @@ func (s *AuthService) Refresh(ctx context.Context, refreshToken, userAgent, ip s
 		ExpiresAt: now.Add(s.cfg.AccessTTL),
 		IssuedAt:  now,
 		ID:        s.ids.New().String(),
+		FamilyID:  session.FamilyID,
 	})
 	if err != nil {
 		return authdomain.TokenPair{}, err
@@ -639,6 +640,7 @@ func (s *AuthService) issuePair(
 		ExpiresAt: now.Add(s.cfg.AccessTTL),
 		IssuedAt:  now,
 		ID:        s.ids.New().String(),
+		FamilyID:  session.FamilyID,
 	})
 	if err != nil {
 		return authdomain.TokenPair{}, err

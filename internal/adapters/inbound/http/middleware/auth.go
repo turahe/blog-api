@@ -95,6 +95,10 @@ func verifyImpersonation(c *gin.Context, sessions ImpersonationVerifier, claims 
 func setIdentity(c *gin.Context, claims authdomain.AccessClaims) {
 	c.Set(ContextUserIDKey, claims.Subject)
 	c.Set(ContextClaimsKey, claims)
+
+	if claims.Impersonating() {
+		c.Header(HeaderImpersonationSession, claims.SessionID)
+	}
 }
 
 // CurrentUserID returns the authenticated subject from context.
@@ -107,6 +111,22 @@ func CurrentUserID(c *gin.Context) (uuid.UUID, bool) {
 	id, ok := value.(uuid.UUID)
 
 	return id, ok
+}
+
+// CurrentSignInFamily returns the refresh-session family the request's token was issued for;
+// uuid.Nil for impersonation tokens and tokens that name none.
+func CurrentSignInFamily(c *gin.Context) uuid.UUID {
+	value, ok := c.Get(ContextClaimsKey)
+	if !ok {
+		return uuid.Nil
+	}
+
+	claims, ok := value.(authdomain.AccessClaims)
+	if !ok || claims.Impersonating() {
+		return uuid.Nil
+	}
+
+	return claims.FamilyID
 }
 
 // Impersonation identifies the staff member behind an impersonation token.

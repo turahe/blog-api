@@ -8,6 +8,7 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
+	"slices"
 	"time"
 
 	"github.com/google/uuid"
@@ -61,6 +62,7 @@ type Service struct {
 	archives ports.ArchiveStore
 	events   event.Unit
 	cache    readcache.Cache
+	modules  []ports.Eraser
 }
 
 // New returns a Service; exports stay unavailable until WithArchives.
@@ -80,6 +82,13 @@ func (s *Service) WithArchives(store ports.ArchiveStore) *Service {
 // WithEvents records request events in the outbox.
 func (s *Service) WithEvents(events event.Unit) *Service {
 	s.events = events
+	return s
+}
+
+// WithModuleErasers also erases the user's data held by other modules (newsletter
+// subscriptions), in the same transaction as the account.
+func (s *Service) WithModuleErasers(erasers ...ports.Eraser) *Service {
+	s.modules = append(s.modules, erasers...)
 	return s
 }
 
@@ -230,8 +239,10 @@ func (s *Service) erase(ctx context.Context, request domain.Request) error {
 	now := s.clock.Now()
 
 	err := s.events.InTx(ctx, func(ctx context.Context) error {
-		if err := s.eraser.EraseUser(ctx, request.UserUUID, now); err != nil {
-			return err
+		for _, eraser := range append(slices.Clone(s.modules), s.eraser) {
+			if err := eraser.EraseUser(ctx, request.UserUUID, now); err != nil {
+				return err
+			}
 		}
 
 		return s.repo.Complete(ctx, request.UUID, nil, nil, now)

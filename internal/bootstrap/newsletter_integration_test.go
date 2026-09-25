@@ -26,6 +26,7 @@ import (
 	nldomain "github.com/turahe/blog-api/internal/core/newsletter/domain"
 	nlports "github.com/turahe/blog-api/internal/core/newsletter/ports"
 	nlservice "github.com/turahe/blog-api/internal/core/newsletter/service"
+	privacyservice "github.com/turahe/blog-api/internal/core/privacy/service"
 	rbacdomain "github.com/turahe/blog-api/internal/core/rbac/domain"
 	"gorm.io/gorm"
 )
@@ -302,6 +303,66 @@ func TestNewsletterLifecycle(t *testing.T) {
 	require.Equal(t, nethttp.StatusOK, r.status, r.code)
 	require.Equal(t, "erased", r.data["status"])
 	require.Empty(t, r.data["email"])
+}
+
+type passwordOK struct{}
+
+func (passwordOK) VerifyPassword(context.Context, uuid.UUID, string) (bool, error) { return true, nil }
+
+func TestAccountErasureErasesTheNewsletterSubscriber(t *testing.T) {
+	t.Parallel()
+
+	s := newNewsletterStack(t)
+	staff, _ := s.login(t)
+	weekly := "weekly-" + strings.ReplaceAll(uuid.NewString()[:8], "-", "")
+
+	r := s.do(t, nethttp.MethodPut, "/api/v1/admin/newsletter/provider-config", staff, map[string]any{
+		"from_name": "Example Blog", "postal_address": "1 Example Street, Jakarta", "confirm_ttl_hours": 48,
+		"double_optin_required": true, "lists": []map[string]any{{"slug": weekly, "name": "Weekly", "is_default": true}},
+	})
+	require.Equal(t, nethttp.StatusOK, r.status, r.code)
+
+	r = s.do(t, nethttp.MethodPost, "/api/v1/me/newsletter/subscribe", staff, map[string]any{})
+	require.Less(t, r.status, 300, r.code)
+
+	var userID uuid.UUID
+	require.NoError(t, s.tx.Raw("SELECT uuid FROM users WHERE email = ?", s.email).Row().Scan(&userID))
+
+	data := persistence.NewPrivacyData(s.tx)
+	privacy := privacyservice.New(persistence.NewPrivacyRepository(s.tx), data, data, passwordOK{}, uuidGen{}, s.nlClock,
+		privacyservice.Config{ExportRetention: time.Hour, DownloadTTL: time.Minute}).
+		WithEvents(event.Unit{Tx: persistence.NewTransactor(s.tx), Recorder: s.out}).
+		WithModuleErasers(s.nl)
+
+	_, _, err := privacy.RequestErase(t.Context(), userID, "pw")
+	require.NoError(t, err)
+
+	changed := s.out.countEvents(event.NewsletterSubscriberChanged)
+	done, err := privacy.ProcessPending(t.Context(), 10)
+	require.NoError(t, err)
+	require.Equal(t, 1, done)
+
+	var sub struct {
+		Status string
+		Email  *string
+		UserID *int64
+		Source *string
+	}
+	require.NoError(t, s.tx.Raw(`SELECT s.status, s.email, s.user_id,
+			(SELECT a.source FROM newsletter_consent_audit a WHERE a.subscriber_id = s.id AND a.event = 'erased') AS source
+		FROM newsletter_subscribers s WHERE s.normalized_email IS NULL AND s.erased_at IS NOT NULL
+		ORDER BY s.id DESC LIMIT 1`).Scan(&sub).Error)
+	require.Equal(t, "erased", sub.Status)
+	require.Nil(t, sub.Email)
+	require.Nil(t, sub.UserID, "the erased row no longer points at the account")
+	require.NotNil(t, sub.Source)
+	require.Equal(t, nldomain.ConsentSourcePrivacy, *sub.Source)
+	require.Equal(t, changed+1, s.out.countEvents(event.NewsletterSubscriberChanged), "provider sync hears of the erasure")
+
+	var remaining int64
+	require.NoError(t, s.tx.Raw("SELECT count(*) FROM newsletter_subscribers WHERE normalized_email = lower(?)", s.email).
+		Row().Scan(&remaining))
+	require.Zero(t, remaining, "the account address is gone from the newsletter")
 }
 
 func (s *newsletterStack) subscriberByEmail(t *testing.T, staff, prefix string) map[string]any {

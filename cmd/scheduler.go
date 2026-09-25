@@ -192,10 +192,10 @@ func scheduledJobs(
 	processed := persistence.NewProcessedMessageRepository(db.GORM)
 	sessions := persistence.NewSessionRepository(db.GORM)
 	resets := persistence.NewResetTokenRepository(db.GORM)
-	privacy := bootstrap.NewPrivacyService(ctx, cfg, db, nil,
-		event.Unit{Tx: persistence.NewTransactor(db.GORM)}, readCache, logger)
-	impersonation := bootstrap.NewImpersonationService(cfg, db, bootstrap.NewEvents(cfg, db), nil, nil)
 	newsletter := bootstrap.NewNewsletterService(cfg, db, bootstrap.NewEvents(cfg, db), nil, logger)
+	privacy := bootstrap.NewPrivacyService(ctx, cfg, db, nil,
+		event.Unit{Tx: persistence.NewTransactor(db.GORM)}, readCache, logger).WithModuleErasers(newsletter)
+	impersonation := bootstrap.NewImpersonationService(cfg, db, bootstrap.NewEvents(cfg, db), nil, nil)
 
 	jobs := []scheduler.Job{
 		{Name: "audit-prune", Every: time.Hour, Run: func(ctx context.Context) error {
