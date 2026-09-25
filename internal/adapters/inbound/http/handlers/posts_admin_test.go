@@ -339,7 +339,7 @@ func TestAdminCreatePostHandlerMapsTagValidation(t *testing.T) {
 
 	w := httptest.NewRecorder()
 	c, _ := gin.CreateTestContext(w)
-	c.Request = httptest.NewRequestWithContext(t.Context(), nethttp.MethodPost, "/api/v1/admin/posts", bytes.NewBufferString(`{"title":"Title","slug":"title","tags":["bad tag"]}`))
+	c.Request = httptest.NewRequestWithContext(t.Context(), nethttp.MethodPost, "/api/v1/admin/posts", bytes.NewBufferString(`{"title":"Title","slug":"title","content":"Content","tags":["bad tag"]}`))
 	c.Request.Header.Set("Content-Type", "application/json")
 	c.Set(middleware.ContextUserIDKey, userID)
 
@@ -351,6 +351,33 @@ func TestAdminCreatePostHandlerMapsTagValidation(t *testing.T) {
 	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &envelope))
 	require.False(t, envelope.OK)
 	require.Equal(t, "validation_error", envelope.Error.Code)
+}
+
+func TestAdminCreatePostHandlerRequiresSlug(t *testing.T) {
+	t.Parallel()
+	gin.SetMode(gin.TestMode)
+
+	svc := &fakePostAdminService{
+		createFn: func(context.Context, uuid.UUID, string, string, string, string, *uuid.UUID, *[]string) (postdomain.Post, []tagdomain.Tag, error) {
+			t.Fatal("unexpected create call")
+			return postdomain.Post{}, nil, nil
+		},
+	}
+
+	w := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(w)
+	c.Request = httptest.NewRequestWithContext(t.Context(), nethttp.MethodPost, "/api/v1/admin/posts", bytes.NewBufferString(`{"title":"Title","content":"Content"}`))
+	c.Request.Header.Set("Content-Type", "application/json")
+	c.Set(middleware.ContextUserIDKey, uuid.MustParse("cccccccc-cccc-cccc-cccc-cccccccccccc"))
+
+	adminCreatePostHandler(svc)(c)
+
+	require.Equal(t, nethttp.StatusBadRequest, w.Code)
+
+	var envelope responses.Envelope
+	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &envelope))
+	require.Equal(t, "validation_error", envelope.Error.Code)
+	require.Equal(t, map[string]any{"slug": []any{"The slug field is required."}}, envelope.Error.Details)
 }
 
 func TestAdminUpdatePostHandlerMapsTagErrors(t *testing.T) {

@@ -607,7 +607,7 @@ Full wire format, client integration, security, and scaling guidance is in the f
 - `POST /api/v1/admin/users/:id/password/admin-reset` (requires `user.password.admin_reset`; sends reset email or force-password-on-next-login)
 - `GET /api/v1/admin/users/:id/activity` (requires `user.activity.read_all`; ignores target user privacy)
 - `GET /api/v1/admin/posts`
-- `POST /api/v1/admin/posts` (optional `tags: string[]` create-or-link attach on create)
+- `POST /api/v1/admin/posts` (`title`, `slug`, `content` required; optional `tags: string[]` create-or-link attach on create)
 - `POST /api/v1/admin/posts/:id/publish`
 - `PATCH /api/v1/admin/posts/:id` (partial post update; ownership-aware; optional `tags: string[]` create-or-link attach; optional `commentPolicy`, see [Comment policy](#comment-policy))
 - `PATCH /api/v1/admin/posts/:id/media` (replace post attachments join rows)

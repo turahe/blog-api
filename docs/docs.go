@@ -8111,6 +8111,7 @@ const docTemplate = `{
             "type": "object",
             "required": [
                 "content",
+                "slug",
                 "title"
             ],
             "properties": {

@@ -192,6 +192,7 @@ definitions:
         type: string
     required:
     - content
+    - slug
     - title
     type: object
   requests.CreateRole:

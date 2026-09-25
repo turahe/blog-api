@@ -26,8 +26,22 @@ Handlers call `bindJSON(c, &req)` instead of raw `ShouldBindJSON`. Failures retu
 ```
 
 `details` is a map of JSON field name → message list (same shape as Laravel's `errors` bag).
-Malformed JSON uses the `_form` key. Struct tags use Gin `binding:"required,email,min=12,..."`;
-JSON names come from `json` tags registered on the shared validator engine.
+Nested fields use dotted paths like Laravel: `items.0.mediaAssetId`, `lists.0`.
+Struct tags use Gin `binding:"required,email,min=12,..."`; JSON names come from `json` tags
+registered on the shared validator engine. Messages follow Laravel's wording:
+
+| Failure | Key | Message |
+|---|---|---|
+| `required` | field | `The title field is required.` |
+| `min` / `max` on a string | field | `The title field must not be greater than 255 characters.` |
+| `min` / `max` on an array | field | `The lists field must have at least 1 items.` |
+| `uuid`, `email`, `oneof` | field | `The categoryId field must be a valid UUID.`, `The selected status is invalid.` |
+| wrong JSON type | field | `The categoryId field must be a string.` (also integer, number, true or false, array, object) |
+| empty body | `_form` | `The request body is required.` |
+| malformed JSON | `_form` | `The request body must be valid JSON (syntax error at byte 21).` |
+
+JSON does not allow comments or raw line breaks inside strings (use `\n`), so a body with
+either fails as malformed JSON before any field is validated.
 
 ## Rules
 

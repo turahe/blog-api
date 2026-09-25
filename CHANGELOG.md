@@ -1,5 +1,20 @@
 # Changelog
 
+## 2026-09-25 — Clearer validation errors
+
+### Changed
+
+- **Breaking:** `POST /api/v1/admin/posts` requires `slug`. Omitting it returns
+  `slug: ["The slug field is required."]` instead of deriving the slug from the title.
+- `validation_error` details follow Laravel more closely. Nested fields are keyed by dotted
+  path (`items.0.kind`, `lists.0`) instead of the leaf name, and messages use Laravel's
+  wording (`must not be greater than 255 characters`, `must be a valid UUID`,
+  `The selected status is invalid.`).
+- A value of the wrong JSON type is reported under its field (`categoryId`: `The categoryId
+  field must be a string.`) instead of `_form`.
+- `_form` now says why the body was rejected: `The request body is required.` for an empty
+  body, and `The request body must be valid JSON (syntax error at byte N).` for malformed JSON.
+
 ## 2026-09-25 — Seed default settings
 
 ### Added
