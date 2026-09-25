@@ -8,7 +8,7 @@ Index: [README.md](./README.md).
 
 ## Status
 
-**In progress** — admin settings and post versioning are implemented. Impersonation, SEO, and
+**In progress** — admin settings, post versioning, and post SEO are implemented. Impersonation and
 newsletter operations still return `501`; search and privacy management have no schema or service yet.
 
 ## Decisions
@@ -61,13 +61,13 @@ Spec: [post-versioning.md](../features/post-versioning.md)
 
 ## Epic: post SEO
 
-- [ ] SEO fields storage — see [post-seo.md](../backend/post-seo.md)
-- [ ] `admin.posts.seo.get` — `GET /api/v1/admin/posts/{id}/seo`
-- [ ] `admin.posts.seo.update` — `PUT /api/v1/admin/posts/{id}/seo`
-- [ ] `admin.posts.seo.preview` — `POST /api/v1/admin/posts/{id}/seo/preview`
-- [ ] `public.posts.seo_meta` — `GET /api/v1/posts/{slug}/seo-meta`
-- [ ] Derive sensible defaults from post title, excerpt, and cover media
-- [ ] Sanitise SEO text so it cannot inject markup into rendered meta tags
+- [x] SEO fields storage — see [post-seo.md](../backend/post-seo.md)
+- [x] `admin.posts.seo.get` — `GET /api/v1/admin/posts/{id}/seo`
+- [x] `admin.posts.seo.update` — `PUT /api/v1/admin/posts/{id}/seo`
+- [x] `admin.posts.seo.preview` — `POST /api/v1/admin/posts/{id}/seo/preview`
+- [x] `public.posts.seo_meta` — `GET /api/v1/posts/{slug}/seo-meta`
+- [x] Derive sensible defaults from post title, excerpt, and cover media
+- [x] Sanitise SEO text so it cannot inject markup into rendered meta tags
 
 Spec: [post-seo.md](../features/post-seo.md)
 

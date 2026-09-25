@@ -39,6 +39,8 @@ passes the current rules resolves to the default and is reported in `default_app
 | `seo.title_template` | string containing `{title}` (≤ 120) | public_safe | `{title} \| {site}` |
 | `seo.default_description` | string (≤ 300) | public_safe | `""` |
 | `seo.default_share_image_url` | http(s) URL or empty | public_safe | `""` |
+| `seo.default_twitter_card` | `summary` or `summary_large_image` | public_safe | `summary_large_image` |
+| `seo.canonical_allowed_hosts` | list of host names (≤ 20, each ≤ 253) | public_safe | `[]` |
 
 Keys that would enforce behaviour (comment switches, moderation mode, password policy,
 session lifetime) are added together with the code that enforces them, so an admin never

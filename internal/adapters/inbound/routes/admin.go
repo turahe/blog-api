@@ -44,6 +44,9 @@ func registerAdmin(v1 *gin.RouterGroup, auth AuthMiddleware, c Controllers) {
 	get(admin, "/posts/:param1/revisions", "admin.posts.revisions.list", g, AuthRequired, c, c.Posts.RevisionsList)
 	get(admin, "/posts/:param1/revisions/:param2", "admin.posts.revisions.get", g, AuthRequired, c, c.Posts.RevisionGet)
 	post(admin, "/posts/:param1/revisions/:param2/restore", "admin.posts.revisions.restore", g, AuthRequired, c, c.Posts.RevisionRestore)
+	get(admin, "/posts/:param1/seo", "admin.posts.seo.get", g, AuthRequired, c, c.Posts.SEOGet)
+	put(admin, "/posts/:param1/seo", "admin.posts.seo.update", g, AuthRequired, c, c.Posts.SEOUpdate)
+	post(admin, "/posts/:param1/seo/preview", "admin.posts.seo.preview", g, AuthRequired, c, c.Posts.SEOPreview)
 
 	get(admin, "/categories", "admin.categories.list", g, AuthRequired, c, c.Cats.AdminList)
 	post(admin, "/categories", "admin.categories.create", g, AuthRequired, c, c.Cats.AdminCreate)

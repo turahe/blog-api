@@ -1560,6 +1560,201 @@
                 }
             }
         },
+        "/api/v1/admin/posts/{param1}/seo": {
+            "get": {
+                "security": [
+                    {
+                        "Bearer": []
+                    }
+                ],
+                "description": "The post's stored SEO overrides (empty fields fall back to derived values), its slug, and advisory warnings such as a title longer than 60 characters. Authors see only their own posts.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "admin"
+                ],
+                "summary": "Get post SEO",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "post UUID",
+                        "name": "param1",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/responses.Envelope"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/responses.Envelope"
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden",
+                        "schema": {
+                            "$ref": "#/definitions/responses.Envelope"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/responses.Envelope"
+                        }
+                    }
+                }
+            },
+            "put": {
+                "security": [
+                    {
+                        "Bearer": []
+                    }
+                ],
+                "description": "Partial update: omitted fields stay unchanged, \"\" clears a text field, and null clears an image. Text is trimmed and whitespace-collapsed; markup is rejected. Canonical and og:url hosts must be the site host or in seo.canonical_allowed_hosts. Changing slug needs post.slug.edit. Every invalid field is listed in error.details with a code (too_long, invalid_format, markup_not_allowed, host_not_allowed, not_found, not_image, slug_taken, slug_reserved).",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "admin"
+                ],
+                "summary": "Update post SEO",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "post UUID",
+                        "name": "param1",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "SEO fields to change",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/requests.UpdatePostSEO"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/responses.Envelope"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/responses.Envelope"
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden",
+                        "schema": {
+                            "$ref": "#/definitions/responses.Envelope"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/responses.Envelope"
+                        }
+                    },
+                    "409": {
+                        "description": "Conflict",
+                        "schema": {
+                            "$ref": "#/definitions/responses.Envelope"
+                        }
+                    },
+                    "422": {
+                        "description": "Unprocessable Entity",
+                        "schema": {
+                            "$ref": "#/definitions/responses.Envelope"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/admin/posts/{param1}/seo/preview": {
+            "post": {
+                "security": [
+                    {
+                        "Bearer": []
+                    }
+                ],
+                "description": "Renders the search snippet, Open Graph card, and Twitter card the post would get with the submitted SEO fields and optional unsaved title and excerpt. Nothing is saved.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "admin"
+                ],
+                "summary": "Preview post SEO",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "post UUID",
+                        "name": "param1",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "draft SEO fields",
+                        "name": "body",
+                        "in": "body",
+                        "schema": {
+                            "$ref": "#/definitions/requests.PreviewPostSEO"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/responses.Envelope"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/responses.Envelope"
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden",
+                        "schema": {
+                            "$ref": "#/definitions/responses.Envelope"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/responses.Envelope"
+                        }
+                    },
+                    "422": {
+                        "description": "Unprocessable Entity",
+                        "schema": {
+                            "$ref": "#/definitions/responses.Envelope"
+                        }
+                    }
+                }
+            }
+        },
         "/api/v1/admin/posts/{param1}/unpublish": {
             "post": {
                 "security": [
@@ -4714,6 +4909,41 @@
                 }
             }
         },
+        "/api/v1/posts/{param1}/seo-meta": {
+            "get": {
+                "description": "Rendered meta for a published post: title, description, canonical URL, robots, Open Graph, and Twitter card values with every fallback applied. Sends X-Robots-Tag when the post is noindex or nofollow.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "public"
+                ],
+                "summary": "Get post SEO meta",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "post slug",
+                        "name": "param1",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/responses.Envelope"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/responses.Envelope"
+                        }
+                    }
+                }
+            }
+        },
         "/api/v1/tags": {
             "get": {
                 "produces": [
@@ -5335,6 +5565,72 @@
                 }
             }
         },
+        "requests.PreviewPostSEO": {
+            "type": "object",
+            "properties": {
+                "canonical_url": {
+                    "type": "string"
+                },
+                "excerpt": {
+                    "type": "string",
+                    "maxLength": 2000
+                },
+                "og_description": {
+                    "type": "string"
+                },
+                "og_image_id": {
+                    "type": "string",
+                    "format": "uuid"
+                },
+                "og_title": {
+                    "type": "string"
+                },
+                "og_url": {
+                    "type": "string"
+                },
+                "robots_nofollow": {
+                    "type": "boolean"
+                },
+                "robots_noindex": {
+                    "type": "boolean"
+                },
+                "seo_description": {
+                    "type": "string"
+                },
+                "seo_keywords": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "seo_title": {
+                    "type": "string"
+                },
+                "slug": {
+                    "type": "string"
+                },
+                "title": {
+                    "type": "string",
+                    "maxLength": 255
+                },
+                "twitter_card": {
+                    "type": "string"
+                },
+                "twitter_creator": {
+                    "type": "string"
+                },
+                "twitter_description": {
+                    "type": "string"
+                },
+                "twitter_image_id": {
+                    "type": "string",
+                    "format": "uuid"
+                },
+                "twitter_title": {
+                    "type": "string"
+                }
+            }
+        },
         "requests.Refresh": {
             "type": "object",
             "required": [
@@ -5533,6 +5829,64 @@
                     }
                 },
                 "title": {
+                    "type": "string"
+                }
+            }
+        },
+        "requests.UpdatePostSEO": {
+            "type": "object",
+            "properties": {
+                "canonical_url": {
+                    "type": "string"
+                },
+                "og_description": {
+                    "type": "string"
+                },
+                "og_image_id": {
+                    "type": "string",
+                    "format": "uuid"
+                },
+                "og_title": {
+                    "type": "string"
+                },
+                "og_url": {
+                    "type": "string"
+                },
+                "robots_nofollow": {
+                    "type": "boolean"
+                },
+                "robots_noindex": {
+                    "type": "boolean"
+                },
+                "seo_description": {
+                    "type": "string"
+                },
+                "seo_keywords": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "seo_title": {
+                    "type": "string"
+                },
+                "slug": {
+                    "type": "string"
+                },
+                "twitter_card": {
+                    "type": "string"
+                },
+                "twitter_creator": {
+                    "type": "string"
+                },
+                "twitter_description": {
+                    "type": "string"
+                },
+                "twitter_image_id": {
+                    "type": "string",
+                    "format": "uuid"
+                },
+                "twitter_title": {
                     "type": "string"
                 }
             }

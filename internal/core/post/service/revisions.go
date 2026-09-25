@@ -2,6 +2,7 @@ package service
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"slices"
@@ -186,12 +187,31 @@ func (s *PostService) storeRestore(
 		}
 	}
 
+	if err := s.restoreSEO(ctx, updated, snap.SEO); err != nil {
+		return postdomain.Post{}, nil, postdomain.Revision{}, err
+	}
+
 	rev, err := s.revise(ctx, updated, postdomain.RevisionRestore, &actorID, &source)
 	if err != nil {
 		return postdomain.Post{}, nil, postdomain.Revision{}, err
 	}
 
 	return updated, tags, rev, nil
+}
+
+// restoreSEO saves the snapshot's SEO onto post; snapshots taken without SEO support
+// leave the current SEO alone.
+func (s *PostService) restoreSEO(ctx context.Context, post postdomain.Post, raw json.RawMessage) error {
+	if s.seo == nil || len(raw) == 0 {
+		return nil
+	}
+
+	seo, err := postdomain.DecodeSEO(raw)
+	if err != nil {
+		return err
+	}
+
+	return s.seo.Save(ctx, post.UUID, seo, post.UpdatedAt)
 }
 
 // restorable returns snap without the references that no longer exist, keeping post's
@@ -240,6 +260,14 @@ func snapshotRefs(snap postdomain.Snapshot) ports.References {
 		refs.Media = append(refs.Media, *snap.CoverImageMediaUUID)
 	}
 
+	if seo, err := postdomain.DecodeSEO(snap.SEO); err == nil {
+		for _, id := range []*uuid.UUID{seo.OGImageUUID, seo.TwitterImageUUID} {
+			if id != nil {
+				refs.Media = append(refs.Media, *id)
+			}
+		}
+	}
+
 	return refs
 }
 
@@ -279,7 +307,30 @@ func dropMissing(snap postdomain.Snapshot, existing ports.References, skipped *R
 		snap.CoverImageMediaUUID = nil
 	}
 
+	snap.SEO = dropMissingSEO(snap.SEO, existing.Media, skipMedia)
+
 	return snap
+}
+
+// dropMissingSEO clears the snapshot SEO's social images absent from media.
+func dropMissingSEO(raw json.RawMessage, media []uuid.UUID, skip func(uuid.UUID)) json.RawMessage {
+	if len(raw) == 0 {
+		return raw
+	}
+
+	seo, err := postdomain.DecodeSEO(raw)
+	if err != nil {
+		return raw
+	}
+
+	for _, id := range []**uuid.UUID{&seo.OGImageUUID, &seo.TwitterImageUUID} {
+		if *id != nil && !slices.Contains(media, **id) {
+			skip(**id)
+			*id = nil
+		}
+	}
+
+	return postdomain.EncodeSEO(seo)
 }
 
 // revise appends a revision of post to its history and records its events. Call it in
@@ -377,7 +428,18 @@ func (s *PostService) snapshot(ctx context.Context, post postdomain.Post) (postd
 		}
 	}
 
-	return postdomain.SnapshotOf(post, tags, media), nil
+	snap := postdomain.SnapshotOf(post, tags, media)
+
+	if s.seo != nil {
+		seo, err := s.seo.Get(ctx, post.UUID)
+		if err != nil {
+			return postdomain.Snapshot{}, err
+		}
+
+		snap.SEO = postdomain.EncodeSEO(seo)
+	}
+
+	return snap, nil
 }
 
 // revisionType names the revision a transition produces.

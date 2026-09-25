@@ -18,7 +18,6 @@ func registerContractStubs(v1 *gin.RouterGroup, auth AuthMiddleware, c Controlle
 	ag, ar := GroupAdmin, AuthRequired
 
 	get(none, "/newsletter/preferences/:param1", "public.newsletter.preferences.get", pub, n, c, nil)
-	get(none, "/posts/:param1/seo-meta", "public.posts.seo_meta", pub, n, c, nil)
 	patch(none, "/newsletter/preferences/:param1", "public.newsletter.preferences.patch", pub, n, c, nil)
 	post(none, "/newsletter/confirm", "public.newsletter.confirm", pub, n, c, nil)
 	post(none, "/newsletter/confirm/resend", "public.newsletter.confirm_resend", pub, n, c, nil)
@@ -54,8 +53,4 @@ func registerContractStubs(v1 *gin.RouterGroup, auth AuthMiddleware, c Controlle
 	patch(admin, "/newsletter/issues/:param1", "admin.newsletter.issues.patch", ag, ar, c, nil)
 	post(admin, "/newsletter/issues", "admin.newsletter.issues.send", ag, ar, c, nil)
 	put(admin, "/newsletter/provider-config", "admin.newsletter.provider_config.put", ag, ar, c, nil)
-
-	get(admin, "/posts/:param1/seo", "admin.posts.seo.get", ag, ar, c, nil)
-	post(admin, "/posts/:param1/seo/preview", "admin.posts.seo.preview", ag, ar, c, nil)
-	put(admin, "/posts/:param1/seo", "admin.posts.seo.update", ag, ar, c, nil)
 }

@@ -252,3 +252,40 @@ Every SEO update must:
 - public seo-meta endpoint: only published posts return data; unpublished drafts return 404 or noindex depending on setting
 - seo updates emit events and trigger cache invalidation
 - restoring a revision restores seo snapshot exactly
+
+## Implementation
+
+What shipped, where it differs from the design above:
+
+- **Placement.** SEO lives in the post module rather than a separate `post/seo` package:
+  - domain: `internal/core/post/domain/seo.go` (`SEO`, `SEOPatch`, `Validate`, `Warnings`, `RenderSEO`, `PreviewOf`);
+  - service: `internal/core/post/service/seo.go` (`GetSEO`, `UpdateSEO`, `PreviewSEO`, `SEOMeta`), enabled with `PostService.WithSEO`.
+- **Storage.** Option A: the `post_seo` table (migration `00025_post_seo.sql`). A row exists only once a post's SEO was edited, and empty text means "use the fallback". Image references are `ON DELETE SET NULL`.
+- **Update semantics.** `PUT /admin/posts/{id}/seo` is a partial update:
+  - omitted fields stay unchanged, `""` clears a text field, and `null` clears an image;
+  - text is trimmed and whitespace-collapsed, and keywords are de-duplicated case-insensitively;
+  - a patch that changes nothing writes nothing and emits no events.
+- **Validation.** Every invalid field is returned together as `422` with `error.details` = `[{field, code, message}]`.
+  - Codes: `too_long`, `too_many`, `invalid_format`, `markup_not_allowed`, `host_not_allowed`, `not_found`, `not_image`, `slug_taken`, `slug_reserved`.
+  - Text containing `<` or `>` or control characters is rejected rather than escaped.
+  - `canonical_url` and `og_url` must use the host of `site.canonical_base_url` (else `site.public_url`) or a host in `seo.canonical_allowed_hosts`. When neither base URL is set, any http(s) host is accepted.
+  - Images must be ready, undeleted `image/*` media.
+  - Title and description lengths over 60 and 160 characters are advisory `warnings` (`too_long_recommended`), not errors.
+- **Slug.** Changing `slug` requires `post.slug.edit`; without it the request is `403`. Resubmitting the current slug is allowed. A slug change bumps the post version and emits `blog.post.slug_changed`. Redirect rules are left to consumers of that event.
+- **Transaction.** The slug update, the `post_seo` upsert, the revision (type `update`), and the outbox events are written in one transaction.
+  - Revisions snapshot SEO in `seo_snapshot` and diff it per field: `diff.seo = {field: {from, to}}`.
+  - Restoring a revision restores its SEO, dropping images that no longer exist (they are listed in `skipped.media`).
+- **Rendering.** `GET /posts/{slug}/seo-meta` returns rendered meta for published posts only; anything else is `404`.
+  - Title: `seo_title`, else `seo.title_template` applied to the plain-text post title.
+  - Description: `seo_description`, else the excerpt, else a 160-character plain-text content summary, else `seo.default_description`.
+  - Canonical URL: `canonical_url`, else `{canonical base}/posts/{slug}`.
+  - `og:image`: the OG image, else the cover image, else `seo.default_share_image_url`.
+  - Twitter values fall back to the OG values.
+  - Derived values have Markdown and HTML stripped.
+  - `X-Robots-Tag` is sent when the post is `noindex` or `nofollow`.
+  - Responses are cached in the posts read-cache family, which every post write invalidates.
+- **Image URLs.** Signed storage URLs expire and would break cached social cards, so images use a stable URL:
+  - with imgproxy configured: `{APP_PUBLIC_URL}/api/v1/media/{id}/transform?w=W&format=jpeg`, where W is the largest `MEDIA_TRANSFORM_WIDTHS` entry up to 1200;
+  - otherwise: `S3_PUBLIC_BASE_URL/{storage_key}`;
+  - with neither, no image URL is emitted.
+- **Permissions.** `post.seo.view` covers GET and preview, `post.seo.edit` covers PUT, and `post.slug.edit` covers slug changes. All three are seeded for admin, editor, and author. Authors reach only their own posts; other posts are `404`.

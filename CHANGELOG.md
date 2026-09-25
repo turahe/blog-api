@@ -1,5 +1,31 @@
 # Changelog
 
+## 2026-09-25 — Post SEO
+
+### Added
+
+- Per-post SEO: search title, description, and keywords; Open Graph and Twitter card overrides;
+  canonical URL; and noindex/nofollow. Stored in the new `post_seo` table. See
+  [post-seo.md](docs/backend/post-seo.md#implementation).
+- `GET` and `PUT /api/v1/admin/posts/{id}/seo`:
+  - `PUT` is a partial update that also renames the post when `slug` changes (requires `post.slug.edit`);
+  - invalid fields are all reported at once as `422` with per-field codes;
+  - text containing markup is rejected.
+- `POST /api/v1/admin/posts/{id}/seo/preview` renders the search, Open Graph, and Twitter previews
+  for unsaved changes.
+- `GET /api/v1/posts/{slug}/seo-meta` returns rendered meta for published posts:
+  - every value falls back to one derived from the post (title, excerpt, content, cover) and then
+    to the site settings;
+  - `X-Robots-Tag` is sent for noindex/nofollow posts.
+- Settings `seo.default_twitter_card` and `seo.canonical_allowed_hosts`.
+- Events `blog.post.seo.updated` and `blog.post.slug_changed`.
+- Permissions `post.seo.view`, `post.seo.edit`, and `post.slug.edit`, seeded for admin, editor, and author.
+
+### Changed
+
+- Post revisions now snapshot SEO and diff it per field. Restoring a revision restores its SEO,
+  skipping images that no longer exist.
+
 ## 2026-09-25 — Post versioning
 
 ### Added

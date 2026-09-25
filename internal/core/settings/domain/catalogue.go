@@ -143,8 +143,21 @@ func DefaultCatalogue() Catalogue {
 			Description: "Meta description when a page has none", Default: "", MaxLength: 300, Pattern: noMarkup,
 		},
 		link(CategorySEO, "seo.default_share_image_url", "Social share image when a page has none"),
+		Definition{
+			Key: "seo.default_twitter_card", Category: CategorySEO, Type: TypeString, Sensitivity: PublicSafe,
+			Description: "Twitter card type when a post sets none", Default: "summary_large_image",
+			Enum: []string{"summary", "summary_large_image"},
+		},
+		Definition{
+			Key: "seo.canonical_allowed_hosts", Category: CategorySEO, Type: TypeStringList, Sensitivity: PublicSafe,
+			Description: "Extra hosts a post's canonical_url or og_url may point at; the canonical base URL's host is always allowed",
+			Default:     []string{}, MaxItems: 20, MaxLength: 253, Pattern: hostPattern,
+		},
 	)
 }
+
+// hostPattern matches a lowercase DNS host name.
+var hostPattern = regexp.MustCompile(`^[a-z0-9]([a-z0-9-]*[a-z0-9])?(\.[a-z0-9]([a-z0-9-]*[a-z0-9])?)*$`)
 
 func text(category Category, key, description, def string, maxLength int) Definition {
 	return Definition{

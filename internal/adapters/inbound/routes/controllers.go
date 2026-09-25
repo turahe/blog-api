@@ -121,6 +121,10 @@ type Posts struct {
 	RevisionsList     gin.HandlerFunc
 	RevisionGet       gin.HandlerFunc
 	RevisionRestore   gin.HandlerFunc
+	SEOGet            gin.HandlerFunc
+	SEOUpdate         gin.HandlerFunc
+	SEOPreview        gin.HandlerFunc
+	PublicSEOMeta     gin.HandlerFunc
 }
 
 // Categories public and admin handlers.

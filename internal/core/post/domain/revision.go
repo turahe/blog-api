@@ -234,8 +234,8 @@ func DiffSnapshots(prev, next Snapshot) ([]string, map[string]any) {
 		diff[FieldMedia] = change
 	}
 
-	if !sameJSON(prev.SEO, next.SEO) {
-		scalar(FieldSEO, rawOrNil(prev.SEO), rawOrNil(next.SEO))
+	if change, ok := seoChange(prev.SEO, next.SEO); ok {
+		diff[FieldSEO] = change
 	}
 
 	return orderedFields(diff), diff
@@ -379,6 +379,25 @@ func mediaChange(prev, next []RevisionMedia) (map[string]any, bool) {
 	}
 }
 
+// seoChange maps each changed SEO field to {from, to}.
+func seoChange(prev, next json.RawMessage) (map[string]any, bool) {
+	if sameJSON(prev, next) {
+		return nil, false
+	}
+
+	var before, after map[string]any
+
+	_ = json.Unmarshal(canonicalJSON(prev), &before)
+	_ = json.Unmarshal(canonicalJSON(next), &after)
+
+	change := map[string]any{}
+	for _, key := range changedKeys(before, after) {
+		change[key] = map[string]any{"from": before[key], "to": after[key]}
+	}
+
+	return change, len(change) > 0
+}
+
 func sameID(a, b *uuid.UUID) bool {
 	if a == nil || b == nil {
 		return a == b
@@ -407,12 +426,4 @@ func canonicalJSON(raw json.RawMessage) []byte {
 	}
 
 	return out
-}
-
-func rawOrNil(raw json.RawMessage) any {
-	if len(bytes.TrimSpace(raw)) == 0 {
-		return nil
-	}
-
-	return raw
 }

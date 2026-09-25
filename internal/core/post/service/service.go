@@ -38,16 +38,19 @@ type Clock interface {
 
 // PostService implements ports.Service.
 type PostService struct {
-	repo      ports.Repository
-	tags      ports.TagLinker
-	postMedia mediaports.PostMediaRepository
-	media     mediaports.Repository
-	ids       IDGenerator
-	clock     Clock
-	cache     readcache.Cache
-	notifier  ports.PublishNotifier
-	events    event.Unit
-	revisions ports.RevisionRepository
+	repo        ports.Repository
+	tags        ports.TagLinker
+	postMedia   mediaports.PostMediaRepository
+	media       mediaports.Repository
+	ids         IDGenerator
+	clock       Clock
+	cache       readcache.Cache
+	notifier    ports.PublishNotifier
+	events      event.Unit
+	revisions   ports.RevisionRepository
+	seo         ports.SEORepository
+	seoDefaults ports.SEODefaultsSource
+	images      ports.ImageURLs
 }
 
 // New returns a PostService without media or tag support; see WithMedia and WithTags.

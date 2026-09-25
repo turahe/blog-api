@@ -42,6 +42,9 @@ const (
 	permRevisionsView    = "post.revisions.view"
 	permRevisionsViewAll = "post.revisions.view_all"
 	permRevisionsRestore = "post.revisions.restore"
+	permSEOView          = "post.seo.view"
+	permSEOEdit          = "post.seo.edit"
+	permSlugEdit         = "post.slug.edit"
 )
 
 var roleDescriptions = map[string]string{
@@ -58,6 +61,7 @@ var rolePermissions = map[string][]string{
 		"user.password.admin_reset", "user.activity.read_all", "role.read", "role.manage",
 		permPostRead, "post.create", "post.update", "post.publish", "post.delete",
 		permRevisionsView, permRevisionsViewAll, permRevisionsRestore,
+		permSEOView, permSEOEdit, permSlugEdit,
 		"category.read", "category.create", "category.update", "category.delete",
 		"tag.create", "tag.update", "tag.delete",
 		"settings.read", "settings.update", "settings.history.read",
@@ -70,6 +74,7 @@ var rolePermissions = map[string][]string{
 		"user.read",
 		permPostRead, "post.create", "post.update", "post.publish", "post.delete",
 		permRevisionsView, permRevisionsViewAll, permRevisionsRestore,
+		permSEOView, permSEOEdit, permSlugEdit,
 		"category.read", "category.create", "category.update", "category.delete",
 		"tag.create", "tag.update", "tag.delete",
 		"media.create", "media.delete",
@@ -79,6 +84,7 @@ var rolePermissions = map[string][]string{
 		permAdminAccess,
 		permPostRead, "post.create", "post.update",
 		permRevisionsView, permRevisionsRestore,
+		permSEOView, permSEOEdit, permSlugEdit,
 		"media.create",
 	},
 	roleModerator: {

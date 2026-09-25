@@ -89,6 +89,8 @@ Recorded in the same transaction as the write (only when `MESSAGE_BROKER` is set
 | `blog.settings.updated` | Admin settings update that changed at least one key (one event per request) | Admin |
 | `blog.post.revision.created` | Every post write (create, update, media replace, publish, unpublish, archive, delete, undelete, restore) | Acting user; none for system writes |
 | `blog.post.revision.restored` | Restore of a revision, alongside its `revision.created` | Restoring user |
+| `blog.post.seo.updated` | SEO update that changed at least one SEO field; `changed_fields` lists them | Editing user |
+| `blog.post.slug_changed` | Slug change through the SEO endpoint, with `old_slug` and `new_slug` | Editing user |
 
 Payloads carry identifiers and state, never email addresses or content. The rest of the
 catalogue above is planned.

@@ -27,6 +27,7 @@ import (
 	"github.com/turahe/blog-api/internal/adapters/outbound/notify"
 	"github.com/turahe/blog-api/internal/adapters/outbound/oauth"
 	"github.com/turahe/blog-api/internal/adapters/outbound/persistence"
+	"github.com/turahe/blog-api/internal/adapters/outbound/postseo"
 	"github.com/turahe/blog-api/internal/adapters/outbound/ratelimit"
 	outboundrbac "github.com/turahe/blog-api/internal/adapters/outbound/rbac"
 	"github.com/turahe/blog-api/internal/adapters/outbound/storage"
@@ -145,8 +146,8 @@ func NewRuntime(ctx context.Context, cfg config.Config, logger *slog.Logger, ver
 	auth.WithEvents(events)
 
 	inbox := newInbox(cfg, db, clock, logger)
-	posts := postservice.New(postsRepo, ids, clock).WithCache(cacheOrNil).WithNotifier(inbox).WithEvents(events).
-		WithRevisions(persistence.NewPostRevisionRepository(db.GORM))
+	settings := newSettingsService(db, ids, clock, events, cacheOrNil)
+	posts := newPostService(cfg, db, postsRepo, ids, clock, cacheOrNil, inbox, events, settings)
 	userSvc := userservice.New(users)
 
 	categories := categoryservice.New(categoriesRepo, ids, clock).WithCache(cacheOrNil)
@@ -157,7 +158,6 @@ func NewRuntime(ctx context.Context, cfg config.Config, logger *slog.Logger, ver
 	tags := tagservice.New(tagsRepo, ids, clock).WithCache(cacheOrNil)
 	posts.WithTags(tags)
 
-	settings := newSettingsService(db, ids, clock, events, cacheOrNil)
 	comments := newCommentService(cfg, db, ids, clock, inbox, events)
 	hub, notificationBus := newNotificationStream(ctx, cfg, inbox, logger)
 
@@ -326,6 +326,37 @@ func newMediaService(
 	}
 
 	return media, nil
+}
+
+// newPostService wires posts with revisions and SEO; media and tags are attached later.
+func newPostService(
+	cfg config.Config,
+	db *database.Database,
+	repo *persistence.PostRepository,
+	ids system.UUIDGenerator,
+	clock system.Clock,
+	readCache readcache.Cache,
+	inbox *notificationservice.Inbox,
+	events event.Unit,
+	settings *settingsservice.Service,
+) *postservice.PostService {
+	return postservice.New(repo, ids, clock).WithCache(readCache).WithNotifier(inbox).WithEvents(events).
+		WithRevisions(persistence.NewPostRevisionRepository(db.GORM)).
+		WithSEO(persistence.NewPostSEORepository(db.GORM), postseo.NewDefaults(settings), newSEOImageURLs(cfg, db))
+}
+
+// newSEOImageURLs resolves social card images; without media storage posts have no images.
+func newSEOImageURLs(cfg config.Config, db *database.Database) *postseo.ImageURLs {
+	if !cfg.MediaEnabled() {
+		return nil
+	}
+
+	var widths []int
+	if cfg.MediaTransformsEnabled() {
+		widths = cfg.MediaTransformWidths
+	}
+
+	return postseo.NewImageURLs(persistence.NewMediaRepository(db.GORM), cfg.AppPublicURL, widths, cfg.S3PublicBaseURL)
 }
 
 // newProfileService wires profiles; avatars are enabled (non-zero max bytes) only with media storage.

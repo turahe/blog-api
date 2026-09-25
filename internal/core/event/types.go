@@ -9,6 +9,8 @@ const (
 
 	PostRevisionCreated  = "blog.post.revision.created"
 	PostRevisionRestored = "blog.post.revision.restored"
+	PostSEOUpdated       = "blog.post.seo.updated"
+	PostSlugChanged      = "blog.post.slug_changed"
 
 	CommentCreated   = "blog.comment.created"
 	CommentModerated = "blog.comment.moderated"

@@ -67,6 +67,25 @@ type RevisionRepository interface {
 	Prune(ctx context.Context, keep int) (int64, error)
 }
 
+// SEORepository stores per-post SEO overrides.
+type SEORepository interface {
+	// Get returns the post's SEO, or the zero SEO when it was never edited.
+	Get(ctx context.Context, postID uuid.UUID) (postdomain.SEO, error)
+	// Save replaces the post's SEO; an unknown image returns postdomain.ErrValidation.
+	Save(ctx context.Context, postID uuid.UUID, seo postdomain.SEO, at time.Time) error
+}
+
+// SEODefaultsSource reads the site-level SEO fallbacks.
+type SEODefaultsSource interface {
+	SEODefaults(ctx context.Context) (postdomain.SEODefaults, error)
+}
+
+// ImageURLs resolves a media asset to a stable public image URL for social cards.
+type ImageURLs interface {
+	// ImageURL returns "" when the asset has no public URL (missing, not ready, or not an image).
+	ImageURL(ctx context.Context, mediaID uuid.UUID) (string, error)
+}
+
 // PublishNotifier tells users that a post went public. Delivery is best effort:
 // implementations log failures instead of returning them.
 type PublishNotifier interface {

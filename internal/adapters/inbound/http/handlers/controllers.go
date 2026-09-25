@@ -78,6 +78,9 @@ const (
 	permPostRevisionsView    = "post.revisions.view"
 	permPostRevisionsViewAll = "post.revisions.view_all"
 	permPostRevisionsRestore = "post.revisions.restore"
+	permPostSEOView          = "post.seo.view"
+	permPostSEOEdit          = "post.seo.edit"
+	permPostSlugEdit         = "post.slug.edit"
 )
 
 // Fallback role sets for gate when no RBAC enforcer is wired.
@@ -211,6 +214,7 @@ func postControllers(deps Deps) routes.Posts {
 		return gate(deps, permission, roles, withPostEditor(handler))
 	}
 	allPosts := func(c *gin.Context) bool { return holds(c, deps, permPostRevisionsViewAll, editorRoles) }
+	seo := postSEOAccess(deps)
 
 	return routes.Posts{
 		PublicList:        listPublishedPostsHandler(p),
@@ -227,6 +231,10 @@ func postControllers(deps Deps) routes.Posts {
 		RevisionsList:     gate(deps, permPostRevisionsView, authorRoles, adminListPostRevisionsHandler(p, allPosts)),
 		RevisionGet:       gate(deps, permPostRevisionsView, authorRoles, adminGetPostRevisionHandler(p, allPosts)),
 		RevisionRestore:   write(permPostRevisionsRestore, authorRoles, adminRestorePostRevisionHandler(p, allPosts)),
+		SEOGet:            gate(deps, permPostSEOView, authorRoles, adminGetPostSEOHandler(p, seo)),
+		SEOUpdate:         write(permPostSEOEdit, authorRoles, adminUpdatePostSEOHandler(p, seo)),
+		SEOPreview:        gate(deps, permPostSEOView, authorRoles, adminPreviewPostSEOHandler(p, seo)),
+		PublicSEOMeta:     publicPostSEOMetaHandler(p),
 	}
 }
 
