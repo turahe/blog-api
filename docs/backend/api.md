@@ -130,6 +130,36 @@ password, and the attempt does not count toward lockout. The tokens are ordinary
 and refresh tokens; each admin route still checks its own permission. Existing
 deployments must re-run `app seed` to grant `admin.access`.
 
+### OAuth sign-in (Google, GitHub)
+
+| Operation | Route | Auth | Rate limit |
+| --- | --- | --- | --- |
+| `auth.oauth.start` | `GET /api/v1/auth/oauth/{provider}/start?redirect_uri=` | none | `auth.oauth` = `AUTH_LOGIN_PER_MINUTE` per IP |
+| `auth.oauth.callback` | `POST /api/v1/auth/oauth/{provider}/callback` | none | `auth.oauth` (shared) |
+
+- **Flow.** The client calls `start` with its callback URL, which must be listed exactly in
+  `OAUTH_REDIRECT_URIS`. The response is `{"authorize_url", "expires_at"}`
+  (`Cache-Control: no-store`). The browser visits `authorize_url`. The provider redirects to
+  the client with `code` and `state`, and the client posts `{"code", "state"}` to `callback`.
+  The answer is the same as `POST /auth/login`: a token pair, or a two-factor challenge for
+  enrolled accounts. The refresh session is not "remember me".
+- **State and PKCE.** The server generates the state and an S256 PKCE verifier and stores them
+  with the provider and redirect URI in Redis (`oauth:state:<sha256>`, 10 minutes). A state
+  works once, and only for the provider that issued it.
+- **Accounts.** OAuth never creates accounts. A callback signs in the account already linked to
+  the provider identity (provider + subject). Otherwise it signs in the account whose email
+  the provider reports as verified, and saves the link (`user_oauth_identities`). After that,
+  the link is used even if the provider email changes. Each identity belongs to one user, and
+  each user links at most one identity per provider. GitHub uses the primary verified address
+  from `/user/emails`.
+- **Errors** (service code `1`, Auth): provider not configured → `404 auth.oauth.provider_unknown`;
+  redirect URI not allowlisted → `400 auth.oauth.redirect_uri`; unknown, expired, reused or
+  mismatched state → `401 auth.oauth.state_invalid`; code rejected by the provider →
+  `401 auth.oauth.exchange_failed`; no linked or verified matching account →
+  `401 auth.oauth.no_account`; the account already links a different identity at that
+  provider → `409 auth.oauth.link_conflict`; inactive account → `401 unauthorized` as for password login.
+  An unreachable provider is a `500`.
+
 ### Two-factor authentication (TOTP)
 
 | Operation | Route | Auth | Rate limit |

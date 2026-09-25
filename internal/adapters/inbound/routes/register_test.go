@@ -91,6 +91,7 @@ func TestCommentRoutesUseDeclaredAuthModes(t *testing.T) {
 		Auth: routes.Auth{
 			AdminLogin: handler, TwoFactorChallenge: handler, MeTwoFactorGet: handler, MeTwoFactorSetup: handler,
 			MeTwoFactorConfirm: handler, MeTwoFactorDisable: handler, MeTwoFactorBackupCodes: handler,
+			OAuthStart: handler, OAuthCallback: handler,
 		},
 	}, routes.AuthMiddleware{
 		Optional: gin.HandlersChain{record("optional")},
@@ -130,6 +131,8 @@ func TestCommentRoutesUseDeclaredAuthModes(t *testing.T) {
 		{nethttp.MethodPatch, "/api/v1/admin/users/u/profile", []string{"required", "admin.users.profile.patch"}},
 		{nethttp.MethodPost, "/api/v1/auth/2fa/challenge", []string{"auth.2fa.challenge"}},
 		{nethttp.MethodPost, "/api/v1/admin/auth/login", []string{"admin.auth.login"}},
+		{nethttp.MethodGet, "/api/v1/auth/oauth/google/start", []string{"auth.oauth.start"}},
+		{nethttp.MethodPost, "/api/v1/auth/oauth/github/callback", []string{"auth.oauth.callback"}},
 		{nethttp.MethodGet, "/api/v1/me/2fa", []string{"required", "me.2fa.get"}},
 		{nethttp.MethodDelete, "/api/v1/me/2fa", []string{"required", "me.2fa.disable"}},
 		{nethttp.MethodPost, "/api/v1/me/2fa/setup", []string{"required", "me.2fa.setup"}},
@@ -154,6 +157,6 @@ func TestRegisterUsesStubWhenHandlerNil(t *testing.T) {
 	routes.Register(router, routes.Controllers{Stub: routes.NotImplemented}, routes.AuthMiddleware{})
 
 	recorder := httptest.NewRecorder()
-	router.ServeHTTP(recorder, httptest.NewRequestWithContext(t.Context(), nethttp.MethodPost, "/api/v1/auth/oauth/google/callback", nil))
+	router.ServeHTTP(recorder, httptest.NewRequestWithContext(t.Context(), nethttp.MethodGet, "/api/v1/media/m/transform", nil))
 	require.Equal(t, nethttp.StatusNotImplemented, recorder.Code)
 }

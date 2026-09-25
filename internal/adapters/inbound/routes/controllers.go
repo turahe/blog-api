@@ -55,6 +55,8 @@ type Auth struct {
 	MePasswordUpdate      gin.HandlerFunc
 
 	AdminLogin             gin.HandlerFunc
+	OAuthStart             gin.HandlerFunc
+	OAuthCallback          gin.HandlerFunc
 	TwoFactorChallenge     gin.HandlerFunc
 	MeTwoFactorGet         gin.HandlerFunc
 	MeTwoFactorSetup       gin.HandlerFunc

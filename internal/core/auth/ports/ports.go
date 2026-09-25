@@ -138,6 +138,32 @@ type ChallengeStore interface {
 	Consume(ctx context.Context, tokenHash string) (bool, error)
 }
 
+// OAuthProvider is one social login provider (authorization code flow with PKCE).
+type OAuthProvider interface {
+	AuthorizeURL(state, codeChallenge, redirectURI string) string
+	// Exchange trades the code for the provider's view of the user;
+	// authdomain.ErrOAuthExchange when the provider refuses the code.
+	Exchange(ctx context.Context, code, codeVerifier, redirectURI string) (authdomain.OAuthIdentity, error)
+}
+
+// OAuthStateStore keeps pending authorization requests; Consume is single use and
+// returns authdomain.ErrOAuthStateInvalid for an unknown or expired state.
+type OAuthStateStore interface {
+	Save(ctx context.Context, state string, value authdomain.OAuthState, ttl time.Duration) error
+	Consume(ctx context.Context, state string) (authdomain.OAuthState, error)
+}
+
+// OAuthIdentityRepository links provider identities to users.
+type OAuthIdentityRepository interface {
+	// FindUser returns the linked user or authdomain.ErrOAuthNoAccount.
+	FindUser(ctx context.Context, provider, subject string) (uuid.UUID, error)
+	// Link stores the identity; authdomain.ErrOAuthLinkConflict when the user already
+	// has a different identity at the provider.
+	Link(ctx context.Context, userID uuid.UUID, identity authdomain.OAuthIdentity, at time.Time) error
+	// Touch records a sign-in with the identity.
+	Touch(ctx context.Context, provider, subject string, at time.Time) error
+}
+
 // Service is the auth use-case API consumed by HTTP handlers.
 type Service interface {
 	// Login returns a challenge instead of tokens when the account has two-factor enabled.

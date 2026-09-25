@@ -18,6 +18,8 @@ import (
 // PostgreSQL identity columns, gen_random_uuid(), and partial indexes.
 const DBDriverPostgres = "postgres"
 
+const envProduction = "production"
+
 const (
 	defaultAddress  = "0.0.0.0:8080"
 	defaultDBDriver = DBDriverPostgres
@@ -66,6 +68,11 @@ type Config struct {
 	RBACPolicyReloadInterval      time.Duration
 	EncryptionKey                 string
 	TwoFactorIssuer               string
+	OAuthGoogleClientID           string
+	OAuthGoogleClientSecret       string
+	OAuthGitHubClientID           string
+	OAuthGitHubClientSecret       string
+	OAuthRedirectURIs             []string
 	MessageBroker                 string
 	KafkaBrokers                  []string
 	KafkaConsumerGroup            string
@@ -256,7 +263,7 @@ func (c Config) ValidateDatabase() error {
 		sslmode = "disable"
 	}
 
-	if c.Environment == "production" && sslmode == "disable" {
+	if c.Environment == envProduction && sslmode == "disable" {
 		return errors.New("DB_SSLMODE cannot be disable in production")
 	}
 
@@ -408,6 +415,11 @@ func Load() (Config, error) {
 		RBACPolicyReloadInterval:      duration("RBAC_POLICY_RELOAD_INTERVAL", 30*time.Second),
 		EncryptionKey:                 env("APP_ENCRYPTION_KEY", ""),
 		TwoFactorIssuer:               env("AUTH_2FA_ISSUER", "Blog"),
+		OAuthGoogleClientID:           env("OAUTH_GOOGLE_CLIENT_ID", ""),
+		OAuthGoogleClientSecret:       env("OAUTH_GOOGLE_CLIENT_SECRET", ""),
+		OAuthGitHubClientID:           env("OAUTH_GITHUB_CLIENT_ID", ""),
+		OAuthGitHubClientSecret:       env("OAUTH_GITHUB_CLIENT_SECRET", ""),
+		OAuthRedirectURIs:             splitCSV(os.Getenv("OAUTH_REDIRECT_URIS")),
 		MessageBroker:                 strings.ToLower(env("MESSAGE_BROKER", "")),
 		KafkaBrokers:                  splitCSV(os.Getenv("KAFKA_BROKERS")),
 		KafkaConsumerGroup:            env("KAFKA_CONSUMER_GROUP", "blog-api"),
@@ -486,7 +498,7 @@ func (c *Config) validate() error {
 		return err
 	}
 
-	if c.Environment == "production" && c.UsesCloudSQL() &&
+	if c.Environment == envProduction && c.UsesCloudSQL() &&
 		(c.DBInstanceConnectionName == "" || c.DBName == "" || c.DBUser == "") {
 		return errors.New("cloud SQL requires DB_INSTANCE_CONNECTION_NAME, DB_NAME, and DB_USER in production")
 	}
@@ -499,7 +511,7 @@ func (c *Config) validate() error {
 		return fmt.Errorf("invalid database pool limits: idle=%d open=%d", c.DBMaxIdle, c.DBMaxOpen)
 	}
 
-	for _, check := range []func() error{c.ValidateRedis, c.ValidateMessaging, c.ValidateMedia, c.ValidateSentry, c.ValidateCache} {
+	for _, check := range []func() error{c.ValidateRedis, c.ValidateMessaging, c.ValidateMedia, c.ValidateSentry, c.ValidateCache, c.ValidateOAuth} {
 		if err := check(); err != nil {
 			return err
 		}
@@ -514,7 +526,7 @@ func (c *Config) validateSecrets() error {
 	}
 
 	if len(c.SessionKey) < 32 {
-		if c.Environment == "production" {
+		if c.Environment == envProduction {
 			return errors.New("APP_SESSION_KEY must be at least 32 characters")
 		}
 

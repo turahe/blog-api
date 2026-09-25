@@ -276,6 +276,18 @@ definitions:
     required:
     - action
     type: object
+  requests.OAuthCallback:
+    properties:
+      code:
+        maxLength: 2048
+        type: string
+      state:
+        maxLength: 128
+        type: string
+    required:
+    - code
+    - state
+    type: object
   requests.PatchMediaTags:
     properties:
       tags:
@@ -2041,6 +2053,96 @@ paths:
       security:
       - Bearer: []
       summary: Logout
+      tags:
+      - auth
+  /api/v1/auth/oauth/{provider}/callback:
+    post:
+      consumes:
+      - application/json
+      description: |-
+        Exchanges the code and state the provider sent to the client's redirect_uri. Signs in
+        the account linked to the provider identity, or the existing account whose email the
+        provider verified (the identity is then linked). No account is ever created.
+        Responds like POST /api/v1/auth/login: a token pair or a two-factor challenge.
+      parameters:
+      - description: google or github
+        in: path
+        name: provider
+        required: true
+        type: string
+      - description: code and state
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/requests.OAuthCallback'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/responses.Envelope'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/responses.Envelope'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/responses.Envelope'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/responses.Envelope'
+        "409":
+          description: Conflict
+          schema:
+            $ref: '#/definitions/responses.Envelope'
+        "429":
+          description: Too Many Requests
+          schema:
+            $ref: '#/definitions/responses.Envelope'
+      summary: Complete an OAuth sign-in
+      tags:
+      - auth
+  /api/v1/auth/oauth/{provider}/start:
+    get:
+      description: |-
+        Returns the provider authorization URL (with state and a PKCE challenge) for the
+        browser to visit. redirect_uri must be listed in OAUTH_REDIRECT_URIS. The state
+        is single use and expires after 10 minutes.
+      parameters:
+      - description: google or github
+        in: path
+        name: provider
+        required: true
+        type: string
+      - description: registered client callback URL
+        in: query
+        name: redirect_uri
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/responses.Envelope'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/responses.Envelope'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/responses.Envelope'
+        "429":
+          description: Too Many Requests
+          schema:
+            $ref: '#/definitions/responses.Envelope'
+      summary: Start an OAuth sign-in
       tags:
       - auth
   /api/v1/auth/password/forgot:

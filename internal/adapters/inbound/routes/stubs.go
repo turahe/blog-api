@@ -16,7 +16,6 @@ func registerContractStubs(v1 *gin.RouterGroup, auth AuthMiddleware, c Controlle
 	pub, n := GroupPublic, AuthNone
 	self, req := GroupSelfService, AuthRequired
 	ag, ar := GroupAdmin, AuthRequired
-	authG := GroupAuth
 
 	get(none, "/media/:param1/transform", "public.media.transform", pub, n, c, nil)
 	get(none, "/newsletter/preferences/:param1", "public.newsletter.preferences.get", pub, n, c, nil)
@@ -26,8 +25,6 @@ func registerContractStubs(v1 *gin.RouterGroup, auth AuthMiddleware, c Controlle
 	post(none, "/newsletter/confirm/resend", "public.newsletter.confirm_resend", pub, n, c, nil)
 	post(none, "/newsletter/subscribe", "public.newsletter.subscribe", pub, n, c, nil)
 	post(none, "/newsletter/unsubscribe", "public.newsletter.unsubscribe", pub, n, c, nil)
-
-	post(none, "/auth/oauth/:param1/callback", "auth.oauth.callback", authG, n, c, nil)
 
 	get(required, "/me/activity", "me.activity.list", self, req, c, nil)
 	get(required, "/me/activity/export", "me.activity.export", self, req, c, nil)

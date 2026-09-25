@@ -1,5 +1,18 @@
 # Changelog
 
+## 2026-09-25 — Google and GitHub OAuth sign-in
+
+### Added
+
+- `GET /api/v1/auth/oauth/{provider}/start?redirect_uri=` returns the provider authorization
+  URL. The server stores a single-use state with an S256 PKCE verifier in Redis for 10 minutes
+- `POST /api/v1/auth/oauth/{provider}/callback` with `{code, state}` answers like login: tokens
+  or a two-factor challenge. It signs in the account linked to the provider identity, or the
+  existing account whose email the provider verified, and then saves the link (migration
+  `00015_oauth_identities.sql`). Accounts are never created
+- Configuration: `OAUTH_GOOGLE_CLIENT_ID`/`_SECRET`, `OAUTH_GITHUB_CLIENT_ID`/`_SECRET` and the
+  exact-match `OAUTH_REDIRECT_URIS` allowlist (https required in production)
+
 ## 2026-09-25 — Admin login
 
 ### Added

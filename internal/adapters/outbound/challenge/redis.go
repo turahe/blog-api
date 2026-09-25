@@ -1,4 +1,4 @@
-// Package challenge stores pending two-factor logins in Redis.
+// Package challenge stores pending two-factor logins and OAuth authorization requests in Redis.
 package challenge
 
 import (

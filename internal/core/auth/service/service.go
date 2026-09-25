@@ -43,6 +43,7 @@ type AuthService struct {
 	cache    readcache.Cache
 	cfg      Config
 	mfa      twoFactorDeps
+	oauth    oauthDeps
 }
 
 // WithLoginAttempts enables account lockout after repeated failed logins.
@@ -652,6 +653,12 @@ var errorMappings = []errorMapping{
 	{authdomain.ErrTwoFactorNotEnrolled, "auth.2fa.not_enabled", "Two-factor authentication is not enabled", 409},
 	{authdomain.ErrTwoFactorPending, "auth.2fa.not_started", "Start two-factor setup first", 409},
 	{authdomain.ErrTwoFactorUnavailable, "auth.2fa.unavailable", "Two-factor authentication is not configured on this server", 503},
+	{authdomain.ErrOAuthProviderUnknown, "auth.oauth.provider_unknown", "OAuth provider is not configured", 404},
+	{authdomain.ErrOAuthRedirectURI, "auth.oauth.redirect_uri", "redirect_uri is not allowed", 400},
+	{authdomain.ErrOAuthStateInvalid, "auth.oauth.state_invalid", "The sign-in request is invalid or expired; start again", 401},
+	{authdomain.ErrOAuthExchange, "auth.oauth.exchange_failed", "The provider did not accept the sign-in", 401},
+	{authdomain.ErrOAuthNoAccount, "auth.oauth.no_account", "No account is linked to this sign-in", 401},
+	{authdomain.ErrOAuthLinkConflict, "auth.oauth.link_conflict", "The account is already linked to another identity at this provider", 409},
 	{rbacdomain.ErrRoleNotFound, "rbac.role.not_found", "", 422},
 	{authdomain.ErrPasswordStrength, "password.strength", "Password does not meet strength requirements", 422},
 	{authdomain.ErrTokenUsed, "auth.password.reset_token_used", "Reset token already used", 400},

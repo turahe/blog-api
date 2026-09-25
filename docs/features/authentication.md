@@ -41,6 +41,16 @@ same 401 as a wrong password. 2FA stays optional; enrolled staff get the usual c
 
 See `docs/backend/api.md` → Two-factor authentication for the contract.
 
+## Implemented: social login
+
+- Google and GitHub, authorization code flow with PKCE. The server keeps the state, verifier and
+  redirect URI in Redis for 10 minutes, single use. Redirect URIs come from an exact allowlist.
+- Existing accounts only: a linked identity, or a provider-verified email that matches an
+  account (the identity is then linked). No sign-up through OAuth.
+- Enrolled accounts still get the 2FA challenge.
+
+See `docs/backend/api.md` → OAuth sign-in for the contract.
+
 ## Related Documents
 
 - `docs/architecture/security.md`

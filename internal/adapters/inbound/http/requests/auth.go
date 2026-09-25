@@ -26,6 +26,12 @@ type DisableTwoFactor struct {
 	Code     string `json:"code" binding:"required,max=32"`
 }
 
+// OAuthCallback is POST /api/v1/auth/oauth/{provider}/callback.
+type OAuthCallback struct {
+	Code  string `json:"code" binding:"required,max=2048"`
+	State string `json:"state" binding:"required,max=128"`
+}
+
 // Refresh is POST /api/v1/auth/refresh.
 type Refresh struct {
 	RefreshToken string `json:"refresh_token" binding:"required"`

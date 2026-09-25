@@ -98,22 +98,27 @@ func loginWith(login loginFunc) gin.HandlerFunc {
 		}
 
 		result, err := login(c.Request.Context(), req.Email, req.Password, c.Request.UserAgent(), c.ClientIP(), req.Remember)
-		if err != nil {
-			setLockedRetryAfter(c, err)
-			writeAuthError(c, err, authservice.MapError)
-
-			return
-		}
-
-		if result.Challenge != nil {
-			responses.SuccessFor(c, nethttp.StatusOK, responses.ServiceAuth, responses.CaseSuccess,
-				responses.TwoFactorChallenge(*result.Challenge, time.Now()))
-
-			return
-		}
-
-		responses.SuccessFor(c, nethttp.StatusOK, responses.ServiceAuth, responses.CaseSuccess, responses.TokenPair(result.Tokens))
+		writeLoginResult(c, result, err)
 	}
+}
+
+// writeLoginResult answers with tokens, a two-factor challenge, or the mapped error.
+func writeLoginResult(c *gin.Context, result authdomain.LoginResult, err error) {
+	if err != nil {
+		setLockedRetryAfter(c, err)
+		writeAuthError(c, err, authservice.MapError)
+
+		return
+	}
+
+	if result.Challenge != nil {
+		responses.SuccessFor(c, nethttp.StatusOK, responses.ServiceAuth, responses.CaseSuccess,
+			responses.TwoFactorChallenge(*result.Challenge, time.Now()))
+
+		return
+	}
+
+	responses.SuccessFor(c, nethttp.StatusOK, responses.ServiceAuth, responses.CaseSuccess, responses.TokenPair(result.Tokens))
 }
 
 // refreshHandler godoc

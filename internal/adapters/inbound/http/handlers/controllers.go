@@ -27,6 +27,7 @@ type Deps struct {
 	AdminUsers  adminUserAPI
 	TwoFactor   twoFactorAPI
 	AdminLogin  adminLoginAPI
+	OAuth       oauthAPI
 	RoleAdmin   roleAPI
 	Profiles    profileAPI
 	EmailChange authports.EmailChanger
@@ -259,6 +260,12 @@ func authControllers(deps Deps) routes.Auth {
 		a.AdminLogin = chain(
 			middleware.RateLimit(deps.RateLimiter, deps.Logger, "admin.auth.login", deps.LoginPerMinute, time.Minute),
 			adminLoginHandler(deps.AdminLogin))
+	}
+
+	if deps.OAuth != nil {
+		limit := middleware.RateLimit(deps.RateLimiter, deps.Logger, "auth.oauth", deps.LoginPerMinute, time.Minute)
+		a.OAuthStart = chain(limit, oauthStartHandler(deps.OAuth))
+		a.OAuthCallback = chain(limit, oauthCallbackHandler(deps.OAuth))
 	}
 
 	if mfa := deps.TwoFactor; mfa != nil {

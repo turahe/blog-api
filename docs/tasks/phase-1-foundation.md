@@ -11,7 +11,8 @@ Index: [README.md](./README.md).
 **Partial** — bootstrap, config, PostgreSQL persistence (bigint row ids plus public UUIDs),
 Redis, health, password-based auth with refresh rotation, and Casbin authorization are in
 place, along with the SMTP mailer, login lockout, and a messaging readiness check. Admin user
-management, second-factor and OAuth login, and session administration are still open.
+management and session administration are still open; admin login, TOTP 2FA and OAuth sign-in
+are done.
 
 ## Epic: project bootstrap and configuration
 
@@ -70,7 +71,9 @@ management, second-factor and OAuth login, and session administration are still 
       `admin.access` permission)
 - [x] `auth.2fa.challenge` — `POST /api/v1/auth/2fa/challenge` (TOTP + backup codes; enrollment at
       `/api/v1/me/2fa/*`; secrets encrypted under `APP_ENCRYPTION_KEY`)
-- [ ] `auth.oauth.callback` — `POST /api/v1/auth/oauth/{provider}/callback`
+- [x] `auth.oauth.callback` — `POST /api/v1/auth/oauth/{provider}/callback` (Google and GitHub,
+      PKCE with server-side state from `GET /api/v1/auth/oauth/{provider}/start`; signs in existing
+      accounts only)
 - [x] Replace the reset-token log stub with a real mailer per [email.md](../backend/email.md)
       (`mail.SMTP` behind `notification/ports.Mailer`; log stub only when `SMTP_HOST` is empty)
 - [x] Refresh-token rotation with reuse detection revoking the whole session family

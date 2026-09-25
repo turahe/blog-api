@@ -18,6 +18,7 @@ import (
 	"github.com/turahe/blog-api/internal/adapters/outbound/challenge"
 	"github.com/turahe/blog-api/internal/adapters/outbound/mail"
 	"github.com/turahe/blog-api/internal/adapters/outbound/notify"
+	"github.com/turahe/blog-api/internal/adapters/outbound/oauth"
 	"github.com/turahe/blog-api/internal/adapters/outbound/persistence"
 	"github.com/turahe/blog-api/internal/adapters/outbound/ratelimit"
 	outboundrbac "github.com/turahe/blog-api/internal/adapters/outbound/rbac"
@@ -158,19 +159,18 @@ func NewRuntime(ctx context.Context, cfg config.Config, logger *slog.Logger, ver
 		AvatarMaxBytes: avatarMaxBytes,
 		Users:          userSvc,
 		AdminUsers:     auth,
-		TwoFactor:      auth,
-		AdminLogin:     auth,
-		RoleAdmin:      rbacservice.NewRoleService(roleStore),
-		Profiles:       profiles,
-		EmailChange:    auth,
-		Roles:          users,
-		RBAC:           enforcer,
-		Posts:          posts,
-		Categories:     categories,
-		Tags:           tags,
-		Media:          media,
-		Comments:       comments,
-		RateLimiter:    ratelimit.NewRedis(redisClient),
+		TwoFactor:      auth, AdminLogin: auth, OAuth: auth,
+		RoleAdmin:   rbacservice.NewRoleService(roleStore),
+		Profiles:    profiles,
+		EmailChange: auth,
+		Roles:       users,
+		RBAC:        enforcer,
+		Posts:       posts,
+		Categories:  categories,
+		Tags:        tags,
+		Media:       media,
+		Comments:    comments,
+		RateLimiter: ratelimit.NewRedis(redisClient),
 		CommentRates: handlers.CommentRates{
 			CreatePerMinute:  cfg.CommentsCreatePerMinute,
 			ActionsPerMinute: cfg.CommentsActionsPerMinute,
@@ -296,8 +296,26 @@ func newAuthService(
 
 	// Always wired, even without a key, so enrolled accounts fail closed.
 	auth.WithTwoFactor(persistence.NewTwoFactorRepository(db.GORM), box, challenge.New(redisClient), cfg.TwoFactorIssuer)
+	auth.WithOAuth(oauthProviders(cfg), persistence.NewOAuthIdentityRepository(db.GORM),
+		challenge.NewOAuthStates(redisClient), cfg.OAuthRedirectURIs)
 
 	return auth, nil
+}
+
+// oauthProviders returns the providers whose client credentials are configured.
+func oauthProviders(cfg config.Config) map[string]authports.OAuthProvider {
+	providers := map[string]authports.OAuthProvider{}
+	if cfg.OAuthGoogleClientID != "" {
+		providers[oauth.Google] = oauth.NewGoogle(
+			oauth.Credentials{ClientID: cfg.OAuthGoogleClientID, ClientSecret: cfg.OAuthGoogleClientSecret}, oauth.GoogleEndpoints)
+	}
+
+	if cfg.OAuthGitHubClientID != "" {
+		providers[oauth.GitHub] = oauth.NewGitHub(
+			oauth.Credentials{ClientID: cfg.OAuthGitHubClientID, ClientSecret: cfg.OAuthGitHubClientSecret}, oauth.GitHubEndpoints)
+	}
+
+	return providers
 }
 
 // newSecretBox returns the APP_ENCRYPTION_KEY box, or a nil interface when the key is unset.

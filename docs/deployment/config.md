@@ -78,6 +78,9 @@ Do not use `0.0.0.0/0`, `*`, or arbitrary client-controlled addresses in
 | `RBAC_POLICY_RELOAD_INTERVAL` | `30s` | No | How often each instance reloads the Casbin policy from `casbin_rules`; `0` disables the timer. Role writes also publish on Redis channel `rbac:policy:reload`, so other instances reload at once. |
 | `APP_ENCRYPTION_KEY` | empty | For 2FA | Base64 32-byte key (`openssl rand -base64 32`). Encrypts TOTP secrets (AES-256-GCM) and keys the HMAC of backup codes. Empty disables 2FA enrollment. Keep it stable: losing or rotating it locks enrolled accounts out (their logins answer `503 auth.2fa.unavailable`). |
 | `AUTH_2FA_ISSUER` | `Blog` | No | Issuer label in the `otpauth://` URL shown by authenticator apps. |
+| `OAUTH_GOOGLE_CLIENT_ID` / `OAUTH_GOOGLE_CLIENT_SECRET` | empty | For Google sign-in | Google OAuth client. Set both or neither; empty disables the provider (`404 auth.oauth.provider_unknown`). |
+| `OAUTH_GITHUB_CLIENT_ID` / `OAUTH_GITHUB_CLIENT_SECRET` | empty | For GitHub sign-in | GitHub OAuth app. Set both or neither. |
+| `OAUTH_REDIRECT_URIS` | empty | For OAuth | Comma-separated allowlist of client callback URLs, matched exactly. Each must be an absolute `http(s)` URL without a fragment, and `https` in production. Register the same URLs with the provider. |
 
 A locked or throttled login answers `429` with `Retry-After`. Lockout is keyed by email, so
 a correct password is refused until the lock expires; both limits are stored in Redis and fail

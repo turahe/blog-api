@@ -31,6 +31,7 @@ type Dependencies struct {
 	AdminUsers     *authservice.AuthService
 	TwoFactor      *authservice.AuthService
 	AdminLogin     *authservice.AuthService
+	OAuth          *authservice.AuthService
 	RoleAdmin      *rbacservice.RoleService
 	Profiles       *userservice.ProfileService
 	EmailChange    authports.EmailChanger
@@ -119,6 +120,10 @@ func NewRouter(deps Dependencies) (*gin.Engine, error) {
 
 	if deps.AdminLogin != nil {
 		controllerDeps.AdminLogin = deps.AdminLogin
+	}
+
+	if deps.OAuth != nil {
+		controllerDeps.OAuth = deps.OAuth
 	}
 
 	if deps.RoleAdmin != nil {
