@@ -142,3 +142,30 @@ func TestStripsNewlinesFromValues(t *testing.T) {
 	require.NotContains(t, msg.Body, "\n")
 	require.Contains(t, msg.Body, "Eve Bcc: evil@example.com")
 }
+
+func TestInAppCommentTypes(t *testing.T) {
+	t.Parallel()
+
+	reply, err := template.Render(template.ChannelWeb, template.TypeCommentReply, template.Data{
+		ActorName: "Grace", PostTitle: "Hello", Excerpt: "nice\npost",
+	})
+	require.NoError(t, err)
+	require.Equal(t, "Grace replied to your comment", reply.Title)
+	require.Equal(t, `On "Hello": nice post`, reply.Body)
+
+	moderated, err := template.Render(template.ChannelWeb, template.TypeCommentModerated, template.Data{
+		PostTitle: "Hello", Outcome: "rejected",
+	})
+	require.NoError(t, err)
+	require.Equal(t, "Your comment was rejected", moderated.Title)
+	require.Equal(t, `Your comment on "Hello" was rejected.`, moderated.Body, "no reason, no reason clause")
+
+	for _, typ := range []string{template.TypeCommentReply, template.TypeCommentModerated, template.TypePublicationRepublished} {
+		sse, err := template.Render(template.ChannelSSE, typ, template.Data{PostTitle: "Hello", Excerpt: "hi"})
+		require.NoError(t, err, typ)
+		require.Equal(t, "notification.created", sse.Event, typ)
+
+		_, err = template.Render(template.ChannelEmail, typ, template.Data{})
+		require.Error(t, err, "%s is in-app only", typ)
+	}
+}

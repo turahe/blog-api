@@ -44,6 +44,7 @@ type PostService struct {
 	ids       IDGenerator
 	clock     Clock
 	cache     readcache.Cache
+	notifier  ports.PublishNotifier
 }
 
 // New returns a PostService without media or tag support; see WithMedia and WithTags.
@@ -62,6 +63,12 @@ func (s *PostService) WithMedia(postMedia mediaports.PostMediaRepository, media 
 // WithCache caches public reads in cache; every post write invalidates the posts family.
 func (s *PostService) WithCache(cache readcache.Cache) *PostService {
 	s.cache = cache
+	return s
+}
+
+// WithNotifier sends a notice whenever a post is published.
+func (s *PostService) WithNotifier(notifier ports.PublishNotifier) *PostService {
+	s.notifier = notifier
 	return s
 }
 

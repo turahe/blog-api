@@ -662,7 +662,9 @@ erDiagram
  bigint user_id FK
  varchar type "Registry-backed keys: notification-created comment-replied post-published role-assigned impersonation-started etc"
  varchar title "Human-readable title one line"
+ text body "Web copy rendered at write time"
  text preview "Short preview plaintext-safe no PII"
+ text dedupe_key "Per-user idempotency key UNIQUE with user_id when set"
  boolean is_read "DEFAULT false"
  jsonb payload "Type-specific: comment_id post_id reason deep_link etc"
  datetime read_at "NULL = unread"

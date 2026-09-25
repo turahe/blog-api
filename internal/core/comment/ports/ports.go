@@ -20,6 +20,15 @@ type CaptchaVerifier interface {
 	Verify(ctx context.Context, token, remoteIP string) (ok bool, err error)
 }
 
+// Notifier tells users about comment activity. Delivery is best effort: implementations log
+// failures instead of returning them, so a notice never fails the comment operation.
+type Notifier interface {
+	// CommentReplied is called once reply is visible; parent is the comment it answers.
+	CommentReplied(ctx context.Context, reply, parent commentdomain.Comment)
+	// CommentModerated is called when a moderator asked to tell the author about a decision.
+	CommentModerated(ctx context.Context, change commentdomain.Moderation)
+}
+
 // Repository stores comments, flags, and upvotes.
 type Repository interface {
 	// PostPolicy returns the post's comment policy, or ErrPostNotFound unless the post is

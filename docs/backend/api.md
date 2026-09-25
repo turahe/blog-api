@@ -329,6 +329,20 @@ covers the whole day), `page`, and `per_page` (max 100), and return newest first
 Rows older than `AUDIT_RETENTION_DAYS` (default 395) are deleted by `app audit prune`
 (`--older-than-days` overrides the setting) and hourly by `app worker`.
 
+### Notifications inbox
+
+In-app notices for comment replies, moderation outcomes, and publications are stored when the
+event happens; see [notification.md](../features/notification.md#in-app-inbox) for triggers.
+
+| Operation | Method and path | Auth | Notes |
+| --- | --- | --- | --- |
+| `me.notifications.list` | `GET /api/v1/me/notifications` | bearer | newest first; `unread=true` filters; `page`, `per_page` (max 100); `X-Unread-Count` header |
+| `me.notifications.read` | `POST /api/v1/me/notifications/{id}/read` | bearer | idempotent; `404` for unknown or another user's id |
+| `me.notifications.stream` | `GET /api/v1/me/notifications/stream` | bearer | `501` until the SSE stream lands |
+
+Each item has `id`, `type`, `title`, `body`, `preview`, `data` (links such as `post_id`,
+`comment_id`, `url`), `actor_id`, `is_read`, `read_at`, and `created_at`.
+
 ### Media
 
 - `public.media.transform` stays `501`; see the decision in [media.md](media.md#transform-decision-phase-2).

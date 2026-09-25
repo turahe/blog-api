@@ -37,6 +37,10 @@ const (
 	TypeEmailChanged         = "email.changed"
 	TypeModerationAlert      = "moderation.alert"
 	TypePublicationPublished = "publication.published"
+	// TypePublicationRepublished tells commenters that a post they discussed is public again.
+	TypePublicationRepublished = "publication.republished"
+	TypeCommentReply           = "comment.reply"
+	TypeCommentModerated       = "comment.moderated"
 )
 
 // Data is the plain-text values substituted into a template.
@@ -51,6 +55,10 @@ type Data struct {
 	PostURL   string
 	Reason    string
 	ActorName string
+	// Excerpt is a short plain-text quote of user content, such as a reply.
+	Excerpt string
+	// Outcome is a past-tense moderation result, such as "approved" or "marked as spam".
+	Outcome string
 }
 
 // Message is one rendered channel payload.
@@ -311,6 +319,8 @@ func scrub(data Data) Data {
 	data.PostURL = oneLine(data.PostURL)
 	data.Reason = oneLine(data.Reason)
 	data.ActorName = oneLine(data.ActorName)
+	data.Excerpt = oneLine(data.Excerpt)
+	data.Outcome = oneLine(data.Outcome)
 
 	return data
 }
@@ -437,6 +447,39 @@ var catalogue = map[string]map[Channel]spec{
 		ChannelSSE: {
 			event:   eventNotificationCreated,
 			title:   "Your post is published",
+			preview: "{{.PostTitle}}",
+		},
+	},
+	TypePublicationRepublished: {
+		ChannelWeb: {
+			title: "A post you commented on is back",
+			body:  "\"{{.PostTitle}}\" is published again.",
+		},
+		ChannelSSE: {
+			event:   eventNotificationCreated,
+			title:   "A post you commented on is back",
+			preview: "{{.PostTitle}}",
+		},
+	},
+	TypeCommentReply: {
+		ChannelWeb: {
+			title: "{{.ActorName}} replied to your comment",
+			body:  "On \"{{.PostTitle}}\": {{.Excerpt}}",
+		},
+		ChannelSSE: {
+			event:   eventNotificationCreated,
+			title:   "{{.ActorName}} replied to your comment",
+			preview: "{{.Excerpt}}",
+		},
+	},
+	TypeCommentModerated: {
+		ChannelWeb: {
+			title: "Your comment was {{.Outcome}}",
+			body:  "Your comment on \"{{.PostTitle}}\" was {{.Outcome}}.{{if .Reason}} Reason: {{.Reason}}{{end}}",
+		},
+		ChannelSSE: {
+			event:   eventNotificationCreated,
+			title:   "Your comment was {{.Outcome}}",
 			preview: "{{.PostTitle}}",
 		},
 	},

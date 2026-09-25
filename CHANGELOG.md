@@ -1,5 +1,19 @@
 # Changelog
 
+## 2026-09-25 — Notification inbox
+
+### Added
+
+- In-app notifications (migration `00019_notifications.sql`). A visible reply notifies the
+  parent comment's author, a moderation decision with `notify_author` notifies the comment's
+  author, and publishing a post notifies its author (when someone else publishes) and the
+  users who commented on it. Notices are best effort and deduplicated per user.
+- `GET /api/v1/me/notifications` (`unread`, `page`, `per_page`; unread total in
+  `X-Unread-Count`) and `POST /api/v1/me/notifications/{id}/read`.
+- Notification template types `comment.reply`, `comment.moderated`, and
+  `publication.republished` (web and SSE only), and the `{{.Excerpt}}` and `{{.Outcome}}`
+  variables.
+
 ## 2026-09-25 — Guest comment captcha
 
 ### Added

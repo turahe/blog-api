@@ -20,18 +20,20 @@ import (
 
 // Deps are the services controllers need when wiring routes.
 type Deps struct {
-	Logger      *slog.Logger
-	Health      healthports.Service
-	Auth        authports.Service
-	Users       *userservice.UserService
-	AdminUsers  adminUserAPI
-	TwoFactor   twoFactorAPI
-	AdminLogin  adminLoginAPI
-	OAuth       oauthAPI
-	RoleAdmin   roleAPI
-	Activity    activityAPI
-	Profiles    profileAPI
-	EmailChange authports.EmailChanger
+	Logger     *slog.Logger
+	Health     healthports.Service
+	Auth       authports.Service
+	Users      *userservice.UserService
+	AdminUsers adminUserAPI
+	TwoFactor  twoFactorAPI
+	AdminLogin adminLoginAPI
+	OAuth      oauthAPI
+	RoleAdmin  roleAPI
+	Activity   activityAPI
+	// Notifications serves the caller's in-app inbox; nil keeps the routes as 501 stubs.
+	Notifications notificationAPI
+	Profiles      profileAPI
+	EmailChange   authports.EmailChanger
 	// AvatarMaxBytes > 0 enables avatar upload and removal (requires media storage).
 	AvatarMaxBytes int64
 	Roles          RoleLookup
@@ -117,6 +119,7 @@ func NewControllers(deps Deps) routes.Controllers {
 	wireProfiles(&c.Users, deps)
 
 	c.Activity.MeList, c.Activity.AdminUserList = activityControllers(deps)
+	c.Notifications.List, c.Notifications.Read = notificationControllers(deps)
 
 	if deps.Posts != nil {
 		c.Posts = routes.Posts{

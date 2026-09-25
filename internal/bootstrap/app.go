@@ -29,6 +29,7 @@ import (
 	authports "github.com/turahe/blog-api/internal/core/auth/ports"
 	authservice "github.com/turahe/blog-api/internal/core/auth/service"
 	categoryservice "github.com/turahe/blog-api/internal/core/category/service"
+	commentports "github.com/turahe/blog-api/internal/core/comment/ports"
 	commentservice "github.com/turahe/blog-api/internal/core/comment/service"
 	healthports "github.com/turahe/blog-api/internal/core/health/ports"
 	healthservice "github.com/turahe/blog-api/internal/core/health/service"
@@ -124,7 +125,8 @@ func NewRuntime(ctx context.Context, cfg config.Config, logger *slog.Logger, ver
 		return fail(err)
 	}
 
-	posts := postservice.New(postsRepo, ids, clock).WithCache(cacheOrNil)
+	inbox := newInbox(cfg, db, clock, logger)
+	posts := postservice.New(postsRepo, ids, clock).WithCache(cacheOrNil).WithNotifier(inbox)
 	userSvc := userservice.New(users)
 
 	categories := categoryservice.New(categoriesRepo, ids, clock).WithCache(cacheOrNil)
@@ -135,7 +137,7 @@ func NewRuntime(ctx context.Context, cfg config.Config, logger *slog.Logger, ver
 	tags := tagservice.New(tagsRepo, ids, clock).WithCache(cacheOrNil)
 	posts.WithTags(tags)
 
-	comments := newCommentService(cfg, db, ids, clock)
+	comments := newCommentService(cfg, db, ids, clock, inbox)
 
 	media, err := newMediaService(ctx, cfg, db, ids, clock, posts, cacheOrNil)
 	if err != nil {
@@ -175,7 +177,7 @@ func NewRuntime(ctx context.Context, cfg config.Config, logger *slog.Logger, ver
 		Categories:  categories,
 		Tags:        tags,
 		Media:       media,
-		Comments:    comments,
+		Comments:    comments, Notifications: inbox,
 		RateLimiter: ratelimit.NewRedis(redisClient),
 		CommentRates: handlers.CommentRates{
 			CreatePerMinute:  cfg.CommentsCreatePerMinute,
@@ -254,19 +256,34 @@ func newProfileService(
 	return profiles.WithAvatars(media, cfg.AvatarMaxBytes), cfg.AvatarMaxBytes
 }
 
-func newCommentService(cfg config.Config, db *database.Database, ids system.UUIDGenerator, clock system.Clock) *commentservice.Service {
+func newCommentService(
+	cfg config.Config,
+	db *database.Database,
+	ids system.UUIDGenerator,
+	clock system.Clock,
+	notifier commentports.Notifier,
+) *commentservice.Service {
 	commentCfg := commentservice.Config{
 		GuestEnabled:    cfg.CommentsGuestEnabled,
 		RequireApproval: cfg.CommentsRequireApproval,
 		EditWindow:      cfg.CommentsEditWindow,
 		FlagThreshold:   cfg.CommentsFlagThreshold,
 		Renderer:        markdown.New(),
+		Notifier:        notifier,
 	}
 	if cfg.TurnstileSecretKey != "" {
 		commentCfg.Captcha = captcha.NewTurnstile(cfg.TurnstileSecretKey, "", nil)
 	}
 
 	return commentservice.New(persistence.NewCommentRepository(db.GORM), ids, clock, commentCfg)
+}
+
+// newInbox stores in-app notifications for comment replies, moderation, and publications.
+func newInbox(cfg config.Config, db *database.Database, clock system.Clock, logger *slog.Logger) *notificationservice.Inbox {
+	repo := persistence.NewNotificationRepository(db.GORM)
+
+	return notificationservice.NewInbox(repo, repo, clock, logger, cfg.AppPublicURL).
+		WithTemplates(persistence.NewNotificationTemplateRepository(db.GORM))
 }
 
 // newMetrics returns the Prometheus server, request recorder, and audit drop

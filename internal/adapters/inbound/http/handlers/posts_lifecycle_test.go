@@ -32,6 +32,10 @@ func (f *fakePostLifecycle) Publish(_ context.Context, id uuid.UUID) (postdomain
 	return f.apply("publish", id, postdomain.StatusPublished)
 }
 
+func (f *fakePostLifecycle) PublishBy(_ context.Context, _, id uuid.UUID) (postdomain.Post, error) {
+	return f.apply("publish_by", id, postdomain.StatusPublished)
+}
+
 func (f *fakePostLifecycle) Unpublish(_ context.Context, id uuid.UUID) (postdomain.Post, error) {
 	return f.apply("unpublish", id, postdomain.StatusDraft)
 }

@@ -43,6 +43,14 @@ type Repository interface {
 	SetCoverImage(ctx context.Context, postID uuid.UUID, mediaID *uuid.UUID, updatedAt time.Time) error
 }
 
+// PublishNotifier tells users that a post went public. Delivery is best effort:
+// implementations log failures instead of returning them.
+type PublishNotifier interface {
+	// PostPublished runs after post became published; actorID is who published it, or nil
+	// when no user did.
+	PostPublished(ctx context.Context, post postdomain.Post, actorID *uuid.UUID)
+}
+
 // Service is the post use-case API consumed by HTTP handlers.
 type Service interface {
 	ListPublished(ctx context.Context, filter postdomain.ListFilter) (postdomain.ListResult, error)
@@ -50,6 +58,7 @@ type Service interface {
 	GetPublishedBySlug(ctx context.Context, slug string) (postdomain.Post, error)
 	CreateDraft(ctx context.Context, authorID uuid.UUID, title, slug, excerpt, content string, categoryID *uuid.UUID, tags *[]string) (postdomain.Post, []tagdomain.Tag, error)
 	Publish(ctx context.Context, id uuid.UUID) (postdomain.Post, error)
+	PublishBy(ctx context.Context, actorID, id uuid.UUID) (postdomain.Post, error)
 	Unpublish(ctx context.Context, id uuid.UUID) (postdomain.Post, error)
 	Archive(ctx context.Context, id uuid.UUID) (postdomain.Post, error)
 	Delete(ctx context.Context, id uuid.UUID) error

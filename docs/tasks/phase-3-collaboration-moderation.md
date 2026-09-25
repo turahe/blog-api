@@ -15,8 +15,9 @@ comment policies (migration `00018_post_comment_policy.sql`). Guest comments can
 Cloudflare Turnstile token (`TURNSTILE_SECRET_KEY`). The 6 admin moderation operations are wired behind `comment.moderate` /
 `comment.delete` with an append-only moderation log (migration `00010_comment_moderation.sql`).
 Audit logging is wired (migration `00016_audit_log_columns.sql`, async writer, activity
-endpoints, retention pruning). Notifications are still open; the 3 notification operations
-return `501`.
+endpoints, retention pruning). The notification inbox is wired (migration
+`00019_notifications.sql`): replies, moderation outcomes, and publications create in-app
+notices, listed and marked read under `/me/notifications`. The SSE stream still returns `501`.
 
 ## Epic: comment model and service
 
@@ -98,11 +99,12 @@ Spec: [comments-and-moderation.md](../features/comments-and-moderation.md)
 
 ## Epic: notification hooks
 
-- [ ] Notification domain and storage — see [notification.md](../features/notification.md)
-- [ ] `me.notifications.list` — `GET /api/v1/me/notifications`
-- [ ] `me.notifications.read` — `POST /api/v1/me/notifications/{id}/read`
+- [x] Notification domain and storage — see [notification.md](../features/notification.md)
+      (`notifications` table with a per-user dedupe key)
+- [x] `me.notifications.list` — `GET /api/v1/me/notifications`
+- [x] `me.notifications.read` — `POST /api/v1/me/notifications/{id}/read`
 - [ ] `me.notifications.stream` — `GET /api/v1/me/notifications/stream` (SSE)
-- [ ] Emit notifications on comment reply, comment moderation, and post publish
+- [x] Emit notifications on comment reply, comment moderation, and post publish
 - [ ] SSE connection lifecycle: heartbeat, client disconnect cleanup, and proxy buffering notes
 - [ ] Fan-out strategy for multiple API replicas, coordinated with the Phase 4 event bus
 

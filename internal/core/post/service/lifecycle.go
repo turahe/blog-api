@@ -17,20 +17,25 @@ const slugAttempts = 3
 
 // Publish makes a draft, scheduled, or archived post public now.
 func (s *PostService) Publish(ctx context.Context, id uuid.UUID) (postdomain.Post, error) {
-	return s.transition(ctx, id, postdomain.TransitionPublish)
+	return s.transition(ctx, id, postdomain.TransitionPublish, nil)
+}
+
+// PublishBy is Publish on behalf of actorID, so the author is told when someone else publishes.
+func (s *PostService) PublishBy(ctx context.Context, actorID, id uuid.UUID) (postdomain.Post, error) {
+	return s.transition(ctx, id, postdomain.TransitionPublish, &actorID)
 }
 
 // Unpublish returns a published or scheduled post to draft and clears published_at.
 func (s *PostService) Unpublish(ctx context.Context, id uuid.UUID) (postdomain.Post, error) {
-	return s.transition(ctx, id, postdomain.TransitionUnpublish)
+	return s.transition(ctx, id, postdomain.TransitionUnpublish, nil)
 }
 
 // Archive hides a post from public reads while keeping its published_at history.
 func (s *PostService) Archive(ctx context.Context, id uuid.UUID) (postdomain.Post, error) {
-	return s.transition(ctx, id, postdomain.TransitionArchive)
+	return s.transition(ctx, id, postdomain.TransitionArchive, nil)
 }
 
-func (s *PostService) transition(ctx context.Context, id uuid.UUID, transition postdomain.Transition) (postdomain.Post, error) {
+func (s *PostService) transition(ctx context.Context, id uuid.UUID, transition postdomain.Transition, actorID *uuid.UUID) (postdomain.Post, error) {
 	post, err := s.livePost(ctx, id)
 	if err != nil {
 		return postdomain.Post{}, err
@@ -64,6 +69,10 @@ func (s *PostService) transition(ctx context.Context, id uuid.UUID, transition p
 
 	audit.AddChange(ctx, "status", previous, next)
 	s.invalidate(ctx)
+
+	if next == postdomain.StatusPublished && s.notifier != nil {
+		s.notifier.PostPublished(ctx, post, actorID)
+	}
 
 	return post, nil
 }

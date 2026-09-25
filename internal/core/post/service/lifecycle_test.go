@@ -203,3 +203,35 @@ func TestFreeSlugIgnoresUnrelatedPrefixesAndKeepsLength(t *testing.T) {
 	require.Equal(t, strings.Repeat("a", postdomain.MaxSlugLength-3)+"-10",
 		withSuffix(strings.Repeat("a", postdomain.MaxSlugLength-3)+"-b", 10), "no dangling hyphen after trimming")
 }
+
+type publishCall struct {
+	post  uuid.UUID
+	actor *uuid.UUID
+}
+
+type fakePublishNotifier struct{ calls []publishCall }
+
+func (n *fakePublishNotifier) PostPublished(_ context.Context, post postdomain.Post, actorID *uuid.UUID) {
+	n.calls = append(n.calls, publishCall{post: post.UUID, actor: actorID})
+}
+
+func TestPublishNotifiesWithActor(t *testing.T) {
+	t.Parallel()
+
+	post := lifecyclePost(postdomain.StatusDraft)
+	notifier := &fakePublishNotifier{}
+	svc := New(newFakePostRepo(post), nil, fixedClock{now: lifecycleNow}).WithNotifier(notifier)
+	editor := uuid.New()
+
+	_, err := svc.PublishBy(context.Background(), editor, post.UUID)
+	require.NoError(t, err)
+
+	_, err = svc.Archive(context.Background(), post.UUID)
+	require.NoError(t, err)
+
+	_, err = svc.Publish(context.Background(), post.UUID)
+	require.NoError(t, err)
+
+	require.Equal(t, []publishCall{{post: post.UUID, actor: &editor}, {post: post.UUID}}, notifier.calls,
+		"only transitions into published notify")
+}

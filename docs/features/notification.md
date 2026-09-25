@@ -40,7 +40,9 @@ Values are inserted as plain text. Newlines in values are collapsed so they cann
 | `{{.PublicURL}}` | API origin |
 | `{{.PostTitle}}` / `{{.PostURL}}` | Publication or moderation target |
 | `{{.Reason}}` | Moderation reason |
-| `{{.ActorName}}` | Person who triggered a moderation alert |
+| `{{.ActorName}}` | Person who triggered the notice (moderation alert, reply author) |
+| `{{.Excerpt}}` | Short one-line quote of a reply (140 characters at most) |
+| `{{.Outcome}}` | Moderation result: `approved`, `rejected`, `marked as spam`, `removed`, `held for review` |
 
 | Type | Email subject | Web title | SSE preview |
 | --- | --- | --- | --- |
@@ -52,8 +54,39 @@ Values are inserted as plain text. Newlines in values are collapsed so they cann
 | `email.changed` | Your email address was changed | Your email address was changed | All sessions were signed out. |
 | `moderation.alert` | Moderation alert: `{{.PostTitle}}` | Moderation alert | `{{.PostTitle}}` needs review. |
 | `publication.published` | Published: `{{.PostTitle}}` | Your post is published | `{{.PostTitle}}` |
+| `publication.republished` | — | A post you commented on is back | `{{.PostTitle}}` |
+| `comment.reply` | — | `{{.ActorName}}` replied to your comment | `{{.Excerpt}}` |
+| `comment.moderated` | — | Your comment was `{{.Outcome}}` | `{{.PostTitle}}` |
+
+Types with no email subject are in-app only: they have web and SSE templates and are never mailed.
 
 SSE frames use `event: notification.created`. The `data` object carries `type`, `title`, and `preview`. Web uses the same `type` and `title`, plus the longer `body`. Email uses `subject` and the plain-text `body`, which is the only place a reset or confirmation token appears.
+
+## In-app inbox
+
+Web notices are stored in the `notifications` table (migration `00019`), one row per recipient.
+Each row keeps the rendered web `title` and `body`, the SSE `preview`, a `payload` with links
+(`post_id`, `comment_id`, `parent_id`, `status`, `url`), the actor, and `read_at`. Copy is
+rendered when the row is written, so later template edits do not rewrite old notices.
+
+Triggers (implemented by `notification/service.Inbox`, called from the comment and post services):
+
+| Event | Recipient | Type | Not sent when |
+| --- | --- | --- | --- |
+| A reply becomes visible (created approved, or approved from pending, spam, or rejected) | Registered author of the parent comment | `comment.reply` | The parent author is a guest or wrote the reply |
+| A moderator decides with `notify_author: true` | Registered comment author | `comment.moderated` | The author is a guest or is the moderator |
+| A post is published by someone other than its author (or by no user) | Post author | `publication.published` | The author published it |
+| A post is published again | Registered users with an approved comment on it | `publication.republished` | The user is the author or the publisher |
+
+Delivery is best effort: a failed insert is logged and never fails the comment or post
+request. Every notice has a per-user dedupe key (for example `comment.reply:<reply id>`), so
+re-approving a reply or retrying a publish does not notify twice. Bulk moderation sends reply
+notices but never `comment.moderated`, because it has no `notify_author` flag.
+
+`GET /api/v1/me/notifications` lists the caller's notices newest first (`?unread=true`,
+`page`, `per_page` up to 100) and returns the unread total in `X-Unread-Count`.
+`POST /api/v1/me/notifications/{id}/read` marks one read; repeating it keeps the first
+`read_at`, and another user's id is `404`.
 
 ## SSE Rules
 

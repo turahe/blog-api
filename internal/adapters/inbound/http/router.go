@@ -17,6 +17,7 @@ import (
 	commentservice "github.com/turahe/blog-api/internal/core/comment/service"
 	healthports "github.com/turahe/blog-api/internal/core/health/ports"
 	mediaports "github.com/turahe/blog-api/internal/core/media/ports"
+	notificationservice "github.com/turahe/blog-api/internal/core/notification/service"
 	postservice "github.com/turahe/blog-api/internal/core/post/service"
 	rbacports "github.com/turahe/blog-api/internal/core/rbac/ports"
 	rbacservice "github.com/turahe/blog-api/internal/core/rbac/service"
@@ -51,6 +52,7 @@ type Dependencies struct {
 	Metrics        middleware.MetricsRecorder // nil disables request metrics
 	Audit          auditports.Writer          // nil disables audit logging
 	Activity       *auditservice.Activity
+	Notifications  *notificationservice.Inbox // nil keeps the inbox routes as 501 stubs
 	Version        string
 	TrustedProxies []string
 	SwaggerEnabled bool
@@ -123,6 +125,10 @@ func NewRouter(deps Dependencies) (*gin.Engine, error) {
 
 	if deps.Activity != nil {
 		controllerDeps.Activity = deps.Activity
+	}
+
+	if deps.Notifications != nil {
+		controllerDeps.Notifications = deps.Notifications
 	}
 
 	return routes.NewRouter(routes.Dependencies{

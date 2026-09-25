@@ -2941,6 +2941,83 @@ paths:
       summary: Request an email change
       tags:
       - self-service
+  /api/v1/me/notifications:
+    get:
+      description: In-app notices (replies, moderation outcomes, publications), newest
+        first. The X-Unread-Count header holds the unread total across all pages.
+      parameters:
+      - description: only unread notifications
+        in: query
+        name: unread
+        type: boolean
+      - default: 1
+        description: page
+        in: query
+        name: page
+        type: integer
+      - default: 20
+        description: per page
+        in: query
+        name: per_page
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          headers:
+            X-Unread-Count:
+              description: unread notifications
+              type: integer
+          schema:
+            $ref: '#/definitions/responses.Envelope'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/responses.Envelope'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/responses.Envelope'
+      security:
+      - Bearer: []
+      summary: List my notifications
+      tags:
+      - me
+  /api/v1/me/notifications/{param1}/read:
+    post:
+      description: 'Idempotent: a notification that is already read keeps its first
+        read_at.'
+      parameters:
+      - description: notification UUID
+        in: path
+        name: param1
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/responses.Envelope'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/responses.Envelope'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/responses.Envelope'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/responses.Envelope'
+      security:
+      - Bearer: []
+      summary: Mark a notification read
+      tags:
+      - me
   /api/v1/me/password:
     put:
       consumes:

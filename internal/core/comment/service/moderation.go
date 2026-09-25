@@ -102,6 +102,7 @@ func (s *Service) Moderate(ctx context.Context, in ModerateInput) (commentdomain
 	}
 
 	audit.AddChange(ctx, "status", change.From, change.Entry.ToStatus)
+	s.notifyModerations(ctx, []commentdomain.Moderation{change})
 
 	return s.repo.GetByID(ctx, in.CommentUUID)
 }
@@ -147,6 +148,8 @@ func (s *Service) BulkModerate(ctx context.Context, in BulkModerateInput) (int, 
 	if err := s.repo.ApplyModerations(ctx, changes); err != nil {
 		return 0, err
 	}
+
+	s.notifyModerations(ctx, changes)
 
 	return len(changes), nil
 }

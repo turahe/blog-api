@@ -7,12 +7,14 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
+	"github.com/turahe/blog-api/internal/adapters/inbound/http/middleware"
 	"github.com/turahe/blog-api/internal/adapters/inbound/http/responses"
 	postdomain "github.com/turahe/blog-api/internal/core/post/domain"
 )
 
 type postLifecycleAPI interface {
 	Publish(ctx context.Context, id uuid.UUID) (postdomain.Post, error)
+	PublishBy(ctx context.Context, actorID, id uuid.UUID) (postdomain.Post, error)
 	Unpublish(ctx context.Context, id uuid.UUID) (postdomain.Post, error)
 	Archive(ctx context.Context, id uuid.UUID) (postdomain.Post, error)
 	Delete(ctx context.Context, id uuid.UUID) error
@@ -33,7 +35,16 @@ type postLifecycleAPI interface {
 //	@Security		Bearer
 //	@Router			/api/v1/admin/posts/{param1}/publish [post]
 func adminPublishPostHandler(posts postLifecycleAPI) gin.HandlerFunc {
-	return postTransitionHandler(posts.Publish)
+	return func(c *gin.Context) {
+		publish := posts.Publish
+		if actorID, ok := middleware.CurrentUserID(c); ok {
+			publish = func(ctx context.Context, id uuid.UUID) (postdomain.Post, error) {
+				return posts.PublishBy(ctx, actorID, id)
+			}
+		}
+
+		postTransitionHandler(publish)(c)
+	}
 }
 
 // adminUnpublishPostHandler godoc

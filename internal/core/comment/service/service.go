@@ -47,6 +47,8 @@ type Config struct {
 	Renderer ports.Renderer
 	// Captcha, when set, must accept a guest's token before the comment is stored.
 	Captcha ports.CaptchaVerifier
+	// Notifier receives reply and moderation notices; nil sends none.
+	Notifier ports.Notifier
 }
 
 // Service implements comment use cases.
@@ -69,6 +71,10 @@ func New(repo ports.Repository, ids IDGenerator, clock Clock, cfg Config) *Servi
 
 	if cfg.Renderer == nil {
 		cfg.Renderer = escapeRenderer{}
+	}
+
+	if cfg.Notifier == nil {
+		cfg.Notifier = noopNotifier{}
 	}
 
 	if repo != nil {
@@ -122,14 +128,15 @@ func (s *Service) Create(ctx context.Context, in CreateInput) (commentdomain.Com
 		}
 	}
 
+	var parent commentdomain.Comment
+
 	if in.ParentUUID != nil {
-		depth, err := s.replyDepth(ctx, in.PostUUID, *in.ParentUUID)
-		if err != nil {
+		if parent, err = s.replyParent(ctx, in.PostUUID, *in.ParentUUID); err != nil {
 			return commentdomain.Comment{}, err
 		}
 
 		comment.ParentUUID = in.ParentUUID
-		comment.Depth = depth
+		comment.Depth = parent.Depth + 1
 	}
 
 	switch {
@@ -145,7 +152,16 @@ func (s *Service) Create(ctx context.Context, in CreateInput) (commentdomain.Com
 	comment.CreatedAt = now
 	comment.UpdatedAt = now
 
-	return s.repo.Create(ctx, comment)
+	created, err := s.repo.Create(ctx, comment)
+	if err != nil {
+		return commentdomain.Comment{}, err
+	}
+
+	if created.ParentUUID != nil && created.Status == commentdomain.StatusApproved {
+		s.cfg.Notifier.CommentReplied(ctx, created, parent)
+	}
+
+	return created, nil
 }
 
 // ListForPost lists public comments on a public post: roots by default, or the direct
@@ -384,25 +400,26 @@ func (s *Service) guestIdentity(rawName, rawEmail string) (string, string, error
 }
 
 // replyDepth validates that parentID is an approved comment on postID and returns the reply's depth.
-func (s *Service) replyDepth(ctx context.Context, postID, parentID uuid.UUID) (int, error) {
+// replyParent returns the comment a reply answers, checking it can take one more level.
+func (s *Service) replyParent(ctx context.Context, postID, parentID uuid.UUID) (commentdomain.Comment, error) {
 	parent, err := s.repo.GetByID(ctx, parentID)
 	if errors.Is(err, commentdomain.ErrNotFound) {
-		return 0, commentdomain.ErrParentInvalid
+		return commentdomain.Comment{}, commentdomain.ErrParentInvalid
 	}
 
 	if err != nil {
-		return 0, err
+		return commentdomain.Comment{}, err
 	}
 
 	if parent.PostUUID != postID || parent.Status != commentdomain.StatusApproved {
-		return 0, commentdomain.ErrParentInvalid
+		return commentdomain.Comment{}, commentdomain.ErrParentInvalid
 	}
 
 	if parent.Depth+1 > commentdomain.MaxDepth {
-		return 0, commentdomain.ErrDepthExceeded
+		return commentdomain.Comment{}, commentdomain.ErrDepthExceeded
 	}
 
-	return parent.Depth + 1, nil
+	return parent, nil
 }
 
 func (s *Service) getPublic(ctx context.Context, id uuid.UUID) (commentdomain.Comment, error) {
