@@ -55,6 +55,8 @@ type Notifications struct {
 type Activity struct {
 	MeList        gin.HandlerFunc
 	AdminUserList gin.HandlerFunc
+	MeExport      gin.HandlerFunc
+	MeErase       gin.HandlerFunc
 }
 
 // Roles holds role and permission administration handlers.

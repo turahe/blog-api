@@ -37,8 +37,10 @@ type Deps struct {
 	SSEPingInterval    time.Duration
 	Profiles           profileAPI
 	// Privacy serves /me/privacy; nil keeps the routes as 501 stubs.
-	Privacy     privacyAPI
-	EmailChange authports.EmailChanger
+	Privacy privacyAPI
+	// PrivacyRequests queues data exports and erasures; nil keeps the routes as 501 stubs.
+	PrivacyRequests privacyRequestsAPI
+	EmailChange     authports.EmailChanger
 	// AvatarMaxBytes > 0 enables avatar upload and removal (requires media storage).
 	AvatarMaxBytes int64
 	Roles          RoleLookup
@@ -136,7 +138,7 @@ func NewControllers(deps Deps) routes.Controllers {
 		}
 	}
 
-	wireProfiles(&c.Users, deps)
+	wireProfiles(&c.Users, &c.Activity, deps)
 
 	c.Activity.MeList, c.Activity.AdminUserList = activityControllers(deps)
 	c.Analytics.ConsentStore, c.Analytics.ConsentGet, c.Analytics.ConsentWithdraw, c.Analytics.IngestGate = consentControllers(deps)
@@ -261,8 +263,8 @@ func settingsControllers(deps Deps) routes.Settings {
 	}
 }
 
-// wireProfiles binds profile, avatar, and email change handlers for the services that are present.
-func wireProfiles(users *routes.Users, deps Deps) {
+// wireProfiles binds profile, avatar, privacy, and email change handlers for the services that are present.
+func wireProfiles(users *routes.Users, activity *routes.Activity, deps Deps) {
 	limit := func(bucket string, n int, window time.Duration, handler gin.HandlerFunc) gin.HandlerFunc {
 		return chain(middleware.RateLimit(deps.RateLimiter, deps.Logger, bucket, n, window), handler)
 	}
@@ -278,6 +280,11 @@ func wireProfiles(users *routes.Users, deps Deps) {
 	if deps.Profiles != nil && deps.AvatarMaxBytes > 0 {
 		users.MeAvatarUpload = limit("profile.avatar", 10, time.Minute, meUploadAvatarHandler(deps.Profiles, deps.AvatarMaxBytes))
 		users.MeAvatarDelete = limit("profile.avatar", 10, time.Minute, meDeleteAvatarHandler(deps.Profiles))
+	}
+
+	if deps.PrivacyRequests != nil {
+		activity.MeExport = limit("privacy.export", 30, time.Minute, meExportHandler(deps.PrivacyRequests))
+		activity.MeErase = limit("privacy.erase", 5, time.Hour, meEraseHandler(deps.PrivacyRequests))
 	}
 
 	if deps.Privacy != nil {

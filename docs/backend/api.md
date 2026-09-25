@@ -213,6 +213,8 @@ limit the answer is `429 rate_limited` with `Retry-After`.
 | `me.email.confirm_change` | `POST /api/v1/me/email/confirm-change` | required | `email.change.confirm` 10/min |
 | `me.privacy.get` | `GET /api/v1/me/privacy` | required | — |
 | `me.privacy.update` | `PUT /api/v1/me/privacy` | required | `privacy.update` 10/min |
+| `me.activity.export` | `GET /api/v1/me/activity/export` | required | `privacy.export` 30/min |
+| `me.activity.erase` | `POST /api/v1/me/activity/erase` | required | `privacy.erase` 5/hour |
 | `public.users.profile` | `GET /api/v1/users/{username_or_id}` | optional | — |
 | `admin.users.profile.get` | `GET /api/v1/admin/users/{id}/profile` | `user.profile.read` | — |
 | `admin.users.profile.patch` | `PATCH /api/v1/admin/users/{id}/profile` | `user.profile.edit` | — |
@@ -263,6 +265,26 @@ Differences from the target rules below:
   public profiles, records `user.privacy.updated` with the before/after values and
   `stepup_proof_present`, and adds the changed fields to the audit entry. An unchanged update
   writes nothing.
+- **Data export:** `GET /me/activity/export` queues a JSON export of the caller's data
+  (account, roles, profile, privacy, activity, sessions, OAuth identities, analytics consents,
+  posts, comments, media, notifications) and answers `202` with `{id, kind, status,
+  requested_at, completed_at}`. Poll the same route: while the job is pending or running it
+  returns that job; once done it answers `200` with `download_url`, `download_expires_at`, and
+  `archive_expires_at`. Each call signs a new link valid for `PRIVACY_EXPORT_URL_TTL` (never past
+  the archive expiry); the archive is deleted after `PRIVACY_EXPORT_RETENTION`, and the next
+  call queues a fresh export. Responses carry `Cache-Control: no-store`. Without object storage
+  (`MEDIA_ENABLED=false`) the route answers `503 privacy.export_unavailable`. Queuing records
+  `user.activity.export_requested`.
+- **Erasure:** `POST /me/activity/erase` with `{current_password}` queues the anonymization
+  and answers `202`; a missing or wrong password → `403 privacy.erase_requires_reauth` (OAuth-only
+  accounts set a password through reset first). Repeating the call while it is pending returns
+  the same request. Within about a minute `app scheduler` deletes the user's activity feed,
+  analytics consents, sessions, reset tokens, 2FA, OAuth identities, notifications, profile,
+  privacy settings, and export archives; scrubs the email (`erased+<uuid>@invalid`), username, name
+  (`Deleted user`), password, and avatar; scrubs guest details from the user's comments; and
+  sets `status = deleted`. Posts and comments stay, shown as "Deleted user"; the remaining audit
+  rows the user performed keep the actor id but lose IP, user agent, request id, and metadata. Queuing records `user.activity.erasure_requested`. It cannot
+  be undone.
 - **Not yet enforced:** 2FA or password step-up on admin patch and avatar delete, CSRF (all
   routes use bearer tokens), and audit or outbox events for profile changes.
 

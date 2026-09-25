@@ -4178,6 +4178,118 @@
                 }
             }
         },
+        "/api/v1/me/activity/erase": {
+            "post": {
+                "security": [
+                    {
+                        "Bearer": []
+                    }
+                ],
+                "description": "Queues the anonymization of the caller's account: activity, consents, sessions, and tokens\nare deleted; email, name, username, avatar, and profile are scrubbed; posts and comments stay,\nshown as \"Deleted user\". Runs within minutes and cannot be undone. Repeating the call while\nthe erasure is pending returns the same request.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "self-service"
+                ],
+                "summary": "Erase my account",
+                "parameters": [
+                    {
+                        "description": "password confirmation",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/requests.EraseAccount"
+                        }
+                    }
+                ],
+                "responses": {
+                    "202": {
+                        "description": "Accepted",
+                        "schema": {
+                            "$ref": "#/definitions/responses.Envelope"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/responses.Envelope"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/responses.Envelope"
+                        }
+                    },
+                    "403": {
+                        "description": "privacy.erase_requires_reauth",
+                        "schema": {
+                            "$ref": "#/definitions/responses.Envelope"
+                        }
+                    },
+                    "429": {
+                        "description": "Too Many Requests",
+                        "schema": {
+                            "$ref": "#/definitions/responses.Envelope"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/me/activity/export": {
+            "get": {
+                "security": [
+                    {
+                        "Bearer": []
+                    }
+                ],
+                "description": "Queues a JSON export of everything stored about the caller, or returns the open or still\ndownloadable one. 202 while it is being prepared (poll this endpoint); 200 with a short-lived\ndownload_url once ready. After the archive expires, the next call queues a new export.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "self-service"
+                ],
+                "summary": "Export my personal data",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/responses.Envelope"
+                        }
+                    },
+                    "202": {
+                        "description": "Accepted",
+                        "schema": {
+                            "$ref": "#/definitions/responses.Envelope"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/responses.Envelope"
+                        }
+                    },
+                    "429": {
+                        "description": "Too Many Requests",
+                        "schema": {
+                            "$ref": "#/definitions/responses.Envelope"
+                        }
+                    },
+                    "503": {
+                        "description": "privacy.export_unavailable",
+                        "schema": {
+                            "$ref": "#/definitions/responses.Envelope"
+                        }
+                    }
+                }
+            }
+        },
         "/api/v1/me/avatar": {
             "post": {
                 "security": [
@@ -5577,6 +5689,18 @@
                     "maxLength": 32
                 },
                 "password": {
+                    "type": "string",
+                    "maxLength": 128
+                }
+            }
+        },
+        "requests.EraseAccount": {
+            "type": "object",
+            "required": [
+                "current_password"
+            ],
+            "properties": {
+                "current_password": {
                     "type": "string",
                     "maxLength": 128
                 }

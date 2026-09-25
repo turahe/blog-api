@@ -9,3 +9,8 @@ type UpdatePrivacy struct {
 	SearchAllowIndexing *bool   `json:"search_allow_indexing"`
 	CurrentPassword     string  `json:"current_password" binding:"max=128"`
 }
+
+// EraseAccount confirms an account erasure with the current password.
+type EraseAccount struct {
+	CurrentPassword string `json:"current_password" binding:"required,max=128"`
+}

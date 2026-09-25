@@ -92,6 +92,8 @@ Recorded in the same transaction as the write (only when `MESSAGE_BROKER` is set
 | `blog.post.seo.updated` | SEO update that changed at least one SEO field; `changed_fields` lists them | Editing user |
 | `blog.post.slug_changed` | Slug change through the SEO endpoint, with `old_slug` and `new_slug` | Editing user |
 | `user.privacy.updated` | A `/me/privacy` update that changed at least one flag; before/after values and `stepup_proof_present` | The user |
+| `user.activity.export_requested` | A new `/me/activity/export` job is queued; `job_id`, `scope`, `requested_by_admin` | The user |
+| `user.activity.erasure_requested` | A new `/me/activity/erase` request is queued; `erasure_id`, `scope` | The user |
 | `analytics.consent.granted` / `rejected` / `withdrawn` | A consent decision that changed status, one event per purpose; payload carries the pseudonymous subject id, purpose, and policy version | None |
 
 Payloads carry identifiers and state, never email addresses or content. The rest of the

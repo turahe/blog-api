@@ -13,11 +13,15 @@ import (
 
 	"github.com/spf13/cobra"
 	"github.com/turahe/blog-api/internal/adapters/inbound/scheduler"
+	"github.com/turahe/blog-api/internal/adapters/outbound/cache"
 	"github.com/turahe/blog-api/internal/adapters/outbound/persistence"
 	"github.com/turahe/blog-api/internal/bootstrap"
 	auditservice "github.com/turahe/blog-api/internal/core/audit/service"
+	"github.com/turahe/blog-api/internal/core/event"
+	"github.com/turahe/blog-api/internal/core/readcache"
 	"github.com/turahe/blog-api/internal/platform/config"
 	"github.com/turahe/blog-api/internal/platform/database"
+	redisplatform "github.com/turahe/blog-api/internal/platform/redis"
 )
 
 const (
@@ -27,6 +31,8 @@ const (
 	sessionRetention = 30 * 24 * time.Hour
 	// resetTokenRetention keeps expired reset and verification tokens before deletion.
 	resetTokenRetention = 7 * 24 * time.Hour
+	// privacyBatch bounds how many export and erasure requests one run processes.
+	privacyBatch = 10
 )
 
 func newSchedulerCmd() *cobra.Command {
@@ -144,17 +150,41 @@ func withScheduler(
 	}
 	defer func() { err = errors.Join(err, db.Close()) }()
 
-	repo := persistence.NewJobRunRepository(db.GORM)
+	readCache, closeCache := schedulerCache(ctx, cfg, logger)
+	defer closeCache()
 
-	return fn(scheduler.New(repo, schedulerTick, logger, scheduledJobs(cfg, db, logger)...), repo, logger)
+	repo := persistence.NewJobRunRepository(db.GORM)
+	jobs := scheduledJobs(ctx, cfg, db, readCache, logger)
+
+	return fn(scheduler.New(repo, schedulerTick, logger, jobs...), repo, logger)
+}
+
+// schedulerCache connects to the public read cache so erasures can invalidate it. It returns a
+// nil cache when caching is disabled or Redis is unreachable; cached reads then expire by TTL.
+func schedulerCache(ctx context.Context, cfg config.Config, logger *slog.Logger) (readcache.Cache, func()) {
+	if !cfg.CacheEnabled {
+		return nil, func() {}
+	}
+
+	client, err := redisplatform.Open(ctx, cfg.RedisURL())
+	if err != nil {
+		logger.Warn("read cache unavailable; erasures will not invalidate cached reads", "error", err)
+		return nil, func() {}
+	}
+
+	return cache.NewRedis(client, bootstrap.CacheTTLs(cfg), logger), func() { _ = client.Close() }
 }
 
 // scheduledJobs lists the recurring jobs. Names are stable: they key locks and run history.
-func scheduledJobs(cfg config.Config, db *database.Database, logger *slog.Logger) []scheduler.Job {
+func scheduledJobs(
+	ctx context.Context, cfg config.Config, db *database.Database, readCache readcache.Cache, logger *slog.Logger,
+) []scheduler.Job {
 	activity := auditservice.NewActivity(persistence.NewAuditRepository(db.GORM))
 	processed := persistence.NewProcessedMessageRepository(db.GORM)
 	sessions := persistence.NewSessionRepository(db.GORM)
 	resets := persistence.NewResetTokenRepository(db.GORM)
+	privacy := bootstrap.NewPrivacyService(ctx, cfg, db, nil,
+		event.Unit{Tx: persistence.NewTransactor(db.GORM)}, readCache, logger)
 
 	return []scheduler.Job{
 		{Name: "audit-prune", Every: time.Hour, Run: func(ctx context.Context) error {
@@ -171,6 +201,16 @@ func scheduledJobs(cfg config.Config, db *database.Database, logger *slog.Logger
 				resets.PruneExpiredBefore(ctx, time.Now().Add(-resetTokenRetention)))
 
 			return errors.Join(sessionsErr, resetsErr)
+		}},
+		{Name: "privacy-requests", Every: time.Minute, Run: func(ctx context.Context) error {
+			done, err := privacy.ProcessPending(ctx, privacyBatch)
+			if done > 0 {
+				logger.InfoContext(ctx, "processed privacy requests", "count", done)
+			}
+
+			purged, purgeErr := privacy.PurgeExpired(ctx)
+
+			return errors.Join(err, logPruned(ctx, logger, "export archives")(int64(purged), purgeErr))
 		}},
 	}
 }

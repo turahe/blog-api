@@ -37,6 +37,14 @@ type getObjectClient interface {
 	GetObject(ctx context.Context, params *s3.GetObjectInput, optFns ...func(*s3.Options)) (*s3.GetObjectOutput, error)
 }
 
+type presignGetClient interface {
+	PresignGetObject(ctx context.Context, params *s3.GetObjectInput, optFns ...func(*s3.PresignOptions)) (*v4.PresignedHTTPRequest, error)
+}
+
+type deleteObjectClient interface {
+	DeleteObject(ctx context.Context, params *s3.DeleteObjectInput, optFns ...func(*s3.Options)) (*s3.DeleteObjectOutput, error)
+}
+
 // Client implements mediaports.ObjectStorage on an S3-compatible bucket.
 type Client struct {
 	bucket       string
@@ -46,6 +54,8 @@ type Client struct {
 	presign      presignPutClient
 	put          putObjectClient
 	get          getObjectClient
+	presignGet   presignGetClient
+	del          deleteObjectClient
 }
 
 var _ ports.ObjectStorage = (*Client)(nil)
@@ -93,14 +103,18 @@ func NewS3(ctx context.Context, cfg appconfig.Config) (*Client, error) {
 		}
 	})
 
+	presigner := s3.NewPresignClient(s3Client)
+
 	return &Client{
 		bucket:       bucket,
 		endpoint:     endpoint,
 		usePathStyle: usePathStyle,
 		head:         s3Client,
-		presign:      s3.NewPresignClient(s3Client),
+		presign:      presigner,
 		put:          s3Client,
 		get:          s3Client,
+		presignGet:   presigner,
+		del:          s3Client,
 	}, nil
 }
 
@@ -163,6 +177,34 @@ func (c *Client) PresignPut(ctx context.Context, key, contentType string, ttl ti
 	}
 
 	return request.URL, headers, nil
+}
+
+// PresignGet returns a presigned download URL for key that expires after ttl.
+func (c *Client) PresignGet(ctx context.Context, key string, ttl time.Duration) (string, error) {
+	request, err := c.presignGet.PresignGetObject(ctx, &s3.GetObjectInput{
+		Bucket: aws.String(c.bucket),
+		Key:    aws.String(key),
+	}, func(o *s3.PresignOptions) {
+		o.Expires = ttl
+	})
+	if err != nil {
+		return "", err
+	}
+
+	return request.URL, nil
+}
+
+// DeleteObject removes key; a missing key is not an error.
+func (c *Client) DeleteObject(ctx context.Context, key string) error {
+	_, err := c.del.DeleteObject(ctx, &s3.DeleteObjectInput{
+		Bucket: aws.String(c.bucket),
+		Key:    aws.String(key),
+	})
+	if err != nil && !isObjectNotFound(err) {
+		return err
+	}
+
+	return nil
 }
 
 // HeadObject returns object metadata, or ports.ErrObjectNotFound when the key is missing.

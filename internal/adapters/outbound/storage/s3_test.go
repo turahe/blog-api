@@ -223,3 +223,63 @@ func (f *fakePresignClient) PresignPutObject(_ context.Context, _ *s3.PutObjectI
 
 	return f.request, nil
 }
+
+func (f *fakePresignClient) PresignGetObject(_ context.Context, _ *s3.GetObjectInput, optFns ...func(*s3.PresignOptions)) (*v4.PresignedHTTPRequest, error) {
+	options := s3.PresignOptions{}
+	for _, optFn := range optFns {
+		optFn(&options)
+	}
+
+	f.lastExpires = options.Expires
+	if f.err != nil {
+		return nil, f.err
+	}
+
+	return f.request, nil
+}
+
+type fakeDeleteClient struct {
+	err     error
+	deleted []string
+}
+
+func (f *fakeDeleteClient) DeleteObject(_ context.Context, params *s3.DeleteObjectInput, _ ...func(*s3.Options)) (*s3.DeleteObjectOutput, error) {
+	f.deleted = append(f.deleted, aws.ToString(params.Key))
+	return &s3.DeleteObjectOutput{}, f.err
+}
+
+func TestPresignGetUsesTTL(t *testing.T) {
+	t.Parallel()
+
+	presigner := &fakePresignClient{request: &v4.PresignedHTTPRequest{URL: "https://s3.test/bucket/key?sig"}}
+	client := &Client{bucket: "bucket", presignGet: presigner}
+
+	url, err := client.PresignGet(t.Context(), "privacy-exports/a.json", 15*time.Minute)
+	if err != nil {
+		t.Fatalf("presign get: %v", err)
+	}
+
+	if url != "https://s3.test/bucket/key?sig" || presigner.lastExpires != 15*time.Minute {
+		t.Fatalf("got url %q expires %s", url, presigner.lastExpires)
+	}
+}
+
+func TestDeleteObjectIgnoresMissingKeys(t *testing.T) {
+	t.Parallel()
+
+	deleter := &fakeDeleteClient{err: &smithy.GenericAPIError{Code: "NoSuchKey", Message: "missing"}}
+	client := &Client{bucket: "bucket", del: deleter}
+
+	if err := client.DeleteObject(t.Context(), "gone"); err != nil {
+		t.Fatalf("missing key should not fail: %v", err)
+	}
+
+	if len(deleter.deleted) != 1 || deleter.deleted[0] != "gone" {
+		t.Fatalf("deleted %v", deleter.deleted)
+	}
+
+	deleter.err = errors.New("boom")
+	if err := client.DeleteObject(t.Context(), "key"); err == nil {
+		t.Fatal("expected storage errors to surface")
+	}
+}

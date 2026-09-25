@@ -301,6 +301,8 @@ delivery semantics are in [events.md](../backend/events.md).
 | `MEDIA_ALLOWED_MIME_TYPES` | `image/jpeg,image/png,image/webp,image/gif` | No | Comma-separated MIME allowlist for uploads. |
 | `MEDIA_MAX_UPLOAD_BYTES` | `10485760` | No | Maximum declared upload size in bytes. |
 | `MEDIA_PRESIGN_TTL` | `15m` | No | Presigned URL lifetime. |
+| `PRIVACY_EXPORT_RETENTION` | `72h` | No | How long a personal data export archive stays in `S3_BUCKET` (under `privacy-exports/`, which must not be publicly readable) before `app scheduler` deletes it. Must be positive. |
+| `PRIVACY_EXPORT_URL_TTL` | `15m` | No | Lifetime of each presigned export download link; a new link is issued on every `GET /me/activity/export`. 1s–168h. |
 | `AVATAR_MAX_BYTES` | `5242880` | No | Maximum avatar upload size (`POST /api/v1/me/avatar`); the smaller of this and `MEDIA_MAX_UPLOAD_BYTES` applies. Must be positive. |
 | `IMGPROXY_URL` | empty | For transforms | Public imgproxy origin (usually behind a CDN). Empty makes `GET /media/{id}/transform` answer `501`. |
 | `IMGPROXY_KEY` / `IMGPROXY_SALT` | empty | With `IMGPROXY_URL` | Hex signing key and salt; must equal imgproxy's own `IMGPROXY_KEY` / `IMGPROXY_SALT`. Secrets. |

@@ -104,6 +104,8 @@ type Config struct {
 	ImgproxySalt                  string
 	MediaTransformWidths          []int
 	MediaTransformURLTTL          time.Duration
+	PrivacyExportRetention        time.Duration
+	PrivacyExportURLTTL           time.Duration
 	CommentsGuestEnabled          bool
 	CommentsRequireApproval       bool
 	CommentsEditWindow            time.Duration
@@ -241,7 +243,26 @@ func (c Config) ValidateMedia() error {
 		return errors.New("AVATAR_MAX_BYTES must be positive")
 	}
 
+	if err := c.validatePrivacyExports(); err != nil {
+		return err
+	}
+
 	return c.validateTransforms()
+}
+
+// maxPresignTTL is the longest lifetime S3 accepts for a presigned URL.
+const maxPresignTTL = 7 * 24 * time.Hour
+
+func (c Config) validatePrivacyExports() error {
+	if c.PrivacyExportRetention <= 0 {
+		return errors.New("PRIVACY_EXPORT_RETENTION must be positive")
+	}
+
+	if c.PrivacyExportURLTTL <= 0 || c.PrivacyExportURLTTL > maxPresignTTL {
+		return errors.New("PRIVACY_EXPORT_URL_TTL must be between 1s and 168h")
+	}
+
+	return nil
 }
 
 func (c Config) validateTransforms() error {
@@ -584,6 +605,8 @@ func load(withJWTKeys bool) (Config, error) {
 		MediaTransformURLTTL:          duration("MEDIA_TRANSFORM_URL_TTL", 24*time.Hour),
 		MediaMaxUploadBytes:           int64(integer("MEDIA_MAX_UPLOAD_BYTES", 10<<20)),
 		MediaPresignTTL:               duration("MEDIA_PRESIGN_TTL", 15*time.Minute),
+		PrivacyExportRetention:        duration("PRIVACY_EXPORT_RETENTION", 72*time.Hour),
+		PrivacyExportURLTTL:           duration("PRIVACY_EXPORT_URL_TTL", 15*time.Minute),
 		CommentsGuestEnabled:          boolEnv("COMMENTS_GUEST_ENABLED", false),
 		CommentsRequireApproval:       boolEnv("COMMENTS_REQUIRE_APPROVAL", false),
 		CommentsEditWindow:            duration("COMMENTS_EDIT_WINDOW", 15*time.Minute),

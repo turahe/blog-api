@@ -193,6 +193,10 @@ Owner only. Append-only rows; CSV export via streaming writer. Rate limit export
 #### `GET /api/v1/me/activity/export` + `POST /api/v1/me/activity/erase`
 
 GDPR/CCPA flows: submit export job or erasure request; erasure requires password re-verify; emits analytics.consent.erasure too if user requests it.
+Implemented as a `privacy_requests` queue run by `app scheduler`: the export is a JSON archive
+in object storage behind a short-lived presigned link, and erasure anonymizes the account
+(analytics consents are deleted directly; no separate consent event). See
+[api.md](api.md#profiles-and-email-change).
 
 ### Public Profile
 

@@ -1,5 +1,22 @@
 # Changelog
 
+## 2026-09-25 — Data export and erasure
+
+### Added
+
+- `GET /api/v1/me/activity/export` queues a JSON export of the caller's data and, once ready,
+  returns a short-lived presigned download link. `POST /api/v1/me/activity/erase` (with
+  `current_password`) queues the anonymization of the account. See
+  [api.md](docs/backend/api.md#profiles-and-email-change).
+- `privacy_requests` table (migration 00027) and a `privacy-requests` job in `app scheduler`
+  that runs queued requests every minute and deletes expired export archives.
+- Config `PRIVACY_EXPORT_RETENTION` (default `72h`) and `PRIVACY_EXPORT_URL_TTL` (default `15m`).
+- Events `user.activity.export_requested` and `user.activity.erasure_requested`.
+
+### Changed
+
+- Comments by an erased account show `Deleted user` as the author username.
+
 ## 2026-09-25 — Privacy settings
 
 ### Added

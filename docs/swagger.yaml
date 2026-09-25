@@ -210,6 +210,14 @@ definitions:
     - code
     - password
     type: object
+  requests.EraseAccount:
+    properties:
+      current_password:
+        maxLength: 128
+        type: string
+    required:
+    - current_password
+    type: object
   requests.FlagComment:
     properties:
       details:
@@ -3407,6 +3415,84 @@ paths:
       summary: List my account activity
       tags:
       - me
+  /api/v1/me/activity/erase:
+    post:
+      consumes:
+      - application/json
+      description: |-
+        Queues the anonymization of the caller's account: activity, consents, sessions, and tokens
+        are deleted; email, name, username, avatar, and profile are scrubbed; posts and comments stay,
+        shown as "Deleted user". Runs within minutes and cannot be undone. Repeating the call while
+        the erasure is pending returns the same request.
+      parameters:
+      - description: password confirmation
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/requests.EraseAccount'
+      produces:
+      - application/json
+      responses:
+        "202":
+          description: Accepted
+          schema:
+            $ref: '#/definitions/responses.Envelope'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/responses.Envelope'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/responses.Envelope'
+        "403":
+          description: privacy.erase_requires_reauth
+          schema:
+            $ref: '#/definitions/responses.Envelope'
+        "429":
+          description: Too Many Requests
+          schema:
+            $ref: '#/definitions/responses.Envelope'
+      security:
+      - Bearer: []
+      summary: Erase my account
+      tags:
+      - self-service
+  /api/v1/me/activity/export:
+    get:
+      description: |-
+        Queues a JSON export of everything stored about the caller, or returns the open or still
+        downloadable one. 202 while it is being prepared (poll this endpoint); 200 with a short-lived
+        download_url once ready. After the archive expires, the next call queues a new export.
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/responses.Envelope'
+        "202":
+          description: Accepted
+          schema:
+            $ref: '#/definitions/responses.Envelope'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/responses.Envelope'
+        "429":
+          description: Too Many Requests
+          schema:
+            $ref: '#/definitions/responses.Envelope'
+        "503":
+          description: privacy.export_unavailable
+          schema:
+            $ref: '#/definitions/responses.Envelope'
+      security:
+      - Bearer: []
+      summary: Export my personal data
+      tags:
+      - self-service
   /api/v1/me/avatar:
     delete:
       produces:

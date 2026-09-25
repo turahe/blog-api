@@ -22,6 +22,7 @@ import (
 	mediaports "github.com/turahe/blog-api/internal/core/media/ports"
 	notificationservice "github.com/turahe/blog-api/internal/core/notification/service"
 	postservice "github.com/turahe/blog-api/internal/core/post/service"
+	privacyservice "github.com/turahe/blog-api/internal/core/privacy/service"
 	rbacports "github.com/turahe/blog-api/internal/core/rbac/ports"
 	rbacservice "github.com/turahe/blog-api/internal/core/rbac/service"
 	settingsservice "github.com/turahe/blog-api/internal/core/settings/service"
@@ -52,10 +53,12 @@ type Dependencies struct {
 	Comments       *commentservice.Service
 	Settings       *settingsservice.Service // nil keeps the settings routes as 501 stubs
 	Consent        *consentservice.Service  // nil keeps the consent routes as 501 stubs
-	RateLimiter    middleware.Limiter
-	CommentRates   handlers.CommentRates
-	LoginPerMinute int
-	Metrics        middleware.MetricsRecorder // nil disables request metrics
+	// PrivacyRequests queues data exports and erasures; nil keeps the routes as 501 stubs.
+	PrivacyRequests *privacyservice.Service
+	RateLimiter     middleware.Limiter
+	CommentRates    handlers.CommentRates
+	LoginPerMinute  int
+	Metrics         middleware.MetricsRecorder // nil disables request metrics
 	// MaxInFlight sheds requests beyond this many concurrent ones with 503; 0 disables.
 	MaxInFlight   int
 	Audit         auditports.Writer // nil disables audit logging
@@ -170,6 +173,10 @@ func optionalServices(controllerDeps *handlers.Deps, deps Dependencies) {
 	if deps.Settings != nil {
 		controllerDeps.Settings = deps.Settings
 		controllerDeps.SettingsValues = deps.Settings
+	}
+
+	if deps.PrivacyRequests != nil {
+		controllerDeps.PrivacyRequests = deps.PrivacyRequests
 	}
 
 	if deps.Consent != nil {
