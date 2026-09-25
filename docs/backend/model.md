@@ -77,7 +77,7 @@ repository             --> persistence model  <-->  domain entity
 - ports take and return public UUIDs; bigint ids never appear in HTTP DTOs, JWT subjects, Casbin subjects, or events
 - indexes and CHECKs belong in goose migrations, not only in GORM tags
 - soft delete only where product requires restore/tombstone: typically `users`, `posts`, `media_assets`, `comments`
-- append-only tables: no GORM `Updates` on historical rows (`post_revisions`, `audit_logs`, `outbox_events`, `user_activity`, `settings_history`, password history/tokens)
+- append-only tables: no GORM `Updates` on historical rows (`post_revisions`, `audit_logs`, `user_activity`, `settings_history`, password history/tokens); `outbox_events` rows only change delivery state (`attempts`, `published_at`, `failed_at`)
 - Casbin: `casbin_rules` is canonical; `rbac_*` mirrors are service-maintained — do not write mirrors from ad-hoc repos
 - foundation migration [00001_foundation.sql](../../internal/platform/migrations/sql/00001_foundation.sql) is a **bootstrap subset**; full target schema is [database.md](./database.md) + [ERD.md](./ERD.md)
 
@@ -87,7 +87,7 @@ repository             --> persistence model  <-->  domain entity
 | --- | --- | --- |
 | Soft delete | `users`, `posts`, `media_assets`, `comments` | unique indexes usually partial `WHERE deleted_at IS NULL` |
 | Hard delete / CASCADE | junction rows (`post_tags`, `user_roles`) | cascade with parent where appropriate |
-| Append-only | `post_revisions`, `audit_logs`, `outbox_events`, `user_activity` | INSERT only; restore = new revision row |
+| Append-only | `post_revisions`, `audit_logs`, `user_activity` | INSERT only; restore = new revision row |
 | 1:1 sidecar | `user_profiles`, `user_privacy_settings`, `post_seo` | keep hot `users`/`posts` rows lean |
 | Nested set | `categories`, `comments`, `media_assets` | maintain `lft`/`rgt`/`depth` in service, not ad-hoc SQL |
 | Outbox | `outbox_events` | same transaction as aggregate write |

@@ -61,7 +61,7 @@ func (r *AuditRepository) Insert(ctx context.Context, entries []auditdomain.Entr
 		return nil
 	}
 
-	db := r.db.WithContext(ctx)
+	db := conn(ctx, r.db)
 
 	actors, err := r.actorIDs(db, entries)
 	if err != nil {
@@ -123,7 +123,7 @@ func (r *AuditRepository) actorIDs(db *gorm.DB, entries []auditdomain.Entry) (ma
 
 // Activity lists entries the user performed or that target the user's account, newest first.
 func (r *AuditRepository) Activity(ctx context.Context, filter auditdomain.ActivityFilter) (auditdomain.ActivityPage, error) {
-	query := r.db.WithContext(ctx).Model(&AuditLogModel{}).
+	query := conn(ctx, r.db).Model(&AuditLogModel{}).
 		Where("(audit_logs.actor_id = "+idOf("users")+" OR (audit_logs.resource_type = ? AND audit_logs.resource_id = ?))",
 			filter.UserID, auditdomain.ResourceUser, filter.UserID)
 
@@ -171,7 +171,7 @@ func (r *AuditRepository) Prune(ctx context.Context, cutoff time.Time) (int64, e
 	var total int64
 
 	for {
-		result := r.db.WithContext(ctx).Exec(
+		result := conn(ctx, r.db).Exec(
 			`DELETE FROM audit_logs WHERE id IN (SELECT id FROM audit_logs WHERE occurred_at < ? LIMIT ?)`,
 			cutoff, pruneBatchSize)
 		if result.Error != nil {

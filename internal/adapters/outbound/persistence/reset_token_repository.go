@@ -41,7 +41,7 @@ func NewResetTokenRepository(db *gorm.DB) *ResetTokenRepository {
 
 // Create stores a hashed password reset token.
 func (r *ResetTokenRepository) Create(ctx context.Context, token authdomain.PasswordResetToken) error {
-	userID, err := idByUUID(r.db.WithContext(ctx), "users", token.UserUUID)
+	userID, err := idByUUID(conn(ctx, r.db), "users", token.UserUUID)
 	if err != nil {
 		return err
 	}
@@ -54,14 +54,14 @@ func (r *ResetTokenRepository) Create(ctx context.Context, token authdomain.Pass
 		model.NewEmail = &token.NewEmail
 	}
 
-	return r.db.WithContext(ctx).Create(&model).Error
+	return conn(ctx, r.db).Create(&model).Error
 }
 
 // FindByHash returns the token with the hash or authdomain.ErrInvalidToken.
 func (r *ResetTokenRepository) FindByHash(ctx context.Context, hash string) (authdomain.PasswordResetToken, error) {
 	var model PasswordResetTokenModel
 
-	err := r.db.WithContext(ctx).
+	err := conn(ctx, r.db).
 		Select(withRefs("password_reset_tokens", uuidRef("users", "password_reset_tokens.user_id", "user_uuid"))).
 		Where("token_hash = ?", hash).First(&model).Error
 	if errors.Is(err, gorm.ErrRecordNotFound) {
@@ -85,13 +85,13 @@ func (r *ResetTokenRepository) FindByHash(ctx context.Context, hash string) (aut
 
 // MarkUsed records that the token was consumed at the given time.
 func (r *ResetTokenRepository) MarkUsed(ctx context.Context, id uuid.UUID, at time.Time) error {
-	return r.db.WithContext(ctx).Model(&PasswordResetTokenModel{}).Where("uuid = ? AND used_at IS NULL", id).
+	return conn(ctx, r.db).Model(&PasswordResetTokenModel{}).Where("uuid = ? AND used_at IS NULL", id).
 		Update("used_at", at).Error
 }
 
 // RevokePending marks every unused token of purpose for the user as used.
 func (r *ResetTokenRepository) RevokePending(ctx context.Context, userID uuid.UUID, purpose string, at time.Time) error {
-	return r.db.WithContext(ctx).Model(&PasswordResetTokenModel{}).
+	return conn(ctx, r.db).Model(&PasswordResetTokenModel{}).
 		Where("user_id = "+idOf("users")+" AND purpose = ? AND used_at IS NULL", userID, purpose).
 		Update("used_at", at).Error
 }

@@ -58,7 +58,7 @@ func mapTag(model TagModel) tagdomain.Tag {
 // List returns all tags ordered by name.
 func (r *TagRepository) List(ctx context.Context) ([]tagdomain.Tag, error) {
 	var models []TagModel
-	if err := r.db.WithContext(ctx).Order("name ASC").Find(&models).Error; err != nil {
+	if err := conn(ctx, r.db).Order("name ASC").Find(&models).Error; err != nil {
 		return nil, err
 	}
 
@@ -74,7 +74,7 @@ func (r *TagRepository) List(ctx context.Context) ([]tagdomain.Tag, error) {
 func (r *TagRepository) GetByID(ctx context.Context, id uuid.UUID) (tagdomain.Tag, error) {
 	var model TagModel
 
-	err := r.db.WithContext(ctx).Where("uuid = ?", id).First(&model).Error
+	err := conn(ctx, r.db).Where("uuid = ?", id).First(&model).Error
 	if errors.Is(err, gorm.ErrRecordNotFound) {
 		return tagdomain.Tag{}, tagdomain.ErrNotFound
 	}
@@ -90,7 +90,7 @@ func (r *TagRepository) GetByID(ctx context.Context, id uuid.UUID) (tagdomain.Ta
 func (r *TagRepository) GetBySlug(ctx context.Context, slug string) (tagdomain.Tag, error) {
 	var model TagModel
 
-	err := r.db.WithContext(ctx).Where("slug = ?", slug).First(&model).Error
+	err := conn(ctx, r.db).Where("slug = ?", slug).First(&model).Error
 	if errors.Is(err, gorm.ErrRecordNotFound) {
 		return tagdomain.Tag{}, tagdomain.ErrNotFound
 	}
@@ -110,7 +110,7 @@ func (r *TagRepository) Create(ctx context.Context, tag tagdomain.Tag) (tagdomai
 		Slug:      tag.Slug,
 		CreatedAt: tag.CreatedAt,
 	}
-	if err := r.db.WithContext(ctx).Create(&model).Error; err != nil {
+	if err := conn(ctx, r.db).Create(&model).Error; err != nil {
 		return tagdomain.Tag{}, err
 	}
 
@@ -119,7 +119,7 @@ func (r *TagRepository) Create(ctx context.Context, tag tagdomain.Tag) (tagdomai
 
 // Update persists tag name and slug changes.
 func (r *TagRepository) Update(ctx context.Context, tag tagdomain.Tag) (tagdomain.Tag, error) {
-	res := r.db.WithContext(ctx).Model(&TagModel{}).Where("uuid = ?", tag.UUID).
+	res := conn(ctx, r.db).Model(&TagModel{}).Where("uuid = ?", tag.UUID).
 		Updates(map[string]any{
 			"name": tag.Name,
 			"slug": tag.Slug,
@@ -139,7 +139,7 @@ func (r *TagRepository) Update(ctx context.Context, tag tagdomain.Tag) (tagdomai
 func (r *TagRepository) SlugTaken(ctx context.Context, slug string, excludeID uuid.UUID) (bool, error) {
 	var n int64
 
-	err := r.db.WithContext(ctx).Model(&TagModel{}).
+	err := conn(ctx, r.db).Model(&TagModel{}).
 		Where("slug = ? AND uuid <> ?", slug, excludeID).
 		Count(&n).Error
 
@@ -150,7 +150,7 @@ func (r *TagRepository) SlugTaken(ctx context.Context, slug string, excludeID uu
 func (r *TagRepository) CountPosts(ctx context.Context, tagID uuid.UUID) (int64, error) {
 	var n int64
 
-	err := r.db.WithContext(ctx).Model(&PostTagModel{}).
+	err := conn(ctx, r.db).Model(&PostTagModel{}).
 		Where("tag_id = "+idOf("tags"), tagID).
 		Count(&n).Error
 
@@ -159,7 +159,7 @@ func (r *TagRepository) CountPosts(ctx context.Context, tagID uuid.UUID) (int64,
 
 // MergeInto moves source's post links to target and deletes source, in one transaction.
 func (r *TagRepository) MergeInto(ctx context.Context, sourceID, targetID uuid.UUID) error {
-	return r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+	return conn(ctx, r.db).Transaction(func(tx *gorm.DB) error {
 		sourceRowID, err := idByUUID(tx, "tags", sourceID)
 		if errors.Is(err, errUnknownReference) {
 			return tagdomain.ErrNotFound
@@ -200,7 +200,7 @@ func (r *TagRepository) MergeInto(ctx context.Context, sourceID, targetID uuid.U
 
 // Delete removes the tag with the given UUID.
 func (r *TagRepository) Delete(ctx context.Context, id uuid.UUID) error {
-	res := r.db.WithContext(ctx).Where("uuid = ?", id).Delete(&TagModel{})
+	res := conn(ctx, r.db).Where("uuid = ?", id).Delete(&TagModel{})
 	if res.Error != nil {
 		return res.Error
 	}
@@ -214,7 +214,7 @@ func (r *TagRepository) Delete(ctx context.Context, id uuid.UUID) error {
 
 // ReplacePostTags sets the post's tags to exactly tagIDs.
 func (r *TagRepository) ReplacePostTags(ctx context.Context, postID uuid.UUID, tagIDs []uuid.UUID) error {
-	return r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+	return conn(ctx, r.db).Transaction(func(tx *gorm.DB) error {
 		postRowID, err := idByUUID(tx, "posts", postID)
 		if err != nil {
 			return err
@@ -255,7 +255,7 @@ func (r *TagRepository) ReplacePostTags(ctx context.Context, postID uuid.UUID, t
 func (r *TagRepository) ListByPostID(ctx context.Context, postID uuid.UUID) ([]tagdomain.Tag, error) {
 	var models []TagModel
 
-	err := r.db.WithContext(ctx).
+	err := conn(ctx, r.db).
 		Model(&TagModel{}).
 		Joins("INNER JOIN post_tags ON post_tags.tag_id = tags.id").
 		Where("post_tags.post_id = "+idOf("posts"), postID).

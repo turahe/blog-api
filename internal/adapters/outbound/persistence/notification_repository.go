@@ -64,7 +64,7 @@ func (r *NotificationRepository) Insert(ctx context.Context, n notificationdomai
 		UUID uuid.UUID
 	}
 
-	res := r.db.WithContext(ctx).Raw(`
+	res := conn(ctx, r.db).Raw(`
 		INSERT INTO notifications (user_id, type, title, body, preview, payload, actor_user_id, dedupe_key, created_at)
 		SELECT u.id, ?, ?, ?, ?, ?::jsonb, (SELECT a.id FROM users a WHERE a.uuid = ?), NULLIF(?, ''), ?
 		FROM users u WHERE u.uuid = ?
@@ -87,7 +87,7 @@ func (r *NotificationRepository) Insert(ctx context.Context, n notificationdomai
 
 // List returns one page of the user's notifications, newest first.
 func (r *NotificationRepository) List(ctx context.Context, filter notificationdomain.ListFilter) (notificationdomain.ListResult, error) {
-	db := r.db.WithContext(ctx)
+	db := conn(ctx, r.db)
 
 	var counts struct {
 		Total  int64
@@ -135,7 +135,7 @@ func (r *NotificationRepository) List(ctx context.Context, filter notificationdo
 
 // MarkRead sets read_at once and returns the row; other users' ids are ErrNotFound.
 func (r *NotificationRepository) MarkRead(ctx context.Context, userID, id uuid.UUID, at time.Time) (notificationdomain.Notification, error) {
-	db := r.db.WithContext(ctx)
+	db := conn(ctx, r.db)
 
 	res := db.Exec(`
 		UPDATE notifications n SET read_at = COALESCE(n.read_at, ?)
@@ -165,7 +165,7 @@ func (r *NotificationRepository) MarkRead(ctx context.Context, userID, id uuid.U
 func (r *NotificationRepository) DisplayName(ctx context.Context, userID uuid.UUID) (string, error) {
 	var names []string
 
-	err := r.db.WithContext(ctx).Table("users").Where("uuid = ?", userID).
+	err := conn(ctx, r.db).Table("users").Where("uuid = ?", userID).
 		Limit(1).Pluck("COALESCE(NULLIF(btrim(full_name), ''), username)", &names).Error
 	if err != nil {
 		return "", fmt.Errorf("user display name: %w", err)
@@ -182,7 +182,7 @@ func (r *NotificationRepository) DisplayName(ctx context.Context, userID uuid.UU
 func (r *NotificationRepository) PostSummary(ctx context.Context, postID uuid.UUID) (ports.PostSummary, error) {
 	var summary ports.PostSummary
 
-	res := r.db.WithContext(ctx).Raw(`
+	res := conn(ctx, r.db).Raw(`
 		SELECT p.uuid, a.uuid AS author_uuid, p.title, p.slug
 		FROM posts p JOIN users a ON a.id = p.author_id
 		WHERE p.uuid = ?`, postID).Scan(&summary)
@@ -201,7 +201,7 @@ func (r *NotificationRepository) PostSummary(ctx context.Context, postID uuid.UU
 func (r *NotificationRepository) PostCommenters(ctx context.Context, postID uuid.UUID) ([]uuid.UUID, error) {
 	var ids []uuid.UUID
 
-	err := r.db.WithContext(ctx).Raw(`
+	err := conn(ctx, r.db).Raw(`
 		SELECT DISTINCT u.uuid
 		FROM comments c
 		JOIN posts p ON p.id = c.post_id

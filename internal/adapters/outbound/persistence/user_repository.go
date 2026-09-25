@@ -44,7 +44,7 @@ func (r *UserRepository) FindByUsernameOrEmail(ctx context.Context, identity str
 func (r *UserRepository) findOne(ctx context.Context, op, query string, args ...any) (userdomain.User, error) {
 	var model UserModel
 
-	err := r.db.WithContext(ctx).Where(query, args...).First(&model).Error
+	err := conn(ctx, r.db).Where(query, args...).First(&model).Error
 	if errors.Is(err, gorm.ErrRecordNotFound) {
 		return userdomain.User{}, userdomain.ErrNotFound
 	}
@@ -58,7 +58,7 @@ func (r *UserRepository) findOne(ctx context.Context, op, query string, args ...
 
 // RecordLogin stamps last_login_at and increments login_count.
 func (r *UserRepository) RecordLogin(ctx context.Context, id uuid.UUID, at time.Time) error {
-	return r.db.WithContext(ctx).Model(&UserModel{}).Where("uuid = ?", id).Updates(map[string]any{
+	return conn(ctx, r.db).Model(&UserModel{}).Where("uuid = ?", id).Updates(map[string]any{
 		"last_login_at": at,
 		"login_count":   gorm.Expr("login_count + 1"),
 		"updated_at":    at,
@@ -80,7 +80,7 @@ func (r *UserRepository) Create(ctx context.Context, user userdomain.User) (user
 		model.PasswordHash = &user.PasswordHash
 	}
 
-	if err := r.db.WithContext(ctx).Create(&model).Error; err != nil {
+	if err := conn(ctx, r.db).Create(&model).Error; err != nil {
 		switch uniqueConstraint(err) {
 		case "users_email_unique":
 			return userdomain.User{}, authdomain.ErrEmailTaken
@@ -96,7 +96,7 @@ func (r *UserRepository) Create(ctx context.Context, user userdomain.User) (user
 
 // UpdatePassword stores a new password hash.
 func (r *UserRepository) UpdatePassword(ctx context.Context, id uuid.UUID, hash string, changedAt time.Time) error {
-	return r.db.WithContext(ctx).Model(&UserModel{}).Where("uuid = ?", id).Updates(map[string]any{
+	return conn(ctx, r.db).Model(&UserModel{}).Where("uuid = ?", id).Updates(map[string]any{
 		"password_hash":       hash,
 		"password_changed_at": changedAt,
 		"updated_at":          changedAt,
@@ -105,7 +105,7 @@ func (r *UserRepository) UpdatePassword(ctx context.Context, id uuid.UUID, hash 
 
 // UpdateEmail sets the address and marks it verified; a live duplicate is authdomain.ErrEmailTaken.
 func (r *UserRepository) UpdateEmail(ctx context.Context, id uuid.UUID, email string, verifiedAt time.Time) error {
-	err := r.db.WithContext(ctx).Model(&UserModel{}).Where("uuid = ?", id).Updates(map[string]any{
+	err := conn(ctx, r.db).Model(&UserModel{}).Where("uuid = ?", id).Updates(map[string]any{
 		"email":             email,
 		"email_verified_at": verifiedAt,
 		"updated_at":        verifiedAt,
@@ -119,7 +119,7 @@ func (r *UserRepository) UpdateEmail(ctx context.Context, id uuid.UUID, email st
 
 // List returns a page of users.
 func (r *UserRepository) List(ctx context.Context, page, perPage int) ([]userdomain.User, int64, error) {
-	q := r.db.WithContext(ctx).Model(&UserModel{}).Where("deleted_at IS NULL")
+	q := conn(ctx, r.db).Model(&UserModel{}).Where("deleted_at IS NULL")
 
 	var total int64
 	if err := q.Count(&total).Error; err != nil {
@@ -145,7 +145,7 @@ func (r *UserRepository) List(ctx context.Context, page, perPage int) ([]userdom
 func (r *UserRepository) ListRoleNames(ctx context.Context, userID uuid.UUID) ([]string, error) {
 	var names []string
 
-	err := r.db.WithContext(ctx).
+	err := conn(ctx, r.db).
 		Table("roles").
 		Select("roles.name").
 		Joins("INNER JOIN user_roles ON user_roles.role_id = roles.id").
@@ -194,7 +194,7 @@ func NewSessionRepository(db *gorm.DB) *SessionRepository {
 
 // Create stores a refresh session and returns it with its assigned ids.
 func (r *SessionRepository) Create(ctx context.Context, session authdomain.RefreshSession) (authdomain.RefreshSession, error) {
-	userID, err := idByUUID(r.db.WithContext(ctx), "users", session.UserUUID)
+	userID, err := idByUUID(conn(ctx, r.db), "users", session.UserUUID)
 	if err != nil {
 		return authdomain.RefreshSession{}, err
 	}
@@ -215,7 +215,7 @@ func (r *SessionRepository) Create(ctx context.Context, session authdomain.Refre
 		model.IPAddress = &session.IPAddress
 	}
 
-	if err := r.db.WithContext(ctx).Create(&model).Error; err != nil {
+	if err := conn(ctx, r.db).Create(&model).Error; err != nil {
 		return authdomain.RefreshSession{}, err
 	}
 
@@ -229,7 +229,7 @@ func (r *SessionRepository) Create(ctx context.Context, session authdomain.Refre
 func (r *SessionRepository) FindByTokenHash(ctx context.Context, hash string) (authdomain.RefreshSession, error) {
 	var model RefreshSessionModel
 
-	err := r.db.WithContext(ctx).
+	err := conn(ctx, r.db).
 		Select(withRefs("refresh_sessions",
 			uuidRef("users", "refresh_sessions.user_id", "user_uuid"),
 			uuidRef("refresh_sessions", "refresh_sessions.replaced_by", "replaced_by_uuid"),
@@ -248,20 +248,20 @@ func (r *SessionRepository) FindByTokenHash(ctx context.Context, hash string) (a
 
 // Revoke marks one session revoked.
 func (r *SessionRepository) Revoke(ctx context.Context, id uuid.UUID, at time.Time) error {
-	return r.db.WithContext(ctx).Model(&RefreshSessionModel{}).Where("uuid = ?", id).
+	return conn(ctx, r.db).Model(&RefreshSessionModel{}).Where("uuid = ?", id).
 		Update("revoked_at", at).Error
 }
 
 // RevokeFamily revokes every live session in a rotation family (refresh token reuse).
 func (r *SessionRepository) RevokeFamily(ctx context.Context, userID, familyID uuid.UUID, at time.Time) error {
-	return r.db.WithContext(ctx).Model(&RefreshSessionModel{}).
+	return conn(ctx, r.db).Model(&RefreshSessionModel{}).
 		Where("user_id = "+idOf("users")+" AND family_id = ? AND revoked_at IS NULL", userID, familyID).
 		Update("revoked_at", at).Error
 }
 
 // Replace revokes oldID and links it to its rotated successor newID.
 func (r *SessionRepository) Replace(ctx context.Context, oldID, newID uuid.UUID, at time.Time) error {
-	return r.db.WithContext(ctx).Model(&RefreshSessionModel{}).Where("uuid = ?", oldID).Updates(map[string]any{
+	return conn(ctx, r.db).Model(&RefreshSessionModel{}).Where("uuid = ?", oldID).Updates(map[string]any{
 		"revoked_at":  at,
 		"replaced_by": gorm.Expr(idOf("refresh_sessions"), newID),
 	}).Error
@@ -269,7 +269,7 @@ func (r *SessionRepository) Replace(ctx context.Context, oldID, newID uuid.UUID,
 
 // RevokeAllForUser revokes every live session of the user.
 func (r *SessionRepository) RevokeAllForUser(ctx context.Context, userID uuid.UUID, at time.Time) error {
-	return r.db.WithContext(ctx).Model(&RefreshSessionModel{}).
+	return conn(ctx, r.db).Model(&RefreshSessionModel{}).
 		Where("user_id = "+idOf("users")+" AND revoked_at IS NULL", userID).
 		Update("revoked_at", at).Error
 }

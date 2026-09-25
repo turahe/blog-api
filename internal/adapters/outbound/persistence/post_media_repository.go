@@ -39,7 +39,7 @@ func NewPostMediaRepository(db *gorm.DB) *PostMediaRepository {
 
 // ReplaceAll replaces every media attachment of the post in one transaction.
 func (r *PostMediaRepository) ReplaceAll(ctx context.Context, postID uuid.UUID, items []mediadomain.PostMediaItem) error {
-	return r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+	return conn(ctx, r.db).Transaction(func(tx *gorm.DB) error {
 		postRowID, err := idByUUID(tx, "posts", postID)
 		if err != nil {
 			return err
@@ -79,7 +79,7 @@ func (r *PostMediaRepository) ReplaceAll(ctx context.Context, postID uuid.UUID, 
 // ListByPostID returns the post's attachments with their assets, in sort order.
 func (r *PostMediaRepository) ListByPostID(ctx context.Context, postID uuid.UUID) ([]mediadomain.PostMediaItem, error) {
 	var models []PostMediaModel
-	if err := r.db.WithContext(ctx).
+	if err := conn(ctx, r.db).
 		Select(withRefs("post_media", uuidRef("media_assets", "post_media.media_asset_id", "media_asset_uuid"))).
 		Where("post_id = "+idOf("posts"), postID).
 		Order("sort_order ASC, created_at ASC").

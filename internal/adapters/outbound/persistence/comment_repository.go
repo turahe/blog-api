@@ -76,7 +76,7 @@ func NewCommentRepository(db *gorm.DB) *CommentRepository {
 func (r *CommentRepository) PostPolicy(ctx context.Context, postID uuid.UUID) (commentdomain.Policy, error) {
 	var policies []string
 
-	err := r.db.WithContext(ctx).Table("posts").
+	err := conn(ctx, r.db).Table("posts").
 		Where("uuid = ? AND status = ? AND deleted_at IS NULL", postID, string(postdomain.StatusPublished)).
 		Limit(1).Pluck("comment_policy", &policies).Error
 	if err != nil {
@@ -94,7 +94,7 @@ func (r *CommentRepository) PostPolicy(ctx context.Context, postID uuid.UUID) (c
 func (r *CommentRepository) GetByID(ctx context.Context, id uuid.UUID) (commentdomain.Comment, error) {
 	var model CommentModel
 
-	err := r.db.WithContext(ctx).Select(commentColumns).Where("comments.uuid = ?", id).First(&model).Error
+	err := conn(ctx, r.db).Select(commentColumns).Where("comments.uuid = ?", id).First(&model).Error
 	if errors.Is(err, gorm.ErrRecordNotFound) {
 		return commentdomain.Comment{}, commentdomain.ErrNotFound
 	}
@@ -108,7 +108,7 @@ func (r *CommentRepository) GetByID(ctx context.Context, id uuid.UUID) (commentd
 
 // List returns a page of comments matching the filter with reply counts.
 func (r *CommentRepository) List(ctx context.Context, filter commentdomain.ListFilter) (commentdomain.ListResult, error) {
-	q := r.db.WithContext(ctx).Model(&CommentModel{})
+	q := conn(ctx, r.db).Model(&CommentModel{})
 	if filter.PostUUID != nil {
 		q = q.Where("comments.post_id = "+idOf("posts"), *filter.PostUUID)
 	}
@@ -162,7 +162,7 @@ func (r *CommentRepository) List(ctx context.Context, filter commentdomain.ListF
 
 // Create inserts a comment and returns it with resolved references.
 func (r *CommentRepository) Create(ctx context.Context, comment commentdomain.Comment) (commentdomain.Comment, error) {
-	db := r.db.WithContext(ctx)
+	db := conn(ctx, r.db)
 
 	postRowID, err := idByUUID(db, "posts", comment.PostUUID)
 	if errors.Is(err, errUnknownReference) {
@@ -212,7 +212,7 @@ func (r *CommentRepository) Create(ctx context.Context, comment commentdomain.Co
 
 // Update persists content, status, and soft-delete changes.
 func (r *CommentRepository) Update(ctx context.Context, comment commentdomain.Comment) (commentdomain.Comment, error) {
-	db := r.db.WithContext(ctx)
+	db := conn(ctx, r.db)
 
 	deletedBy, err := optionalIDByUUID(db, "users", comment.DeletedByUUID)
 	if err != nil {
@@ -243,7 +243,7 @@ func (r *CommentRepository) Update(ctx context.Context, comment commentdomain.Co
 // It reports whether the flag was newly recorded.
 func (r *CommentRepository) AddFlag(ctx context.Context, flag commentdomain.Flag, threshold int) (bool, error) {
 	added := false
-	err := r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+	err := conn(ctx, r.db).Transaction(func(tx *gorm.DB) error {
 		commentRowID, err := idByUUID(tx, "comments", flag.CommentUUID)
 		if errors.Is(err, errUnknownReference) {
 			return commentdomain.ErrNotFound
@@ -292,7 +292,7 @@ func (r *CommentRepository) ToggleUpvote(ctx context.Context, commentID, voterID
 		count   int
 	)
 
-	err := r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+	err := conn(ctx, r.db).Transaction(func(tx *gorm.DB) error {
 		commentRowID, err := idByUUID(tx, "comments", commentID)
 		if errors.Is(err, errUnknownReference) {
 			return commentdomain.ErrNotFound

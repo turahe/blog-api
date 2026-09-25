@@ -52,7 +52,7 @@ func NewTwoFactorRepository(db *gorm.DB) *TwoFactorRepository {
 func (r *TwoFactorRepository) Find(ctx context.Context, userID uuid.UUID) (authdomain.TwoFactor, error) {
 	var model TwoFactorMethodModel
 
-	err := r.db.WithContext(ctx).Where("user_id = "+idOf("users"), userID).First(&model).Error
+	err := conn(ctx, r.db).Where("user_id = "+idOf("users"), userID).First(&model).Error
 	if errors.Is(err, gorm.ErrRecordNotFound) {
 		return authdomain.TwoFactor{}, authdomain.ErrTwoFactorNotEnrolled
 	}
@@ -62,7 +62,7 @@ func (r *TwoFactorRepository) Find(ctx context.Context, userID uuid.UUID) (authd
 	}
 
 	var remaining int64
-	if err := r.db.WithContext(ctx).Model(&TwoFactorBackupCodeModel{}).
+	if err := conn(ctx, r.db).Model(&TwoFactorBackupCodeModel{}).
 		Where("user_id = ? AND used_at IS NULL", model.UserID).Count(&remaining).Error; err != nil {
 		return authdomain.TwoFactor{}, fmt.Errorf("count backup codes: %w", err)
 	}
@@ -79,7 +79,7 @@ func (r *TwoFactorRepository) Find(ctx context.Context, userID uuid.UUID) (authd
 // SavePending upserts an unconfirmed enrollment and drops any backup codes.
 // It never overwrites a confirmed enrollment.
 func (r *TwoFactorRepository) SavePending(ctx context.Context, userID uuid.UUID, secretCiphertext string, at time.Time) error {
-	return r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+	return conn(ctx, r.db).Transaction(func(tx *gorm.DB) error {
 		id, err := idByUUID(tx, "users", userID)
 		if err != nil {
 			return err
@@ -112,7 +112,7 @@ func (r *TwoFactorRepository) SavePending(ctx context.Context, userID uuid.UUID,
 
 // Confirm enables a pending enrollment and stores its backup codes.
 func (r *TwoFactorRepository) Confirm(ctx context.Context, userID uuid.UUID, step int64, codeHashes []string, at time.Time) error {
-	return r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+	return conn(ctx, r.db).Transaction(func(tx *gorm.DB) error {
 		id, err := idByUUID(tx, "users", userID)
 		if err != nil {
 			return err
@@ -135,7 +135,7 @@ func (r *TwoFactorRepository) Confirm(ctx context.Context, userID uuid.UUID, ste
 
 // UseStep advances last_used_step so a TOTP code is accepted at most once.
 func (r *TwoFactorRepository) UseStep(ctx context.Context, userID uuid.UUID, step int64) (bool, error) {
-	res := r.db.WithContext(ctx).Model(&TwoFactorMethodModel{}).
+	res := conn(ctx, r.db).Model(&TwoFactorMethodModel{}).
 		Where("user_id = "+idOf("users")+" AND last_used_step < ?", userID, step).
 		Updates(map[string]any{"last_used_step": step, "updated_at": gorm.Expr("now()")})
 	if res.Error != nil {
@@ -147,7 +147,7 @@ func (r *TwoFactorRepository) UseStep(ctx context.Context, userID uuid.UUID, ste
 
 // UseBackupCode marks one unused matching code as used.
 func (r *TwoFactorRepository) UseBackupCode(ctx context.Context, userID uuid.UUID, codeHash string, at time.Time) (bool, error) {
-	res := r.db.WithContext(ctx).Model(&TwoFactorBackupCodeModel{}).
+	res := conn(ctx, r.db).Model(&TwoFactorBackupCodeModel{}).
 		Where("user_id = "+idOf("users")+" AND code_hash = ? AND used_at IS NULL", userID, codeHash).
 		Update("used_at", at)
 	if res.Error != nil {
@@ -159,7 +159,7 @@ func (r *TwoFactorRepository) UseBackupCode(ctx context.Context, userID uuid.UUI
 
 // ReplaceBackupCodes swaps every backup code for the new set.
 func (r *TwoFactorRepository) ReplaceBackupCodes(ctx context.Context, userID uuid.UUID, codeHashes []string, at time.Time) error {
-	return r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+	return conn(ctx, r.db).Transaction(func(tx *gorm.DB) error {
 		id, err := idByUUID(tx, "users", userID)
 		if err != nil {
 			return err
@@ -175,7 +175,7 @@ func (r *TwoFactorRepository) ReplaceBackupCodes(ctx context.Context, userID uui
 
 // Delete removes the enrollment and its backup codes.
 func (r *TwoFactorRepository) Delete(ctx context.Context, userID uuid.UUID) error {
-	return r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+	return conn(ctx, r.db).Transaction(func(tx *gorm.DB) error {
 		id, err := idByUUID(tx, "users", userID)
 		if err != nil {
 			return err

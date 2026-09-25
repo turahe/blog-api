@@ -37,7 +37,7 @@ func (r *MediaRepository) Create(ctx context.Context, asset mediadomain.MediaAss
 		asset.UpdatedAt = asset.CreatedAt
 	}
 
-	db := r.db.WithContext(ctx)
+	db := conn(ctx, r.db)
 
 	uploadedBy, err := optionalIDByUUID(db, "users", asset.UploadedByUUID)
 	if err != nil {
@@ -60,7 +60,7 @@ func (r *MediaRepository) Create(ctx context.Context, asset mediadomain.MediaAss
 func (r *MediaRepository) GetByID(ctx context.Context, id uuid.UUID) (mediadomain.MediaAsset, error) {
 	var model MediaAssetModel
 
-	err := r.db.WithContext(ctx).
+	err := conn(ctx, r.db).
 		Select(mediaColumns).
 		Where("uuid = ? AND deleted_at IS NULL", id).
 		First(&model).Error
@@ -81,7 +81,7 @@ func (r *MediaRepository) Update(ctx context.Context, asset mediadomain.MediaAss
 		asset.UpdatedAt = time.Now().UTC()
 	}
 
-	db := r.db.WithContext(ctx)
+	db := conn(ctx, r.db)
 
 	uploadedBy, err := optionalIDByUUID(db, "users", asset.UploadedByUUID)
 	if err != nil {
@@ -117,7 +117,7 @@ func (r *MediaRepository) Update(ctx context.Context, asset mediadomain.MediaAss
 
 // List returns a page of live media assets matching the filter.
 func (r *MediaRepository) List(ctx context.Context, filter mediadomain.ListFilter) (mediadomain.ListResult, error) {
-	q := r.db.WithContext(ctx).Model(&MediaAssetModel{}).Where("deleted_at IS NULL")
+	q := conn(ctx, r.db).Model(&MediaAssetModel{}).Where("deleted_at IS NULL")
 
 	if filter.Query != "" {
 		like := "%" + filter.Query + "%"
@@ -154,7 +154,7 @@ func (r *MediaRepository) List(ctx context.Context, filter mediadomain.ListFilte
 
 // SoftDelete marks the asset deleted at deletedAt.
 func (r *MediaRepository) SoftDelete(ctx context.Context, id uuid.UUID, deletedAt time.Time) error {
-	res := r.db.WithContext(ctx).Model(&MediaAssetModel{}).
+	res := conn(ctx, r.db).Model(&MediaAssetModel{}).
 		Where("uuid = ? AND deleted_at IS NULL", id).
 		Updates(map[string]any{
 			"deleted_at": gorm.DeletedAt{Time: deletedAt, Valid: true},
@@ -173,7 +173,7 @@ func (r *MediaRepository) SoftDelete(ctx context.Context, id uuid.UUID, deletedA
 
 // ClearEntityReferences nulls user avatar, category image, and post cover references to the asset.
 func (r *MediaRepository) ClearEntityReferences(ctx context.Context, id uuid.UUID) error {
-	return r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+	return conn(ctx, r.db).Transaction(func(tx *gorm.DB) error {
 		mediaID, err := idByUUID(tx, "media_assets", id)
 		if errors.Is(err, errUnknownReference) {
 			return nil

@@ -54,7 +54,7 @@ func NewCategoryRepository(db *gorm.DB) *CategoryRepository {
 // List returns all categories ordered by nested-set left bound.
 func (r *CategoryRepository) List(ctx context.Context) ([]categorydomain.Category, error) {
 	var models []CategoryModel
-	if err := r.db.WithContext(ctx).Select(categoryColumns).Order("lft ASC").Find(&models).Error; err != nil {
+	if err := conn(ctx, r.db).Select(categoryColumns).Order("lft ASC").Find(&models).Error; err != nil {
 		return nil, err
 	}
 
@@ -70,7 +70,7 @@ func (r *CategoryRepository) List(ctx context.Context) ([]categorydomain.Categor
 func (r *CategoryRepository) GetByID(ctx context.Context, id uuid.UUID) (categorydomain.Category, error) {
 	var model CategoryModel
 
-	err := r.db.WithContext(ctx).Select(categoryColumns).Where("uuid = ?", id).First(&model).Error
+	err := conn(ctx, r.db).Select(categoryColumns).Where("uuid = ?", id).First(&model).Error
 	if errors.Is(err, gorm.ErrRecordNotFound) {
 		return categorydomain.Category{}, categorydomain.ErrNotFound
 	}
@@ -86,7 +86,7 @@ func (r *CategoryRepository) GetByID(ctx context.Context, id uuid.UUID) (categor
 func (r *CategoryRepository) GetBySlug(ctx context.Context, slug string) (categorydomain.Category, error) {
 	var model CategoryModel
 
-	err := r.db.WithContext(ctx).Select(categoryColumns).Where("slug = ?", slug).First(&model).Error
+	err := conn(ctx, r.db).Select(categoryColumns).Where("slug = ?", slug).First(&model).Error
 	if errors.Is(err, gorm.ErrRecordNotFound) {
 		return categorydomain.Category{}, categorydomain.ErrNotFound
 	}
@@ -100,7 +100,7 @@ func (r *CategoryRepository) GetBySlug(ctx context.Context, slug string) (catego
 
 // Create inserts a category and returns it with its assigned id.
 func (r *CategoryRepository) Create(ctx context.Context, cat categorydomain.Category) (categorydomain.Category, error) {
-	db := r.db.WithContext(ctx)
+	db := conn(ctx, r.db)
 
 	parentID, err := optionalIDByUUID(db, "categories", cat.ParentUUID)
 	if err != nil {
@@ -128,7 +128,7 @@ func (r *CategoryRepository) Create(ctx context.Context, cat categorydomain.Cate
 
 // Update persists name, slug, description, image, and parent changes.
 func (r *CategoryRepository) Update(ctx context.Context, cat categorydomain.Category) (categorydomain.Category, error) {
-	db := r.db.WithContext(ctx)
+	db := conn(ctx, r.db)
 
 	parentID, err := optionalIDByUUID(db, "categories", cat.ParentUUID)
 	if err != nil {
@@ -162,7 +162,7 @@ func (r *CategoryRepository) Update(ctx context.Context, cat categorydomain.Cate
 
 // Delete removes the category with the given UUID.
 func (r *CategoryRepository) Delete(ctx context.Context, id uuid.UUID) error {
-	res := r.db.WithContext(ctx).Where("uuid = ?", id).Delete(&CategoryModel{})
+	res := conn(ctx, r.db).Where("uuid = ?", id).Delete(&CategoryModel{})
 	if res.Error != nil {
 		return res.Error
 	}
@@ -178,7 +178,7 @@ func (r *CategoryRepository) Delete(ctx context.Context, id uuid.UUID) error {
 func (r *CategoryRepository) SlugTaken(ctx context.Context, slug string, excludeID uuid.UUID) (bool, error) {
 	var n int64
 
-	err := r.db.WithContext(ctx).Model(&CategoryModel{}).
+	err := conn(ctx, r.db).Model(&CategoryModel{}).
 		Where("slug = ? AND uuid <> ?", slug, excludeID).
 		Count(&n).Error
 
@@ -189,7 +189,7 @@ func (r *CategoryRepository) SlugTaken(ctx context.Context, slug string, exclude
 func (r *CategoryRepository) CountPosts(ctx context.Context, categoryID uuid.UUID) (int64, error) {
 	var n int64
 
-	err := r.db.WithContext(ctx).Table("posts").Where("category_id = "+idOf("categories"), categoryID).Count(&n).Error
+	err := conn(ctx, r.db).Table("posts").Where("category_id = "+idOf("categories"), categoryID).Count(&n).Error
 
 	return n, err
 }
@@ -198,7 +198,7 @@ func (r *CategoryRepository) CountPosts(ctx context.Context, categoryID uuid.UUI
 func (r *CategoryRepository) CountChildren(ctx context.Context, categoryID uuid.UUID) (int64, error) {
 	var n int64
 
-	err := r.db.WithContext(ctx).Model(&CategoryModel{}).Where("parent_id = "+idOf("categories"), categoryID).Count(&n).Error
+	err := conn(ctx, r.db).Model(&CategoryModel{}).Where("parent_id = "+idOf("categories"), categoryID).Count(&n).Error
 
 	return n, err
 }
@@ -206,7 +206,7 @@ func (r *CategoryRepository) CountChildren(ctx context.Context, categoryID uuid.
 // ReplaceTreeBounds writes recomputed lft/rgt/depth/sort_order for every category.
 func (r *CategoryRepository) ReplaceTreeBounds(ctx context.Context, cats []categorydomain.Category) error {
 	for _, cat := range cats {
-		if err := r.db.WithContext(ctx).Model(&CategoryModel{}).
+		if err := conn(ctx, r.db).Model(&CategoryModel{}).
 			Where("uuid = ?", cat.UUID).
 			Updates(map[string]any{
 				"lft":        cat.Lft,
@@ -225,7 +225,7 @@ func (r *CategoryRepository) ReplaceTreeBounds(ctx context.Context, cats []categ
 
 // WithinTx runs fn with a repository bound to a single database transaction.
 func (r *CategoryRepository) WithinTx(ctx context.Context, fn func(ctx context.Context, repo categoryports.Repository) error) error {
-	return r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+	return conn(ctx, r.db).Transaction(func(tx *gorm.DB) error {
 		return fn(ctx, &CategoryRepository{db: tx})
 	})
 }

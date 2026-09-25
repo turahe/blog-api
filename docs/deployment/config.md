@@ -329,6 +329,21 @@ subscription of its own, so a notice created on one replica reaches streams on e
 replica. Without a broker, or when the broker cannot be reached at startup, the stream
 returns `503 notifications.stream_unavailable` while the inbox endpoints keep working.
 
+## Domain events (outbox)
+
+| Variable | Default | Required | Purpose |
+| --- | --- | --- | --- |
+| `OUTBOX_BATCH_SIZE` | `100` | No | Outbox rows the relay claims per transaction. |
+| `OUTBOX_POLL_INTERVAL` | `1s` | No | How long the relay waits when no row is due. |
+| `OUTBOX_MAX_ATTEMPTS` | `10` | No | Publishes before a row is parked as failed. Retries back off from 1s, doubling up to 10m. |
+| `OUTBOX_RETENTION` | `168h` | No | How long published rows are kept before the relay deletes them. Failed rows are kept. |
+
+When `MESSAGE_BROKER` is set, services append domain events to `outbox_events` in the same
+transaction as the change, and `app worker` publishes them (see
+[events.md](../backend/events.md#delivery)). Without a broker no events are stored. Keep at
+least one worker running while a broker is configured, or the backlog grows; watch
+`blog_outbox_lag_seconds`. `app outbox retry` makes parked rows due again.
+
 ## Error tracking (Sentry)
 
 | Variable | Default | Required | Purpose |

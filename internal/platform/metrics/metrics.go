@@ -22,6 +22,12 @@ type Metrics struct {
 	duration *prometheus.HistogramVec
 	inflight prometheus.Gauge
 	dropped  prometheus.Counter
+
+	outboxPublished prometheus.Counter
+	outboxFailed    *prometheus.CounterVec
+	outboxPending   prometheus.Gauge
+	outboxParked    prometheus.Gauge
+	outboxLag       prometheus.Gauge
 }
 
 // New registers runtime, process, build, and (when db is non-nil) sql.DB pool collectors.
@@ -51,6 +57,31 @@ func New(db *sql.DB, version string) *Metrics {
 			Name:      "audit_entries_dropped_total",
 			Help:      "Audit entries lost to a full queue or a failed insert.",
 		}),
+		outboxPublished: prometheus.NewCounter(prometheus.CounterOpts{
+			Namespace: namespace,
+			Name:      "outbox_published_total",
+			Help:      "Outbox events published to the message broker.",
+		}),
+		outboxFailed: prometheus.NewCounterVec(prometheus.CounterOpts{
+			Namespace: namespace,
+			Name:      "outbox_publish_failures_total",
+			Help:      "Failed outbox publishes; terminal=true when the event was parked.",
+		}, []string{"terminal"}),
+		outboxPending: prometheus.NewGauge(prometheus.GaugeOpts{
+			Namespace: namespace,
+			Name:      "outbox_pending",
+			Help:      "Outbox events waiting to be published.",
+		}),
+		outboxParked: prometheus.NewGauge(prometheus.GaugeOpts{
+			Namespace: namespace,
+			Name:      "outbox_failed",
+			Help:      "Outbox events parked after their last attempt.",
+		}),
+		outboxLag: prometheus.NewGauge(prometheus.GaugeOpts{
+			Namespace: namespace,
+			Name:      "outbox_lag_seconds",
+			Help:      "Age of the oldest outbox event waiting to be published; 0 when none.",
+		}),
 	}
 
 	build := prometheus.NewGauge(prometheus.GaugeOpts{
@@ -65,6 +96,7 @@ func New(db *sql.DB, version string) *Metrics {
 		collectors.NewGoCollector(),
 		collectors.NewProcessCollector(collectors.ProcessCollectorOpts{}),
 		m.requests, m.duration, m.inflight, m.dropped, build,
+		m.outboxPublished, m.outboxFailed, m.outboxPending, m.outboxParked, m.outboxLag,
 	)
 
 	if db != nil {
@@ -100,6 +132,29 @@ func (m *Metrics) ObserveHTTP(method, route string, status int, elapsed time.Dur
 // AuditDropped counts n audit entries that were not stored.
 func (m *Metrics) AuditDropped(n int) {
 	m.dropped.Add(float64(n))
+}
+
+// OutboxPublished counts one relayed event.
+func (m *Metrics) OutboxPublished() {
+	m.outboxPublished.Inc()
+}
+
+// OutboxPublishFailed counts one failed publish.
+func (m *Metrics) OutboxPublishFailed(terminal bool) {
+	m.outboxFailed.WithLabelValues(strconv.FormatBool(terminal)).Inc()
+}
+
+// OutboxBacklog records the outbox backlog sampled at now.
+func (m *Metrics) OutboxBacklog(pending, failed int64, oldestPendingAt *time.Time, now time.Time) {
+	m.outboxPending.Set(float64(pending))
+	m.outboxParked.Set(float64(failed))
+
+	lag := 0.0
+	if oldestPendingAt != nil {
+		lag = max(now.Sub(*oldestPendingAt).Seconds(), 0)
+	}
+
+	m.outboxLag.Set(lag)
 }
 
 // NewServer returns the metrics HTTP server for addr, serving /metrics only.

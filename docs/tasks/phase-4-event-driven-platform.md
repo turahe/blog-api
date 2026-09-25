@@ -8,9 +8,10 @@ Index: [README.md](./README.md).
 
 ## Status
 
-**Partial** — the multi-broker Watermill layer, the `app worker` command, and the
-`outbox_events` table exist. No domain event is published yet, the outbox has no writer or
-relay, and the worker runs only a heartbeat handler.
+**Partial** — the multi-broker Watermill layer and the `app worker` command exist. The
+transactional outbox is in place: services can record events inside a unit of work, and the
+worker relays them with retries, parking, pruning, and metrics. No service records domain
+events yet, and the worker's only consumer is a heartbeat handler.
 
 ## Epic: messaging transports
 
@@ -24,9 +25,10 @@ relay, and the worker runs only a heartbeat handler.
 - [x] Kafka and RabbitMQ in `compose.yaml` under the `messaging` profile
 - [x] `make infra-up-messaging` / `make infra-down-messaging`
 - [x] `app doctor` probes broker reachability when messaging is enabled
-- [ ] Document per-broker delivery semantics and ordering guarantees in [events.md](../backend/events.md)
+- [x] Document per-broker delivery semantics and ordering guarantees in [events.md](../backend/events.md#delivery)
 - [ ] Add a dead-letter or parking-lot topic per broker
-- [ ] Decide and document the message envelope: schema version, event ID, occurred-at, actor
+- [x] Decide and document the message envelope: schema version, event ID, occurred-at, actor
+      (broker headers per the AsyncAPI `EventEnvelope` trait; [events.md](../backend/events.md#envelope))
 
 Design: [2026-07-30-messaging-brokers-design.md](../superpowers/specs/2026-07-30-messaging-brokers-design.md)
 
@@ -34,7 +36,7 @@ Design: [2026-07-30-messaging-brokers-design.md](../superpowers/specs/2026-07-30
 
 - [x] `outbox_events` table from migration `00001`
 - [ ] Event catalogue matching the channels in [asyncapi.yaml](../architecture/asyncapi.yaml)
-- [ ] Outbound event-publisher port in the core layer with no Watermill import
+- [x] Outbound event-publisher port in the core layer with no Watermill import (`internal/core/event`)
 - [ ] Publish `post.published` from the post service
 - [ ] Publish `post.created` and `post.updated`
 - [ ] Publish `comment.created` and `comment.moderated` (needs Phase 3)
@@ -44,15 +46,16 @@ Design: [2026-07-30-messaging-brokers-design.md](../superpowers/specs/2026-07-30
 
 ## Epic: durable outbox
 
-- [ ] Outbox writer that appends to `outbox_events` inside the business transaction
-- [ ] Unit-of-work helper so services enlist the outbox write atomically
-- [ ] Relay loop in `app worker` that claims unpublished rows and publishes to the broker
-- [ ] Row claiming that is safe across replicas on all three dialects
-      (`FOR UPDATE SKIP LOCKED` on PostgreSQL and MySQL; a documented equivalent on SQL Server)
-- [ ] Retry with exponential backoff and a `failed` terminal state after N attempts
-- [ ] Idempotency key on each event so consumers can dedupe
-- [ ] Pruning of successfully published rows on a configurable retention window
-- [ ] Metrics or log counters for outbox lag, backlog depth, and failure rate
+- [x] Outbox writer that appends to `outbox_events` inside the business transaction
+- [x] Unit-of-work helper so services enlist the outbox write atomically (`persistence.Transactor`)
+- [x] Relay loop in `app worker` that claims unpublished rows and publishes to the broker
+- [x] Row claiming that is safe across replicas (`FOR UPDATE SKIP LOCKED`; PostgreSQL is the
+      only supported database)
+- [x] Retry with exponential backoff and a `failed` terminal state after N attempts
+      (migration `00020_outbox_relay.sql`; `app outbox retry` requeues parked rows)
+- [x] Idempotency key on each event so consumers can dedupe (the `id` header and message UUID)
+- [x] Pruning of successfully published rows on a configurable retention window (`OUTBOX_RETENTION`)
+- [x] Metrics or log counters for outbox lag, backlog depth, and failure rate (`blog_outbox_*`)
 
 ## Epic: workers and jobs
 
@@ -94,7 +97,7 @@ Design: [2026-07-30-messaging-brokers-design.md](../superpowers/specs/2026-07-30
 
 - [x] Unit tests for broker normalization, misconfiguration, and topic prefixing
 - [ ] Integration tests against Compose Kafka and RabbitMQ, skipped when brokers are absent
-- [ ] Outbox tests proving no event is lost when the transaction rolls back
+- [x] Outbox tests proving events commit and roll back with the business write
 - [ ] Consumer idempotency tests using duplicate deliveries
 - [ ] Secrets review for broker credentials — see [secrets-and-headers.md](../security/secrets-and-headers.md)
 - [ ] Update [checklist.md](../deployment/checklist.md) with worker rollout steps

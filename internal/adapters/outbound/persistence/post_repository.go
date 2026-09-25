@@ -29,7 +29,7 @@ func NewPostRepository(db *gorm.DB) *PostRepository {
 
 // ListPublished returns a page of published, non-deleted posts.
 func (r *PostRepository) ListPublished(ctx context.Context, filter postdomain.ListFilter) (postdomain.ListResult, error) {
-	q := r.db.WithContext(ctx).Model(&PostModel{}).Where("status = ? AND deleted_at IS NULL", string(postdomain.StatusPublished))
+	q := conn(ctx, r.db).Model(&PostModel{}).Where("status = ? AND deleted_at IS NULL", string(postdomain.StatusPublished))
 	if filter.CategoryUUID != nil {
 		q = q.Where("category_id = "+idOf("categories"), *filter.CategoryUUID)
 	}
@@ -61,9 +61,9 @@ func (r *PostRepository) ListPublished(ctx context.Context, filter postdomain.Li
 
 // ListAdmin returns a page of posts for the admin list, filtered by status, author, and query.
 func (r *PostRepository) ListAdmin(ctx context.Context, filter postdomain.AdminListFilter) (postdomain.ListResult, error) {
-	q := r.db.WithContext(ctx).Model(&PostModel{}).Where("deleted_at IS NULL")
+	q := conn(ctx, r.db).Model(&PostModel{}).Where("deleted_at IS NULL")
 	if filter.Trashed {
-		q = r.db.WithContext(ctx).Unscoped().Model(&PostModel{}).Where("deleted_at IS NOT NULL")
+		q = conn(ctx, r.db).Unscoped().Model(&PostModel{}).Where("deleted_at IS NOT NULL")
 	}
 
 	if filter.Status != "" {
@@ -108,7 +108,7 @@ func (r *PostRepository) ListAdmin(ctx context.Context, filter postdomain.AdminL
 func (r *PostRepository) GetPublishedBySlug(ctx context.Context, slug string) (postdomain.Post, error) {
 	var model PostModel
 
-	err := r.db.WithContext(ctx).Select(postColumns).
+	err := conn(ctx, r.db).Select(postColumns).
 		Where("slug = ? AND status = ? AND deleted_at IS NULL", slug, string(postdomain.StatusPublished)).
 		First(&model).Error
 	if errors.Is(err, gorm.ErrRecordNotFound) {
@@ -124,12 +124,12 @@ func (r *PostRepository) GetPublishedBySlug(ctx context.Context, slug string) (p
 
 // GetByID returns the live post with the given UUID or ErrNotFound.
 func (r *PostRepository) GetByID(ctx context.Context, id uuid.UUID) (postdomain.Post, error) {
-	return r.getByID(r.db.WithContext(ctx), id)
+	return r.getByID(conn(ctx, r.db), id)
 }
 
 // GetDeletedByID returns the soft-deleted post with the given UUID or ErrNotFound.
 func (r *PostRepository) GetDeletedByID(ctx context.Context, id uuid.UUID) (postdomain.Post, error) {
-	return r.getByID(r.db.WithContext(ctx).Unscoped().Where("deleted_at IS NOT NULL"), id)
+	return r.getByID(conn(ctx, r.db).Unscoped().Where("deleted_at IS NOT NULL"), id)
 }
 
 func (r *PostRepository) getByID(db *gorm.DB, id uuid.UUID) (postdomain.Post, error) {
@@ -149,7 +149,7 @@ func (r *PostRepository) getByID(db *gorm.DB, id uuid.UUID) (postdomain.Post, er
 
 // Create inserts a post and returns it with resolved references.
 func (r *PostRepository) Create(ctx context.Context, post postdomain.Post) (postdomain.Post, error) {
-	db := r.db.WithContext(ctx)
+	db := conn(ctx, r.db)
 
 	authorID, err := idByUUID(db, "users", post.AuthorUUID)
 	if err != nil {
@@ -190,7 +190,7 @@ func (r *PostRepository) Create(ctx context.Context, post postdomain.Post) (post
 
 // Update persists post fields and returns the stored row.
 func (r *PostRepository) Update(ctx context.Context, post postdomain.Post) (postdomain.Post, error) {
-	db := r.db.WithContext(ctx)
+	db := conn(ctx, r.db)
 
 	categoryID, err := optionalIDByUUID(db, "categories", post.CategoryUUID)
 	if err != nil {
@@ -240,7 +240,7 @@ func (r *PostRepository) Update(ctx context.Context, post postdomain.Post) (post
 
 // SoftDelete sets deleted_at on a live post whose stored version is post.Version-1.
 func (r *PostRepository) SoftDelete(ctx context.Context, post postdomain.Post) error {
-	res := r.db.WithContext(ctx).Model(&PostModel{}).
+	res := conn(ctx, r.db).Model(&PostModel{}).
 		Where("uuid = ? AND version = ?", post.UUID, post.Version-1).
 		Updates(map[string]any{
 			"deleted_at": post.DeletedAt,
@@ -265,7 +265,7 @@ func (r *PostRepository) SoftDelete(ctx context.Context, post postdomain.Post) e
 // Restore revives a soft-deleted post whose stored version is post.Version-1 with the
 // post's slug, status, and published_at.
 func (r *PostRepository) Restore(ctx context.Context, post postdomain.Post) (postdomain.Post, error) {
-	res := r.db.WithContext(ctx).Unscoped().Model(&PostModel{}).
+	res := conn(ctx, r.db).Unscoped().Model(&PostModel{}).
 		Where("uuid = ? AND version = ? AND deleted_at IS NOT NULL", post.UUID, post.Version-1).
 		Updates(map[string]any{
 			"deleted_at":   nil,
@@ -294,7 +294,7 @@ func (r *PostRepository) Restore(ctx context.Context, post postdomain.Post) (pos
 func (r *PostRepository) SlugsWithPrefix(ctx context.Context, base string) ([]string, error) {
 	var slugs []string
 
-	err := r.db.WithContext(ctx).Model(&PostModel{}).
+	err := conn(ctx, r.db).Model(&PostModel{}).
 		Where("slug = ? OR left(slug, ?) = ?", base, len(base)+1, base+"-").
 		Pluck("slug", &slugs).Error
 
@@ -305,7 +305,7 @@ func (r *PostRepository) SlugsWithPrefix(ctx context.Context, base string) ([]st
 func (r *PostRepository) SlugTaken(ctx context.Context, slug string, excludeID uuid.UUID) (bool, error) {
 	var n int64
 
-	err := r.db.WithContext(ctx).Model(&PostModel{}).
+	err := conn(ctx, r.db).Model(&PostModel{}).
 		Where("slug = ? AND uuid <> ? AND deleted_at IS NULL", slug, excludeID).
 		Count(&n).Error
 
@@ -314,7 +314,7 @@ func (r *PostRepository) SlugTaken(ctx context.Context, slug string, excludeID u
 
 // SetCoverImage points the post's cover at mediaID, or clears it when nil.
 func (r *PostRepository) SetCoverImage(ctx context.Context, postID uuid.UUID, mediaID *uuid.UUID, updatedAt time.Time) error {
-	db := r.db.WithContext(ctx)
+	db := conn(ctx, r.db)
 
 	coverID, err := optionalIDByUUID(db, "media_assets", mediaID)
 	if err != nil {

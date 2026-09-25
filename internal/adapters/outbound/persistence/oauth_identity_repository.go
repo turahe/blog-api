@@ -39,7 +39,7 @@ func NewOAuthIdentityRepository(db *gorm.DB) *OAuthIdentityRepository {
 func (r *OAuthIdentityRepository) FindUser(ctx context.Context, provider, subject string) (uuid.UUID, error) {
 	var ids []uuid.UUID
 
-	err := r.db.WithContext(ctx).Table("user_oauth_identities i").
+	err := conn(ctx, r.db).Table("user_oauth_identities i").
 		Joins("JOIN users u ON u.id = i.user_id AND u.deleted_at IS NULL").
 		Where("i.provider = ? AND i.subject = ?", provider, subject).
 		Limit(1).Pluck("u.uuid", &ids).Error
@@ -56,7 +56,7 @@ func (r *OAuthIdentityRepository) FindUser(ctx context.Context, provider, subjec
 
 // Link stores identity for the user.
 func (r *OAuthIdentityRepository) Link(ctx context.Context, userID uuid.UUID, identity authdomain.OAuthIdentity, at time.Time) error {
-	id, err := idByUUID(r.db.WithContext(ctx), "users", userID)
+	id, err := idByUUID(conn(ctx, r.db), "users", userID)
 	if errors.Is(err, errUnknownReference) {
 		return authdomain.ErrOAuthNoAccount
 	}
@@ -73,7 +73,7 @@ func (r *OAuthIdentityRepository) Link(ctx context.Context, userID uuid.UUID, id
 	}
 
 	// A savepoint keeps an enclosing transaction usable after a unique violation.
-	err = r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error { return tx.Create(&model).Error })
+	err = conn(ctx, r.db).Transaction(func(tx *gorm.DB) error { return tx.Create(&model).Error })
 	if err != nil {
 		if IsUniqueViolation(err) {
 			return authdomain.ErrOAuthLinkConflict
@@ -87,7 +87,7 @@ func (r *OAuthIdentityRepository) Link(ctx context.Context, userID uuid.UUID, id
 
 // Touch records a sign-in with the identity.
 func (r *OAuthIdentityRepository) Touch(ctx context.Context, provider, subject string, at time.Time) error {
-	return r.db.WithContext(ctx).Model(&OAuthIdentityModel{}).
+	return conn(ctx, r.db).Model(&OAuthIdentityModel{}).
 		Where("provider = ? AND subject = ?", provider, subject).
 		Update("last_used_at", at).Error
 }

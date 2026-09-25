@@ -110,6 +110,56 @@ Platform factory: `internal/platform/messaging`. Core domain code must not impor
 - include actor ID when available
 - keep payload versionable
 
+## Envelope
+
+Metadata travels in Watermill message metadata (broker headers), following the
+`EventEnvelope` trait in [asyncapi.yaml](../architecture/asyncapi.yaml). The message body is the
+JSON payload only.
+
+| Header | Always | Value |
+| --- | --- | --- |
+| `id` | Yes | Event UUID; also the Watermill message UUID. Consumers dedupe on it. |
+| `type` | Yes | Event name, for example `blog.post.published` (the topic before `MESSAGE_TOPIC_PREFIX`). |
+| `schema_version` | Yes | Payload version, starting at `1`. Additive changes keep the version; renames or removals bump it. |
+| `source` | Yes | `blog-api`. |
+| `timestamp` | Yes | When the change happened (RFC 3339, UTC). |
+| `aggregate_type`, `aggregate_id` | When known | The entity that changed (`post`, `comment`, `user`, `media`) and its public UUID. |
+| `actor_id` | When known | The user who caused the change. |
+| `correlation_id` | For HTTP requests | The request's `X-Request-ID`. |
+
+Core services build events with `internal/core/event` (`event.New`) and never import
+Watermill.
+
+## Delivery
+
+Events go through a transactional outbox:
+
+1. A service runs its writes and `event.Recorder.Record` inside `event.Transactor.InTx`. The
+   rows in `outbox_events` commit or roll back with the change. Without `MESSAGE_BROKER`, the
+   recorder discards events and nothing is stored.
+2. The relay in `app worker` claims due rows (`FOR UPDATE SKIP LOCKED`, `OUTBOX_BATCH_SIZE`
+   per transaction), publishes each one, and records the outcome before committing. Several
+   workers can run at once.
+3. A failed publish is retried after 1s, 2s, 4s, … up to 10m. After `OUTBOX_MAX_ATTEMPTS` the
+   row is parked (`failed_at`); fix the cause and run `app outbox retry`. `app outbox status`
+   shows the backlog.
+4. Published rows are deleted after `OUTBOX_RETENTION`.
+
+Guarantees:
+
+- **At least once.** A crash between publishing and committing publishes the row again.
+  Consumers must be idempotent: dedupe on the `id` header.
+- **No global order.** One relay publishes due rows in `occurred_at` order, but retries and
+  concurrent relays can reorder events, even for one aggregate. Consumers that care compare
+  `timestamp` or reread current state.
+- **Per broker.** Kafka keeps order within a partition (the relay does not set a partition
+  key). RabbitMQ keeps order per queue while there is one consumer. Google Pub/Sub does not
+  order messages (ordering keys are not used). All three redeliver unacknowledged messages.
+
+Metrics (on `METRICS_ADDR` in `app worker`): `blog_outbox_published_total`,
+`blog_outbox_publish_failures_total{terminal}`, `blog_outbox_pending`, `blog_outbox_failed`, and
+`blog_outbox_lag_seconds` (age of the oldest pending event).
+
 ## Streaming Channels and SSE Fan-Out
 
 In addition to the point-to-point Watermill channels listed above, the backend exposes

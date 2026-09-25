@@ -57,7 +57,7 @@ func mapNotificationTemplate(model NotificationTemplateModel) template.Template 
 func (r *NotificationTemplateRepository) Get(ctx context.Context, typ string, channel template.Channel) (template.Template, error) {
 	var model NotificationTemplateModel
 
-	err := r.db.WithContext(ctx).Where("type = ? AND channel = ?", typ, string(channel)).First(&model).Error
+	err := conn(ctx, r.db).Where("type = ? AND channel = ?", typ, string(channel)).First(&model).Error
 	if errors.Is(err, gorm.ErrRecordNotFound) {
 		return template.Template{}, template.ErrNotFound
 	}
@@ -72,7 +72,7 @@ func (r *NotificationTemplateRepository) Get(ctx context.Context, typ string, ch
 // List returns every stored template ordered by type then channel.
 func (r *NotificationTemplateRepository) List(ctx context.Context) ([]template.Template, error) {
 	var models []NotificationTemplateModel
-	if err := r.db.WithContext(ctx).Order("type ASC, channel ASC").Find(&models).Error; err != nil {
+	if err := conn(ctx, r.db).Order("type ASC, channel ASC").Find(&models).Error; err != nil {
 		return nil, err
 	}
 
@@ -93,7 +93,7 @@ func (r *NotificationTemplateRepository) Save(ctx context.Context, tpl template.
 	now := time.Now().UTC()
 	model := toNotificationTemplateModel(tpl, now)
 
-	return r.db.WithContext(ctx).Clauses(clause.OnConflict{
+	return conn(ctx, r.db).Clauses(clause.OnConflict{
 		Columns: []clause.Column{{Name: "type"}, {Name: "channel"}},
 		DoUpdates: clause.AssignmentColumns([]string{
 			"subject", "title", "body", "preview", "event", "updated_at",
@@ -118,7 +118,7 @@ func (r *NotificationTemplateRepository) SeedDefaults(ctx context.Context, tpls 
 		models = append(models, toNotificationTemplateModel(tpl, now))
 	}
 
-	return r.db.WithContext(ctx).Clauses(clause.OnConflict{
+	return conn(ctx, r.db).Clauses(clause.OnConflict{
 		Columns:   []clause.Column{{Name: "type"}, {Name: "channel"}},
 		DoNothing: true,
 	}).Create(&models).Error

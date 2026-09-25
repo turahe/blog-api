@@ -69,7 +69,7 @@ func (r *ProfileRepository) GetViewByUsername(ctx context.Context, username stri
 
 func (r *ProfileRepository) view(ctx context.Context, where string, arg any) (userdomain.ProfileView, error) {
 	var rows []profileRow
-	if err := r.db.WithContext(ctx).Raw(profileViewSelect+where+" LIMIT 1", arg).Scan(&rows).Error; err != nil {
+	if err := conn(ctx, r.db).Raw(profileViewSelect+where+" LIMIT 1", arg).Scan(&rows).Error; err != nil {
 		return userdomain.ProfileView{}, fmt.Errorf("load profile: %w", err)
 	}
 
@@ -94,7 +94,7 @@ func (r *ProfileRepository) SaveProfile(
 		return fmt.Errorf("encode social links: %w", err)
 	}
 
-	err = r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+	err = conn(ctx, r.db).Transaction(func(tx *gorm.DB) error {
 		id, err := idByUUID(tx, "users", userID)
 		if errors.Is(err, errUnknownReference) {
 			return userdomain.ErrNotFound
@@ -138,7 +138,7 @@ func (r *ProfileRepository) SetAvatar(ctx context.Context, userID uuid.UUID, med
 		avatar = gorm.Expr(idOf("media_assets"), *mediaID)
 	}
 
-	result := r.db.WithContext(ctx).Model(&UserModel{}).Where("uuid = ?", userID).
+	result := conn(ctx, r.db).Model(&UserModel{}).Where("uuid = ?", userID).
 		Updates(map[string]any{"avatar_id": avatar, "updated_at": at})
 	if result.Error != nil {
 		return fmt.Errorf("set avatar: %w", result.Error)

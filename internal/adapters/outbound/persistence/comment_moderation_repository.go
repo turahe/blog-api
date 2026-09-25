@@ -47,7 +47,7 @@ func (r *CommentRepository) GetByIDs(ctx context.Context, ids []uuid.UUID) ([]co
 	}
 
 	var models []CommentModel
-	if err := r.db.WithContext(ctx).Select(commentColumns).Where("comments.uuid IN ?", ids).Find(&models).Error; err != nil {
+	if err := conn(ctx, r.db).Select(commentColumns).Where("comments.uuid IN ?", ids).Find(&models).Error; err != nil {
 		return nil, err
 	}
 
@@ -66,7 +66,7 @@ func (r *CommentRepository) ApplyModerations(ctx context.Context, changes []comm
 		return nil
 	}
 
-	return r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+	return conn(ctx, r.db).Transaction(func(tx *gorm.DB) error {
 		users := userIDCache{db: tx, ids: map[uuid.UUID]*int64{}}
 
 		var stale []uuid.UUID
@@ -128,7 +128,7 @@ func (r *CommentRepository) ApplyModerations(ctx context.Context, changes []comm
 // would silently remove the whole subtree.
 func (r *CommentRepository) HardDelete(ctx context.Context, id uuid.UUID, entry commentdomain.ModerationEntry) (bool, error) {
 	scrubbed := false
-	err := r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+	err := conn(ctx, r.db).Transaction(func(tx *gorm.DB) error {
 		var rowIDs []int64
 		if err := tx.Raw(`SELECT id FROM comments WHERE uuid = ? FOR UPDATE`, id).Scan(&rowIDs).Error; err != nil {
 			return err
@@ -191,7 +191,7 @@ func (r *CommentRepository) ListFlags(ctx context.Context, id uuid.UUID) ([]comm
 		CreatedAt      time.Time
 	}
 
-	err := r.db.WithContext(ctx).Table("comment_flags").
+	err := conn(ctx, r.db).Table("comment_flags").
 		Select("(SELECT ref.uuid FROM users ref WHERE ref.id = comment_flags.reporter_user_id) AS reporter_uuid, "+
 			"reporter_ip_hash, reason_code, details, created_at").
 		Where("comment_id = "+idOf("comments"), id).
@@ -220,7 +220,7 @@ func (r *CommentRepository) ListFlags(ctx context.Context, id uuid.UUID) ([]comm
 func (r *CommentRepository) ListModerationLog(ctx context.Context, id uuid.UUID) ([]commentdomain.ModerationEntry, error) {
 	var models []ModerationLogModel
 
-	err := r.db.WithContext(ctx).Select(moderationLogColumns).
+	err := conn(ctx, r.db).Select(moderationLogColumns).
 		Where("comment_moderation_log.comment_uuid = ?", id).
 		Order("comment_moderation_log.created_at ASC, comment_moderation_log.id ASC").
 		Find(&models).Error
@@ -244,7 +244,7 @@ func (r *CommentRepository) ListModerationLog(ctx context.Context, id uuid.UUID)
 
 // Stats counts comments by status and ranks the posts with the deepest moderation queue.
 func (r *CommentRepository) Stats(ctx context.Context) (commentdomain.Stats, error) {
-	db := r.db.WithContext(ctx)
+	db := conn(ctx, r.db)
 	queue := []string{string(commentdomain.StatusPending), string(commentdomain.StatusFlagged)}
 
 	var counts []struct {

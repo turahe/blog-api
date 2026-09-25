@@ -1,8 +1,11 @@
 package cmd
 
 import (
+	"context"
 	"errors"
 	"fmt"
+	"log/slog"
+	nethttp "net/http"
 	"os"
 	"os/signal"
 	"syscall"
@@ -10,12 +13,14 @@ import (
 
 	"github.com/ThreeDotsLabs/watermill/message"
 	"github.com/spf13/cobra"
+	"github.com/turahe/blog-api/internal/adapters/outbound/outbox"
 	"github.com/turahe/blog-api/internal/adapters/outbound/persistence"
 	"github.com/turahe/blog-api/internal/bootstrap"
 	auditservice "github.com/turahe/blog-api/internal/core/audit/service"
 	"github.com/turahe/blog-api/internal/platform/config"
 	"github.com/turahe/blog-api/internal/platform/database"
 	"github.com/turahe/blog-api/internal/platform/messaging"
+	"github.com/turahe/blog-api/internal/platform/metrics"
 )
 
 // auditPruneInterval is how often the worker deletes audit entries past retention.
@@ -79,13 +84,57 @@ func newWorkerCmd() *cobra.Command {
 				},
 			)
 
+			relay := outbox.New(persistence.NewOutboxRepository(db.GORM), bus.Publisher, bus.Topic, outbox.Config{
+				BatchSize:    cfg.OutboxBatchSize,
+				PollInterval: cfg.OutboxPollInterval,
+				MaxAttempts:  cfg.OutboxMaxAttempts,
+				Retention:    cfg.OutboxRetention,
+			}, logger)
+
+			if cfg.MetricsAddr != "" {
+				workerMetrics := metrics.New(db.SQL, version)
+				relay.WithObserver(workerMetrics)
+
+				stopMetrics := serveMetrics(workerMetrics.NewServer(cfg.MetricsAddr), logger)
+				defer stopMetrics()
+			}
+
+			relayDone := make(chan struct{})
+
+			go func() {
+				defer close(relayDone)
+
+				relay.Run(ctx)
+			}()
+
 			logger.Info("worker started", "broker", bus.Broker, "topic", topic)
 
-			if err := router.Run(ctx); err != nil && ctx.Err() == nil {
+			err = router.Run(ctx)
+
+			stop()
+			<-relayDone
+
+			if err != nil && ctx.Err() == nil {
 				return fmt.Errorf("router: %w", err)
 			}
 
 			return nil
 		},
+	}
+}
+
+// serveMetrics serves /metrics in the background and returns a func that shuts it down.
+func serveMetrics(server *nethttp.Server, logger *slog.Logger) func() {
+	go func() {
+		if err := server.ListenAndServe(); err != nil && !errors.Is(err, nethttp.ErrServerClosed) {
+			logger.Error("metrics server failed", "error", err)
+		}
+	}()
+
+	return func() {
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+
+		_ = server.Shutdown(ctx)
 	}
 }

@@ -1,5 +1,22 @@
 # Changelog
 
+## 2026-09-25 — Transactional outbox and relay
+
+### Added
+
+- `internal/core/event`: domain events (`event.New`) with `Recorder` and `Transactor` ports, so
+  services record events in the same transaction as their writes without importing Watermill.
+- `persistence.Transactor` carries the transaction in the context; every repository joins it.
+- `persistence.OutboxRepository` stores events in `outbox_events` with envelope headers (`id`,
+  `type`, `schema_version`, `source`, `timestamp`, aggregate, `actor_id`, `correlation_id`).
+- `app worker` relays due rows to the broker (`FOR UPDATE SKIP LOCKED`, safe with several
+  workers), retries with exponential backoff, parks rows after `OUTBOX_MAX_ATTEMPTS`, and
+  deletes published rows after `OUTBOX_RETENTION`. It serves `blog_outbox_*` metrics on
+  `METRICS_ADDR`.
+- `app outbox status` and `app outbox retry`.
+- Migration `00020_outbox_relay.sql` (`next_attempt_at`, `failed_at`).
+- `OUTBOX_BATCH_SIZE`, `OUTBOX_POLL_INTERVAL`, `OUTBOX_MAX_ATTEMPTS`, `OUTBOX_RETENTION`.
+
 ## 2026-09-25 — Comment abuse controls documented; phase 3 done
 
 ### Changed
