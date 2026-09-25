@@ -6,6 +6,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/turahe/blog-api/internal/adapters/inbound/http/middleware"
+	"github.com/turahe/blog-api/internal/adapters/inbound/http/responses"
 	"github.com/turahe/blog-api/internal/adapters/inbound/routes"
 	authports "github.com/turahe/blog-api/internal/core/auth/ports"
 	categoryservice "github.com/turahe/blog-api/internal/core/category/service"
@@ -42,7 +43,11 @@ type Deps struct {
 	PrivacyRequests privacyRequestsAPI
 	// Impersonation serves /admin/impersonation; nil keeps the routes as 501 stubs.
 	Impersonation impersonationAPI
-	EmailChange   authports.EmailChanger
+	// Newsletter serves /newsletter, /me/newsletter, and /admin/newsletter; nil keeps them as 501 stubs.
+	Newsletter newsletterAPI
+	// NewsletterProvider is the read-only delivery provider shown in the admin provider config.
+	NewsletterProvider responses.NewsletterProvider
+	EmailChange        authports.EmailChanger
 	// AvatarMaxBytes > 0 enables avatar upload and removal (requires media storage).
 	AvatarMaxBytes int64
 	Roles          RoleLookup
@@ -146,6 +151,7 @@ func NewControllers(deps Deps) routes.Controllers {
 	c.Analytics.ConsentStore, c.Analytics.ConsentGet, c.Analytics.ConsentWithdraw, c.Analytics.IngestGate = consentControllers(deps)
 	c.Notifications = notificationControllers(deps)
 	c.Impersonation = impersonationControllers(deps)
+	c.Newsletter = newsletterControllers(deps)
 
 	c.Posts = postControllers(deps)
 

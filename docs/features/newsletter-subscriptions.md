@@ -10,6 +10,24 @@ preview, and send newsletter issues; all sends integrate with an external Email 
 custom SMTP (SES/SMTP). The module records every consent event, suppresses bounces/complaints,
 and preserves audit trails for GDPR, CASL, and CAN-SPAM compliance.
 
+## Implementation status
+
+Implemented; the backend is described in [newsletter.md](../backend/newsletter.md). Where this
+spec and the build differ, the build is:
+
+| Topic | Built |
+| --- | --- |
+| Providers | `smtp` (the transactional mailer, sent by the worker) and `custom_http` (signed JSON gateway). The other ESPs in the table below are extension points: a gateway speaking the `custom_http` contract, or a new adapter. |
+| Provider config | Provider, endpoint, and secret come from env (`NEWSLETTER_*`); the admin endpoint stores only from/reply-to, postal address, confirm TTL, `double_optin_required`, and the lists. |
+| Lists | Several admin-defined lists with default lists for subscribes that name none. |
+| Frequency | Only `format` (`html` or `plaintext`). Digests are not built; every issue is sent as it is queued. |
+| Content | Markdown rendered to sanitized HTML in a fixed email template; plaintext is derived from the Markdown. No MJML. |
+| Tokens | 32 random bytes, SHA-256 on disk. The one-click target is `POST /api/v1/newsletter/unsubscribe?token=…`; there is no mailto unsubscribe. |
+| ESP sync | Subscriber changes go through the outbox (`blog.newsletter.subscriber.changed`) to a consumer that pushes current state; broker retries replace the `newsletter_provider_syncs` table. |
+| Bounces | A signed webhook (`POST /api/v1/newsletter/webhooks/provider`) for hard bounces, soft bounces, and complaints. |
+| Permissions | Public and self-service routes need no permission; the admin routes use the eight `newsletter.subscribers.*`, `newsletter.issues.*`, and `newsletter.provider_config.*` permissions. |
+| Monitoring | Structured logs for sends; the metrics and alerts listed below are not built. |
+
 ## Capability Matrix
 
 | Action | Anonymous / public | Authenticated user | Newsletter editor | Admin |

@@ -11,6 +11,11 @@ Email is used for account and notification workflows where durable user communic
 - account recovery notifications
 - 2FA recovery updates
 - moderation or system notifications
+- newsletter confirmation and welcome emails (`newsletter.confirm`, `newsletter.welcome`
+  templates) and newsletter issues — see [newsletter.md](newsletter.md)
+
+Newsletter issues go out through the same SMTP settings by default, one message per recipient
+from `app worker`, or through a signed `custom_http` gateway (`NEWSLETTER_PROVIDER`).
 
 ## Rules
 

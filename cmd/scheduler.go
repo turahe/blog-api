@@ -35,6 +35,10 @@ const (
 	privacyBatch = 10
 	// impersonationBatch bounds how many expired impersonation sessions one run closes.
 	impersonationBatch = 500
+	// newsletterReleaseBatch bounds how many due scheduled issues one run queues.
+	newsletterReleaseBatch = 50
+	// newsletterTokenRetention keeps expired newsletter tokens so old links still say "expired".
+	newsletterTokenRetention = 30 * 24 * time.Hour
 )
 
 func newSchedulerCmd() *cobra.Command {
@@ -188,6 +192,7 @@ func scheduledJobs(
 	privacy := bootstrap.NewPrivacyService(ctx, cfg, db, nil,
 		event.Unit{Tx: persistence.NewTransactor(db.GORM)}, readCache, logger)
 	impersonation := bootstrap.NewImpersonationService(cfg, db, bootstrap.NewEvents(cfg, db), nil, nil)
+	newsletter := bootstrap.NewNewsletterService(cfg, db, bootstrap.NewEvents(cfg, db), nil, logger)
 
 	return []scheduler.Job{
 		{Name: "audit-prune", Every: time.Hour, Run: func(ctx context.Context) error {
@@ -219,6 +224,17 @@ func scheduledJobs(
 			closed, err := impersonation.ExpireStale(ctx, impersonationBatch)
 
 			return logPruned(ctx, logger, "expired impersonation sessions")(int64(closed), err)
+		}},
+		{Name: "newsletter-release", Every: time.Minute, Run: func(ctx context.Context) error {
+			released, err := newsletter.ReleaseDue(ctx, newsletterReleaseBatch)
+			if released > 0 {
+				logger.InfoContext(ctx, "queued scheduled newsletter issues", "count", released)
+			}
+
+			return err
+		}},
+		{Name: "newsletter-tokens-prune", Every: time.Hour, Run: func(ctx context.Context) error {
+			return logPruned(ctx, logger, "newsletter tokens")(newsletter.PruneTokens(ctx, newsletterTokenRetention))
 		}},
 	}
 }

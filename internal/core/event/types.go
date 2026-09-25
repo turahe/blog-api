@@ -34,6 +34,9 @@ const (
 	ImpersonationExited  = "blog.impersonation.exited_manually"
 	ImpersonationExpired = "blog.impersonation.expired"
 	ImpersonationRevoked = "blog.impersonation.revoked_by_policy"
+
+	NewsletterIssueSendRequested = "blog.newsletter.issue.send_requested"
+	NewsletterSubscriberChanged  = "blog.newsletter.subscriber.changed"
 )
 
 // Aggregate types.
@@ -46,5 +49,7 @@ const (
 	AggregateSettings = "settings"
 	AggregateConsent  = "consent"
 
-	AggregateImpersonation = "impersonation_session"
+	AggregateImpersonation        = "impersonation_session"
+	AggregateNewsletterIssue      = "newsletter_issue"
+	AggregateNewsletterSubscriber = "newsletter_subscriber"
 )

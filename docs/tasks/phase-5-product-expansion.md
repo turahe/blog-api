@@ -10,7 +10,7 @@ Index: [README.md](./README.md).
 
 **In progress** — admin settings, post versioning, post SEO, and analytics consent are implemented.
 `/me/privacy` settings, the asynchronous `/me` data export and erasure, PostgreSQL post
-search, and staff impersonation are implemented. Newsletter operations still return `501`.
+search, staff impersonation, and newsletter subscriptions are implemented.
 
 ## Decisions
 
@@ -75,27 +75,28 @@ Spec: [post-seo.md](../features/post-seo.md)
 
 ## Epic: newsletter subscriptions
 
-- [ ] Subscriber and issue storage with double opt-in state
-- [ ] `public.newsletter.subscribe` — `POST /api/v1/newsletter/subscribe`
-- [ ] `public.newsletter.confirm` — `POST /api/v1/newsletter/confirm`
-- [ ] `public.newsletter.confirm_resend` — `POST /api/v1/newsletter/confirm/resend`
-- [ ] `public.newsletter.unsubscribe` — `POST /api/v1/newsletter/unsubscribe`
-- [ ] `public.newsletter.preferences.get` — `GET /api/v1/newsletter/preferences/{token}`
-- [ ] `public.newsletter.preferences.patch` — `PATCH /api/v1/newsletter/preferences/{token}`
-- [ ] `me.newsletter.subscribe` — `POST /api/v1/me/newsletter/subscribe`
-- [ ] `me.newsletter.unsubscribe` — `POST /api/v1/me/newsletter/unsubscribe`
-- [ ] `me.newsletter.subscriptions.list` — `GET /api/v1/me/newsletter/subscriptions`
-- [ ] `admin.newsletter.subscribers.list` — `GET /api/v1/admin/newsletter/subscribers`
-- [ ] `admin.newsletter.subscribers.get` — `GET /api/v1/admin/newsletter/subscribers/{id}`
-- [ ] `admin.newsletter.subscribers.delete` — `DELETE /api/v1/admin/newsletter/subscribers/{id}`
-- [ ] `admin.newsletter.issues.list` — `GET /api/v1/admin/newsletter/issues`
-- [ ] `admin.newsletter.issues.get` — `GET /api/v1/admin/newsletter/issues/{id}`
-- [ ] `admin.newsletter.issues.patch` — `PATCH /api/v1/admin/newsletter/issues/{id}`
-- [ ] `admin.newsletter.issues.send` — `POST /api/v1/admin/newsletter/issues`
-- [ ] `admin.newsletter.provider_config.get` — `GET /api/v1/admin/newsletter/provider-config`
-- [ ] `admin.newsletter.provider_config.put` — `PUT /api/v1/admin/newsletter/provider-config`
-- [ ] Unsubscribe tokens must be unguessable and single-purpose
-- [ ] Send issues through a Phase 4 consumer, never inline in the request
+- [x] Subscriber and issue storage with double opt-in state — see [newsletter.md](../backend/newsletter.md)
+- [x] `public.newsletter.subscribe` — `POST /api/v1/newsletter/subscribe`
+- [x] `public.newsletter.confirm` — `POST /api/v1/newsletter/confirm`
+- [x] `public.newsletter.confirm_resend` — `POST /api/v1/newsletter/confirm/resend`
+- [x] `public.newsletter.unsubscribe` — `POST /api/v1/newsletter/unsubscribe`
+- [x] `public.newsletter.preferences.get` — `GET /api/v1/newsletter/preferences/{token}`
+- [x] `public.newsletter.preferences.patch` — `PATCH /api/v1/newsletter/preferences/{token}`
+- [x] `me.newsletter.subscribe` — `POST /api/v1/me/newsletter/subscribe`
+- [x] `me.newsletter.unsubscribe` — `POST /api/v1/me/newsletter/unsubscribe`
+- [x] `me.newsletter.subscriptions.list` — `GET /api/v1/me/newsletter/subscriptions`
+- [x] `admin.newsletter.subscribers.list` — `GET /api/v1/admin/newsletter/subscribers`
+- [x] `admin.newsletter.subscribers.get` — `GET /api/v1/admin/newsletter/subscribers/{id}`
+- [x] `admin.newsletter.subscribers.delete` — `DELETE /api/v1/admin/newsletter/subscribers/{id}`
+- [x] `admin.newsletter.issues.list` — `GET /api/v1/admin/newsletter/issues`
+- [x] `admin.newsletter.issues.get` — `GET /api/v1/admin/newsletter/issues/{id}`
+- [x] `admin.newsletter.issues.patch` — `PATCH /api/v1/admin/newsletter/issues/{id}`
+- [x] `admin.newsletter.issues.send` — `POST /api/v1/admin/newsletter/issues`
+- [x] `admin.newsletter.provider_config.get` — `GET /api/v1/admin/newsletter/provider-config`
+- [x] `admin.newsletter.provider_config.put` — `PUT /api/v1/admin/newsletter/provider-config`
+- [x] Unsubscribe tokens must be unguessable and single-purpose (32 random bytes, SHA-256 on
+      disk, one purpose each)
+- [x] Send issues through a Phase 4 consumer, never inline in the request (`newsletter-dispatch`)
 
 Spec: [newsletter-subscriptions.md](../features/newsletter-subscriptions.md)
 
@@ -160,6 +161,7 @@ Spec: [newsletter-subscriptions.md](../features/newsletter-subscriptions.md)
 | Post SEO | [post-seo.md](../backend/post-seo.md) |
 | Search | [search.md](../backend/search.md) |
 | Impersonation | [impersonation.md](../backend/impersonation.md) |
+| Newsletter | [newsletter.md](../backend/newsletter.md) |
 | Media | [media.md](../backend/media.md) |
 | Email | [email.md](../backend/email.md) |
 | Product requirements | [PRD.md](../product/PRD.md) |

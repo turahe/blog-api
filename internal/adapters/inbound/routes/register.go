@@ -27,6 +27,7 @@ func Register(router gin.IRouter, c Controllers, auth AuthMiddleware) {
 	registerComments(v1, auth, c)
 	registerAdmin(v1, auth, c)
 	registerAnalytics(v1, auth, c)
+	registerNewsletter(v1, auth, c)
 	registerContractStubs(v1, auth, c)
 }
 

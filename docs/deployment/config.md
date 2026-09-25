@@ -85,6 +85,10 @@ Do not use `0.0.0.0/0`, `*`, or arbitrary client-controlled addresses in
 | `AUDIT_RETENTION_DAYS` | `395` | No | Days audit rows are kept; `app audit prune` and the hourly `audit-prune` job in `app scheduler` delete older rows. Must be positive. |
 | `AUDIT_QUEUE_SIZE` | `1024` | No | Entries buffered for the background audit writer. When full, new entries are dropped and counted in `blog_audit_entries_dropped_total`. Must be positive. |
 | `IMPERSONATION_TTL` | `1h` | No | Lifetime of an impersonation session and its token; never renewed. `5m`–`2h`. See [impersonation.md](../backend/impersonation.md). |
+| `NEWSLETTER_PROVIDER` | `smtp` | No | Newsletter issue sender: `smtp` (the SMTP settings, from `app worker`) or `custom_http` (signed JSON gateway). See [newsletter.md](../backend/newsletter.md). |
+| `NEWSLETTER_HTTP_ENDPOINT` | — | With `custom_http` | Gateway URL for deliveries and contact syncs; must be `https` in production. Credentials and query are never shown by the admin API. |
+| `NEWSLETTER_HTTP_SECRET` | — | With `custom_http` | HMAC-SHA256 secret, at least 32 bytes, for gateway requests and the bounce/complaint webhook. Set with `smtp` it enables only the webhook. |
+| `NEWSLETTER_SEND_BATCH` | `50` | No | Recipients claimed per dispatch step, `1`–`500`. |
 | `SEARCH_LANGUAGE` | `simple` | No | PostgreSQL text search configuration for post search (`simple` does no stemming; `english`, `indonesian`, … stem). Changing it takes effect after `app search reindex` and an `app serve` restart; until then searches keep the indexed language and `serve` logs a warning. See [search.md](../backend/search.md). |
 
 A locked or throttled login answers `429` with `Retry-After`. Lockout is keyed by email, so

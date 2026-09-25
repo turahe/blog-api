@@ -8,6 +8,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/turahe/blog-api/internal/adapters/inbound/http/handlers"
 	"github.com/turahe/blog-api/internal/adapters/inbound/http/middleware"
+	"github.com/turahe/blog-api/internal/adapters/inbound/http/responses"
 	"github.com/turahe/blog-api/internal/adapters/inbound/http/swagger"
 	"github.com/turahe/blog-api/internal/adapters/inbound/realtime"
 	"github.com/turahe/blog-api/internal/adapters/inbound/routes"
@@ -21,6 +22,7 @@ import (
 	healthports "github.com/turahe/blog-api/internal/core/health/ports"
 	impservice "github.com/turahe/blog-api/internal/core/impersonation/service"
 	mediaports "github.com/turahe/blog-api/internal/core/media/ports"
+	nlservice "github.com/turahe/blog-api/internal/core/newsletter/service"
 	notificationservice "github.com/turahe/blog-api/internal/core/notification/service"
 	postservice "github.com/turahe/blog-api/internal/core/post/service"
 	privacyservice "github.com/turahe/blog-api/internal/core/privacy/service"
@@ -58,11 +60,15 @@ type Dependencies struct {
 	PrivacyRequests *privacyservice.Service
 	// Impersonation serves /admin/impersonation and verifies impersonation tokens; nil keeps
 	// the routes as 501 stubs and refuses impersonation tokens.
-	Impersonation  *impservice.Service
-	RateLimiter    middleware.Limiter
-	CommentRates   handlers.CommentRates
-	LoginPerMinute int
-	Metrics        middleware.MetricsRecorder // nil disables request metrics
+	Impersonation *impservice.Service
+	// Newsletter serves the newsletter routes; nil keeps them as 501 stubs.
+	Newsletter *nlservice.Service
+	// NewsletterProvider describes the environment-configured provider for the admin config.
+	NewsletterProvider responses.NewsletterProvider
+	RateLimiter        middleware.Limiter
+	CommentRates       handlers.CommentRates
+	LoginPerMinute     int
+	Metrics            middleware.MetricsRecorder // nil disables request metrics
 	// MaxInFlight sheds requests beyond this many concurrent ones with 503; 0 disables.
 	MaxInFlight   int
 	Audit         auditports.Writer // nil disables audit logging
@@ -183,6 +189,12 @@ func authChains(deps Dependencies) (optional, required gin.HandlersChain) {
 func optionalServices(controllerDeps *handlers.Deps, deps Dependencies) {
 	if deps.Impersonation != nil {
 		controllerDeps.Impersonation = deps.Impersonation
+	}
+
+	if deps.Newsletter != nil {
+		controllerDeps.Newsletter = deps.Newsletter
+		controllerDeps.NewsletterProvider = deps.NewsletterProvider
+		controllerDeps.NewsletterProvider.SendingEnabled = deps.Newsletter.SendingEnabled()
 	}
 
 	if deps.Profiles != nil {

@@ -295,6 +295,42 @@ channels:
       operationId: publishImpersonationActionPerformed
       message:
         $ref: '#/components/messages/ImpersonationActionPerformed'
+  blog.newsletter.issue.send_requested:
+    description: Raised when a newsletter issue is queued (sent now, released by the scheduler at send_at, or
+      resumed). The newsletter-dispatch consumer delivers it; redelivery is safe because each recipient is claimed
+      before it is mailed.
+    subscribe:
+      operationId: onNewsletterIssueSendRequested
+      tags:
+      - name: newsletter
+      - name: outbox
+      message:
+        $ref: '#/components/messages/NewsletterIssueSendRequested'
+    publish:
+      operationId: publishNewsletterIssueSendRequested
+      tags:
+      - name: newsletter
+      - name: outbox
+      message:
+        $ref: '#/components/messages/NewsletterIssueSendRequested'
+  blog.newsletter.subscriber.changed:
+    description: Raised when a subscriber's consent state changes (confirmed, lists or format changed,
+      unsubscribed, bounced, complained, erased). Carries ids only; the newsletter-provider-sync consumer
+      (custom_http) reads the current state and pushes it to the provider.
+    subscribe:
+      operationId: onNewsletterSubscriberChanged
+      tags:
+      - name: newsletter
+      - name: outbox
+      message:
+        $ref: '#/components/messages/NewsletterSubscriberChanged'
+    publish:
+      operationId: publishNewsletterSubscriberChanged
+      tags:
+      - name: newsletter
+      - name: outbox
+      message:
+        $ref: '#/components/messages/NewsletterSubscriberChanged'
   blog.post.revision.created:
     description: Raised when a new post revision is appended (create/update/publish/archive/restore).
     subscribe:
@@ -1222,6 +1258,58 @@ components:
             type: string
             format: uuid
             nullable: true
+    NewsletterIssueSendRequested:
+      traits:
+      - $ref: '#/components/messageTraits/EventEnvelope'
+      payload:
+        type: object
+        required:
+        - issue_id
+        - requested_at
+        properties:
+          issue_id:
+            type: string
+            format: uuid
+          requested_at:
+            type: string
+            format: date-time
+    NewsletterSubscriberChanged:
+      traits:
+      - $ref: '#/components/messageTraits/EventEnvelope'
+      payload:
+        type: object
+        required:
+        - subscriber_id
+        - status
+        - change
+        - occurred_at
+        properties:
+          subscriber_id:
+            type: string
+            format: uuid
+          status:
+            type: string
+            enum:
+            - pending_confirm
+            - active
+            - unsubscribed
+            - bounced
+            - complained
+            - erased
+          change:
+            type: string
+            enum:
+            - confirmed
+            - lists_changed
+            - preferences_updated
+            - resubscribed
+            - unsubscribed
+            - bounced
+            - complained
+            - erased
+          occurred_at:
+            type: string
+            format: date-time
     NotificationStreamMessage:
       description: SSE notification event for per-user streams
       payload:

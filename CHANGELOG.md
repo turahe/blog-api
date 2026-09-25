@@ -1,5 +1,34 @@
 # Changelog
 
+## 2026-09-25 — Newsletter subscriptions
+
+### Added
+
+- Public double opt-in: `POST /api/v1/newsletter/subscribe`, `/confirm`, `/confirm/resend`,
+  `/unsubscribe` (also the RFC 8058 one-click target), and `GET|PATCH
+  /api/v1/newsletter/preferences/{token}`. Subscribe never reveals whether an address is known;
+  it checks a honeypot and, when configured, Turnstile, and is rate limited per IP and per
+  address. See [newsletter.md](docs/backend/newsletter.md).
+- `GET /api/v1/me/newsletter/subscriptions`, `POST /api/v1/me/newsletter/subscribe`, and
+  `POST /api/v1/me/newsletter/unsubscribe` for the account email.
+- Admin subscribers (list, search, CSV export, get with consent history, unsubscribe or
+  `hard_delete` erasure), issues (Markdown drafts, scheduling, send, cancel, preview), and
+  provider config (sender identity, postal address, confirm TTL, double opt-in, and lists).
+- Issues are sent by the `newsletter-dispatch` consumer in `app worker`, one message per
+  recipient with unsubscribe and preferences links, the postal address, and `List-Unsubscribe`
+  headers. Each recipient is claimed once, so retries never send twice.
+- `NEWSLETTER_PROVIDER=smtp|custom_http`: the SMTP mailer, or HMAC-signed JSON deliveries and
+  contact syncs to `NEWSLETTER_HTTP_ENDPOINT`. `NEWSLETTER_HTTP_SECRET` also enables the signed
+  bounce and complaint webhook `POST /api/v1/newsletter/webhooks/provider`.
+  `NEWSLETTER_SEND_BATCH` sets the dispatch batch size.
+- Migration 00030 with lists, subscribers, memberships, hashed tokens, consent audit, issues,
+  and deliveries. Erasure keeps the suppressed row and consent history without the address.
+- Events `blog.newsletter.issue.send_requested` and `blog.newsletter.subscriber.changed`;
+  scheduler jobs `newsletter-release` (every minute) and `newsletter-tokens-prune` (hourly).
+- `newsletter.confirm` and `newsletter.welcome` notification templates.
+- Eight `newsletter.*` permissions: all on `admin`; subscriber read/export and issue
+  read/edit/send on `editor`.
+
 ## 2026-09-25 — Staff impersonation
 
 ### Added

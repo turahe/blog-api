@@ -33,7 +33,7 @@ prefixes intentionally mix modes (see below).
 | `health` | `/health/live`, `/health/ready`, `/health/version` | 3 | none | no auth, no CSRF, no rate limit; stays cheap enough for probes |
 | `auth` | `/api/v1/auth` | 8 | 6 none, 2 required | strict per-IP and per-identity rate limits, timing-safe responses, no user enumeration |
 | `self-service` | `/api/v1/me`, `/api/v1/comments/:id` (mutations) | 22 | required | bearer or session auth, CSRF for browser clients, step-up re-verify on high-risk actions, ownership checks on owned resources |
-| `public` | `/api/v1/posts`, `/api/v1/categories`, `/api/v1/tags`, `/api/v1/media`, `/api/v1/users`, `/api/v1/comments`, `/api/v1/newsletter` | 19 | 16 none, 3 optional | anonymous-safe, cache-friendly, privacy filtering, spam and captcha checks on writes |
+| `public` | `/api/v1/posts`, `/api/v1/categories`, `/api/v1/tags`, `/api/v1/media`, `/api/v1/users`, `/api/v1/comments`, `/api/v1/newsletter` | 20 | 17 none, 3 optional | anonymous-safe, cache-friendly, privacy filtering, spam and captcha checks on writes |
 | `admin` | `/api/v1/admin` | 64 | 63 required, 1 none | bearer auth, RBAC permission check, CSRF, audit logging |
 | `analytics` | `/api/v1/analytics` | 8 | none | consent gating, bot filtering, high-volume ingest rate limits |
 
@@ -386,6 +386,21 @@ Each item has `id`, `type`, `title`, `body`, `preview`, `data` (links such as `p
   media.transform_disabled` without `IMGPROXY_URL`; see [media.md](media.md#image-transforms-imgproxy).
 - Upload checks and residual risks: [upload-security.md](upload-security.md).
 
+### Newsletter
+
+- Public routes take JSON or HTML form bodies. Subscribe and resend always answer `202
+  {"status": "pending_confirmation"}`, whether or not the address is known.
+- Token errors: unknown `404 newsletter.token_invalid`, expired `410 newsletter.token_expired`,
+  used `409 newsletter.token_used`.
+- `POST /api/v1/newsletter/unsubscribe` accepts the token in the body or `?token=`, so it is also
+  the RFC 8058 one-click target in the `List-Unsubscribe` header.
+- `POST /api/v1/newsletter/webhooks/provider` (`public.newsletter.provider_webhook`) takes
+  HMAC-signed bounce and complaint batches; `422 newsletter.not_configured` without
+  `NEWSLETTER_HTTP_SECRET`, `401 newsletter.signature_invalid` on a bad signature.
+- Scheduling or queuing an issue needs `newsletter.issues.send` and a postal address in the
+  provider config (`422 newsletter.not_configured`). Details:
+  [newsletter.md](newsletter.md).
+
 ## Main API Areas
 
 - auth
@@ -401,6 +416,7 @@ Each item has `id`, `type`, `title`, `body`, `preview`, `data` (links such as `p
 - analytics
 - settings
 - impersonation
+- newsletter
 - health
 
 ## Example Self-Service Endpoints

@@ -23,6 +23,9 @@ PostgreSQL is the source of truth for:
 - settings
 - settings_history
 - impersonation_sessions
+- newsletter_lists, newsletter_provider_config, newsletter_subscribers,
+  newsletter_list_memberships, newsletter_tokens, newsletter_consent_audit, newsletter_issues,
+  newsletter_issue_lists, newsletter_deliveries
 - post_revisions
 - post_seo
 - user_profiles
@@ -706,6 +709,22 @@ Implemented (migration 00029); see [impersonation.md](impersonation.md#storage).
 - ended_at (set exactly when state is not active)
 - end_reason (manual_exit, expired, policy)
 - unique partial index on actor_id where state = 'active'
+
+### newsletter tables
+
+Implemented (migration 00030); see [newsletter.md](newsletter.md#storage).
+
+- newsletter_subscribers: one row per normalized email (unique partial index while not erased),
+  optional user_id (unique), status, format, source, IP hash, confirmation-rate counters, and
+  opt-in/unsubscribe/bounce/complaint/erase timestamps. Erasure nulls email, normalized_email,
+  display_name, ip_hash, and user_agent and keeps the row for suppression.
+- newsletter_list_memberships: (subscriber_id, list_id) with state pending, active, or left
+- newsletter_tokens: SHA-256 token_hash (unique), purpose confirm/unsubscribe/preferences,
+  optional issue_id, expires_at, used_at
+- newsletter_consent_audit: append-only consent events
+- newsletter_issues and newsletter_issue_lists: issue content, status, send_at, counters, and
+  target lists (RESTRICT on list delete; lists are archived instead)
+- newsletter_deliveries: unique (issue_id, subscriber_id) claim with attempts and outcome
 
 ### post_revisions
 

@@ -41,6 +41,10 @@ const (
 	TypePublicationRepublished = "publication.republished"
 	TypeCommentReply           = "comment.reply"
 	TypeCommentModerated       = "comment.moderated"
+	// TypeNewsletterConfirm carries the double opt-in link; TypeNewsletterWelcome follows the
+	// confirmation with a preferences link. Both are email only.
+	TypeNewsletterConfirm = "newsletter.confirm"
+	TypeNewsletterWelcome = "newsletter.welcome"
 )
 
 // Data is the plain-text values substituted into a template.
@@ -59,6 +63,11 @@ type Data struct {
 	Excerpt string
 	// Outcome is a past-tense moderation result, such as "approved" or "marked as spam".
 	Outcome string
+	// SiteURL is the public site origin that hosts pages such as /newsletter/confirm.
+	SiteURL  string
+	SiteName string
+	// Lists names newsletter lists, comma separated.
+	Lists string
 }
 
 // Message is one rendered channel payload.
@@ -321,6 +330,9 @@ func scrub(data Data) Data {
 	data.ActorName = oneLine(data.ActorName)
 	data.Excerpt = oneLine(data.Excerpt)
 	data.Outcome = oneLine(data.Outcome)
+	data.SiteURL = oneLine(data.SiteURL)
+	data.SiteName = oneLine(data.SiteName)
+	data.Lists = oneLine(data.Lists)
 
 	return data
 }
@@ -470,6 +482,18 @@ var catalogue = map[string]map[Channel]spec{
 			event:   eventNotificationCreated,
 			title:   "{{.ActorName}} replied to your comment",
 			preview: "{{.Excerpt}}",
+		},
+	},
+	TypeNewsletterConfirm: {
+		ChannelEmail: {
+			subject: "Confirm your subscription to {{.SiteName}}",
+			body:    "Hi{{if .Name}} {{.Name}}{{end}},\n\nConfirm your subscription to {{.Lists}} from {{.SiteName}} before {{.ExpiresAt}}:\n\n{{.SiteURL}}/newsletter/confirm?token={{.Token}}\n\nIf you did not ask for this, ignore this message and you will not be subscribed.\n",
+		},
+	},
+	TypeNewsletterWelcome: {
+		ChannelEmail: {
+			subject: "You're subscribed to {{.SiteName}}",
+			body:    "Hi{{if .Name}} {{.Name}}{{end}},\n\nYou're now subscribed to {{.Lists}}.\n\nChange what you receive or unsubscribe at any time:\n\n{{.SiteURL}}/newsletter/preferences?token={{.Token}}\n",
 		},
 	},
 	TypeCommentModerated: {

@@ -1017,6 +1017,581 @@
                 }
             }
         },
+        "/api/v1/admin/newsletter/issues": {
+            "get": {
+                "security": [
+                    {
+                        "Bearer": []
+                    }
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "admin"
+                ],
+                "summary": "List newsletter issues",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "draft, scheduled, queued, sending, sent, cancelled",
+                        "name": "status",
+                        "in": "query"
+                    },
+                    {
+                        "type": "integer",
+                        "default": 1,
+                        "description": "page",
+                        "name": "page",
+                        "in": "query"
+                    },
+                    {
+                        "type": "integer",
+                        "default": 20,
+                        "description": "per page",
+                        "name": "per_page",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/responses.Envelope"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/responses.Envelope"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/responses.Envelope"
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden",
+                        "schema": {
+                            "$ref": "#/definitions/responses.Envelope"
+                        }
+                    }
+                }
+            },
+            "post": {
+                "security": [
+                    {
+                        "Bearer": []
+                    }
+                ],
+                "description": "status draft (default) saves; scheduled sends at send_at; queued sends now. Scheduling and\nsending need newsletter.issues.send and a postal_address in the provider config. The Markdown\nbody is rendered to sanitized HTML and plain text inside a template that adds the unsubscribe\nand preferences links and the postal address.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "admin"
+                ],
+                "summary": "Create, schedule, or send a newsletter issue",
+                "parameters": [
+                    {
+                        "description": "issue",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/requests.NewsletterIssueCreate"
+                        }
+                    }
+                ],
+                "responses": {
+                    "201": {
+                        "description": "Created",
+                        "schema": {
+                            "$ref": "#/definitions/responses.Envelope"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/responses.Envelope"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/responses.Envelope"
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden",
+                        "schema": {
+                            "$ref": "#/definitions/responses.Envelope"
+                        }
+                    },
+                    "422": {
+                        "description": "newsletter.not_configured",
+                        "schema": {
+                            "$ref": "#/definitions/responses.Envelope"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/admin/newsletter/issues/{param1}": {
+            "get": {
+                "security": [
+                    {
+                        "Bearer": []
+                    }
+                ],
+                "description": "preview=true adds the rendered html and text as a subscriber would receive them.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "admin"
+                ],
+                "summary": "Get a newsletter issue",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "issue UUID",
+                        "name": "param1",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "boolean",
+                        "description": "include the rendered email",
+                        "name": "preview",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/responses.Envelope"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/responses.Envelope"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/responses.Envelope"
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden",
+                        "schema": {
+                            "$ref": "#/definitions/responses.Envelope"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/responses.Envelope"
+                        }
+                    }
+                }
+            },
+            "patch": {
+                "security": [
+                    {
+                        "Bearer": []
+                    }
+                ],
+                "description": "Content and lists change only while draft or scheduled. status moves draft/scheduled to\ndraft, scheduled, queued, or cancelled; queued to cancelled; sending to queued (resume) or\ncancelled. Scheduling and sending need newsletter.issues.send. 409 when the move is not\nallowed or the issue changed meanwhile.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "admin"
+                ],
+                "summary": "Update, schedule, send, or cancel a newsletter issue",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "issue UUID",
+                        "name": "param1",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "changes",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/requests.NewsletterIssuePatch"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/responses.Envelope"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/responses.Envelope"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/responses.Envelope"
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden",
+                        "schema": {
+                            "$ref": "#/definitions/responses.Envelope"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/responses.Envelope"
+                        }
+                    },
+                    "409": {
+                        "description": "newsletter.conflict",
+                        "schema": {
+                            "$ref": "#/definitions/responses.Envelope"
+                        }
+                    },
+                    "422": {
+                        "description": "newsletter.not_configured",
+                        "schema": {
+                            "$ref": "#/definitions/responses.Envelope"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/admin/newsletter/provider-config": {
+            "get": {
+                "security": [
+                    {
+                        "Bearer": []
+                    }
+                ],
+                "description": "Stored sending settings and lists, and the read-only provider from the environment\n(NEWSLETTER_PROVIDER); the HMAC secret is never returned, only whether it is set.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "admin"
+                ],
+                "summary": "Get the newsletter provider config",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/responses.Envelope"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/responses.Envelope"
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden",
+                        "schema": {
+                            "$ref": "#/definitions/responses.Envelope"
+                        }
+                    }
+                }
+            },
+            "put": {
+                "security": [
+                    {
+                        "Bearer": []
+                    }
+                ],
+                "description": "Saves the sending settings and the complete list set. Lists missing from lists are archived:\nthey keep memberships and history but can no longer be joined or targeted. At least one list\nmust be a default list. The provider, endpoint, and secret are environment settings.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "admin"
+                ],
+                "summary": "Replace the newsletter provider config",
+                "parameters": [
+                    {
+                        "description": "settings and lists",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/requests.NewsletterProviderConfig"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/responses.Envelope"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/responses.Envelope"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/responses.Envelope"
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden",
+                        "schema": {
+                            "$ref": "#/definitions/responses.Envelope"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/admin/newsletter/subscribers": {
+            "get": {
+                "security": [
+                    {
+                        "Bearer": []
+                    }
+                ],
+                "description": "Filters by status, list slug, and email prefix (q). format=csv downloads every matching\nsubscriber (up to 50000) as CSV and needs newsletter.subscribers.export.",
+                "produces": [
+                    "application/json",
+                    "text/csv"
+                ],
+                "tags": [
+                    "admin"
+                ],
+                "summary": "List newsletter subscribers",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "pending_confirm, active, unsubscribed, bounced, complained, erased",
+                        "name": "status",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "list slug",
+                        "name": "list",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "email prefix",
+                        "name": "q",
+                        "in": "query"
+                    },
+                    {
+                        "enum": [
+                            "json",
+                            "csv"
+                        ],
+                        "type": "string",
+                        "default": "json",
+                        "description": "json or csv",
+                        "name": "format",
+                        "in": "query"
+                    },
+                    {
+                        "type": "integer",
+                        "default": 1,
+                        "description": "page",
+                        "name": "page",
+                        "in": "query"
+                    },
+                    {
+                        "type": "integer",
+                        "default": 20,
+                        "description": "per page",
+                        "name": "per_page",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/responses.Envelope"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/responses.Envelope"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/responses.Envelope"
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden",
+                        "schema": {
+                            "$ref": "#/definitions/responses.Envelope"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/admin/newsletter/subscribers/{param1}": {
+            "get": {
+                "security": [
+                    {
+                        "Bearer": []
+                    }
+                ],
+                "description": "The subscriber, list memberships, and the latest 100 consent events.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "admin"
+                ],
+                "summary": "Get a newsletter subscriber",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "subscriber UUID",
+                        "name": "param1",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/responses.Envelope"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/responses.Envelope"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/responses.Envelope"
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden",
+                        "schema": {
+                            "$ref": "#/definitions/responses.Envelope"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/responses.Envelope"
+                        }
+                    }
+                }
+            },
+            "delete": {
+                "security": [
+                    {
+                        "Bearer": []
+                    }
+                ],
+                "description": "mode=unsubscribe (default) stops all mail. mode=hard_delete erases the address and name;\nthe row stays, suppressed, with its consent history, so the address is never mailed again\nwithout a new opt-in.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "admin"
+                ],
+                "summary": "Unsubscribe or erase a newsletter subscriber",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "subscriber UUID",
+                        "name": "param1",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "enum": [
+                            "unsubscribe",
+                            "hard_delete"
+                        ],
+                        "type": "string",
+                        "default": "unsubscribe",
+                        "description": "unsubscribe or hard_delete",
+                        "name": "mode",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/responses.Envelope"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/responses.Envelope"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/responses.Envelope"
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden",
+                        "schema": {
+                            "$ref": "#/definitions/responses.Envelope"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/responses.Envelope"
+                        }
+                    }
+                }
+            }
+        },
         "/api/v1/admin/permissions": {
             "get": {
                 "security": [
@@ -4695,6 +5270,163 @@
                 }
             }
         },
+        "/api/v1/me/newsletter/subscribe": {
+            "post": {
+                "security": [
+                    {
+                        "Bearer": []
+                    }
+                ],
+                "description": "Subscribes the account email to lists (the default lists when empty). A verified account\nemail joins at once unless double_optin_required is set; otherwise the lists stay pending\nuntil the emailed confirmation link is used (status pending_confirm).",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "me"
+                ],
+                "summary": "Subscribe my account email",
+                "parameters": [
+                    {
+                        "description": "lists and format",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/requests.NewsletterMeSubscribe"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/responses.Envelope"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/responses.Envelope"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/responses.Envelope"
+                        }
+                    },
+                    "422": {
+                        "description": "newsletter.not_configured",
+                        "schema": {
+                            "$ref": "#/definitions/responses.Envelope"
+                        }
+                    },
+                    "429": {
+                        "description": "Too Many Requests",
+                        "schema": {
+                            "$ref": "#/definitions/responses.Envelope"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/me/newsletter/subscriptions": {
+            "get": {
+                "security": [
+                    {
+                        "Bearer": []
+                    }
+                ],
+                "description": "The subscription for the signed-in account (linked, or matching the account email) and the\nlists that can be chosen. subscribed is false when there is none.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "me"
+                ],
+                "summary": "My newsletter subscription",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/responses.Envelope"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/responses.Envelope"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/me/newsletter/unsubscribe": {
+            "post": {
+                "security": [
+                    {
+                        "Bearer": []
+                    }
+                ],
+                "description": "Leaves lists; empty lists leaves every list and stops all newsletter mail.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "me"
+                ],
+                "summary": "Unsubscribe my account email",
+                "parameters": [
+                    {
+                        "description": "lists and optional feedback",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/requests.NewsletterMeUnsubscribe"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/responses.Envelope"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/responses.Envelope"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/responses.Envelope"
+                        }
+                    },
+                    "404": {
+                        "description": "not subscribed",
+                        "schema": {
+                            "$ref": "#/definitions/responses.Envelope"
+                        }
+                    },
+                    "429": {
+                        "description": "Too Many Requests",
+                        "schema": {
+                            "$ref": "#/definitions/responses.Envelope"
+                        }
+                    }
+                }
+            }
+        },
         "/api/v1/me/notifications": {
             "get": {
                 "security": [
@@ -5146,6 +5878,411 @@
                     },
                     "501": {
                         "description": "Not Implemented",
+                        "schema": {
+                            "$ref": "#/definitions/responses.Envelope"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/newsletter/confirm": {
+            "post": {
+                "description": "Uses the token from the confirmation email. The pending lists become active and a welcome\nemail with a preferences link is sent. A token works once.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "newsletter"
+                ],
+                "summary": "Confirm a newsletter subscription",
+                "parameters": [
+                    {
+                        "description": "confirmation token",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/requests.NewsletterToken"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/responses.Envelope"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/responses.Envelope"
+                        }
+                    },
+                    "404": {
+                        "description": "newsletter.token_invalid",
+                        "schema": {
+                            "$ref": "#/definitions/responses.Envelope"
+                        }
+                    },
+                    "409": {
+                        "description": "newsletter.token_used",
+                        "schema": {
+                            "$ref": "#/definitions/responses.Envelope"
+                        }
+                    },
+                    "410": {
+                        "description": "newsletter.token_expired (request a new link)",
+                        "schema": {
+                            "$ref": "#/definitions/responses.Envelope"
+                        }
+                    },
+                    "429": {
+                        "description": "Too Many Requests",
+                        "schema": {
+                            "$ref": "#/definitions/responses.Envelope"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/newsletter/confirm/resend": {
+            "post": {
+                "description": "Sends a new confirmation link to a pending address. Always 202 with the same body, and at\nmost 3 emails per address in 30 minutes.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "newsletter"
+                ],
+                "summary": "Resend the confirmation email",
+                "parameters": [
+                    {
+                        "description": "address",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/requests.NewsletterResend"
+                        }
+                    }
+                ],
+                "responses": {
+                    "202": {
+                        "description": "Accepted",
+                        "schema": {
+                            "$ref": "#/definitions/responses.Envelope"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/responses.Envelope"
+                        }
+                    },
+                    "429": {
+                        "description": "Too Many Requests",
+                        "schema": {
+                            "$ref": "#/definitions/responses.Envelope"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/newsletter/preferences/{param1}": {
+            "get": {
+                "description": "The subscription behind a preferences token (welcome email and issue footers): masked address,\nstatus, format, list memberships, and the lists that can be chosen.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "newsletter"
+                ],
+                "summary": "Newsletter preferences",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "preferences token",
+                        "name": "param1",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/responses.Envelope"
+                        }
+                    },
+                    "404": {
+                        "description": "newsletter.token_invalid",
+                        "schema": {
+                            "$ref": "#/definitions/responses.Envelope"
+                        }
+                    },
+                    "410": {
+                        "description": "newsletter.token_expired",
+                        "schema": {
+                            "$ref": "#/definitions/responses.Envelope"
+                        }
+                    },
+                    "429": {
+                        "description": "Too Many Requests",
+                        "schema": {
+                            "$ref": "#/definitions/responses.Envelope"
+                        }
+                    }
+                }
+            },
+            "patch": {
+                "description": "Changes format and lists by preferences token. lists is the complete set to receive; chosen\nlists are active at once, including after an earlier unsubscribe. An empty lists array or\nunsubscribe_all stops all mail.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "newsletter"
+                ],
+                "summary": "Update newsletter preferences",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "preferences token",
+                        "name": "param1",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "changes",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/requests.NewsletterPreferences"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/responses.Envelope"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/responses.Envelope"
+                        }
+                    },
+                    "404": {
+                        "description": "newsletter.token_invalid",
+                        "schema": {
+                            "$ref": "#/definitions/responses.Envelope"
+                        }
+                    },
+                    "410": {
+                        "description": "newsletter.token_expired",
+                        "schema": {
+                            "$ref": "#/definitions/responses.Envelope"
+                        }
+                    },
+                    "429": {
+                        "description": "Too Many Requests",
+                        "schema": {
+                            "$ref": "#/definitions/responses.Envelope"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/newsletter/subscribe": {
+            "post": {
+                "description": "Emails a double opt-in confirmation link. Always 202 with the same body whether the address\nis new, pending, already subscribed, or suppressed, so it cannot reveal who subscribes. lists\nare list slugs (empty means the default lists). Leave honeypot empty. turnstile_response is\nrequired when Turnstile is configured. Rate limited per IP and per address.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "newsletter"
+                ],
+                "summary": "Subscribe to the newsletter",
+                "parameters": [
+                    {
+                        "description": "subscription request",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/requests.NewsletterSubscribe"
+                        }
+                    }
+                ],
+                "responses": {
+                    "202": {
+                        "description": "Accepted",
+                        "schema": {
+                            "$ref": "#/definitions/responses.Envelope"
+                        }
+                    },
+                    "400": {
+                        "description": "validation_error, newsletter.captcha_failed",
+                        "schema": {
+                            "$ref": "#/definitions/responses.Envelope"
+                        }
+                    },
+                    "422": {
+                        "description": "newsletter.not_configured (no lists)",
+                        "schema": {
+                            "$ref": "#/definitions/responses.Envelope"
+                        }
+                    },
+                    "429": {
+                        "description": "Too Many Requests",
+                        "schema": {
+                            "$ref": "#/definitions/responses.Envelope"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/newsletter/unsubscribe": {
+            "post": {
+                "description": "Stops all newsletter mail for the subscriber behind an unsubscribe token (email footer).\nAlso the RFC 8058 one-click target: mail clients POST List-Unsubscribe=One-Click as a form\nto this URL with ?token=. The token may be sent in the JSON body or the token query\nparameter. Repeating it is harmless.",
+                "consumes": [
+                    "application/json",
+                    "application/x-www-form-urlencoded"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "newsletter"
+                ],
+                "summary": "Unsubscribe from the newsletter",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "unsubscribe token (one-click)",
+                        "name": "token",
+                        "in": "query"
+                    },
+                    {
+                        "description": "token and optional feedback",
+                        "name": "body",
+                        "in": "body",
+                        "schema": {
+                            "$ref": "#/definitions/requests.NewsletterUnsubscribe"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/responses.Envelope"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/responses.Envelope"
+                        }
+                    },
+                    "404": {
+                        "description": "newsletter.token_invalid",
+                        "schema": {
+                            "$ref": "#/definitions/responses.Envelope"
+                        }
+                    },
+                    "410": {
+                        "description": "newsletter.token_expired",
+                        "schema": {
+                            "$ref": "#/definitions/responses.Envelope"
+                        }
+                    },
+                    "429": {
+                        "description": "Too Many Requests",
+                        "schema": {
+                            "$ref": "#/definitions/responses.Envelope"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/newsletter/webhooks/provider": {
+            "post": {
+                "description": "For the delivery provider. The body is {\"events\":[{\"type\":\"hard_bounce|soft_bounce|complaint\",\n\"email\":\"...\",\"occurred_at\":\"RFC 3339\"}]} (1-100 events), signed like outgoing custom_http\nrequests: X-Newsletter-Timestamp (Unix seconds, within 5 minutes) and X-Newsletter-Signature\nv1=hex(HMAC-SHA256(NEWSLETTER_HTTP_SECRET, timestamp + \".\" + body)). Hard bounces and complaints\nsuppress the address. 422 when NEWSLETTER_HTTP_SECRET is not set.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "newsletter"
+                ],
+                "summary": "Provider bounce and complaint webhook",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Unix seconds",
+                        "name": "X-Newsletter-Timestamp",
+                        "in": "header",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "v1=\u003chex HMAC-SHA256\u003e",
+                        "name": "X-Newsletter-Signature",
+                        "in": "header",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/responses.Envelope"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/responses.Envelope"
+                        }
+                    },
+                    "401": {
+                        "description": "newsletter.signature_invalid",
+                        "schema": {
+                            "$ref": "#/definitions/responses.Envelope"
+                        }
+                    },
+                    "413": {
+                        "description": "Request Entity Too Large",
+                        "schema": {
+                            "$ref": "#/definitions/responses.Envelope"
+                        }
+                    },
+                    "422": {
+                        "description": "newsletter.not_configured",
+                        "schema": {
+                            "$ref": "#/definitions/responses.Envelope"
+                        }
+                    },
+                    "429": {
+                        "description": "Too Many Requests",
                         "schema": {
                             "$ref": "#/definitions/responses.Envelope"
                         }
@@ -5960,6 +7097,344 @@
                 "reason": {
                     "type": "string",
                     "maxLength": 1000
+                }
+            }
+        },
+        "requests.NewsletterIssueCreate": {
+            "type": "object",
+            "required": [
+                "body_markdown",
+                "lists",
+                "subject"
+            ],
+            "properties": {
+                "body_markdown": {
+                    "type": "string",
+                    "maxLength": 200000,
+                    "example": "## Hello\n\nThis month..."
+                },
+                "lists": {
+                    "type": "array",
+                    "maxItems": 20,
+                    "minItems": 1,
+                    "items": {
+                        "type": "string"
+                    },
+                    "example": [
+                        "weekly"
+                    ]
+                },
+                "preheader": {
+                    "type": "string",
+                    "maxLength": 200,
+                    "example": "Three posts you may have missed"
+                },
+                "send_at": {
+                    "type": "string",
+                    "example": "2026-10-01T09:00:00Z"
+                },
+                "status": {
+                    "type": "string",
+                    "enum": [
+                        "draft",
+                        "scheduled",
+                        "queued"
+                    ],
+                    "example": "draft"
+                },
+                "subject": {
+                    "type": "string",
+                    "maxLength": 200,
+                    "example": "September highlights"
+                }
+            }
+        },
+        "requests.NewsletterIssuePatch": {
+            "type": "object",
+            "required": [
+                "lists"
+            ],
+            "properties": {
+                "body_markdown": {
+                    "type": "string",
+                    "maxLength": 200000
+                },
+                "lists": {
+                    "type": "array",
+                    "maxItems": 20,
+                    "minItems": 1,
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "preheader": {
+                    "type": "string",
+                    "maxLength": 200
+                },
+                "send_at": {
+                    "type": "string"
+                },
+                "status": {
+                    "type": "string",
+                    "enum": [
+                        "draft",
+                        "scheduled",
+                        "queued",
+                        "cancelled"
+                    ],
+                    "example": "cancelled"
+                },
+                "subject": {
+                    "type": "string",
+                    "maxLength": 200
+                }
+            }
+        },
+        "requests.NewsletterList": {
+            "type": "object",
+            "required": [
+                "name",
+                "slug"
+            ],
+            "properties": {
+                "description": {
+                    "type": "string",
+                    "maxLength": 500,
+                    "example": "The week's posts, every Friday"
+                },
+                "is_default": {
+                    "type": "boolean",
+                    "example": true
+                },
+                "name": {
+                    "type": "string",
+                    "maxLength": 100,
+                    "example": "Weekly digest"
+                },
+                "slug": {
+                    "type": "string",
+                    "maxLength": 64,
+                    "example": "weekly"
+                }
+            }
+        },
+        "requests.NewsletterMeSubscribe": {
+            "type": "object",
+            "required": [
+                "lists"
+            ],
+            "properties": {
+                "format": {
+                    "type": "string",
+                    "enum": [
+                        "html",
+                        "plaintext"
+                    ],
+                    "example": "html"
+                },
+                "lists": {
+                    "type": "array",
+                    "maxItems": 20,
+                    "items": {
+                        "type": "string"
+                    },
+                    "example": [
+                        "weekly"
+                    ]
+                }
+            }
+        },
+        "requests.NewsletterMeUnsubscribe": {
+            "type": "object",
+            "required": [
+                "lists"
+            ],
+            "properties": {
+                "feedback": {
+                    "type": "string",
+                    "maxLength": 1000
+                },
+                "lists": {
+                    "type": "array",
+                    "maxItems": 20,
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "reason_code": {
+                    "type": "string",
+                    "enum": [
+                        "too_frequent",
+                        "not_relevant",
+                        "never_signed_up",
+                        "other"
+                    ]
+                }
+            }
+        },
+        "requests.NewsletterPreferences": {
+            "type": "object",
+            "required": [
+                "lists"
+            ],
+            "properties": {
+                "format": {
+                    "type": "string",
+                    "enum": [
+                        "html",
+                        "plaintext"
+                    ],
+                    "example": "plaintext"
+                },
+                "lists": {
+                    "type": "array",
+                    "maxItems": 20,
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "unsubscribe_all": {
+                    "type": "boolean"
+                }
+            }
+        },
+        "requests.NewsletterProviderConfig": {
+            "type": "object",
+            "required": [
+                "confirm_ttl_hours",
+                "double_optin_required",
+                "lists"
+            ],
+            "properties": {
+                "confirm_ttl_hours": {
+                    "type": "integer",
+                    "maximum": 168,
+                    "minimum": 1,
+                    "example": 48
+                },
+                "double_optin_required": {
+                    "type": "boolean",
+                    "example": true
+                },
+                "from_email": {
+                    "type": "string",
+                    "maxLength": 254,
+                    "example": "newsletter@example.com"
+                },
+                "from_name": {
+                    "type": "string",
+                    "maxLength": 100,
+                    "example": "Turahe Blog"
+                },
+                "lists": {
+                    "type": "array",
+                    "maxItems": 20,
+                    "minItems": 1,
+                    "items": {
+                        "$ref": "#/definitions/requests.NewsletterList"
+                    }
+                },
+                "postal_address": {
+                    "type": "string",
+                    "maxLength": 500,
+                    "example": "123 Example Street, Jakarta, ID"
+                },
+                "reply_to": {
+                    "type": "string",
+                    "maxLength": 254,
+                    "example": "hello@example.com"
+                }
+            }
+        },
+        "requests.NewsletterResend": {
+            "type": "object",
+            "required": [
+                "email"
+            ],
+            "properties": {
+                "email": {
+                    "type": "string",
+                    "maxLength": 254,
+                    "example": "reader@example.com"
+                }
+            }
+        },
+        "requests.NewsletterSubscribe": {
+            "type": "object",
+            "required": [
+                "email",
+                "lists"
+            ],
+            "properties": {
+                "display_name": {
+                    "type": "string",
+                    "maxLength": 100,
+                    "example": "Alex"
+                },
+                "email": {
+                    "type": "string",
+                    "maxLength": 254,
+                    "example": "reader@example.com"
+                },
+                "format": {
+                    "type": "string",
+                    "enum": [
+                        "html",
+                        "plaintext"
+                    ],
+                    "example": "html"
+                },
+                "honeypot": {
+                    "type": "string",
+                    "maxLength": 200
+                },
+                "lists": {
+                    "type": "array",
+                    "maxItems": 20,
+                    "items": {
+                        "type": "string"
+                    },
+                    "example": [
+                        "weekly"
+                    ]
+                },
+                "turnstile_response": {
+                    "type": "string",
+                    "maxLength": 2048
+                }
+            }
+        },
+        "requests.NewsletterToken": {
+            "type": "object",
+            "required": [
+                "token"
+            ],
+            "properties": {
+                "token": {
+                    "type": "string",
+                    "maxLength": 128
+                }
+            }
+        },
+        "requests.NewsletterUnsubscribe": {
+            "type": "object",
+            "properties": {
+                "feedback": {
+                    "type": "string",
+                    "maxLength": 1000
+                },
+                "reason_code": {
+                    "type": "string",
+                    "enum": [
+                        "too_frequent",
+                        "not_relevant",
+                        "never_signed_up",
+                        "other"
+                    ]
+                },
+                "token": {
+                    "type": "string",
+                    "maxLength": 128
                 }
             }
         },

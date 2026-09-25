@@ -13,6 +13,7 @@ import (
 
 	"github.com/ThreeDotsLabs/watermill/message"
 	"github.com/spf13/cobra"
+	"github.com/turahe/blog-api/internal/adapters/inbound/consumer"
 	"github.com/turahe/blog-api/internal/adapters/inbound/probe"
 	"github.com/turahe/blog-api/internal/adapters/outbound/mailqueue"
 	"github.com/turahe/blog-api/internal/adapters/outbound/outbox"
@@ -26,8 +27,12 @@ import (
 	"github.com/turahe/blog-api/internal/platform/metrics"
 )
 
-// emailConsumer is the handler name, and dedupe key, of the email dispatch consumer.
-const emailConsumer = "email-dispatch"
+// Consumer handler names; each is also the dedupe key of its consumer.
+const (
+	emailConsumer              = "email-dispatch"
+	newsletterDispatchConsumer = "newsletter-dispatch"
+	newsletterSyncConsumer     = "newsletter-provider-sync"
+)
 
 func newWorkerCmd() *cobra.Command {
 	return &cobra.Command{
@@ -81,6 +86,8 @@ func newWorkerCmd() *cobra.Command {
 			if err != nil {
 				return err
 			}
+
+			consumers = append(consumers, addNewsletterConsumers(router, bus, cfg, db, dedupe, logger)...)
 
 			relay := outbox.New(persistence.NewOutboxRepository(db.GORM), bus.Publisher, bus.Topic, outbox.Config{
 				BatchSize:    cfg.OutboxBatchSize,
@@ -181,6 +188,32 @@ func addConsumers(
 	}
 
 	return names, nil
+}
+
+// addNewsletterConsumers registers issue dispatch when a delivery provider is configured, and
+// contact sync for providers with a contact store (custom_http).
+func addNewsletterConsumers(
+	router *message.Router, bus *messaging.Bus, cfg config.Config, db *database.Database, dedupe messaging.Deduper,
+	logger *slog.Logger,
+) []string {
+	nl := bootstrap.NewNewsletterService(cfg, db, bootstrap.NewEvents(cfg, db), nil, logger)
+	if !nl.SendingEnabled() {
+		logger.Warn("newsletter dispatch disabled: needs SMTP_HOST or NEWSLETTER_PROVIDER=custom_http; queued issues wait in the broker")
+		return nil
+	}
+
+	names := []string{newsletterDispatchConsumer}
+	addConsumer(router, bus, cfg, newsletterDispatchConsumer, bus.Topic(event.NewsletterIssueSendRequested),
+		messaging.Idempotent(dedupe, newsletterDispatchConsumer, consumer.NewsletterDispatch(nl)), logger)
+
+	if cfg.NewsletterProvider == config.NewsletterProviderCustomHTTP {
+		addConsumer(router, bus, cfg, newsletterSyncConsumer, bus.Topic(event.NewsletterSubscriberChanged),
+			messaging.Idempotent(dedupe, newsletterSyncConsumer, consumer.NewsletterSync(nl)), logger)
+
+		names = append(names, newsletterSyncConsumer)
+	}
+
+	return names
 }
 
 // addConsumer registers CONSUMER_CONCURRENCY copies of handler on topic behind one shared

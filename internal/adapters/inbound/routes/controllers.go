@@ -29,6 +29,32 @@ type Controllers struct {
 	Settings      Settings
 	Analytics     Analytics
 	Impersonation Impersonation
+	Newsletter    Newsletter
+}
+
+// Newsletter holds the public double opt-in, self-service, and admin newsletter handlers.
+type Newsletter struct {
+	Subscribe        gin.HandlerFunc
+	Confirm          gin.HandlerFunc
+	ConfirmResend    gin.HandlerFunc
+	Unsubscribe      gin.HandlerFunc
+	PreferencesGet   gin.HandlerFunc
+	PreferencesPatch gin.HandlerFunc
+	ProviderWebhook  gin.HandlerFunc
+
+	MeSubscriptions gin.HandlerFunc
+	MeSubscribe     gin.HandlerFunc
+	MeUnsubscribe   gin.HandlerFunc
+
+	AdminSubscribersList  gin.HandlerFunc
+	AdminSubscriberGet    gin.HandlerFunc
+	AdminSubscriberDelete gin.HandlerFunc
+	AdminIssuesList       gin.HandlerFunc
+	AdminIssueCreate      gin.HandlerFunc
+	AdminIssueGet         gin.HandlerFunc
+	AdminIssuePatch       gin.HandlerFunc
+	AdminConfigGet        gin.HandlerFunc
+	AdminConfigPut        gin.HandlerFunc
 }
 
 // Impersonation holds the staff impersonation handlers.

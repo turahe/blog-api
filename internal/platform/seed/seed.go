@@ -45,6 +45,12 @@ const (
 	permSEOView          = "post.seo.view"
 	permSEOEdit          = "post.seo.edit"
 	permSlugEdit         = "post.slug.edit"
+
+	permNewsletterSubscribersRead   = "newsletter.subscribers.read"
+	permNewsletterSubscribersExport = "newsletter.subscribers.export"
+	permNewsletterIssuesRead        = "newsletter.issues.read"
+	permNewsletterIssuesEdit        = "newsletter.issues.edit"
+	permNewsletterIssuesSend        = "newsletter.issues.send"
 )
 
 var roleDescriptions = map[string]string{
@@ -68,6 +74,9 @@ var rolePermissions = map[string][]string{
 		"media.create", "media.delete",
 		permCommentModerate, permCommentDelete,
 		"impersonation.start",
+		permNewsletterSubscribersRead, permNewsletterSubscribersExport, "newsletter.subscribers.erase",
+		permNewsletterIssuesRead, permNewsletterIssuesEdit, permNewsletterIssuesSend,
+		"newsletter.provider_config.read", "newsletter.provider_config.update",
 		"*",
 	},
 	roleEditor: {
@@ -80,6 +89,8 @@ var rolePermissions = map[string][]string{
 		"tag.create", "tag.update", "tag.delete",
 		"media.create", "media.delete",
 		permCommentModerate,
+		permNewsletterSubscribersRead, permNewsletterSubscribersExport,
+		permNewsletterIssuesRead, permNewsletterIssuesEdit, permNewsletterIssuesSend,
 	},
 	roleAuthor: {
 		permAdminAccess,

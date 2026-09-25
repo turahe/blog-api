@@ -59,6 +59,15 @@ func (s *SMTP) Send(ctx context.Context, msg ports.Message) error {
 		return err
 	}
 
+	return s.SendRaw(ctx, recipient, body)
+}
+
+// From returns the configured sender header value.
+func (s *SMTP) From() string { return s.from }
+
+// SendRaw delivers a complete message (headers and body) to recipient, using the configured
+// address as the envelope sender. The caller must have validated the headers.
+func (s *SMTP) SendRaw(ctx context.Context, recipient string, body []byte) error {
 	dialer := &net.Dialer{Timeout: s.timeout}
 
 	conn, err := dialer.DialContext(ctx, "tcp", net.JoinHostPort(s.host, strconv.Itoa(s.port)))

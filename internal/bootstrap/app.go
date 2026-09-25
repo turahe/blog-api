@@ -200,16 +200,16 @@ func NewRuntime(ctx context.Context, cfg config.Config, logger *slog.Logger, ver
 		RBAC:          enforcer,
 		Posts:         posts, Categories: categories, Tags: tags, Media: media,
 		Comments: comments, Notifications: inbox, NotificationStream: hub, SSEPingInterval: cfg.SSEPingInterval,
-		Settings:        settings,
-		Consent:         consentservice.New(persistence.NewConsentRepository(db.GORM), ids, clock).WithEvents(events),
-		PrivacyRequests: NewPrivacyService(ctx, cfg, db, auth, events, cacheOrNil, logger),
-		RateLimiter:     ratelimit.NewRedis(redisClient),
+		Settings: settings, Newsletter: NewNewsletterService(cfg, db, events, settings, logger),
+		NewsletterProvider: NewsletterProvider(cfg),
+		Consent:            consentservice.New(persistence.NewConsentRepository(db.GORM), ids, clock).WithEvents(events),
+		PrivacyRequests:    NewPrivacyService(ctx, cfg, db, auth, events, cacheOrNil, logger),
+		RateLimiter:        ratelimit.NewRedis(redisClient),
 		CommentRates: handlers.CommentRates{
 			CreatePerMinute:  cfg.CommentsCreatePerMinute,
 			ActionsPerMinute: cfg.CommentsActionsPerMinute,
 		},
-		LoginPerMinute:    cfg.AuthLoginPerMinute,
-		Version:           version,
+		LoginPerMinute: cfg.AuthLoginPerMinute, Version: version,
 		TrustedProxies:    cfg.TrustedProxies,
 		SwaggerEnabled:    cfg.SwaggerEnabled,
 		CacheBypassHeader: cfg.CacheEnabled && cfg.CacheBypassHeader,
@@ -560,21 +560,13 @@ func CacheTTLs(cfg config.Config) map[readcache.Family]time.Duration {
 // a message broker and APP_ENCRYPTION_KEY, emails are queued as encrypted outbox commands for
 // app worker, falling back to SMTP when a command cannot be stored.
 func newNotifier(cfg config.Config, db *database.Database, box authports.SecretBox, logger *slog.Logger) authports.EmailChangeNotifier {
-	smtp, err := NewMailer(cfg)
-	if err != nil {
-		logger.Error("smtp notifier disabled", "error", err)
-	}
-
-	if smtp == nil {
+	mailer := NewTransactionalMailer(cfg, db, box, logger)
+	if mailer == nil {
 		return notify.NewLog(logger)
 	}
 
-	var mailer notificationports.Mailer = smtp
-
 	switch {
 	case cfg.MessagingEnabled() && box != nil:
-		mailer = mailqueue.New(persistence.NewOutboxRepository(db.GORM), box, smtp, logger)
-
 		logger.Info("email notifications queued for app worker", "host", cfg.SMTPHost, "port", cfg.SMTPPort)
 	case cfg.MessagingEnabled():
 		logger.Warn("APP_ENCRYPTION_KEY is not set; emails are sent inline instead of by app worker")
@@ -584,6 +576,26 @@ func newNotifier(cfg config.Config, db *database.Database, box authports.SecretB
 
 	return notificationservice.New(mailer, logger, cfg.AppPublicURL).
 		WithTemplates(persistence.NewNotificationTemplateRepository(db.GORM))
+}
+
+// NewTransactionalMailer returns the SMTP mailer for account and confirmation emails, wrapped
+// to queue encrypted commands through the outbox when a broker and box are available. It
+// returns nil when SMTP_HOST is unset or invalid.
+func NewTransactionalMailer(cfg config.Config, db *database.Database, box mailqueue.Box, logger *slog.Logger) notificationports.Mailer {
+	smtp, err := NewMailer(cfg)
+	if err != nil {
+		logger.Error("smtp mailer disabled", "error", err)
+	}
+
+	if smtp == nil {
+		return nil
+	}
+
+	if cfg.MessagingEnabled() && box != nil {
+		return mailqueue.New(persistence.NewOutboxRepository(db.GORM), box, smtp, logger)
+	}
+
+	return smtp
 }
 
 // NewMailer returns the SMTP mailer, or nil when SMTP_HOST is unset.

@@ -161,11 +161,17 @@ Readable mirrors in early migrations may appear as `roles`, `permissions`, `user
 
 | Entity | Purpose | Notes |
 | --- | --- | --- |
-| `newsletter_subscribers` | Subscriber identity | Double opt-in |
-| `newsletter_list_memberships` | List membership | |
-| `newsletter_issues` | Sent issues | Admin lifecycle |
-| `newsletter_provider_syncs` | External ESP sync | |
+| `newsletter_lists` | Admin-defined lists | Archived, not deleted |
+| `newsletter_provider_config` | Sender identity, postal address, confirm TTL | Singleton; provider secrets stay in env |
+| `newsletter_subscribers` | Subscriber identity | Double opt-in; erasure keeps the row for suppression |
+| `newsletter_list_memberships` | List membership | pending / active / left |
+| `newsletter_tokens` | Confirm, unsubscribe, preferences tokens | SHA-256 only |
+| `newsletter_issues` | Issues | draft → scheduled / queued → sending → sent |
+| `newsletter_issue_lists` | Issue audience | |
+| `newsletter_deliveries` | Per-recipient send | Unique per issue and subscriber |
 | `newsletter_consent_audit` | Consent changes | Append-only |
+
+See [newsletter.md](newsletter.md).
 
 ### Analytics
 

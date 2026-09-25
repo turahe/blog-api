@@ -58,5 +58,10 @@ in `last_error`; the job is tried again at its next interval.
 | `auth-tokens-prune` | 1h | Deletes refresh sessions 30 days past expiry and reset/verification tokens 7 days past expiry |
 | `privacy-requests` | 1m | Runs queued `/me` data exports and erasures (up to 10 per run, 3 attempts each; a job stuck running for 15 minutes is retried) and deletes export archives past `PRIVACY_EXPORT_RETENTION` |
 | `impersonation-expire` | 1m | Closes impersonation sessions past `expires_at` (up to 500 per run) and records `blog.impersonation.expired`; the tokens already stopped working at expiry |
+| `newsletter-release` | 1m | Queues scheduled newsletter issues whose `send_at` has passed (up to 50 per run) and records `blog.newsletter.issue.send_requested` |
+| `newsletter-tokens-prune` | 1h | Deletes newsletter confirm, unsubscribe, and preferences tokens 30 days past expiry |
+
+Newsletter issues are sent by the `newsletter-dispatch` consumer in `app worker`, not by the
+scheduler; see [newsletter.md](newsletter.md#dispatch).
 
 Published outbox rows are pruned by the relay in `app worker` (`OUTBOX_RETENTION`).

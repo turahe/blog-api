@@ -98,6 +98,8 @@ Recorded in the same transaction as the write (only when `MESSAGE_BROKER` is set
 | `blog.impersonation.revoked_by_policy` | A participant is no longer active, or the staff member lost `impersonation.start` | Staff member |
 | `user.activity.export_requested` | A new `/me/activity/export` job is queued; `job_id`, `scope`, `requested_by_admin` | The user |
 | `user.activity.erasure_requested` | A new `/me/activity/erase` request is queued; `erasure_id`, `scope` | The user |
+| `blog.newsletter.issue.send_requested` | An issue is queued, by an editor or the `newsletter-release` job; consumed by `newsletter-dispatch` | Editor; none for the job |
+| `blog.newsletter.subscriber.changed` | Confirm, list or preference change, resubscribe, unsubscribe, bounce, complaint, or erase; `change` names which. Consumed by `newsletter-provider-sync` when `NEWSLETTER_PROVIDER=custom_http` | The user or admin; none for public token and webhook changes |
 | `analytics.consent.granted` / `rejected` / `withdrawn` | A consent decision that changed status, one event per purpose; payload carries the pseudonymous subject id, purpose, and policy version | None |
 
 Payloads carry identifiers and state, never email addresses or content. The rest of the

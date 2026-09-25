@@ -32,6 +32,23 @@ func New() *Renderer {
 	return &Renderer{md: goldmark.New(), policy: policy}
 }
 
+// NewNewsletter returns a Renderer for newsletter issues written by staff. On top of the
+// comment elements it keeps headings, horizontal rules, and https images with alt text; links
+// keep noreferrer but drop nofollow, since they are the sender's own.
+func NewNewsletter() *Renderer {
+	policy := bluemonday.NewPolicy()
+	policy.AllowElements("p", "br", "strong", "em", "code", "pre", "blockquote", "ul", "ol", "li",
+		"h1", "h2", "h3", "h4", "hr")
+	policy.AllowAttrs("href").OnElements("a")
+	policy.AllowAttrs("src", "alt", "title").OnElements("img")
+	policy.AllowURLSchemes("https", "mailto")
+	policy.RequireParseableURLs(true)
+	policy.AllowRelativeURLs(false)
+	policy.RequireNoReferrerOnLinks(true)
+
+	return &Renderer{md: goldmark.New(), policy: policy}
+}
+
 // Render returns sanitized HTML for source; it never returns an error because
 // invalid markdown still renders as text.
 func (r *Renderer) Render(source string) string {

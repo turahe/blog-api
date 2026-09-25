@@ -289,6 +289,256 @@ definitions:
     required:
     - action
     type: object
+  requests.NewsletterIssueCreate:
+    properties:
+      body_markdown:
+        example: |-
+          ## Hello
+
+          This month...
+        maxLength: 200000
+        type: string
+      lists:
+        example:
+        - weekly
+        items:
+          type: string
+        maxItems: 20
+        minItems: 1
+        type: array
+      preheader:
+        example: Three posts you may have missed
+        maxLength: 200
+        type: string
+      send_at:
+        example: "2026-10-01T09:00:00Z"
+        type: string
+      status:
+        enum:
+        - draft
+        - scheduled
+        - queued
+        example: draft
+        type: string
+      subject:
+        example: September highlights
+        maxLength: 200
+        type: string
+    required:
+    - body_markdown
+    - lists
+    - subject
+    type: object
+  requests.NewsletterIssuePatch:
+    properties:
+      body_markdown:
+        maxLength: 200000
+        type: string
+      lists:
+        items:
+          type: string
+        maxItems: 20
+        minItems: 1
+        type: array
+      preheader:
+        maxLength: 200
+        type: string
+      send_at:
+        type: string
+      status:
+        enum:
+        - draft
+        - scheduled
+        - queued
+        - cancelled
+        example: cancelled
+        type: string
+      subject:
+        maxLength: 200
+        type: string
+    required:
+    - lists
+    type: object
+  requests.NewsletterList:
+    properties:
+      description:
+        example: The week's posts, every Friday
+        maxLength: 500
+        type: string
+      is_default:
+        example: true
+        type: boolean
+      name:
+        example: Weekly digest
+        maxLength: 100
+        type: string
+      slug:
+        example: weekly
+        maxLength: 64
+        type: string
+    required:
+    - name
+    - slug
+    type: object
+  requests.NewsletterMeSubscribe:
+    properties:
+      format:
+        enum:
+        - html
+        - plaintext
+        example: html
+        type: string
+      lists:
+        example:
+        - weekly
+        items:
+          type: string
+        maxItems: 20
+        type: array
+    required:
+    - lists
+    type: object
+  requests.NewsletterMeUnsubscribe:
+    properties:
+      feedback:
+        maxLength: 1000
+        type: string
+      lists:
+        items:
+          type: string
+        maxItems: 20
+        type: array
+      reason_code:
+        enum:
+        - too_frequent
+        - not_relevant
+        - never_signed_up
+        - other
+        type: string
+    required:
+    - lists
+    type: object
+  requests.NewsletterPreferences:
+    properties:
+      format:
+        enum:
+        - html
+        - plaintext
+        example: plaintext
+        type: string
+      lists:
+        items:
+          type: string
+        maxItems: 20
+        type: array
+      unsubscribe_all:
+        type: boolean
+    required:
+    - lists
+    type: object
+  requests.NewsletterProviderConfig:
+    properties:
+      confirm_ttl_hours:
+        example: 48
+        maximum: 168
+        minimum: 1
+        type: integer
+      double_optin_required:
+        example: true
+        type: boolean
+      from_email:
+        example: newsletter@example.com
+        maxLength: 254
+        type: string
+      from_name:
+        example: Turahe Blog
+        maxLength: 100
+        type: string
+      lists:
+        items:
+          $ref: '#/definitions/requests.NewsletterList'
+        maxItems: 20
+        minItems: 1
+        type: array
+      postal_address:
+        example: 123 Example Street, Jakarta, ID
+        maxLength: 500
+        type: string
+      reply_to:
+        example: hello@example.com
+        maxLength: 254
+        type: string
+    required:
+    - confirm_ttl_hours
+    - double_optin_required
+    - lists
+    type: object
+  requests.NewsletterResend:
+    properties:
+      email:
+        example: reader@example.com
+        maxLength: 254
+        type: string
+    required:
+    - email
+    type: object
+  requests.NewsletterSubscribe:
+    properties:
+      display_name:
+        example: Alex
+        maxLength: 100
+        type: string
+      email:
+        example: reader@example.com
+        maxLength: 254
+        type: string
+      format:
+        enum:
+        - html
+        - plaintext
+        example: html
+        type: string
+      honeypot:
+        maxLength: 200
+        type: string
+      lists:
+        example:
+        - weekly
+        items:
+          type: string
+        maxItems: 20
+        type: array
+      turnstile_response:
+        maxLength: 2048
+        type: string
+    required:
+    - email
+    - lists
+    type: object
+  requests.NewsletterToken:
+    properties:
+      token:
+        maxLength: 128
+        type: string
+    required:
+    - token
+    type: object
+  requests.NewsletterUnsubscribe:
+    properties:
+      feedback:
+        maxLength: 1000
+        type: string
+      reason_code:
+        enum:
+        - too_frequent
+        - not_relevant
+        - never_signed_up
+        - other
+        type: string
+      token:
+        maxLength: 128
+        type: string
+    type: object
   requests.OAuthCallback:
     properties:
       code:
@@ -1370,6 +1620,396 @@ paths:
       security:
       - Bearer: []
       summary: Patch media tags
+      tags:
+      - admin
+  /api/v1/admin/newsletter/issues:
+    get:
+      parameters:
+      - description: draft, scheduled, queued, sending, sent, cancelled
+        in: query
+        name: status
+        type: string
+      - default: 1
+        description: page
+        in: query
+        name: page
+        type: integer
+      - default: 20
+        description: per page
+        in: query
+        name: per_page
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/responses.Envelope'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/responses.Envelope'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/responses.Envelope'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/responses.Envelope'
+      security:
+      - Bearer: []
+      summary: List newsletter issues
+      tags:
+      - admin
+    post:
+      consumes:
+      - application/json
+      description: |-
+        status draft (default) saves; scheduled sends at send_at; queued sends now. Scheduling and
+        sending need newsletter.issues.send and a postal_address in the provider config. The Markdown
+        body is rendered to sanitized HTML and plain text inside a template that adds the unsubscribe
+        and preferences links and the postal address.
+      parameters:
+      - description: issue
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/requests.NewsletterIssueCreate'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            $ref: '#/definitions/responses.Envelope'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/responses.Envelope'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/responses.Envelope'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/responses.Envelope'
+        "422":
+          description: newsletter.not_configured
+          schema:
+            $ref: '#/definitions/responses.Envelope'
+      security:
+      - Bearer: []
+      summary: Create, schedule, or send a newsletter issue
+      tags:
+      - admin
+  /api/v1/admin/newsletter/issues/{param1}:
+    get:
+      description: preview=true adds the rendered html and text as a subscriber would
+        receive them.
+      parameters:
+      - description: issue UUID
+        in: path
+        name: param1
+        required: true
+        type: string
+      - description: include the rendered email
+        in: query
+        name: preview
+        type: boolean
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/responses.Envelope'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/responses.Envelope'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/responses.Envelope'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/responses.Envelope'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/responses.Envelope'
+      security:
+      - Bearer: []
+      summary: Get a newsletter issue
+      tags:
+      - admin
+    patch:
+      consumes:
+      - application/json
+      description: |-
+        Content and lists change only while draft or scheduled. status moves draft/scheduled to
+        draft, scheduled, queued, or cancelled; queued to cancelled; sending to queued (resume) or
+        cancelled. Scheduling and sending need newsletter.issues.send. 409 when the move is not
+        allowed or the issue changed meanwhile.
+      parameters:
+      - description: issue UUID
+        in: path
+        name: param1
+        required: true
+        type: string
+      - description: changes
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/requests.NewsletterIssuePatch'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/responses.Envelope'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/responses.Envelope'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/responses.Envelope'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/responses.Envelope'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/responses.Envelope'
+        "409":
+          description: newsletter.conflict
+          schema:
+            $ref: '#/definitions/responses.Envelope'
+        "422":
+          description: newsletter.not_configured
+          schema:
+            $ref: '#/definitions/responses.Envelope'
+      security:
+      - Bearer: []
+      summary: Update, schedule, send, or cancel a newsletter issue
+      tags:
+      - admin
+  /api/v1/admin/newsletter/provider-config:
+    get:
+      description: |-
+        Stored sending settings and lists, and the read-only provider from the environment
+        (NEWSLETTER_PROVIDER); the HMAC secret is never returned, only whether it is set.
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/responses.Envelope'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/responses.Envelope'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/responses.Envelope'
+      security:
+      - Bearer: []
+      summary: Get the newsletter provider config
+      tags:
+      - admin
+    put:
+      consumes:
+      - application/json
+      description: |-
+        Saves the sending settings and the complete list set. Lists missing from lists are archived:
+        they keep memberships and history but can no longer be joined or targeted. At least one list
+        must be a default list. The provider, endpoint, and secret are environment settings.
+      parameters:
+      - description: settings and lists
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/requests.NewsletterProviderConfig'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/responses.Envelope'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/responses.Envelope'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/responses.Envelope'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/responses.Envelope'
+      security:
+      - Bearer: []
+      summary: Replace the newsletter provider config
+      tags:
+      - admin
+  /api/v1/admin/newsletter/subscribers:
+    get:
+      description: |-
+        Filters by status, list slug, and email prefix (q). format=csv downloads every matching
+        subscriber (up to 50000) as CSV and needs newsletter.subscribers.export.
+      parameters:
+      - description: pending_confirm, active, unsubscribed, bounced, complained, erased
+        in: query
+        name: status
+        type: string
+      - description: list slug
+        in: query
+        name: list
+        type: string
+      - description: email prefix
+        in: query
+        name: q
+        type: string
+      - default: json
+        description: json or csv
+        enum:
+        - json
+        - csv
+        in: query
+        name: format
+        type: string
+      - default: 1
+        description: page
+        in: query
+        name: page
+        type: integer
+      - default: 20
+        description: per page
+        in: query
+        name: per_page
+        type: integer
+      produces:
+      - application/json
+      - text/csv
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/responses.Envelope'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/responses.Envelope'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/responses.Envelope'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/responses.Envelope'
+      security:
+      - Bearer: []
+      summary: List newsletter subscribers
+      tags:
+      - admin
+  /api/v1/admin/newsletter/subscribers/{param1}:
+    delete:
+      description: |-
+        mode=unsubscribe (default) stops all mail. mode=hard_delete erases the address and name;
+        the row stays, suppressed, with its consent history, so the address is never mailed again
+        without a new opt-in.
+      parameters:
+      - description: subscriber UUID
+        in: path
+        name: param1
+        required: true
+        type: string
+      - default: unsubscribe
+        description: unsubscribe or hard_delete
+        enum:
+        - unsubscribe
+        - hard_delete
+        in: query
+        name: mode
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/responses.Envelope'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/responses.Envelope'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/responses.Envelope'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/responses.Envelope'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/responses.Envelope'
+      security:
+      - Bearer: []
+      summary: Unsubscribe or erase a newsletter subscriber
+      tags:
+      - admin
+    get:
+      description: The subscriber, list memberships, and the latest 100 consent events.
+      parameters:
+      - description: subscriber UUID
+        in: path
+        name: param1
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/responses.Envelope'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/responses.Envelope'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/responses.Envelope'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/responses.Envelope'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/responses.Envelope'
+      security:
+      - Bearer: []
+      summary: Get a newsletter subscriber
       tags:
       - admin
   /api/v1/admin/permissions:
@@ -3786,6 +4426,111 @@ paths:
       summary: Request an email change
       tags:
       - self-service
+  /api/v1/me/newsletter/subscribe:
+    post:
+      consumes:
+      - application/json
+      description: |-
+        Subscribes the account email to lists (the default lists when empty). A verified account
+        email joins at once unless double_optin_required is set; otherwise the lists stay pending
+        until the emailed confirmation link is used (status pending_confirm).
+      parameters:
+      - description: lists and format
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/requests.NewsletterMeSubscribe'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/responses.Envelope'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/responses.Envelope'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/responses.Envelope'
+        "422":
+          description: newsletter.not_configured
+          schema:
+            $ref: '#/definitions/responses.Envelope'
+        "429":
+          description: Too Many Requests
+          schema:
+            $ref: '#/definitions/responses.Envelope'
+      security:
+      - Bearer: []
+      summary: Subscribe my account email
+      tags:
+      - me
+  /api/v1/me/newsletter/subscriptions:
+    get:
+      description: |-
+        The subscription for the signed-in account (linked, or matching the account email) and the
+        lists that can be chosen. subscribed is false when there is none.
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/responses.Envelope'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/responses.Envelope'
+      security:
+      - Bearer: []
+      summary: My newsletter subscription
+      tags:
+      - me
+  /api/v1/me/newsletter/unsubscribe:
+    post:
+      consumes:
+      - application/json
+      description: Leaves lists; empty lists leaves every list and stops all newsletter
+        mail.
+      parameters:
+      - description: lists and optional feedback
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/requests.NewsletterMeUnsubscribe'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/responses.Envelope'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/responses.Envelope'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/responses.Envelope'
+        "404":
+          description: not subscribed
+          schema:
+            $ref: '#/definitions/responses.Envelope'
+        "429":
+          description: Too Many Requests
+          schema:
+            $ref: '#/definitions/responses.Envelope'
+      security:
+      - Bearer: []
+      summary: Unsubscribe my account email
+      tags:
+      - me
   /api/v1/me/notifications:
     get:
       description: In-app notices (replies, moderation outcomes, publications), newest
@@ -4093,6 +4838,295 @@ paths:
       summary: Redirect to a resized image
       tags:
       - public
+  /api/v1/newsletter/confirm:
+    post:
+      consumes:
+      - application/json
+      description: |-
+        Uses the token from the confirmation email. The pending lists become active and a welcome
+        email with a preferences link is sent. A token works once.
+      parameters:
+      - description: confirmation token
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/requests.NewsletterToken'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/responses.Envelope'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/responses.Envelope'
+        "404":
+          description: newsletter.token_invalid
+          schema:
+            $ref: '#/definitions/responses.Envelope'
+        "409":
+          description: newsletter.token_used
+          schema:
+            $ref: '#/definitions/responses.Envelope'
+        "410":
+          description: newsletter.token_expired (request a new link)
+          schema:
+            $ref: '#/definitions/responses.Envelope'
+        "429":
+          description: Too Many Requests
+          schema:
+            $ref: '#/definitions/responses.Envelope'
+      summary: Confirm a newsletter subscription
+      tags:
+      - newsletter
+  /api/v1/newsletter/confirm/resend:
+    post:
+      consumes:
+      - application/json
+      description: |-
+        Sends a new confirmation link to a pending address. Always 202 with the same body, and at
+        most 3 emails per address in 30 minutes.
+      parameters:
+      - description: address
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/requests.NewsletterResend'
+      produces:
+      - application/json
+      responses:
+        "202":
+          description: Accepted
+          schema:
+            $ref: '#/definitions/responses.Envelope'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/responses.Envelope'
+        "429":
+          description: Too Many Requests
+          schema:
+            $ref: '#/definitions/responses.Envelope'
+      summary: Resend the confirmation email
+      tags:
+      - newsletter
+  /api/v1/newsletter/preferences/{param1}:
+    get:
+      description: |-
+        The subscription behind a preferences token (welcome email and issue footers): masked address,
+        status, format, list memberships, and the lists that can be chosen.
+      parameters:
+      - description: preferences token
+        in: path
+        name: param1
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/responses.Envelope'
+        "404":
+          description: newsletter.token_invalid
+          schema:
+            $ref: '#/definitions/responses.Envelope'
+        "410":
+          description: newsletter.token_expired
+          schema:
+            $ref: '#/definitions/responses.Envelope'
+        "429":
+          description: Too Many Requests
+          schema:
+            $ref: '#/definitions/responses.Envelope'
+      summary: Newsletter preferences
+      tags:
+      - newsletter
+    patch:
+      consumes:
+      - application/json
+      description: |-
+        Changes format and lists by preferences token. lists is the complete set to receive; chosen
+        lists are active at once, including after an earlier unsubscribe. An empty lists array or
+        unsubscribe_all stops all mail.
+      parameters:
+      - description: preferences token
+        in: path
+        name: param1
+        required: true
+        type: string
+      - description: changes
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/requests.NewsletterPreferences'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/responses.Envelope'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/responses.Envelope'
+        "404":
+          description: newsletter.token_invalid
+          schema:
+            $ref: '#/definitions/responses.Envelope'
+        "410":
+          description: newsletter.token_expired
+          schema:
+            $ref: '#/definitions/responses.Envelope'
+        "429":
+          description: Too Many Requests
+          schema:
+            $ref: '#/definitions/responses.Envelope'
+      summary: Update newsletter preferences
+      tags:
+      - newsletter
+  /api/v1/newsletter/subscribe:
+    post:
+      consumes:
+      - application/json
+      description: |-
+        Emails a double opt-in confirmation link. Always 202 with the same body whether the address
+        is new, pending, already subscribed, or suppressed, so it cannot reveal who subscribes. lists
+        are list slugs (empty means the default lists). Leave honeypot empty. turnstile_response is
+        required when Turnstile is configured. Rate limited per IP and per address.
+      parameters:
+      - description: subscription request
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/requests.NewsletterSubscribe'
+      produces:
+      - application/json
+      responses:
+        "202":
+          description: Accepted
+          schema:
+            $ref: '#/definitions/responses.Envelope'
+        "400":
+          description: validation_error, newsletter.captcha_failed
+          schema:
+            $ref: '#/definitions/responses.Envelope'
+        "422":
+          description: newsletter.not_configured (no lists)
+          schema:
+            $ref: '#/definitions/responses.Envelope'
+        "429":
+          description: Too Many Requests
+          schema:
+            $ref: '#/definitions/responses.Envelope'
+      summary: Subscribe to the newsletter
+      tags:
+      - newsletter
+  /api/v1/newsletter/unsubscribe:
+    post:
+      consumes:
+      - application/json
+      - application/x-www-form-urlencoded
+      description: |-
+        Stops all newsletter mail for the subscriber behind an unsubscribe token (email footer).
+        Also the RFC 8058 one-click target: mail clients POST List-Unsubscribe=One-Click as a form
+        to this URL with ?token=. The token may be sent in the JSON body or the token query
+        parameter. Repeating it is harmless.
+      parameters:
+      - description: unsubscribe token (one-click)
+        in: query
+        name: token
+        type: string
+      - description: token and optional feedback
+        in: body
+        name: body
+        schema:
+          $ref: '#/definitions/requests.NewsletterUnsubscribe'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/responses.Envelope'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/responses.Envelope'
+        "404":
+          description: newsletter.token_invalid
+          schema:
+            $ref: '#/definitions/responses.Envelope'
+        "410":
+          description: newsletter.token_expired
+          schema:
+            $ref: '#/definitions/responses.Envelope'
+        "429":
+          description: Too Many Requests
+          schema:
+            $ref: '#/definitions/responses.Envelope'
+      summary: Unsubscribe from the newsletter
+      tags:
+      - newsletter
+  /api/v1/newsletter/webhooks/provider:
+    post:
+      consumes:
+      - application/json
+      description: |-
+        For the delivery provider. The body is {"events":[{"type":"hard_bounce|soft_bounce|complaint",
+        "email":"...","occurred_at":"RFC 3339"}]} (1-100 events), signed like outgoing custom_http
+        requests: X-Newsletter-Timestamp (Unix seconds, within 5 minutes) and X-Newsletter-Signature
+        v1=hex(HMAC-SHA256(NEWSLETTER_HTTP_SECRET, timestamp + "." + body)). Hard bounces and complaints
+        suppress the address. 422 when NEWSLETTER_HTTP_SECRET is not set.
+      parameters:
+      - description: Unix seconds
+        in: header
+        name: X-Newsletter-Timestamp
+        required: true
+        type: string
+      - description: v1=<hex HMAC-SHA256>
+        in: header
+        name: X-Newsletter-Signature
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/responses.Envelope'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/responses.Envelope'
+        "401":
+          description: newsletter.signature_invalid
+          schema:
+            $ref: '#/definitions/responses.Envelope'
+        "413":
+          description: Request Entity Too Large
+          schema:
+            $ref: '#/definitions/responses.Envelope'
+        "422":
+          description: newsletter.not_configured
+          schema:
+            $ref: '#/definitions/responses.Envelope'
+        "429":
+          description: Too Many Requests
+          schema:
+            $ref: '#/definitions/responses.Envelope'
+      summary: Provider bounce and complaint webhook
+      tags:
+      - newsletter
   /api/v1/posts:
     get:
       description: |-
