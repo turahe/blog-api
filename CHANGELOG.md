@@ -1,5 +1,17 @@
 # Changelog
 
+## 2026-09-25 — Auth threat model
+
+### Added
+
+- Threat model for authentication in `docs/security/authn-authz.md`: assets, trust boundaries,
+  threats with their mitigations and residual risk, and open items
+
+### Security
+
+- A new forgot-password request revokes the account's older reset links, and completing a reset
+  spends every pending link. Before, only admin-initiated resets revoked older links
+
 ## 2026-09-25 — Auth security checklist run
 
 ### Security

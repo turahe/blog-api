@@ -406,7 +406,7 @@ func (s *AuthService) ForgotPassword(ctx context.Context, emailOrUsername string
 	return err
 }
 
-// issuePasswordReset stores a new reset token for user and delivers it.
+// issuePasswordReset replaces any pending reset token for user with a new one and delivers it.
 func (s *AuthService) issuePasswordReset(ctx context.Context, user userdomain.User) (time.Time, error) {
 	raw, hash, jti, err := s.tokens.IssueResetToken()
 	if err != nil {
@@ -414,6 +414,9 @@ func (s *AuthService) issuePasswordReset(ctx context.Context, user userdomain.Us
 	}
 
 	now := s.clock.Now()
+	if err := s.resets.RevokePending(ctx, user.UUID, authdomain.PurposePasswordReset, now); err != nil {
+		return time.Time{}, err
+	}
 
 	token := authdomain.PasswordResetToken{
 		UUID: s.ids.New(), UserUUID: user.UUID, JTI: jti, TokenHash: hash,
@@ -504,7 +507,8 @@ func (s *AuthService) ResetPassword(ctx context.Context, rawToken, newPassword, 
 		return err
 	}
 
-	if err := s.resets.MarkUsed(ctx, token.UUID, now); err != nil {
+	// Spends this token and any other pending reset token for the account.
+	if err := s.resets.RevokePending(ctx, token.UserUUID, authdomain.PurposePasswordReset, now); err != nil {
 		return err
 	}
 

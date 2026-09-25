@@ -504,3 +504,29 @@ func TestForgotPasswordDeliversInBackground(t *testing.T) {
 		t.Fatal("reset email was not delivered")
 	}
 }
+
+func TestForgotPasswordKeepsOnlyTheNewestToken(t *testing.T) {
+	t.Parallel()
+
+	user := userdomain.User{
+		UUID: uuid.New(), Email: "ada@example.com", Username: "ada", FullName: "Ada",
+		PasswordHash: "hash:pw", Status: userdomain.StatusActive,
+	}
+	users, sessions, resets := newMemStores(user)
+	sink := &capturingSink{}
+	svc := newService(users, sessions, resets, sink)
+	ctx := t.Context()
+
+	require.NoError(t, svc.ForgotPassword(ctx, user.Email))
+
+	first := sink.raw
+
+	require.NoError(t, svc.ForgotPassword(ctx, user.Email))
+
+	second := sink.raw
+
+	require.ErrorIs(t, svc.ResetPassword(ctx, first, "N3w-Passw0rd!", "N3w-Passw0rd!"), authdomain.ErrTokenUsed,
+		"a newer request revokes the older link")
+	require.NoError(t, svc.ResetPassword(ctx, second, "N3w-Passw0rd!", "N3w-Passw0rd!"))
+	require.ErrorIs(t, svc.ResetPassword(ctx, second, "An0ther-Pass!", "An0ther-Pass!"), authdomain.ErrTokenUsed)
+}

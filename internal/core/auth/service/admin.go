@@ -87,9 +87,6 @@ func (s *AuthService) AdminResetPassword(ctx context.Context, userID uuid.UUID, 
 	}
 
 	now := s.clock.Now()
-	if err := s.resets.RevokePending(ctx, user.UUID, authdomain.PurposePasswordReset, now); err != nil {
-		return authdomain.AdminReset{}, err
-	}
 
 	expiresAt, err := s.issuePasswordReset(ctx, user)
 	if err != nil {

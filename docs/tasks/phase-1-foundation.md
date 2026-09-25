@@ -118,7 +118,8 @@ Specs: [user-management.md](../features/user-management.md),
       (`internal/bootstrap/auth_integration_test.go`, real repositories, ES256 and Argon2id)
 - [x] Negative-path tests for expired and reused refresh tokens (expired, reused, logged-out and
       unknown tokens answer `401`; reuse revokes the family, other families survive)
-- [ ] Document the auth threat model in [authn-authz.md](../security/authn-authz.md)
+- [x] Document the auth threat model in [authn-authz.md](../security/authn-authz.md)
+      (assets, trust boundaries, threats with mitigations and residual risk, open items)
 - [x] Run the security checklist against the auth surface — [checklist.md](../security/checklist.md)
       (run log 2026-09-25: fixed login enumeration and timing, missing rate limits, forgot-password
       timing and JWT issuer/`exp` checks; unknown-key rejection and audit logging stay open)
