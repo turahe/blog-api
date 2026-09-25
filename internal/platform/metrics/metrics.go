@@ -157,10 +157,20 @@ func (m *Metrics) OutboxBacklog(pending, failed int64, oldestPendingAt *time.Tim
 	m.outboxLag.Set(lag)
 }
 
-// NewServer returns the metrics HTTP server for addr, serving /metrics only.
-func (m *Metrics) NewServer(addr string) *http.Server {
+// Route is an extra endpoint served next to /metrics, such as a worker probe.
+type Route struct {
+	Pattern string
+	Handler http.Handler
+}
+
+// NewServer returns the metrics HTTP server for addr, serving /metrics plus any extra routes.
+func (m *Metrics) NewServer(addr string, routes ...Route) *http.Server {
 	mux := http.NewServeMux()
 	mux.Handle("GET /metrics", m.Handler())
+
+	for _, route := range routes {
+		mux.Handle(route.Pattern, route.Handler)
+	}
 
 	return &http.Server{
 		Addr:              addr,

@@ -30,14 +30,17 @@ type ConsumerConfig struct {
 
 // NewRouter returns a router whose handlers run behind, outermost first: the poison queue,
 // correlation id propagation, tracing, retry with exponential backoff, and panic recovery.
-// A message that exhausts its retries is published to DeadLetterTopic and acked.
+// A message that exhausts its retries is published to DeadLetterTopic and acked; a message
+// refused by an open CircuitBreaker is nacked for redelivery instead.
 func NewRouter(bus *Bus, cfg ConsumerConfig) (*message.Router, error) {
 	router, err := message.NewRouter(message.RouterConfig{}, bus.Logger)
 	if err != nil {
 		return nil, fmt.Errorf("create message router: %w", err)
 	}
 
-	poison, err := middleware.PoisonQueue(bus.Publisher, bus.Topic(DeadLetterTopic))
+	poison, err := middleware.PoisonQueueWithFilter(bus.Publisher, bus.Topic(DeadLetterTopic), func(err error) bool {
+		return !errors.Is(err, ErrCircuitOpen)
+	})
 	if err != nil {
 		return nil, fmt.Errorf("create poison queue: %w", err)
 	}
@@ -49,7 +52,7 @@ func NewRouter(bus *Bus, cfg ConsumerConfig) (*message.Router, error) {
 		Multiplier:      2,
 		Logger:          bus.Logger,
 		ShouldRetry: func(params middleware.RetryParams) bool {
-			return !errors.Is(params.Err, ErrPermanent)
+			return !errors.Is(params.Err, ErrPermanent) && !errors.Is(params.Err, ErrCircuitOpen)
 		},
 	}
 

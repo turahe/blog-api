@@ -52,9 +52,11 @@ type Dependencies struct {
 	CommentRates   handlers.CommentRates
 	LoginPerMinute int
 	Metrics        middleware.MetricsRecorder // nil disables request metrics
-	Audit          auditports.Writer          // nil disables audit logging
-	Activity       *auditservice.Activity
-	Notifications  *notificationservice.Inbox // nil keeps the inbox routes as 501 stubs
+	// MaxInFlight sheds requests beyond this many concurrent ones with 503; 0 disables.
+	MaxInFlight   int
+	Audit         auditports.Writer // nil disables audit logging
+	Activity      *auditservice.Activity
+	Notifications *notificationservice.Inbox // nil keeps the inbox routes as 501 stubs
 	// NotificationStream fans live notices out to SSE clients; nil answers 503.
 	NotificationStream *realtime.Hub
 	SSEPingInterval    time.Duration
@@ -168,7 +170,7 @@ func globalMiddleware(deps Dependencies) gin.HandlersChain {
 		global = append(global, middleware.Metrics(deps.Metrics))
 	}
 
-	global = append(global, middleware.Recovery(deps.Logger))
+	global = append(global, middleware.MaxInFlight(deps.MaxInFlight), middleware.Recovery(deps.Logger))
 	if deps.Audit != nil {
 		global = append(global, middleware.Audit(deps.Audit))
 	}

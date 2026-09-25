@@ -1,5 +1,25 @@
 # Changelog
 
+## 2026-09-25 — Event pipeline hardening
+
+### Added
+
+- `app worker` serves `GET /healthz` and `GET /readyz` on `METRICS_ADDR`; readiness fails
+  while the database or the broker is down.
+- Consumer circuit breaker: after `CONSUMER_BREAKER_FAILURES` consecutive transient failures
+  a consumer pauses for `CONSUMER_BREAKER_TIMEOUT`, nacking messages for redelivery instead
+  of dead-lettering them.
+- `CONSUMER_CONCURRENCY` runs several handler copies per consumer in one worker.
+- `HTTP_MAX_INFLIGHT` caps concurrent API requests per process; extra requests get
+  `503 server.overloaded` with `Retry-After: 1`. Off by default.
+- [Runbook](docs/deployment/runbook.md) and process-role deployment notes
+  ([deployment.md](docs/architecture/deployment.md#process-roles)).
+
+### Changed
+
+- Readiness dependencies report `critical`. The broker is non-critical for `app serve`, so a
+  broker outage no longer fails API readiness; events wait in the outbox.
+
 ## 2026-09-25 — Image transforms via imgproxy
 
 ### Added

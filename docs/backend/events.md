@@ -194,6 +194,14 @@ Metrics (on `METRICS_ADDR` in `app worker`): `blog_outbox_published_total`,
    from `CONSUMER_RETRY_INTERVAL` and doubling up to `CONSUMER_RETRY_MAX_INTERVAL`. Errors
    wrapping `messaging.ErrPermanent` skip the retries.
 4. **Recoverer.** A panic becomes an error, so it is retried and dead-lettered like any other.
+5. **Circuit breaker** (per consumer). After `CONSUMER_BREAKER_FAILURES` consecutive transient
+   failures the breaker opens for `CONSUMER_BREAKER_TIMEOUT`. Messages that arrive meanwhile
+   return `messaging.ErrCircuitOpen` after a short pause: they skip the retries and the dead
+   letter topic and are nacked, so the broker redelivers them once the downstream recovers.
+
+`CONSUMER_CONCURRENCY` registers that many copies of each consumer (`email-dispatch-1`, …),
+sharing one breaker and one dedupe key. Worker probes and incident steps:
+[deployment.md](../architecture/deployment.md#process-roles), [runbook.md](../deployment/runbook.md).
 
 Handlers wrapped with `messaging.Idempotent` claim `(consumer, message id)` in
 `processed_messages` in the same transaction as their work. A redelivered message is acked

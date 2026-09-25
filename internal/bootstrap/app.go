@@ -89,12 +89,14 @@ type Runtime struct {
 }
 
 type checker struct {
-	name  string
-	check func(context.Context) error
+	name     string
+	check    func(context.Context) error
+	optional bool
 }
 
 func (c checker) Name() string                    { return c.name }
 func (c checker) Check(ctx context.Context) error { return c.check(ctx) }
+func (c checker) Optional() bool                  { return c.optional }
 
 // NewRuntime opens the database and Redis, wires services, and builds the HTTP server.
 func NewRuntime(ctx context.Context, cfg config.Config, logger *slog.Logger, version string) (*Runtime, error) {
@@ -175,8 +177,9 @@ func NewRuntime(ctx context.Context, cfg config.Config, logger *slog.Logger, ver
 	auditRecorder, activity := newAudit(cfg, db, onAuditDrop, logger)
 
 	router, err := httpadapter.NewRouter(httpadapter.Dependencies{
-		Metrics: recorder,
-		Audit:   auditRecorder, Activity: activity,
+		Metrics:     recorder,
+		MaxInFlight: cfg.HTTPMaxInFlight,
+		Audit:       auditRecorder, Activity: activity,
 		Logger:         logger,
 		Health:         healthservice.New(version, healthCheckers(cfg, db, redisClient)...),
 		Auth:           auth,
@@ -547,6 +550,24 @@ func NewMailer(cfg config.Config) (*mail.SMTP, error) {
 	return mailer, nil
 }
 
+// WorkerHealthCheckers probes what the worker cannot run without: the database and the broker.
+func WorkerHealthCheckers(cfg config.Config, db *database.Database) []healthports.Checker {
+	return []healthports.Checker{
+		checker{name: "database", check: func(ctx context.Context) error {
+			checkCtx, cancel := context.WithTimeout(ctx, 2*time.Second)
+			defer cancel()
+
+			return db.SQL.PingContext(checkCtx)
+		}},
+		checker{name: "messaging", check: func(ctx context.Context) error {
+			checkCtx, cancel := context.WithTimeout(ctx, 2*time.Second)
+			defer cancel()
+
+			return messaging.Probe(checkCtx, cfg)
+		}},
+	}
+}
+
 func healthCheckers(cfg config.Config, db *database.Database, redisClient *redis.Client) []healthports.Checker {
 	checkers := []healthports.Checker{
 		checker{name: "database", check: func(ctx context.Context) error {
@@ -564,7 +585,9 @@ func healthCheckers(cfg config.Config, db *database.Database, redisClient *redis
 	}
 
 	if cfg.MessagingEnabled() {
-		checkers = append(checkers, checker{name: "messaging", check: func(ctx context.Context) error {
+		// The API keeps accepting writes while the broker is down (events wait in the outbox),
+		// so a broker outage is reported without taking replicas out of rotation.
+		checkers = append(checkers, checker{name: "messaging", optional: true, check: func(ctx context.Context) error {
 			checkCtx, cancel := context.WithTimeout(ctx, 2*time.Second)
 			defer cancel()
 

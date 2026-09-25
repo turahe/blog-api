@@ -13,7 +13,8 @@ transactional outbox is in place: post, comment, account, and media writes recor
 events in the same transaction, and the worker relays them with retries, parking, pruning,
 and metrics. Worker consumers run behind retry, a dead-letter topic, and a dedupe table; the
 first consumer sends queued emails. `app scheduler` runs pruning jobs once per interval across
-replicas. Image transforms are delegated to imgproxy.
+replicas. Image transforms are delegated to imgproxy. Workers expose readiness probes, consumers
+have concurrency limits and circuit breakers, and the API sheds load past `HTTP_MAX_INFLIGHT`.
 
 ## Epic: messaging transports
 
@@ -92,12 +93,17 @@ Design: [2026-07-30-messaging-brokers-design.md](../superpowers/specs/2026-07-30
 
 ## Epic: operational hardening
 
-- [ ] Readiness gate that fails when the broker is configured but unreachable
-- [ ] Backpressure and consumer concurrency limits driven by config
-- [ ] Runbook entries for broker outage, outbox backlog, and consumer crash loops
-- [ ] Load-shedding or circuit breaking on downstream failures
-- [ ] Deployment notes for running `serve` and `worker` as separate processes —
-      see [deployment.md](../architecture/deployment.md)
+- [x] Readiness gate that fails when the broker is configured but unreachable (worker
+      `GET /readyz` on `METRICS_ADDR`; the API lists the broker as non-critical because writes
+      keep landing in the outbox)
+- [x] Backpressure and consumer concurrency limits driven by config (`CONSUMER_CONCURRENCY`,
+      `HTTP_MAX_INFLIGHT`)
+- [x] Runbook entries for broker outage, outbox backlog, and consumer crash loops —
+      [runbook.md](../deployment/runbook.md)
+- [x] Load-shedding or circuit breaking on downstream failures (API in-flight limit with
+      `503 server.overloaded`; per-consumer circuit breaker)
+- [x] Deployment notes for running `serve` and `worker` as separate processes —
+      see [deployment.md](../architecture/deployment.md#process-roles)
 
 ## Dependencies and order
 
@@ -115,7 +121,7 @@ Design: [2026-07-30-messaging-brokers-design.md](../superpowers/specs/2026-07-30
 - [x] Outbox tests proving events commit and roll back with the business write
 - [x] Consumer idempotency tests using duplicate deliveries
 - [ ] Secrets review for broker credentials — see [secrets-and-headers.md](../security/secrets-and-headers.md)
-- [ ] Update [checklist.md](../deployment/checklist.md) with worker rollout steps
+- [x] Update [checklist.md](../deployment/checklist.md) with worker rollout steps
 
 ## References
 

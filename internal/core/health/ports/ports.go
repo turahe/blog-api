@@ -13,6 +13,12 @@ type Checker interface {
 	Check(context.Context) error
 }
 
+// Optional is implemented by checkers whose failure is reported but does not fail readiness,
+// because the process keeps serving without that dependency.
+type Optional interface {
+	Optional() bool
+}
+
 // Service reports liveness and readiness.
 type Service interface {
 	Live() domain.Status

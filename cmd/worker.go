@@ -13,11 +13,13 @@ import (
 
 	"github.com/ThreeDotsLabs/watermill/message"
 	"github.com/spf13/cobra"
+	"github.com/turahe/blog-api/internal/adapters/inbound/probe"
 	"github.com/turahe/blog-api/internal/adapters/outbound/mailqueue"
 	"github.com/turahe/blog-api/internal/adapters/outbound/outbox"
 	"github.com/turahe/blog-api/internal/adapters/outbound/persistence"
 	"github.com/turahe/blog-api/internal/bootstrap"
 	"github.com/turahe/blog-api/internal/core/event"
+	healthservice "github.com/turahe/blog-api/internal/core/health/service"
 	"github.com/turahe/blog-api/internal/platform/config"
 	"github.com/turahe/blog-api/internal/platform/database"
 	"github.com/turahe/blog-api/internal/platform/messaging"
@@ -88,11 +90,7 @@ func newWorkerCmd() *cobra.Command {
 			}, logger)
 
 			if cfg.MetricsAddr != "" {
-				workerMetrics := metrics.New(db.SQL, version)
-				relay.WithObserver(workerMetrics)
-
-				stopMetrics := serveMetrics(workerMetrics.NewServer(cfg.MetricsAddr), logger)
-				defer stopMetrics()
+				defer serveWorkerProbes(cfg, db, relay, logger)()
 			}
 
 			relayDone := make(chan struct{})
@@ -140,8 +138,8 @@ func addConsumers(
 	}
 
 	if box != nil && mailer != nil {
-		router.AddConsumerHandler(emailConsumer, bus.Topic(event.NotificationEmailRequested), bus.Subscriber,
-			messaging.Idempotent(dedupe, emailConsumer, mailqueue.Handler(box, mailer)))
+		addConsumer(router, bus, cfg, emailConsumer, bus.Topic(event.NotificationEmailRequested),
+			messaging.Idempotent(dedupe, emailConsumer, mailqueue.Handler(box, mailer)), logger)
 
 		names = append(names, emailConsumer)
 	} else {
@@ -149,6 +147,42 @@ func addConsumers(
 	}
 
 	return names, nil
+}
+
+// addConsumer registers CONSUMER_CONCURRENCY copies of handler on topic behind one shared
+// circuit breaker. Copies compete for queue messages (AMQP) or split partitions (Kafka); the
+// dedupe key stays name, so copies never handle the same message twice.
+func addConsumer(
+	router *message.Router, bus *messaging.Bus, cfg config.Config, name, topic string,
+	handler message.NoPublishHandlerFunc, logger *slog.Logger,
+) {
+	breaker := messaging.CircuitBreaker(name, messaging.BreakerConfig{
+		Failures: cfg.ConsumerBreakerFailures,
+		OpenFor:  cfg.ConsumerBreakerTimeout,
+	}, logger)
+
+	for i := range cfg.ConsumerConcurrency {
+		handlerName := name
+		if cfg.ConsumerConcurrency > 1 {
+			handlerName = fmt.Sprintf("%s-%d", name, i+1)
+		}
+
+		router.AddConsumerHandler(handlerName, topic, bus.Subscriber, handler).AddMiddleware(breaker)
+	}
+}
+
+// serveWorkerProbes serves /metrics, /healthz and /readyz on METRICS_ADDR and returns a func
+// that shuts the server down. Readiness fails while the database or the broker is down.
+func serveWorkerProbes(cfg config.Config, db *database.Database, relay *outbox.Relay, logger *slog.Logger) func() {
+	workerMetrics := metrics.New(db.SQL, version)
+	relay.WithObserver(workerMetrics)
+
+	health := healthservice.New(version, bootstrap.WorkerHealthCheckers(cfg, db)...)
+
+	return serveMetrics(workerMetrics.NewServer(cfg.MetricsAddr,
+		metrics.Route{Pattern: "GET /healthz", Handler: probe.Live(health)},
+		metrics.Route{Pattern: "GET /readyz", Handler: probe.Ready(health, logger)},
+	), logger)
 }
 
 // serveMetrics serves /metrics in the background and returns a func that shuts it down.

@@ -115,6 +115,10 @@ type Config struct {
 	ConsumerRetryInterval         time.Duration
 	ConsumerRetryMaxInterval      time.Duration
 	ConsumerDedupeRetention       time.Duration
+	ConsumerConcurrency           int
+	ConsumerBreakerFailures       int
+	ConsumerBreakerTimeout        time.Duration
+	HTTPMaxInFlight               int
 	CacheEnabled                  bool
 	CacheBypassHeader             bool
 	CacheTTLPosts                 time.Duration
@@ -533,6 +537,7 @@ func Load() (Config, error) {
 		SMTPFrom:                      env("SMTP_FROM", "Blog <blog@localhost>"),
 		AppPublicURL:                  env("APP_PUBLIC_URL", "http://127.0.0.1:8080"),
 		MetricsAddr:                   env("METRICS_ADDR", ""),
+		HTTPMaxInFlight:               integer("HTTP_MAX_INFLIGHT", 0),
 	}
 	cfg.SwaggerEnabled = boolEnv("APP_SWAGGER_ENABLED", cfg.Environment == "local")
 	cfg.SentryEnvironment = env("SENTRY_ENVIRONMENT", cfg.Environment)
@@ -559,6 +564,9 @@ func (c *Config) loadWorker() {
 	c.ConsumerRetryInterval = duration("CONSUMER_RETRY_INTERVAL", time.Second)
 	c.ConsumerRetryMaxInterval = duration("CONSUMER_RETRY_MAX_INTERVAL", 30*time.Second)
 	c.ConsumerDedupeRetention = duration("CONSUMER_DEDUPE_RETENTION", 7*24*time.Hour)
+	c.ConsumerConcurrency = max(integer("CONSUMER_CONCURRENCY", 1), 1)
+	c.ConsumerBreakerFailures = integer("CONSUMER_BREAKER_FAILURES", 5)
+	c.ConsumerBreakerTimeout = duration("CONSUMER_BREAKER_TIMEOUT", 30*time.Second)
 }
 
 func (c *Config) loadJWTKeys() error {

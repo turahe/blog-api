@@ -10,3 +10,4 @@ Runtime and release handbook. Broader environment notes:
 | [docker.md](./docker.md) | Image build, distroless runtime, ports |
 | [release.md](./release.md) | CI gates, migrate order, smoke checks |
 | [checklist.md](./checklist.md) | Pre-deploy / post-deploy checklist |
+| [runbook.md](./runbook.md) | Broker outage, outbox backlog, consumer crash loops, overload |

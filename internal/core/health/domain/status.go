@@ -7,7 +7,9 @@ import "time"
 type Dependency struct {
 	Name    string `json:"name"`
 	Healthy bool   `json:"healthy"`
-	Message string `json:"message,omitempty"`
+	// Critical dependencies fail readiness when unhealthy; the others are only reported.
+	Critical bool   `json:"critical"`
+	Message  string `json:"message,omitempty"`
 	// Err is the check failure; it is logged but never serialized to clients.
 	Err error `json:"-"`
 }

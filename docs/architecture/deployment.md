@@ -30,6 +30,34 @@ Local Compose should be able to run:
 - object storage bucket for originals and optionally cached variants
 - worker process for async jobs if consumers are split from the API
 
+## Process roles
+
+One image runs three commands. Deploy them as separate services so each scales and restarts
+on its own:
+
+| Process | Command | Replicas | Probes |
+| --- | --- | --- | --- |
+| API | `app serve` | 2+ behind the load balancer | `GET /health/live`, `GET /health/ready` on `APP_ADDR` |
+| Worker | `app worker` | 1+ when `MESSAGE_BROKER` is set | `GET /healthz`, `GET /readyz` on `METRICS_ADDR` |
+| Scheduler | `app scheduler` | 1+ (jobs run once per interval across replicas) | process liveness |
+
+- **API readiness** fails only on the database or Redis. A broker outage is listed as a
+  non-critical dependency: writes keep landing in the outbox, so replicas stay in rotation.
+- **Worker readiness** fails when the database or the broker is down. Set `METRICS_ADDR`
+  (for example `0.0.0.0:9090`) on workers so the probes exist; keep that port private.
+- **Shared settings.** Workers need the same database, `MESSAGE_BROKER`, and
+  `MESSAGE_TOPIC_PREFIX` as the API, plus `APP_ENCRYPTION_KEY` and `SMTP_*` to send queued
+  email. The scheduler needs only the database settings.
+- **Scaling.** Relays share the outbox with `FOR UPDATE SKIP LOCKED`, and consumers share a
+  subscription (Kafka consumer group, RabbitMQ queue, Pub/Sub subscription), so worker
+  replicas split the load. `CONSUMER_CONCURRENCY` adds handlers inside one worker.
+- **Shutdown.** On SIGTERM the worker stops consuming and waits up to 30s for in-flight
+  handlers; give it a termination grace period above that. Unacked messages are redelivered.
+- **Load shedding.** `HTTP_MAX_INFLIGHT` caps concurrent API requests per replica; consumer
+  circuit breakers pause a worker whose SMTP or database keeps failing.
+
+Incident steps: [runbook.md](../deployment/runbook.md).
+
 ## Configuration
 
 Use environment variables for:
@@ -57,7 +85,7 @@ Use environment variables for:
 - deploy background workers (`app worker`)
 - deploy scheduled jobs if separated (`app scheduler`)
 - validate runtime dependencies with `app doctor`
-- verify health and readiness endpoints
+- verify health and readiness endpoints (`/health/ready` on the API, `/readyz` on workers)
 
 ## Migration Policy
 
@@ -76,7 +104,8 @@ Use environment variables for:
 - health endpoints pass
 - database connectivity works
 - Redis connectivity works
-- event publishing and consumers are healthy
+- event publishing and consumers are healthy (`blog_outbox_lag_seconds` stays low, worker
+  `/readyz` is 200)
 - critical auth flows succeed in smoke tests
 
 ## Operational handbook

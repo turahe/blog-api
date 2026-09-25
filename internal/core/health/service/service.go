@@ -25,7 +25,8 @@ func (h *Health) Live() domain.Status {
 	return domain.Status{Status: "ok", Version: h.version, Time: time.Now().UTC()}
 }
 
-// Ready probes every dependency and reports degraded when any fails.
+// Ready probes every dependency and reports degraded when a critical one fails. Optional
+// dependencies are listed as unhealthy without changing the status.
 func (h *Health) Ready(ctx context.Context) domain.Status {
 	status := domain.Status{
 		Status:       "ok",
@@ -34,12 +35,21 @@ func (h *Health) Ready(ctx context.Context) domain.Status {
 		Dependencies: make([]domain.Dependency, 0, len(h.checkers)),
 	}
 	for _, checker := range h.checkers {
-		dependency := domain.Dependency{Name: checker.Name(), Healthy: true}
+		optional, _ := checker.(ports.Optional)
+		dependency := domain.Dependency{
+			Name:     checker.Name(),
+			Healthy:  true,
+			Critical: optional == nil || !optional.Optional(),
+		}
+
 		if err := checker.Check(ctx); err != nil {
 			dependency.Healthy = false
 			dependency.Message = "unavailable"
 			dependency.Err = err
-			status.Status = "degraded"
+
+			if dependency.Critical {
+				status.Status = "degraded"
+			}
 		}
 
 		status.Dependencies = append(status.Dependencies, dependency)

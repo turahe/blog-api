@@ -17,6 +17,7 @@
 - corrupted uploads or invalid transforms -> `422`
 - unprocessable domain logic (password strength, history reuse, token already used) -> `422`
 - rate limiting -> `429` with `Retry-After` header in seconds and `code=rate_limit.exceeded`
+- overload (`HTTP_MAX_INFLIGHT` reached) -> `503` with `Retry-After: 1` and `code=server.overloaded`
 - unexpected failures -> `500`
 
 ## Stable Error Code Catalogue (profile area)
@@ -58,6 +59,7 @@ Client-safe codes only; never include usernames, emails, hashes, IPs, or interna
 | `encryption.decrypt_failed`                    | 500  | contact.phone envelope decryption failed; operator must check KMS       |
 | `encryption.key_unavailable`                   | 500  | KMS/ENV master key not accessible at decrypt time                       |
 | `rate_limit.exceeded`                          | 429  | with Retry-After header seconds                                         |
+| `server.overloaded`                            | 503  | too many requests in flight on this replica; retry after Retry-After    |
 | `csrf.missing` / `csrf.invalid`                | 403  | browser-origin state-changing requests without/invalid CSRF             |
 | `cors.origin_not_allowed`                      | 403  | origin not in whitelist for profile mutations                           |
 | `stepup.required`                              | 403  | missing `X-Re-Verify-Password` or recent 2FA for high-risk action       |

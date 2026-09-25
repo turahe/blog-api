@@ -43,8 +43,10 @@ Sensitive actions should create durable audit records for:
 
 ## Health Checks
 
-- liveness endpoint for process health
-- readiness endpoint for dependency health
+- liveness endpoint for process health (`/health/live` on the API, `/healthz` on workers)
+- readiness endpoint for dependency health (`/health/ready` on the API, `/readyz` on workers).
+  Each dependency reports `critical`; only a critical failure fails readiness. The broker is
+  non-critical for the API and critical for workers.
 - optional deeper diagnostics for internal ops use
 
 ## Alerting

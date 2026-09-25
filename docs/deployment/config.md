@@ -56,6 +56,7 @@ docker run --rm --env-file .env -p 8080:8080 blog-api:local serve
 | `APP_READ_TIMEOUT` | `15s` | No | Maximum request body read time. |
 | `APP_READ_HEADER_TIMEOUT` | `5s` | No | Maximum request header read time. |
 | `APP_IDLE_TIMEOUT` | `60s` | No | Keep-alive idle timeout. |
+| `HTTP_MAX_INFLIGHT` | `0` | No | Concurrent requests one `app serve` process handles before answering `503` `server.overloaded` with `Retry-After: 1`. `0` disables shedding. Health probes and SSE streams are not counted. |
 
 Do not use `0.0.0.0/0`, `*`, or arbitrary client-controlled addresses in
 `APP_TRUSTED_PROXIES`. See [docker.md](./docker.md) for reverse-proxy deployment notes.
@@ -110,7 +111,7 @@ Local Mailpit UI is [http://127.0.0.1:8025](http://127.0.0.1:8025). Messages cov
 
 | Variable | Default | Required | Purpose |
 | --- | --- | --- | --- |
-| `METRICS_ADDR` | empty | No | Listen address for Prometheus `GET /metrics` (e.g. `0.0.0.0:9090`). Empty disables metrics. |
+| `METRICS_ADDR` | empty | No | Listen address for Prometheus `GET /metrics` (e.g. `0.0.0.0:9090`). Empty disables metrics. In `app worker` the same listener serves the `GET /healthz` and `GET /readyz` probes. |
 
 Metrics are served on their own listener so they never share the public API port; keep that
 port off the public load balancer. Series use the `blog_` prefix:
@@ -356,6 +357,13 @@ least one worker running while a broker is configured, or the backlog grows; wat
 | `CONSUMER_RETRY_INTERVAL` | `1s` | No | First retry delay; each retry doubles it. |
 | `CONSUMER_RETRY_MAX_INTERVAL` | `30s` | No | Ceiling for the retry delay. |
 | `CONSUMER_DEDUPE_RETENTION` | `168h` | No | How long handled message ids are kept to skip redeliveries. Keep it above the broker's redelivery window. |
+| `CONSUMER_CONCURRENCY` | `1` | No | Handler copies per consumer in one worker. RabbitMQ copies compete for queue messages; Kafka copies share partitions, so more copies than partitions sit idle. |
+| `CONSUMER_BREAKER_FAILURES` | `5` | No | Consecutive transient handler failures (retries included) that open a consumer's circuit breaker. `0` disables it. |
+| `CONSUMER_BREAKER_TIMEOUT` | `30s` | No | How long an open breaker refuses messages before one trial message is let through. |
+
+While a breaker is open the consumer nacks messages after a short pause (at most 5s) instead
+of running them, so a down SMTP server or database pauses delivery rather than dead-lettering
+every message. See the [runbook](./runbook.md#consumer-circuit-breaker-open).
 
 With `MESSAGE_BROKER` and `APP_ENCRYPTION_KEY` both set, the API does not talk to SMTP:
 each email is encrypted and stored as a `notification.email.requested` command, and the
