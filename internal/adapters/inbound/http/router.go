@@ -60,7 +60,10 @@ type Dependencies struct {
 	// AnalyticsIngest accepts telemetry; nil keeps the ingest routes as 501 stubs.
 	AnalyticsIngest *analyticsservice.Ingest
 	// AnalyticsReports answers the admin dashboard; nil keeps the report routes as 501 stubs.
-	AnalyticsReports         *analyticsservice.Reports
+	AnalyticsReports *analyticsservice.Reports
+	// AnalyticsLive and AnalyticsLiveStreams feed the live stream; nil (no broker) answers 503.
+	AnalyticsLive            *analyticsservice.Board
+	AnalyticsLiveStreams     *realtime.Hub
 	AnalyticsIngestPerMinute int
 	AnalyticsCountryHeader   string
 	// PrivacyRequests queues data exports and erasures; nil keeps the routes as 501 stubs.
@@ -231,6 +234,11 @@ func optionalServices(controllerDeps *handlers.Deps, deps Dependencies) {
 
 	if deps.AnalyticsReports != nil {
 		controllerDeps.AnalyticsReports = deps.AnalyticsReports
+	}
+
+	if deps.AnalyticsLive != nil && deps.AnalyticsLiveStreams != nil {
+		controllerDeps.AnalyticsLive = deps.AnalyticsLive
+		controllerDeps.AnalyticsLiveStreams = deps.AnalyticsLiveStreams
 	}
 }
 

@@ -86,6 +86,7 @@ type SearchClickInput struct {
 // reveal nothing about content, users, or consent.
 type Ingest struct {
 	sink   ports.Sink
+	live   ports.LiveSink
 	hasher ports.IdentityHasher
 	ids    IDGenerator
 	clock  Clock
@@ -99,6 +100,13 @@ func NewIngest(sink ports.Sink, hasher ports.IdentityHasher, ids IDGenerator, cl
 	}
 
 	return &Ingest{sink: sink, hasher: hasher, ids: ids, clock: clock}
+}
+
+// WithLive also announces every accepted event to the live view.
+func (s *Ingest) WithLive(live ports.LiveSink) *Ingest {
+	s.live = live
+
+	return s
 }
 
 // PageView records a page load and returns its id.
@@ -229,6 +237,10 @@ func (s *Ingest) accept(meta Meta, agent domain.Agent, id, session uuid.UUID, ev
 	event.Visitor = domain.Visitor{SubjectUUID: meta.Subject, Hash: s.visitorHash(meta, now), SessionID: session}
 
 	s.sink.Enqueue(event)
+
+	if s.live != nil {
+		s.live.Publish(domain.LiveEventOf(event))
+	}
 
 	return id, nil
 }

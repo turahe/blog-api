@@ -4,12 +4,15 @@ import (
 	"context"
 	"log/slog"
 
+	"github.com/turahe/blog-api/internal/adapters/inbound/realtime"
+	"github.com/turahe/blog-api/internal/adapters/outbound/analyticslive"
 	"github.com/turahe/blog-api/internal/adapters/outbound/persistence"
 	analyticsservice "github.com/turahe/blog-api/internal/core/analytics/service"
 	settingsdomain "github.com/turahe/blog-api/internal/core/settings/domain"
 	settingsservice "github.com/turahe/blog-api/internal/core/settings/service"
 	"github.com/turahe/blog-api/internal/platform/config"
 	"github.com/turahe/blog-api/internal/platform/database"
+	"github.com/turahe/blog-api/internal/platform/messaging"
 	"github.com/turahe/blog-api/internal/platform/system"
 )
 
@@ -24,6 +27,32 @@ func newAnalytics(
 	})
 
 	return analyticsservice.NewIngest(writer, identityHasher(cfg), system.UUIDGenerator{}, system.Clock{}), writer
+}
+
+// newAnalyticsLive feeds this replica's live view from the broadcast bus and has ingest announce
+// accepted events on it. Without a bus, or when it cannot subscribe, it returns nils and the
+// live stream answers 503.
+func newAnalyticsLive(
+	ctx context.Context, cfg config.Config, bus *messaging.Bus, ingest *analyticsservice.Ingest, logger *slog.Logger,
+) (*analyticsservice.Board, *realtime.Hub) {
+	if bus == nil {
+		return nil, nil
+	}
+
+	topic := bus.Topic(analyticslive.Topic)
+	board := analyticsservice.NewBoard(system.Clock{})
+
+	if err := analyticslive.Consume(ctx, bus.Subscriber, topic, board.Add, logger); err != nil {
+		logger.Warn("live analytics disabled: cannot subscribe", "error", err)
+		return nil, nil
+	}
+
+	publisher := analyticslive.NewPublisher(bus.Publisher, topic, logger)
+	go publisher.Run(ctx, analyticslive.FlushEvery)
+
+	ingest.WithLive(publisher)
+
+	return board, realtime.NewHub(cfg.SSEMaxConcurrentPerUser, 1)
 }
 
 // NewAnalyticsAggregator returns the rollup builder used by app scheduler and app analytics.

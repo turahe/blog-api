@@ -14,6 +14,12 @@ type Sink interface {
 	Enqueue(event domain.Event) bool
 }
 
+// LiveSink announces accepted events to the live view of every API replica. Publish never
+// blocks; a busy sink drops events.
+type LiveSink interface {
+	Publish(event domain.LiveEvent)
+}
+
 // EventRepository stores raw events.
 type EventRepository interface {
 	// InsertBatch stores events, ignoring ones whose UUID is already stored; a time-spent

@@ -65,6 +65,9 @@ type Deps struct {
 	AnalyticsIngest analyticsIngestAPI
 	// AnalyticsReports answers the admin dashboard; nil keeps the report routes as 501 stubs.
 	AnalyticsReports analyticsReportsAPI
+	// AnalyticsLive and AnalyticsLiveStreams feed the live stream; either nil answers 503.
+	AnalyticsLive        analyticsLiveBoard
+	AnalyticsLiveStreams notificationStreamHub
 	// AnalyticsIngestPerMinute is the per-IP budget shared by the ingest routes; zero disables it.
 	AnalyticsIngestPerMinute int
 	// AnalyticsCountryHeader names the proxy header carrying the visitor's country; empty disables it.

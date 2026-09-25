@@ -2,6 +2,7 @@ package responses
 
 import (
 	"strconv"
+	"time"
 
 	"github.com/gin-gonic/gin"
 	analyticsdomain "github.com/turahe/blog-api/internal/core/analytics/domain"
@@ -227,6 +228,46 @@ func AnalyticsSearch(s analyticsservice.SearchReport) gin.H {
 	out["positions"], out["clicked_results"] = positions, results
 
 	return out
+}
+
+// AnalyticsLiveSummary renders the live counters.
+func AnalyticsLiveSummary(s analyticsdomain.LiveSnapshot) gin.H {
+	series := make([]gin.H, 0, len(s.Series))
+
+	var views, searches int64
+
+	for _, m := range s.Series {
+		views += m.Views
+		searches += m.Searches
+		series = append(series, gin.H{"minute": m.Start.Format(time.RFC3339), "views": m.Views, "searches": m.Searches})
+	}
+
+	top := make([]gin.H, 0, len(s.TopPages))
+	for _, p := range s.TopPages {
+		top = append(top, gin.H{"path": p.Path, "views": p.Count})
+	}
+
+	return gin.H{
+		"ts":                     s.At.UTC().Format(time.RFC3339),
+		"active_sessions":        s.ActiveSessions,
+		"active_sessions_capped": s.SessionsCapped,
+		"active_window_minutes":  int(analyticsdomain.LiveActiveWindow / time.Minute),
+		"window_minutes":         int(analyticsdomain.LiveWindow / time.Minute),
+		"views":                  views,
+		"searches":               searches,
+		"series":                 series,
+		"top_pages":              top,
+	}
+}
+
+// AnalyticsLivePageView renders one live page view.
+func AnalyticsLivePageView(e analyticsdomain.LiveEvent) gin.H {
+	return gin.H{"ts": e.At.UTC().Format(time.RFC3339), "path": e.Path, "country": e.Country, "device": e.Device}
+}
+
+// AnalyticsLiveSearch renders one live search.
+func AnalyticsLiveSearch(e analyticsdomain.LiveEvent) gin.H {
+	return gin.H{"ts": e.At.UTC().Format(time.RFC3339), "query": e.Query, "result_count": e.Results}
 }
 
 func searchQueries(rows []analyticsdomain.QueryRow, grain analyticsdomain.Grain, periods int) []gin.H {

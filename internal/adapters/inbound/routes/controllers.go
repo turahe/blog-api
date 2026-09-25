@@ -84,6 +84,7 @@ type Analytics struct {
 	AdminNavigation gin.HandlerFunc
 	AdminRetention  gin.HandlerFunc
 	AdminSearch     gin.HandlerFunc
+	AdminRealtime   gin.HandlerFunc
 }
 
 // Settings holds admin settings handlers.

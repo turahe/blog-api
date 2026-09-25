@@ -423,6 +423,10 @@ Each item has `id`, `type`, `title`, `body`, `preview`, `data` (links such as `p
   per-period uniques named `visitor_days`/`visitor_weeks`/`visitor_months`; plain `visitors`
   appears only for a one-period window. Details:
   [analytics.md](analytics.md#admin-dashboard-rbac-protected).
+- `GET /api/v1/admin/analytics/realtime/stream` (SSE, `analytics.realtime.read`) sends
+  `realtime.page_view`, `realtime.search`, and `realtime.summary` every 5 seconds; `503
+  analytics.realtime_unavailable` without a message broker, `429 analytics.realtime_limit` past
+  the per-user stream limit. Details: [analytics.md](analytics.md#live-stream).
 
 ## Main API Areas
 

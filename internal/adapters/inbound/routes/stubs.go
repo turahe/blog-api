@@ -11,6 +11,5 @@ func registerContractStubs(v1 *gin.RouterGroup, auth AuthMiddleware, c Controlle
 
 	ag, ar := GroupAdmin, AuthRequired
 
-	get(admin, "/analytics/realtime/stream", "admin.analytics.realtime.stream", ag, ar, c, nil)
 	post(admin, "/analytics/export", "admin.analytics.export", ag, ar, c, nil)
 }

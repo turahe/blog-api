@@ -9,9 +9,10 @@ Index: [README.md](./README.md).
 
 ## Status
 
-**In progress** — telemetry ingest, the aggregation pipeline, and dashboard reporting are done:
-the five ingest routes store raw events, `app scheduler` rolls them up, and the five admin
-reports read the rollups. The realtime stream and export still return `501`.
+**In progress** — telemetry ingest, the aggregation pipeline, dashboard reporting, and the live
+view are done: the five ingest routes store raw events, `app scheduler` rolls them up, the five
+admin reports read the rollups, and the realtime stream counts broker-fed events in memory.
+Export still returns `501`.
 
 ## Epic: telemetry ingest
 
@@ -64,10 +65,15 @@ Spec: [analytics-dashboard.md](../features/analytics-dashboard.md)
 
 ## Epic: real-time admin views
 
-- [ ] `admin.analytics.realtime.stream` — `GET /api/v1/admin/analytics/realtime/stream` (SSE)
-- [ ] Live counters fed from the Phase 4 broker rather than polling the database
-- [ ] Bounded time window with a documented refresh cadence
-- [ ] Reuse the Phase 3 SSE lifecycle handling: heartbeat, disconnect cleanup, proxy buffering
+- [x] `admin.analytics.realtime.stream` — `GET /api/v1/admin/analytics/realtime/stream` (SSE,
+  `analytics.realtime.read`, admins and editors)
+- [x] Live counters fed from the Phase 4 broker rather than polling the database (broadcast
+  topic `analytics.live`, batched once a second; each replica counts in memory)
+- [x] Bounded time window with a documented refresh cadence (active sessions over 5 minutes,
+  series and top pages over 30, a frame every 5 seconds) — see
+  [analytics.md](../backend/analytics.md#live-stream)
+- [x] Reuse the Phase 3 SSE lifecycle handling: heartbeat, disconnect cleanup, proxy buffering
+  (per-user stream cap, `stream.closed` on shutdown, `X-Accel-Buffering: no`)
 
 ## Epic: export and retention
 

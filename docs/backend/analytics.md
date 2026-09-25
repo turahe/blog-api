@@ -270,9 +270,8 @@ All five reports share one query:
 - **Freshness.** Rollups of the current and previous periods are rebuilt every 15 minutes, so
   today lags by at most one run. Responses carry `Cache-Control: private, no-store`.
 
-- `GET /api/v1/admin/analytics/realtime/stream`
-  - SSE endpoint for live activity stream
-  - `events`: `realtime.page_view`, `realtime.search`, `realtime.summary`
+- `GET /api/v1/admin/analytics/realtime/stream` — live view over SSE; needs
+  `analytics.realtime.read` (admins and editors). See [Real-Time Pipeline](#real-time-pipeline).
 - `POST /api/v1/admin/analytics/export`
   - exports CSV/JSON for a date window
   - requires `analytics.export` and step-up auth if 2FA is enabled
@@ -312,16 +311,51 @@ All five reports share one query:
 
 ## Real-Time Pipeline
 
-Recommendation for live dashboard:
-
-1. Ingestion API validates consent.
-2. On success, queue the raw event for the batched writer (write path).
-3. Hand accepted events to the live counters in process (no outbox; see [Events](#events)).
-4. Async handlers:
-   - update Redis counters for live counts (last 5 min, last hour)
-   - fan out per-topic events to admin SSE stream via pub/sub
+1. Ingest validates the event and consent, and queues it for the batched writer.
+2. Every accepted event (after bot, prefetch, and refused-consent filtering) is also reduced to
+   its live form and queued for the broker: kind, time, session id, and for page views the
+   path, country, and device, for searches the normalised query and result count. No visitor
+   hash or subject id leaves the process.
+3. Each replica publishes its queue to the broadcast topic `analytics.live` once a second (or
+   every 500 events). The queue holds 10,000 events; beyond that events are dropped from the
+   live view only and a warning is logged. There is no outbox: see [Events](#events).
+4. Every replica subscribes to `analytics.live` on its own broadcast queue, so each one counts
+   every replica's traffic in memory. A replica that starts (or restarts) begins empty and is
+   complete after 30 minutes.
 5. The `analytics-rollup` job in `app scheduler` rolls raw events up into the
-   [rollups](#rollups) that historical views read.
+   [rollups](#rollups) that historical views read; the live view never touches the database.
+
+### Live stream
+
+`GET /api/v1/admin/analytics/realtime/stream` needs `analytics.realtime.read`, a message
+broker (`503 analytics.realtime_unavailable` without one), and a free stream slot
+(`SSE_MAX_CONCURRENT_PER_USER` per user, `429 analytics.realtime_limit` with `Retry-After`).
+
+| Window | Value |
+| --- | --- |
+| Active sessions | sessions with any event (including time-spent heartbeats) in the last 5 minutes; tracking stops at 100,000 sessions (`active_sessions_capped: true`) |
+| Series and top pages | the last 30 minutes in one-minute buckets; top 10 pages, with paths past 1,000 per minute folded into `(other)` |
+| Refresh | every 5 seconds, plus once when the stream opens |
+
+Each refresh writes `realtime.page_view` frames (`ts`, `path`, `country`, `device`) and
+`realtime.search` frames (`ts`, `query`, `result_count`) for events that arrived since the last
+refresh, at most 20 of each (the latest when busier; the first refresh replays up to 20
+recent ones), then one `realtime.summary` frame:
+
+```json
+{
+  "ts": "2026-09-25T10:00:05Z",
+  "active_sessions": 42, "active_sessions_capped": false,
+  "active_window_minutes": 5, "window_minutes": 30,
+  "views": 1830, "searches": 96,
+  "series": [{"minute": "2026-09-25T09:31:00Z", "views": 61, "searches": 3}],
+  "top_pages": [{"path": "/posts/hello", "views": 210}]
+}
+```
+
+The summary doubles as the heartbeat (`X-Accel-Buffering: no` disables proxy buffering), the
+stream ends with `stream.closed` (code `shutdown`) when the server stops, and a client that
+reconnects simply gets a fresh summary: live data has no replay.
 
 ## Events
 
@@ -330,9 +364,9 @@ Domain and integration events:
 - `analytics.consent.granted`
 - `analytics.consent.rejected`
 - `analytics.consent.withdrawn`
-- `analytics.realtime.summary.tick`
 
-Consent events go through the outbox. Ingested events do not: an outbox row per event would put
+Consent events go through the outbox. Live analytics use the broker topic `analytics.live`
+directly (see [Real-Time Pipeline](#real-time-pipeline)). Ingested events do not: an outbox row per event would put
 a database write back on the ingest path. There are no `analytics.*.ingested` events, and
 rollups publish nothing: dashboards read the rollup tables directly.
 

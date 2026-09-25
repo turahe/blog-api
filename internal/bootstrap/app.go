@@ -93,8 +93,9 @@ type Runtime struct {
 	Posts      *postservice.PostService
 	Categories *categoryservice.CategoryService
 	Media      mediaports.Service
-	// NotificationBus carries live notification pushes between replicas; nil without a broker.
-	NotificationBus *messaging.Bus
+	// Broadcast carries live notification pushes and live analytics between replicas; nil
+	// without a broker.
+	Broadcast *messaging.Bus
 }
 
 type checker struct {
@@ -161,7 +162,8 @@ func NewRuntime(ctx context.Context, cfg config.Config, logger *slog.Logger, ver
 	posts.WithTags(tags).WithSearch(newPostSearch(ctx, cfg, db, logger))
 
 	comments := newCommentService(cfg, db, ids, clock, inbox, events)
-	hub, notificationBus := newNotificationStream(ctx, cfg, inbox, logger)
+	broadcast := newBroadcast(ctx, cfg, logger)
+	hub := newNotificationStream(ctx, cfg, broadcast, inbox, logger)
 
 	media, err := newMediaService(ctx, cfg, db, ids, clock, posts, cacheOrNil, events, settings)
 	if err != nil {
@@ -182,6 +184,7 @@ func NewRuntime(ctx context.Context, cfg config.Config, logger *slog.Logger, ver
 	metricsServer, recorder, drops := newMetrics(cfg, db, version)
 	auditRecorder, activity := newAudit(cfg, db, drops.audit, logger)
 	analyticsIngest, analyticsWriter := newAnalytics(cfg, db, drops.analytics, logger)
+	live, liveStreams := newAnalyticsLive(ctx, cfg, broadcast, analyticsIngest, logger)
 	newsletter := NewNewsletterService(cfg, db, events, settings, logger)
 
 	router, err := httpadapter.NewRouter(httpadapter.Dependencies{
@@ -205,8 +208,8 @@ func NewRuntime(ctx context.Context, cfg config.Config, logger *slog.Logger, ver
 		Settings: settings, Newsletter: newsletter,
 		NewsletterProvider: NewsletterProvider(cfg),
 		Consent:            consentservice.New(persistence.NewConsentRepository(db.GORM), ids, clock).WithEvents(events),
-		AnalyticsIngest:    analyticsIngest, AnalyticsIngestPerMinute: cfg.AnalyticsIngestPerMinute,
-		AnalyticsCountryHeader: cfg.AnalyticsCountryHeader, AnalyticsReports: newAnalyticsReports(db, settings),
+		AnalyticsIngest:    analyticsIngest, AnalyticsIngestPerMinute: cfg.AnalyticsIngestPerMinute, AnalyticsCountryHeader: cfg.AnalyticsCountryHeader,
+		AnalyticsReports: newAnalyticsReports(db, settings), AnalyticsLive: live, AnalyticsLiveStreams: liveStreams,
 		PrivacyRequests: NewPrivacyService(ctx, cfg, db, auth, events, cacheOrNil, logger).WithModuleErasers(newsletter),
 		RateLimiter:     ratelimit.NewRedis(redisClient),
 		CommentRates: handlers.CommentRates{
@@ -226,7 +229,7 @@ func NewRuntime(ctx context.Context, cfg config.Config, logger *slog.Logger, ver
 		Config: cfg, Database: db, Redis: redisClient, Cache: readCache,
 		Auth: auth, Users: userSvc, Posts: posts, Categories: categories, Media: media,
 		MetricsServer: metricsServer, PolicySync: policySync, Audit: auditRecorder, Analytics: analyticsWriter,
-		NotificationBus: notificationBus, Server: newServer(cfg, router, hub),
+		Broadcast: broadcast, Server: newServer(cfg, router, hub, liveStreams),
 	}, nil
 }
 
@@ -244,38 +247,54 @@ func newCategoryService(
 	return categories
 }
 
-// newServer builds the HTTP server. There is no write timeout because notification streams
-// stay open; Shutdown tells them to close so it does not wait out the grace period.
-func newServer(cfg config.Config, handler nethttp.Handler, hub *realtime.Hub) *nethttp.Server {
+// newServer builds the HTTP server. There is no write timeout because notification and live
+// analytics streams stay open; Shutdown tells them to close so it does not wait out the grace
+// period.
+func newServer(cfg config.Config, handler nethttp.Handler, hubs ...*realtime.Hub) *nethttp.Server {
 	server := &nethttp.Server{
 		Addr: cfg.Address, Handler: handler,
 		ReadTimeout: cfg.ReadTimeout, ReadHeaderTimeout: cfg.ReadHeaderTimeout,
 		IdleTimeout: cfg.IdleTimeout, MaxHeaderBytes: 1 << 20,
 	}
-	if hub != nil {
-		server.RegisterOnShutdown(hub.Shutdown)
+
+	for _, hub := range hubs {
+		if hub != nil {
+			server.RegisterOnShutdown(hub.Shutdown)
+		}
 	}
 
 	return server
 }
 
-// newNotificationStream wires live notification pushes through the message broker. Without
-// MESSAGE_BROKER, or when the broker cannot be reached, it returns nils: the stream answers
-// 503 and the inbox keeps working.
-func newNotificationStream(
-	ctx context.Context,
-	cfg config.Config,
-	inbox *notificationservice.Inbox,
-	logger *slog.Logger,
-) (*realtime.Hub, *messaging.Bus) {
+// newBroadcast opens the bus every API replica receives every message on. Without
+// MESSAGE_BROKER, or when the broker cannot be reached, it returns nil and the live streams
+// answer 503.
+func newBroadcast(ctx context.Context, cfg config.Config, logger *slog.Logger) *messaging.Bus {
 	if !cfg.MessagingEnabled() {
-		return nil, nil
+		return nil
 	}
 
 	bus, err := messaging.OpenBroadcast(ctx, cfg, logger, "api-"+watermill.NewShortUUID())
 	if err != nil {
-		logger.Warn("notification stream disabled: message broker unavailable", "error", err)
-		return nil, nil
+		logger.Warn("live streams disabled: message broker unavailable", "error", err)
+		return nil
+	}
+
+	return bus
+}
+
+// newNotificationStream wires live notification pushes through the broadcast bus. Without
+// one, or when it cannot subscribe, it returns nil: the stream answers 503 and the inbox
+// keeps working.
+func newNotificationStream(
+	ctx context.Context,
+	cfg config.Config,
+	bus *messaging.Bus,
+	inbox *notificationservice.Inbox,
+	logger *slog.Logger,
+) *realtime.Hub {
+	if bus == nil {
+		return nil
 	}
 
 	topic := bus.Topic(notificationbus.Topic)
@@ -283,15 +302,12 @@ func newNotificationStream(
 
 	if err := notificationbus.Consume(ctx, bus.Subscriber, topic, hub.Deliver, logger); err != nil {
 		logger.Warn("notification stream disabled: cannot subscribe", "error", err)
-
-		_ = bus.Close()
-
-		return nil, nil
+		return nil
 	}
 
 	inbox.OnCreated(notificationbus.NewPublisher(bus.Publisher, topic, logger).Publish)
 
-	return hub, bus
+	return hub
 }
 
 // newMediaService returns nil when media storage is not configured; otherwise it
@@ -724,8 +740,8 @@ func (r *Runtime) Close() error {
 		cancel()
 	}
 
-	if err := r.NotificationBus.Close(); err != nil {
-		errs = append(errs, fmt.Errorf("close notification bus: %w", err))
+	if err := r.Broadcast.Close(); err != nil {
+		errs = append(errs, fmt.Errorf("close broadcast bus: %w", err))
 	}
 
 	if r.Redis != nil {

@@ -358,6 +358,11 @@ subscription of its own, so a notice created on one replica reaches streams on e
 replica. Without a broker, or when the broker cannot be reached at startup, the stream
 returns `503 notifications.stream_unavailable` while the inbox endpoints keep working.
 
+The live analytics stream (`/api/v1/admin/analytics/realtime/stream`) works the same way on
+the topic `analytics.live`, shares the `SSE_MAX_CONCURRENT_PER_USER` limit (counted
+separately from notification streams), and returns `503 analytics.realtime_unavailable`
+without a broker.
+
 ## Domain events (outbox)
 
 | Variable | Default | Required | Purpose |

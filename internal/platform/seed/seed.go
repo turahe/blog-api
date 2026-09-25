@@ -54,8 +54,9 @@ const (
 
 	permMediaUsageRead = "media.usage.read"
 
-	permAnalyticsRead       = "analytics.read"
-	permAnalyticsSearchRead = "analytics.search.read"
+	permAnalyticsRead         = "analytics.read"
+	permAnalyticsSearchRead   = "analytics.search.read"
+	permAnalyticsRealtimeRead = "analytics.realtime.read"
 )
 
 var roleDescriptions = map[string]string{
@@ -82,7 +83,7 @@ var rolePermissions = map[string][]string{
 		permNewsletterSubscribersRead, permNewsletterSubscribersExport, "newsletter.subscribers.erase",
 		permNewsletterIssuesRead, permNewsletterIssuesEdit, permNewsletterIssuesSend,
 		"newsletter.provider_config.read", "newsletter.provider_config.update",
-		permAnalyticsRead, permAnalyticsSearchRead,
+		permAnalyticsRead, permAnalyticsSearchRead, permAnalyticsRealtimeRead,
 		"*",
 	},
 	roleEditor: {
@@ -97,7 +98,7 @@ var rolePermissions = map[string][]string{
 		permCommentModerate,
 		permNewsletterSubscribersRead, permNewsletterSubscribersExport,
 		permNewsletterIssuesRead, permNewsletterIssuesEdit, permNewsletterIssuesSend,
-		permAnalyticsRead, permAnalyticsSearchRead,
+		permAnalyticsRead, permAnalyticsSearchRead, permAnalyticsRealtimeRead,
 	},
 	roleAuthor: {
 		permAdminAccess,

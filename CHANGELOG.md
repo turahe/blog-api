@@ -1,5 +1,29 @@
 # Changelog
 
+## 2026-09-25 — Live analytics stream
+
+### Added
+
+- `GET /api/v1/admin/analytics/realtime/stream` (SSE): every 5 seconds, the page views and
+  searches accepted since the last frame (at most 20 of each) and a summary with sessions active
+  in the last 5 minutes, views and searches per minute for the last 30, and the top 10 pages of
+  those 30 minutes.
+- Accepted ingest events are published in one-second batches to the broadcast topic
+  `analytics.live`; every API replica counts all of them in memory, so the stream covers every
+  replica without reading the database. Without a message broker the stream answers `503
+  analytics.realtime_unavailable`.
+
+### Changed
+
+- The notification stream and the live analytics stream share one broadcast connection to the
+  broker.
+
+### Security
+
+- New permission `analytics.realtime.read`, seeded for admins and editors (rerun `app seed`).
+  Live frames carry the path, country, and device of page views and the normalised query of
+  searches; no visitor, session, or subject id reaches the client.
+
 ## 2026-09-25 — Analytics dashboard reports
 
 ### Added

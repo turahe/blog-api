@@ -149,6 +149,9 @@ func reportHandler[T any](
 }
 
 func analyticsReportControllers(deps Deps, a *routes.Analytics) {
+	a.AdminRealtime = gate(deps, analyticsdomain.PermRealtimeRead, editorRoles,
+		adminAnalyticsRealtimeHandler(deps.AnalyticsLive, deps.AnalyticsLiveStreams, 0))
+
 	reports := deps.AnalyticsReports
 	if reports == nil {
 		return

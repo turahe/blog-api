@@ -212,6 +212,7 @@ func analyticsReportOps() map[string]gatedOp {
 		"navigation": {func(c routes.Controllers) gin.HandlerFunc { return c.Analytics.AdminNavigation }, analyticsdomain.PermRead, editorRoles},
 		"retention":  {func(c routes.Controllers) gin.HandlerFunc { return c.Analytics.AdminRetention }, analyticsdomain.PermRead, editorRoles},
 		"search":     {func(c routes.Controllers) gin.HandlerFunc { return c.Analytics.AdminSearch }, analyticsdomain.PermSearchRead, editorRoles},
+		"realtime":   {func(c routes.Controllers) gin.HandlerFunc { return c.Analytics.AdminRealtime }, analyticsdomain.PermRealtimeRead, editorRoles},
 	}
 }
 

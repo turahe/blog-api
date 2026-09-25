@@ -278,6 +278,55 @@ const docTemplate = `{
                 }
             }
         },
+        "/api/v1/admin/analytics/realtime/stream": {
+            "get": {
+                "security": [
+                    {
+                        "Bearer": []
+                    }
+                ],
+                "description": "Server-sent events. The stream opens with ` + "`" + `retry: 5000` + "`" + ` and ` + "`" + `event: stream.opened` + "`" + `, then every 5 seconds (and once right away) sends ` + "`" + `event: realtime.page_view` + "`" + ` and ` + "`" + `event: realtime.search` + "`" + ` for events accepted since the previous frame (at most 20 of each, the latest when busier; the first frame replays up to 20 recent ones), followed by ` + "`" + `event: realtime.summary` + "`" + `: sessions active in the last 5 minutes, views and searches per minute for the last 30 minutes, and the top 10 pages of those 30 minutes. The summary doubles as the heartbeat. ` + "`" + `event: stream.closed` + "`" + ` (code shutdown) precedes a server shutdown. Counts cover every API replica through the message broker but start empty when a replica starts. Page views carry path, country, and device; searches the normalised query and result count; nothing identifies a visitor. Returns 429 analytics.realtime_limit (with Retry-After) past the per-user stream limit and 503 analytics.realtime_unavailable without a message broker.",
+                "produces": [
+                    "text/event-stream"
+                ],
+                "tags": [
+                    "admin"
+                ],
+                "summary": "Stream live analytics",
+                "responses": {
+                    "200": {
+                        "description": "event stream",
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/responses.Envelope"
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden",
+                        "schema": {
+                            "$ref": "#/definitions/responses.Envelope"
+                        }
+                    },
+                    "429": {
+                        "description": "Too Many Requests",
+                        "schema": {
+                            "$ref": "#/definitions/responses.Envelope"
+                        }
+                    },
+                    "503": {
+                        "description": "Service Unavailable",
+                        "schema": {
+                            "$ref": "#/definitions/responses.Envelope"
+                        }
+                    }
+                }
+            }
+        },
         "/api/v1/admin/analytics/retention": {
             "get": {
                 "security": [

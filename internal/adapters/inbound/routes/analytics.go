@@ -32,7 +32,8 @@ func registerAnalytics(v1 *gin.RouterGroup, auth AuthMiddleware, c Controllers) 
 	registerAnalyticsReports(v1, auth, c)
 }
 
-// registerAnalyticsReports binds the admin dashboard reports, read from rollups.
+// registerAnalyticsReports binds the admin dashboard reports, read from rollups, and the live
+// stream.
 func registerAnalyticsReports(v1 *gin.RouterGroup, auth AuthMiddleware, c Controllers) {
 	ag, ar := GroupAdmin, AuthRequired
 	admin := v1.Group("/admin")
@@ -41,6 +42,7 @@ func registerAnalyticsReports(v1 *gin.RouterGroup, auth AuthMiddleware, c Contro
 	get(admin, "/analytics/navigation", "admin.analytics.navigation", ag, ar, c, c.Analytics.AdminNavigation)
 	get(admin, "/analytics/overview", "admin.analytics.overview", ag, ar, c, c.Analytics.AdminOverview)
 	get(admin, "/analytics/pages", "admin.analytics.pages", ag, ar, c, c.Analytics.AdminPages)
+	get(admin, "/analytics/realtime/stream", "admin.analytics.realtime.stream", ag, ar, c, c.Analytics.AdminRealtime)
 	get(admin, "/analytics/retention", "admin.analytics.retention", ag, ar, c, c.Analytics.AdminRetention)
 	get(admin, "/analytics/search", "admin.analytics.search", ag, ar, c, c.Analytics.AdminSearch)
 }

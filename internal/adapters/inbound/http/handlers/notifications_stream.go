@@ -142,9 +142,7 @@ func streamNotifications(c *gin.Context, conn *realtime.Conn, userID uuid.UUID, 
 		case <-c.Request.Context().Done():
 			return
 		case <-conn.Done():
-			_ = writeFrame(w, "stream.closed", uuid.NewString(), gin.H{"code": "shutdown", "retry_ms": streamShutdownRetryMS})
-			w.Flush()
-
+			writeShutdown(w)
 			return
 		case n := <-conn.Events():
 			if err = checkSession(w, alive); err == nil {
@@ -171,6 +169,12 @@ func streamNotifications(c *gin.Context, conn *realtime.Conn, userID uuid.UUID, 
 
 		w.Flush()
 	}
+}
+
+// writeShutdown tells the client the server is stopping and when to reconnect.
+func writeShutdown(w gin.ResponseWriter) {
+	_ = writeFrame(w, "stream.closed", uuid.NewString(), gin.H{"code": "shutdown", "retry_ms": streamShutdownRetryMS})
+	w.Flush()
 }
 
 func writeDropped(w io.Writer, conn *realtime.Conn) error {
