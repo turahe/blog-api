@@ -344,6 +344,21 @@ transaction as the change, and `app worker` publishes them (see
 least one worker running while a broker is configured, or the backlog grows; watch
 `blog_outbox_lag_seconds`. `app outbox retry` makes parked rows due again.
 
+### Worker consumers
+
+| Variable | Default | Required | Purpose |
+| --- | --- | --- | --- |
+| `CONSUMER_MAX_RETRIES` | `3` | No | In-process retries of a failing handler before the message goes to `blog.dead_letter`. |
+| `CONSUMER_RETRY_INTERVAL` | `1s` | No | First retry delay; each retry doubles it. |
+| `CONSUMER_RETRY_MAX_INTERVAL` | `30s` | No | Ceiling for the retry delay. |
+| `CONSUMER_DEDUPE_RETENTION` | `168h` | No | How long handled message ids are kept to skip redeliveries. Keep it above the broker's redelivery window. |
+
+With `MESSAGE_BROKER` and `APP_ENCRYPTION_KEY` both set, the API does not talk to SMTP:
+each email is encrypted and stored as a `notification.email.requested` command, and the
+worker sends it. The worker then needs the same `APP_ENCRYPTION_KEY` and `SMTP_*`
+settings as the API. Without the key, or when the command cannot be stored, the API sends
+inline as before.
+
 ## Error tracking (Sentry)
 
 | Variable | Default | Required | Purpose |

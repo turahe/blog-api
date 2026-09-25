@@ -20,6 +20,7 @@ import (
 	"github.com/turahe/blog-api/internal/adapters/outbound/captcha"
 	"github.com/turahe/blog-api/internal/adapters/outbound/challenge"
 	"github.com/turahe/blog-api/internal/adapters/outbound/mail"
+	"github.com/turahe/blog-api/internal/adapters/outbound/mailqueue"
 	"github.com/turahe/blog-api/internal/adapters/outbound/markdown"
 	"github.com/turahe/blog-api/internal/adapters/outbound/notificationbus"
 	"github.com/turahe/blog-api/internal/adapters/outbound/notify"
@@ -39,6 +40,7 @@ import (
 	healthservice "github.com/turahe/blog-api/internal/core/health/service"
 	mediaports "github.com/turahe/blog-api/internal/core/media/ports"
 	mediaservice "github.com/turahe/blog-api/internal/core/media/service"
+	notificationports "github.com/turahe/blog-api/internal/core/notification/ports"
 	notificationservice "github.com/turahe/blog-api/internal/core/notification/service"
 	postservice "github.com/turahe/blog-api/internal/core/post/service"
 	rbacservice "github.com/turahe/blog-api/internal/core/rbac/service"
@@ -394,17 +396,17 @@ func newAuthService(
 		return nil, fmt.Errorf("create token service: %w", err)
 	}
 
-	auth := authservice.New(users, sessions, resets, password.New(), tokens, clock, ids, authservice.Config{
-		AccessTTL:  cfg.AccessTokenTTL,
-		RefreshTTL: cfg.RefreshTokenTTL,
-	}, nil).WithEmailChange(newNotifier(cfg, logger, persistence.NewNotificationTemplateRepository(db.GORM)), cacheOrNil)
-	if cfg.AuthLoginMaxFailures > 0 {
-		auth.WithLoginAttempts(ratelimit.NewLoginLockout(redisClient, cfg.AuthLoginMaxFailures, cfg.AuthLoginLockout))
-	}
-
 	box, err := newSecretBox(cfg, logger)
 	if err != nil {
 		return nil, err
+	}
+
+	auth := authservice.New(users, sessions, resets, password.New(), tokens, clock, ids, authservice.Config{
+		AccessTTL:  cfg.AccessTokenTTL,
+		RefreshTTL: cfg.RefreshTokenTTL,
+	}, nil).WithEmailChange(newNotifier(cfg, db, box, logger), cacheOrNil)
+	if cfg.AuthLoginMaxFailures > 0 {
+		auth.WithLoginAttempts(ratelimit.NewLoginLockout(redisClient, cfg.AuthLoginMaxFailures, cfg.AuthLoginLockout))
 	}
 
 	// Always wired, even without a key, so enrolled accounts fail closed.
@@ -433,8 +435,21 @@ func oauthProviders(cfg config.Config) map[string]authports.OAuthProvider {
 
 // newSecretBox returns the APP_ENCRYPTION_KEY box, or a nil interface when the key is unset.
 func newSecretBox(cfg config.Config, logger *slog.Logger) (authports.SecretBox, error) {
+	box, err := NewSecretBox(cfg)
+	if err != nil || box == nil {
+		if err == nil {
+			logger.Warn("APP_ENCRYPTION_KEY is not set; two-factor enrollment is disabled")
+		}
+
+		return nil, err
+	}
+
+	return box, nil
+}
+
+// NewSecretBox returns the APP_ENCRYPTION_KEY box, or nil when the key is unset.
+func NewSecretBox(cfg config.Config) (*secretbox.Box, error) {
 	if cfg.EncryptionKey == "" {
-		logger.Warn("APP_ENCRYPTION_KEY is not set; two-factor enrollment is disabled")
 		return nil, nil
 	}
 
@@ -470,21 +485,48 @@ func CacheTTLs(cfg config.Config) map[readcache.Family]time.Duration {
 	}
 }
 
-func newNotifier(cfg config.Config, logger *slog.Logger, templates *persistence.NotificationTemplateRepository) authports.EmailChangeNotifier {
-	if strings.TrimSpace(cfg.SMTPHost) == "" {
+// newNotifier sends account emails over SMTP, or logs them when SMTP is not configured. With
+// a message broker and APP_ENCRYPTION_KEY, emails are queued as encrypted outbox commands for
+// app worker, falling back to SMTP when a command cannot be stored.
+func newNotifier(cfg config.Config, db *database.Database, box authports.SecretBox, logger *slog.Logger) authports.EmailChangeNotifier {
+	smtp, err := NewMailer(cfg)
+	if err != nil {
+		logger.Error("smtp notifier disabled", "error", err)
+	}
+
+	if smtp == nil {
 		return notify.NewLog(logger)
+	}
+
+	var mailer notificationports.Mailer = smtp
+
+	switch {
+	case cfg.MessagingEnabled() && box != nil:
+		mailer = mailqueue.New(persistence.NewOutboxRepository(db.GORM), box, smtp, logger)
+
+		logger.Info("email notifications queued for app worker", "host", cfg.SMTPHost, "port", cfg.SMTPPort)
+	case cfg.MessagingEnabled():
+		logger.Warn("APP_ENCRYPTION_KEY is not set; emails are sent inline instead of by app worker")
+	default:
+		logger.Info("email notifications via smtp", "host", cfg.SMTPHost, "port", cfg.SMTPPort)
+	}
+
+	return notificationservice.New(mailer, logger, cfg.AppPublicURL).
+		WithTemplates(persistence.NewNotificationTemplateRepository(db.GORM))
+}
+
+// NewMailer returns the SMTP mailer, or nil when SMTP_HOST is unset.
+func NewMailer(cfg config.Config) (*mail.SMTP, error) {
+	if strings.TrimSpace(cfg.SMTPHost) == "" {
+		return nil, nil
 	}
 
 	mailer, err := mail.NewSMTP(cfg.SMTPHost, cfg.SMTPPort, cfg.SMTPUsername, cfg.SMTPPassword, cfg.SMTPFrom)
 	if err != nil {
-		logger.Error("smtp notifier disabled", "error", err)
-
-		return notify.NewLog(logger)
+		return nil, fmt.Errorf("create smtp mailer: %w", err)
 	}
 
-	logger.Info("email notifications via smtp", "host", cfg.SMTPHost, "port", cfg.SMTPPort)
-
-	return notificationservice.New(mailer, logger, cfg.AppPublicURL).WithTemplates(templates)
+	return mailer, nil
 }
 
 func healthCheckers(cfg config.Config, db *database.Database, redisClient *redis.Client) []healthports.Checker {

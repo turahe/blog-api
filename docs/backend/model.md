@@ -183,6 +183,7 @@ Readable mirrors in early migrations may appear as `roles`, `permissions`, `user
 | `impersonation_sessions` | Active impersonation | Short TTL; audit metadata |
 | `audit_logs` | Generic security/product audit | Append-only; keep on actor delete |
 | `outbox_events` | Reliable domain event publish | Same TX as aggregate |
+| `processed_messages` | Consumer dedupe (`consumer`, `message_id`) | Same TX as the handler; pruned |
 
 ## Domain Module Ownership
 

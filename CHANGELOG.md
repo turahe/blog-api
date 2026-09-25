@@ -1,5 +1,25 @@
 # Changelog
 
+## 2026-09-25 — Worker consumers and email dispatch
+
+### Added
+
+- Worker consumers retry with exponential backoff (`CONSUMER_MAX_RETRIES`,
+  `CONSUMER_RETRY_INTERVAL`, `CONSUMER_RETRY_MAX_INTERVAL`), recover panics, carry the
+  originating `request_id` in logs, and move messages that still fail to `blog.dead_letter`.
+- `processed_messages` table (migration 00021): consumers skip redelivered messages. Rows are
+  pruned after `CONSUMER_DEDUPE_RETENTION`.
+- Email dispatch: with `MESSAGE_BROKER` and `APP_ENCRYPTION_KEY` set, the API stores each
+  email as an encrypted `notification.email.requested` command and `app worker` sends it.
+  The worker needs the same key and `SMTP_*` settings. See
+  [events.md](docs/backend/events.md#email-dispatch).
+
+### Changed
+
+- The worker no longer subscribes to `worker.heartbeat`.
+- Without `APP_ENCRYPTION_KEY`, or when a command cannot be stored, emails are still sent
+  inline by the API.
+
 ## 2026-09-25 — Domain events
 
 ### Added

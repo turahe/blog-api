@@ -11,7 +11,8 @@ Index: [README.md](./README.md).
 **Partial** — the multi-broker Watermill layer and the `app worker` command exist. The
 transactional outbox is in place: post, comment, account, and media writes record domain
 events in the same transaction, and the worker relays them with retries, parking, pruning,
-and metrics. The worker's only consumer is still a heartbeat handler.
+and metrics. Worker consumers run behind retry, a dead-letter topic, and a dedupe table; the
+first consumer sends queued emails.
 
 ## Epic: messaging transports
 
@@ -26,7 +27,8 @@ and metrics. The worker's only consumer is still a heartbeat handler.
 - [x] `make infra-up-messaging` / `make infra-down-messaging`
 - [x] `app doctor` probes broker reachability when messaging is enabled
 - [x] Document per-broker delivery semantics and ordering guarantees in [events.md](../backend/events.md#delivery)
-- [ ] Add a dead-letter or parking-lot topic per broker
+- [x] Add a dead-letter or parking-lot topic per broker (`blog.dead_letter` via the Watermill
+      poison queue; [events.md](../backend/events.md#worker-consumers))
 - [x] Decide and document the message envelope: schema version, event ID, occurred-at, actor
       (broker headers per the AsyncAPI `EventEnvelope` trait; [events.md](../backend/events.md#envelope))
 
@@ -63,13 +65,14 @@ Design: [2026-07-30-messaging-brokers-design.md](../superpowers/specs/2026-07-30
 ## Epic: workers and jobs
 
 - [x] `app worker` command bootstrapping a Watermill router with graceful shutdown
-- [ ] Replace the heartbeat handler with real subscriptions per event channel
-- [ ] Consumer middleware: correlation ID propagation, panic recovery, retry, and poison queue
+- [x] Replace the heartbeat handler with real subscriptions per event channel
+- [x] Consumer middleware: correlation ID propagation, panic recovery, retry, and poison queue
 - [ ] Scheduled jobs runner for pruning, digests, and retention tasks — see [jobs.md](../backend/jobs.md)
 - [ ] Single-flight or leader election so scheduled jobs do not double-run across replicas
 - [x] Notification fan-out consumer feeding the Phase 3 SSE streams (each API process subscribes to
       `notifications.created` through `messaging.OpenBroadcast`)
-- [ ] Email dispatch consumer replacing inline mail sends
+- [x] Email dispatch consumer replacing inline mail sends (encrypted `notification.email.requested`
+      commands; inline when `APP_ENCRYPTION_KEY` or the broker is missing)
 
 ## Epic: transformed media cache
 
@@ -102,7 +105,7 @@ Design: [2026-07-30-messaging-brokers-design.md](../superpowers/specs/2026-07-30
 - [x] Unit tests for broker normalization, misconfiguration, and topic prefixing
 - [ ] Integration tests against Compose Kafka and RabbitMQ, skipped when brokers are absent
 - [x] Outbox tests proving events commit and roll back with the business write
-- [ ] Consumer idempotency tests using duplicate deliveries
+- [x] Consumer idempotency tests using duplicate deliveries
 - [ ] Secrets review for broker credentials — see [secrets-and-headers.md](../security/secrets-and-headers.md)
 - [ ] Update [checklist.md](../deployment/checklist.md) with worker rollout steps
 

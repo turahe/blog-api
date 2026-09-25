@@ -180,6 +180,40 @@ Metrics (on `METRICS_ADDR` in `app worker`): `blog_outbox_published_total`,
 `blog_outbox_publish_failures_total{terminal}`, `blog_outbox_pending`, `blog_outbox_failed`, and
 `blog_outbox_lag_seconds` (age of the oldest pending event).
 
+## Worker Consumers
+
+`app worker` handlers run behind `messaging.NewRouter`, outermost first:
+
+1. **Poison queue.** A message that still fails is published to `blog.dead_letter` (with
+   `MESSAGE_TOPIC_PREFIX`) and acked, so it stops blocking the subscription. Watermill adds
+   `reason_poisoned`, `topic_poisoned`, and `handler_poisoned` to the original headers, so
+   handler errors must not contain secrets. Inspect or replay dead letters with broker tools.
+2. **Correlation.** The `correlation_id` header becomes the context request id, so handler
+   logs carry the `request_id` of the API call that produced the event.
+3. **Tracing**, then **retry**: `CONSUMER_MAX_RETRIES` attempts after the first, backing off
+   from `CONSUMER_RETRY_INTERVAL` and doubling up to `CONSUMER_RETRY_MAX_INTERVAL`. Errors
+   wrapping `messaging.ErrPermanent` skip the retries.
+4. **Recoverer.** A panic becomes an error, so it is retried and dead-lettered like any other.
+
+Handlers wrapped with `messaging.Idempotent` claim `(consumer, message id)` in
+`processed_messages` in the same transaction as their work. A redelivered message is acked
+without running the handler; a failed attempt rolls the claim back. Claims are pruned after
+`CONSUMER_DEDUPE_RETENTION`.
+
+| Consumer | Topic | Does |
+| --- | --- | --- |
+| `email-dispatch` | `notification.email.requested` | Decrypts the command and sends it over SMTP |
+
+### Email dispatch
+
+With `MESSAGE_BROKER` and `APP_ENCRYPTION_KEY` set, the API renders each email and records a
+`notification.email.requested` command in the outbox instead of calling SMTP. The payload is
+`{"ciphertext": "..."}`: recipient, subject, and body sealed with AES-GCM under the
+`APP_ENCRYPTION_KEY`-derived key, because reset and verification emails contain raw tokens.
+The broker, the outbox, and dead letters only hold ciphertext. The worker needs the same key
+and `SMTP_*` settings; an undecryptable command is dead-lettered without retries. When the
+key is unset, or the command cannot be stored, the API sends inline.
+
 ## Streaming Channels and SSE Fan-Out
 
 In addition to the point-to-point Watermill channels listed above, the backend exposes

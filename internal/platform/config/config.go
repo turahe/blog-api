@@ -106,6 +106,10 @@ type Config struct {
 	OutboxPollInterval            time.Duration
 	OutboxMaxAttempts             int
 	OutboxRetention               time.Duration
+	ConsumerMaxRetries            int
+	ConsumerRetryInterval         time.Duration
+	ConsumerRetryMaxInterval      time.Duration
+	ConsumerDedupeRetention       time.Duration
 	CacheEnabled                  bool
 	CacheBypassHeader             bool
 	CacheTTLPosts                 time.Duration
@@ -462,6 +466,10 @@ func Load() (Config, error) {
 		OutboxPollInterval:            duration("OUTBOX_POLL_INTERVAL", time.Second),
 		OutboxMaxAttempts:             integer("OUTBOX_MAX_ATTEMPTS", 10),
 		OutboxRetention:               duration("OUTBOX_RETENTION", 7*24*time.Hour),
+		ConsumerMaxRetries:            integer("CONSUMER_MAX_RETRIES", 3),
+		ConsumerRetryInterval:         duration("CONSUMER_RETRY_INTERVAL", time.Second),
+		ConsumerRetryMaxInterval:      duration("CONSUMER_RETRY_MAX_INTERVAL", 30*time.Second),
+		ConsumerDedupeRetention:       duration("CONSUMER_DEDUPE_RETENTION", 7*24*time.Hour),
 		CacheEnabled:                  boolEnv("CACHE_ENABLED", true),
 		CacheBypassHeader:             boolEnv("CACHE_BYPASS_HEADER", false),
 		CacheTTLPosts:                 duration("CACHE_TTL_POSTS", time.Minute),

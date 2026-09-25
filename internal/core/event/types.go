@@ -23,4 +23,5 @@ const (
 	AggregateComment = "comment"
 	AggregateUser    = "user"
 	AggregateMedia   = "media"
+	AggregateEmail   = "email"
 )

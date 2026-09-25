@@ -132,6 +132,22 @@ channels:
       operationId: publishMediaDeleted
     message:
       $ref: '#/components/messages/MediaDeleted'
+  notification.email.requested:
+    description: Command to send one rendered email. The API records it in the outbox when a broker and APP_ENCRYPTION_KEY are configured; the worker's email-dispatch consumer decrypts and sends it.
+    subscribe:
+      operationId: onNotificationEmailRequested
+    publish:
+      operationId: publishNotificationEmailRequested
+    message:
+      $ref: '#/components/messages/NotificationEmailRequested'
+  blog.dead_letter:
+    description: Messages a worker consumer could not handle after its retries. The original payload and headers are kept, plus the Watermill poison-queue headers.
+    subscribe:
+      operationId: onDeadLetter
+    publish:
+      operationId: publishDeadLetter
+    message:
+      $ref: '#/components/messages/DeadLetter'
   blog.media.variant.generated:
     subscribe:
       operationId: onMediaVariantGenerated
@@ -672,6 +688,24 @@ components:
       - $ref: '#/components/messageTraits/EventEnvelope'
       payload:
         $ref: '#/components/schemas/MediaEventPayload'
+    NotificationEmailRequested:
+      traits:
+      - $ref: '#/components/messageTraits/EventEnvelope'
+      payload:
+        $ref: '#/components/schemas/NotificationEmailRequestedPayload'
+    DeadLetter:
+      headers:
+        type: object
+        properties:
+          reason_poisoned:
+            type: string
+            description: Handler error after the last retry.
+          topic_poisoned:
+            type: string
+          handler_poisoned:
+            type: string
+      payload:
+        description: The original message payload, unchanged.
     MediaVariantGenerated:
       traits:
       - $ref: '#/components/messageTraits/EventEnvelope'
@@ -1331,6 +1365,14 @@ components:
           type: string
           format: uuid
           nullable: true
+    NotificationEmailRequestedPayload:
+      type: object
+      required:
+      - ciphertext
+      properties:
+        ciphertext:
+          type: string
+          description: Base64 AES-GCM ciphertext of {"to", "subject", "text"} under the APP_ENCRYPTION_KEY-derived key. Emails can carry raw reset tokens, so they are never stored in plaintext.
     MediaEventPayload:
       type: object
       required:
