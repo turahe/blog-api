@@ -274,6 +274,16 @@ func (r *SessionRepository) RevokeAllForUser(ctx context.Context, userID uuid.UU
 		Update("revoked_at", at).Error
 }
 
+// PruneExpiredBefore deletes sessions that expired before cutoff and returns how many.
+func (r *SessionRepository) PruneExpiredBefore(ctx context.Context, cutoff time.Time) (int64, error) {
+	res := r.db.WithContext(ctx).Exec(`DELETE FROM refresh_sessions WHERE expires_at < ?`, cutoff)
+	if res.Error != nil {
+		return 0, fmt.Errorf("prune refresh sessions: %w", res.Error)
+	}
+
+	return res.RowsAffected, nil
+}
+
 func mapSession(model RefreshSessionModel) authdomain.RefreshSession {
 	session := authdomain.RefreshSession{
 		ID:             model.ID,

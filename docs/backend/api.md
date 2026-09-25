@@ -327,7 +327,7 @@ Both take `category` (comma-separated), `from` and `to` (RFC 3339 or `YYYY-MM-DD
 covers the whole day), `page`, and `per_page` (max 100), and return newest first.
 
 Rows older than `AUDIT_RETENTION_DAYS` (default 395) are deleted by `app audit prune`
-(`--older-than-days` overrides the setting) and hourly by `app worker`.
+(`--older-than-days` overrides the setting) and hourly by `app scheduler`.
 
 ### Notifications inbox
 

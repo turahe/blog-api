@@ -93,7 +93,7 @@ Spec: [comments-and-moderation.md](../features/comments-and-moderation.md)
 - [x] `me.activity.list` — `GET /api/v1/me/activity` (user-facing categories; IP reduced to its
       network, user agent to "browser on OS")
 - [x] Retention policy and pruning job for audit rows (`AUDIT_RETENTION_DAYS`, default 395;
-      `app audit prune` and an hourly prune in `app worker`)
+      `app audit prune` and an hourly prune, now in `app scheduler`)
 - [x] Ensure audit writes never block the request path on failure (bounded queue and batch
       writer; overflow and insert failures are logged, dropped, and counted in
       `blog_audit_entries_dropped_total`)

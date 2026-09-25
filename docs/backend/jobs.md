@@ -34,8 +34,25 @@ Jobs handle asynchronous and retryable work that should not block request-respon
 
 ## Entrypoints
 
-- run async event/job workers with `app worker`; it opens the database and prunes audit rows
-  older than `AUDIT_RETENTION_DAYS` at startup and every hour
+- run async event/job workers with `app worker` (outbox relay and message consumers)
+- run recurring jobs with `app scheduler`; `app scheduler status` shows the last run of each
+  job and `app scheduler run <job>` runs one now
 - prune audit rows once with `app audit prune [--older-than-days N]`
-- run scheduled/cron jobs with `app scheduler`
 - validate worker/scheduler health before startup using `app doctor`
+
+## Scheduled Jobs
+
+`app scheduler` needs only the database. Run one or more replicas: before each run a replica
+takes a PostgreSQL advisory lock for the job (`pg_try_advisory_lock` on a pinned connection)
+and skips the job when `scheduled_job_runs.last_started_at` is less than the interval ago. A
+job therefore runs once per interval however many replicas are up, and a replica that dies
+mid-run releases the lock with its connection. Failures are logged at Error level and stored
+in `last_error`; the job is tried again at its next interval.
+
+| Job | Every | Does |
+| --- | --- | --- |
+| `audit-prune` | 1h | Deletes audit rows older than `AUDIT_RETENTION_DAYS` |
+| `processed-messages-prune` | 1h | Deletes consumer dedupe rows older than `CONSUMER_DEDUPE_RETENTION` |
+| `auth-tokens-prune` | 1h | Deletes refresh sessions 30 days past expiry and reset/verification tokens 7 days past expiry |
+
+Published outbox rows are pruned by the relay in `app worker` (`OUTBOX_RETENTION`).

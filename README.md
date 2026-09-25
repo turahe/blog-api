@@ -13,6 +13,7 @@ authentication, RBAC, media, analytics, impersonation, and audit tooling.**
 ![Node 20.19+](https://img.shields.io/badge/Node-20.19%2B-339933?logo=nodedotjs&logoColor=white)
 ![PostgreSQL 15+](https://img.shields.io/badge/PostgreSQL-15%2B-336791?logo=postgresql&logoColor=white)
 ![Redis 7+](https://img.shields.io/badge/Redis-7%2B-FF4438?logo=redis&logoColor=white)
+[![codecov](https://codecov.io/gh/turahe/blog-api/graph/badge.svg?token=Ix8cLCnU5Z)](https://codecov.io/gh/turahe/blog-api)
 ![License](https://img.shields.io/badge/License-MIT-blue.svg)
 ![Changelog](https://img.shields.io/badge/Changelog-keepachangelog-10B981.svg)
 
@@ -668,8 +669,8 @@ This is the documented release checklist from
 4. **Apply DB migrations** *before* enabling new traffic:
   `./app migrate up` (with `DB_HOST` / `DB_USER` / `DB_PASSWORD` / `DB_NAME` set)
 5. **Deploy API** (`/bin/app serve`) with a rolling / canary strategy.
-6. **Deploy workers and scheduler** if separated: `/bin/app worker`,
-  `/bin/app scheduler`. Workers consume the outbox via Watermill.
+6. **Deploy workers and scheduler**: `/bin/app worker` (relays the outbox and consumes
+  messages; needs `MESSAGE_BROKER`) and `/bin/app scheduler` (pruning jobs; database only).
 7. **Validate runtime deps**: `./app doctor`
 8. **Post-deploy probes**:
   ```bash

@@ -17,16 +17,12 @@ import (
 	"github.com/turahe/blog-api/internal/adapters/outbound/outbox"
 	"github.com/turahe/blog-api/internal/adapters/outbound/persistence"
 	"github.com/turahe/blog-api/internal/bootstrap"
-	auditservice "github.com/turahe/blog-api/internal/core/audit/service"
 	"github.com/turahe/blog-api/internal/core/event"
 	"github.com/turahe/blog-api/internal/platform/config"
 	"github.com/turahe/blog-api/internal/platform/database"
 	"github.com/turahe/blog-api/internal/platform/messaging"
 	"github.com/turahe/blog-api/internal/platform/metrics"
 )
-
-// auditPruneInterval is how often the worker deletes audit entries and dedupe rows past retention.
-const auditPruneInterval = time.Hour
 
 // emailConsumer is the handler name, and dedupe key, of the email dispatch consumer.
 const emailConsumer = "email-dispatch"
@@ -77,11 +73,7 @@ func newWorkerCmd() *cobra.Command {
 			}
 			defer func() { err = errors.Join(err, db.Close()) }()
 
-			activity := auditservice.NewActivity(persistence.NewAuditRepository(db.GORM))
-			go activity.PruneEvery(ctx, cfg.AuditRetention(), auditPruneInterval, logger)
-
 			dedupe := persistence.NewProcessedMessageRepository(db.GORM)
-			go pruneProcessedEvery(ctx, dedupe, cfg.ConsumerDedupeRetention, logger)
 
 			consumers, err := addConsumers(router, bus, cfg, dedupe, logger)
 			if err != nil {
@@ -157,28 +149,6 @@ func addConsumers(
 	}
 
 	return names, nil
-}
-
-// pruneProcessedEvery deletes consumer dedupe rows older than retention until ctx ends.
-func pruneProcessedEvery(
-	ctx context.Context, repo *persistence.ProcessedMessageRepository, retention time.Duration, logger *slog.Logger,
-) {
-	ticker := time.NewTicker(auditPruneInterval)
-	defer ticker.Stop()
-
-	for {
-		if removed, err := repo.PruneBefore(ctx, time.Now().Add(-retention)); err != nil {
-			logger.ErrorContext(ctx, "prune processed messages failed", "error", err)
-		} else if removed > 0 {
-			logger.InfoContext(ctx, "pruned processed messages", "count", removed)
-		}
-
-		select {
-		case <-ctx.Done():
-			return
-		case <-ticker.C:
-		}
-	}
 }
 
 // serveMetrics serves /metrics in the background and returns a func that shuts it down.

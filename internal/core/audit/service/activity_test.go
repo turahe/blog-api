@@ -60,31 +60,3 @@ func TestActivityPruneUsesRetentionCutoff(t *testing.T) {
 	require.Equal(t, int64(3), deleted)
 	require.WithinDuration(t, before.Add(-395*24*time.Hour), repo.cutoff, time.Minute)
 }
-
-func TestPruneEveryRunsImmediatelyAndStopsWithContext(t *testing.T) {
-	t.Parallel()
-
-	repo := &memRepo{}
-	ctx, cancel := context.WithCancel(context.Background())
-	done := make(chan struct{})
-
-	go func() {
-		service.NewActivity(repo).PruneEvery(ctx, time.Hour, time.Hour, quietLogger())
-		close(done)
-	}()
-
-	require.Eventually(t, func() bool {
-		repo.mu.Lock()
-		defer repo.mu.Unlock()
-
-		return !repo.cutoff.IsZero()
-	}, 2*time.Second, 5*time.Millisecond)
-
-	cancel()
-
-	select {
-	case <-done:
-	case <-time.After(2 * time.Second):
-		t.Fatal("PruneEvery did not stop")
-	}
-}

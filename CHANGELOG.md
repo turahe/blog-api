@@ -1,5 +1,20 @@
 # Changelog
 
+## 2026-09-25 — Scheduled jobs
+
+### Added
+
+- `app scheduler` runs recurring jobs: `audit-prune`, `processed-messages-prune`, and
+  `auth-tokens-prune` (refresh sessions 30 days past expiry, reset tokens 7 days past
+  expiry). Each job runs once per interval across replicas, guarded by a PostgreSQL advisory
+  lock and `scheduled_job_runs` (migration 00022). See [jobs.md](docs/backend/jobs.md#scheduled-jobs).
+- `app scheduler status` and `app scheduler run <job>`.
+
+### Changed
+
+- Audit pruning moved from `app worker` to `app scheduler`; run the scheduler to keep
+  `AUDIT_RETENTION_DAYS` enforced.
+
 ## 2026-09-25 — Worker consumers and email dispatch
 
 ### Added

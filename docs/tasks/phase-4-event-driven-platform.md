@@ -12,7 +12,8 @@ Index: [README.md](./README.md).
 transactional outbox is in place: post, comment, account, and media writes record domain
 events in the same transaction, and the worker relays them with retries, parking, pruning,
 and metrics. Worker consumers run behind retry, a dead-letter topic, and a dedupe table; the
-first consumer sends queued emails.
+first consumer sends queued emails. `app scheduler` runs pruning jobs once per interval across
+replicas.
 
 ## Epic: messaging transports
 
@@ -67,8 +68,11 @@ Design: [2026-07-30-messaging-brokers-design.md](../superpowers/specs/2026-07-30
 - [x] `app worker` command bootstrapping a Watermill router with graceful shutdown
 - [x] Replace the heartbeat handler with real subscriptions per event channel
 - [x] Consumer middleware: correlation ID propagation, panic recovery, retry, and poison queue
-- [ ] Scheduled jobs runner for pruning, digests, and retention tasks — see [jobs.md](../backend/jobs.md)
-- [ ] Single-flight or leader election so scheduled jobs do not double-run across replicas
+- [x] Scheduled jobs runner for pruning, digests, and retention tasks — see [jobs.md](../backend/jobs.md)
+      (`app scheduler`: audit, consumer dedupe, and expired auth token pruning; digests come with
+      their features)
+- [x] Single-flight or leader election so scheduled jobs do not double-run across replicas
+      (per-job PostgreSQL advisory lock plus `scheduled_job_runs` last-start check)
 - [x] Notification fan-out consumer feeding the Phase 3 SSE streams (each API process subscribes to
       `notifications.created` through `messaging.OpenBroadcast`)
 - [x] Email dispatch consumer replacing inline mail sends (encrypted `notification.email.requested`

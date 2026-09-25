@@ -95,3 +95,13 @@ func (r *ResetTokenRepository) RevokePending(ctx context.Context, userID uuid.UU
 		Where("user_id = "+idOf("users")+" AND purpose = ? AND used_at IS NULL", userID, purpose).
 		Update("used_at", at).Error
 }
+
+// PruneExpiredBefore deletes tokens that expired before cutoff and returns how many.
+func (r *ResetTokenRepository) PruneExpiredBefore(ctx context.Context, cutoff time.Time) (int64, error) {
+	res := r.db.WithContext(ctx).Exec(`DELETE FROM password_reset_tokens WHERE expires_at < ?`, cutoff)
+	if res.Error != nil {
+		return 0, fmt.Errorf("prune reset tokens: %w", res.Error)
+	}
+
+	return res.RowsAffected, nil
+}
