@@ -100,7 +100,8 @@ func (s *Service) ParseAccess(token string) (authdomain.AccessClaims, error) {
 		}
 
 		return s.publicKey, nil
-	})
+	}, jwtlib.WithValidMethods([]string{jwtlib.SigningMethodES256.Alg()}),
+		jwtlib.WithIssuer(s.issuer), jwtlib.WithExpirationRequired())
 	if err != nil || !parsed.Valid {
 		return authdomain.AccessClaims{}, authdomain.ErrInvalidToken
 	}

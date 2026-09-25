@@ -3,6 +3,7 @@ package service_test
 import (
 	"context"
 	"errors"
+	"sync"
 	"testing"
 	"time"
 
@@ -431,4 +432,75 @@ func TestRefreshKeepsShortSessionLifetime(t *testing.T) {
 
 	_, err = f.svc.Refresh(t.Context(), pair.RefreshToken, "ua", "127.0.0.1")
 	require.ErrorIs(t, err, authdomain.ErrSessionExpired, "rotation keeps the 7-day lifetime")
+}
+
+// countingHasher counts Compare calls to show every login path pays for a hash.
+type countingHasher struct {
+	fakeHasher
+
+	mu       sync.Mutex
+	compares int
+}
+
+func (h *countingHasher) Compare(hash, password string) bool {
+	h.mu.Lock()
+	h.compares++
+	h.mu.Unlock()
+
+	return h.fakeHasher.Compare(hash, password)
+}
+
+func TestLoginDoesNotRevealAccountState(t *testing.T) {
+	t.Parallel()
+
+	suspended := userdomain.User{
+		UUID: uuid.New(), Email: "gone@example.com", Username: "gone", FullName: "Gone",
+		PasswordHash: "hash:right", Status: userdomain.StatusSuspended,
+	}
+	users, sessions, resets := newMemStores(suspended)
+	hasher := &countingHasher{}
+	svc := authservice.New(users, sessions, resets, hasher, fakeTokens{}, fixedClock{t: time.Now().UTC()}, uuidGen{},
+		authservice.Config{}, nil)
+
+	_, err := svc.Login(t.Context(), "nobody@example.com", "whatever", "ua", "127.0.0.1", false)
+	require.ErrorIs(t, err, authdomain.ErrInvalidCredentials)
+	require.Equal(t, 1, hasher.compares, "an unknown account still costs a hash")
+
+	_, err = svc.Login(t.Context(), suspended.Email, "wrong", "ua", "127.0.0.1", false)
+	require.ErrorIs(t, err, authdomain.ErrInvalidCredentials, "a suspended account looks like a wrong password")
+
+	_, err = svc.Login(t.Context(), suspended.Email, "right", "ua", "127.0.0.1", false)
+	require.ErrorIs(t, err, authdomain.ErrUserInactive, "status is revealed only with the right password")
+}
+
+// signalNotifier reports password reset deliveries on a channel.
+type signalNotifier struct {
+	capturingNotifier
+
+	resets chan string
+}
+
+func (n *signalNotifier) PasswordReset(_ context.Context, user userdomain.User, _ string, _ time.Time) {
+	n.resets <- user.Email
+}
+
+func TestForgotPasswordDeliversInBackground(t *testing.T) {
+	t.Parallel()
+
+	user := userdomain.User{
+		UUID: uuid.New(), Email: "ada@example.com", Username: "ada", FullName: "Ada",
+		PasswordHash: "hash:pw", Status: userdomain.StatusActive,
+	}
+	users, sessions, resets := newMemStores(user)
+	notifier := &signalNotifier{resets: make(chan string)}
+	svc := newService(users, sessions, resets, &capturingSink{}).WithEmailChange(notifier, nil)
+
+	require.NoError(t, svc.ForgotPassword(t.Context(), user.Email), "returns without waiting for delivery")
+
+	select {
+	case got := <-notifier.resets:
+		require.Equal(t, user.Email, got)
+	case <-time.After(5 * time.Second):
+		t.Fatal("reset email was not delivered")
+	}
 }

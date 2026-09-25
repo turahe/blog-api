@@ -135,7 +135,7 @@ func NewControllers(deps Deps) routes.Controllers {
 		c.Cats = routes.Categories{
 			PublicList:  listCategoriesHandler(deps.Categories),
 			PublicGet:   getCategoryHandler(deps.Categories),
-			AdminList:   gate(deps, "category.read", editorRoles, chain(middleware.NoReadCache(), listCategoriesHandler(deps.Categories))),
+			AdminList:   gate(deps, "category.read", editorRoles, chain(middleware.NoReadCache(), adminListCategoriesHandler(deps.Categories))),
 			AdminCreate: gate(deps, "category.create", editorRoles, adminCreateCategoryHandler(deps.Categories)),
 			AdminUpdate: gate(deps, "category.update", editorRoles, adminUpdateCategoryHandler(deps.Categories)),
 			AdminDelete: gate(deps, "category.delete", editorRoles, adminDeleteCategoryHandler(deps.Categories)),
@@ -243,35 +243,37 @@ func chain(handlers ...gin.HandlerFunc) gin.HandlerFunc {
 
 // authControllers wires login, password and two-factor handlers.
 func authControllers(deps Deps) routes.Auth {
+	limit := func(bucket string) gin.HandlerFunc {
+		return middleware.RateLimit(deps.RateLimiter, deps.Logger, bucket, deps.LoginPerMinute, time.Minute)
+	}
+
 	var a routes.Auth
+
 	if deps.Auth != nil {
+		password := limit("auth.password")
 		a = routes.Auth{
-			Login:                 chain(middleware.RateLimit(deps.RateLimiter, deps.Logger, "auth.login", deps.LoginPerMinute, time.Minute), loginHandler(deps.Auth)),
-			Refresh:               refreshHandler(deps.Auth),
+			Login:                 chain(limit("auth.login"), loginHandler(deps.Auth)),
+			Refresh:               chain(limit("auth.refresh"), refreshHandler(deps.Auth)),
 			Logout:                logoutHandler(deps.Auth),
-			PasswordForgot:        forgotPasswordHandler(deps.Auth),
-			PasswordResetValidity: resetTokenValidityHandler(deps.Auth),
-			PasswordReset:         resetPasswordHandler(deps.Auth),
+			PasswordForgot:        chain(password, forgotPasswordHandler(deps.Auth)),
+			PasswordResetValidity: chain(password, resetTokenValidityHandler(deps.Auth)),
+			PasswordReset:         chain(password, resetPasswordHandler(deps.Auth)),
 			MePasswordUpdate:      changePasswordHandler(deps.Auth),
 		}
 	}
 
 	if deps.AdminLogin != nil {
-		a.AdminLogin = chain(
-			middleware.RateLimit(deps.RateLimiter, deps.Logger, "admin.auth.login", deps.LoginPerMinute, time.Minute),
-			adminLoginHandler(deps.AdminLogin))
+		a.AdminLogin = chain(limit("admin.auth.login"), adminLoginHandler(deps.AdminLogin))
 	}
 
 	if deps.OAuth != nil {
-		limit := middleware.RateLimit(deps.RateLimiter, deps.Logger, "auth.oauth", deps.LoginPerMinute, time.Minute)
-		a.OAuthStart = chain(limit, oauthStartHandler(deps.OAuth))
-		a.OAuthCallback = chain(limit, oauthCallbackHandler(deps.OAuth))
+		oauth := limit("auth.oauth")
+		a.OAuthStart = chain(oauth, oauthStartHandler(deps.OAuth))
+		a.OAuthCallback = chain(oauth, oauthCallbackHandler(deps.OAuth))
 	}
 
 	if mfa := deps.TwoFactor; mfa != nil {
-		a.TwoFactorChallenge = chain(
-			middleware.RateLimit(deps.RateLimiter, deps.Logger, "auth.2fa", deps.LoginPerMinute, time.Minute),
-			twoFactorChallengeHandler(mfa))
+		a.TwoFactorChallenge = chain(limit("auth.2fa"), twoFactorChallengeHandler(mfa))
 		a.MeTwoFactorGet = meTwoFactorGetHandler(mfa)
 		a.MeTwoFactorSetup = meTwoFactorSetupHandler(mfa)
 		a.MeTwoFactorConfirm = meTwoFactorConfirmHandler(mfa)

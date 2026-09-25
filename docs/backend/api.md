@@ -130,6 +130,13 @@ password, and the attempt does not count toward lockout. The tokens are ordinary
 and refresh tokens; each admin route still checks its own permission. Existing
 deployments must re-run `app seed` to grant `admin.access`.
 
+### Auth rate limits
+
+Every anonymous auth endpoint is limited per client IP to `AUTH_LOGIN_PER_MINUTE` requests per
+minute, in these buckets: `auth.login`, `admin.auth.login`, `auth.refresh`, `auth.password`
+(forgot, reset-token check and reset share one bucket), `auth.2fa` and `auth.oauth`. Over the
+limit the answer is `429 rate_limited` with `Retry-After`.
+
 ### OAuth sign-in (Google, GitHub)
 
 | Operation | Route | Auth | Rate limit |

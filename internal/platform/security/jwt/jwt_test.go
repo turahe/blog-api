@@ -9,6 +9,7 @@ import (
 	"testing"
 	"time"
 
+	jwtlib "github.com/golang-jwt/jwt/v5"
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/require"
 	authdomain "github.com/turahe/blog-api/internal/core/auth/domain"
@@ -32,6 +33,36 @@ func TestIssueAndParseAccess(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, subject, claims.Subject)
 	require.Equal(t, "a@example.com", claims.Email)
+}
+
+func TestParseAccessRejectsForeignIssuerAndMissingExpiry(t *testing.T) {
+	t.Parallel()
+
+	priv := generateP256(t)
+	newService := func(issuer string) *jwttoken.Service {
+		svc, err := jwttoken.New(encodePrivatePEM(t, priv), encodePublicPEM(t, &priv.PublicKey),
+			"01234567890123456789012345678901", issuer)
+		require.NoError(t, err)
+
+		return svc
+	}
+
+	now := time.Now().UTC()
+	claims := authdomain.AccessClaims{Subject: uuid.New(), ExpiresAt: now.Add(time.Minute), IssuedAt: now}
+
+	foreign, err := newService("other-service").IssueAccess(claims)
+	require.NoError(t, err)
+
+	_, err = newService("blog-api").ParseAccess(foreign)
+	require.ErrorIs(t, err, authdomain.ErrInvalidToken, "same key, different issuer")
+
+	noExpiry, err := jwtlib.NewWithClaims(jwtlib.SigningMethodES256, jwtlib.RegisteredClaims{
+		Subject: uuid.NewString(), Issuer: "blog-api", IssuedAt: jwtlib.NewNumericDate(now),
+	}).SignedString(priv)
+	require.NoError(t, err)
+
+	_, err = newService("blog-api").ParseAccess(noExpiry)
+	require.ErrorIs(t, err, authdomain.ErrInvalidToken, "exp is required")
 }
 
 func TestRefreshHashStable(t *testing.T) {

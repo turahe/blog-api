@@ -32,7 +32,6 @@ type categoryAPI interface {
 //	@Produce	json
 //	@Success	200	{object}	responses.Envelope
 //	@Router		/api/v1/categories [get]
-//	@Router		/api/v1/admin/categories [get]
 func listCategoriesHandler(cats categoryAPI) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		items, err := cats.List(c.Request.Context())
@@ -48,6 +47,20 @@ func listCategoriesHandler(cats categoryAPI) gin.HandlerFunc {
 
 		responses.Success(c, nethttp.StatusOK, gin.H{"items": out})
 	}
+}
+
+// adminListCategoriesHandler godoc
+//
+//	@Summary	List categories (admin)
+//	@Tags		admin
+//	@Produce	json
+//	@Security	Bearer
+//	@Success	200	{object}	responses.Envelope
+//	@Failure	401	{object}	responses.Envelope
+//	@Failure	403	{object}	responses.Envelope
+//	@Router		/api/v1/admin/categories [get]
+func adminListCategoriesHandler(cats categoryAPI) gin.HandlerFunc {
+	return listCategoriesHandler(cats)
 }
 
 // getCategoryHandler godoc

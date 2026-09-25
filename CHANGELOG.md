@@ -1,5 +1,26 @@
 # Changelog
 
+## 2026-09-25 — Auth security checklist run
+
+### Security
+
+- Login no longer reveals account state. An unknown email still pays for a password hash, and
+  an inactive account answers like a wrong password unless the password is correct
+- Forgot-password emails are delivered in the background, so response time does not reveal
+  whether the account exists
+- `POST /auth/refresh`, `POST /auth/password/forgot`, `GET /auth/password/reset/{token}` and
+  `POST /auth/password/reset` are now rate limited per IP (`AUTH_LOGIN_PER_MINUTE`)
+- Access tokens must carry `exp` and the configured issuer
+
+### Added
+
+- The Swagger parity test also checks that each operation's `security` matches the route's
+  auth mode
+
+### Fixed
+
+- `GET /api/v1/admin/categories` is documented as an admin operation with bearer auth
+
 ## 2026-09-25 — Auth cycle integration tests
 
 ### Added

@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"strings"
+	"sync"
 	"time"
 	"unicode"
 
@@ -29,6 +30,9 @@ type Config struct {
 // shortSessionTTL is the refresh session lifetime of a login without "remember me".
 const shortSessionTTL = 7 * 24 * time.Hour
 
+// deliveryTimeout bounds background delivery of a reset email.
+const deliveryTimeout = time.Minute
+
 // AuthService implements ports.Service.
 type AuthService struct {
 	users    ports.UserRepository
@@ -47,6 +51,9 @@ type AuthService struct {
 	cfg      Config
 	mfa      twoFactorDeps
 	oauth    oauthDeps
+
+	dummyOnce sync.Once
+	dummyHash string
 }
 
 // WithLoginAttempts enables account lockout after repeated failed logins.
@@ -174,23 +181,36 @@ func (s *AuthService) authenticate(ctx context.Context, email, password string) 
 	}
 
 	user, err := s.users.FindByEmail(ctx, email)
-	if errors.Is(err, userdomain.ErrNotFound) {
+	if err != nil && !errors.Is(err, userdomain.ErrNotFound) {
+		return userdomain.User{}, err
+	}
+
+	// Unknown accounts and accounts without a password still pay for a hash, and the
+	// account status is revealed only to a caller who knows the password.
+	if user.PasswordHash == "" {
+		s.hasher.Compare(s.timingHash(), password)
 		return userdomain.User{}, s.loginFailed(ctx, email)
 	}
 
-	if err != nil {
-		return userdomain.User{}, err
+	if !s.hasher.Compare(user.PasswordHash, password) {
+		return userdomain.User{}, s.loginFailed(ctx, email)
 	}
 
 	if !user.IsActive() {
 		return userdomain.User{}, authdomain.ErrUserInactive
 	}
 
-	if user.PasswordHash == "" || !s.hasher.Compare(user.PasswordHash, password) {
-		return userdomain.User{}, s.loginFailed(ctx, email)
-	}
-
 	return user, nil
+}
+
+// timingHash is a real hash of a random value, compared against when there is no
+// account, so that path costs as much as a wrong password.
+func (s *AuthService) timingHash() string {
+	s.dummyOnce.Do(func() {
+		s.dummyHash, _ = s.hasher.Hash(uuid.NewString())
+	})
+
+	return s.dummyHash
 }
 
 // completeLogin records the login and issues the session for a fully authenticated user.
@@ -407,8 +427,15 @@ func (s *AuthService) issuePasswordReset(ctx context.Context, user userdomain.Us
 		s.sink.Capture(raw)
 	}
 
+	// Delivered in the background: a slow mail server must not reveal, through
+	// response time, that the account exists.
 	if s.notifier != nil {
-		s.notifier.PasswordReset(ctx, user, raw, token.ExpiresAt)
+		go func() {
+			ctx, cancel := context.WithTimeout(context.WithoutCancel(ctx), deliveryTimeout)
+			defer cancel()
+
+			s.notifier.PasswordReset(ctx, user, raw, token.ExpiresAt)
+		}()
 	}
 
 	return token.ExpiresAt, nil

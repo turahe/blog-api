@@ -579,9 +579,19 @@ paths:
           description: OK
           schema:
             $ref: '#/definitions/responses.Envelope'
-      summary: List categories
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/responses.Envelope'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/responses.Envelope'
+      security:
+      - Bearer: []
+      summary: List categories (admin)
       tags:
-      - public
+      - admin
     post:
       consumes:
       - application/json
