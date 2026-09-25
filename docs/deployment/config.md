@@ -81,6 +81,8 @@ Do not use `0.0.0.0/0`, `*`, or arbitrary client-controlled addresses in
 | `OAUTH_GOOGLE_CLIENT_ID` / `OAUTH_GOOGLE_CLIENT_SECRET` | empty | For Google sign-in | Google OAuth client. Set both or neither; empty disables the provider (`404 auth.oauth.provider_unknown`). |
 | `OAUTH_GITHUB_CLIENT_ID` / `OAUTH_GITHUB_CLIENT_SECRET` | empty | For GitHub sign-in | GitHub OAuth app. Set both or neither. |
 | `OAUTH_REDIRECT_URIS` | empty | For OAuth | Comma-separated allowlist of client callback URLs, matched exactly. Each must be an absolute `http(s)` URL without a fragment, and `https` in production. Register the same URLs with the provider. |
+| `AUDIT_RETENTION_DAYS` | `395` | No | Days audit rows are kept; `app audit prune` and the hourly prune in `app worker` delete older rows. Must be positive. |
+| `AUDIT_QUEUE_SIZE` | `1024` | No | Entries buffered for the background audit writer. When full, new entries are dropped and counted in `blog_audit_entries_dropped_total`. Must be positive. |
 
 A locked or throttled login answers `429` with `Retry-After`. Lockout is keyed by email, so
 a correct password is refused until the lock expires; both limits are stored in Redis and fail
@@ -117,6 +119,8 @@ port off the public load balancer. Series use the `blog_` prefix:
   labelled by route template (`unmatched` for 404s), so login attempt and lockout rates are
   `route="/api/v1/auth/login"` by status
 - `blog_http_requests_in_flight`, `blog_build_info{version}`
+- `blog_audit_entries_dropped_total`: audit entries lost to a full queue or a failed insert;
+  alert when it increases
 - `blog_db_*` connection-pool stats, plus Go runtime (`go_*`) and process (`process_*`) series
 
 ## Database

@@ -34,6 +34,8 @@ Jobs handle asynchronous and retryable work that should not block request-respon
 
 ## Entrypoints
 
-- run async event/job workers with `app worker`
+- run async event/job workers with `app worker`; it opens the database and prunes audit rows
+  older than `AUDIT_RETENTION_DAYS` at startup and every hour
+- prune audit rows once with `app audit prune [--older-than-days N]`
 - run scheduled/cron jobs with `app scheduler`
 - validate worker/scheduler health before startup using `app doctor`

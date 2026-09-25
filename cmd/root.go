@@ -73,6 +73,9 @@ func newRootCmd() *cobra.Command {
 	seedCmd := newSeedCmd()
 	seedCmd.GroupID = groupData
 
+	auditCmd := newAuditCmd()
+	auditCmd.GroupID = groupData
+
 	doctorCmd := newDoctorCmd()
 	doctorCmd.GroupID = groupOps
 	versionCmd := newVersionCmd()
@@ -84,6 +87,7 @@ func newRootCmd() *cobra.Command {
 		schedulerCmd,
 		migrateCmd,
 		seedCmd,
+		auditCmd,
 		doctorCmd,
 		versionCmd,
 	)

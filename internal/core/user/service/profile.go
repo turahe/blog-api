@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/turahe/blog-api/internal/core/audit"
 	mediadomain "github.com/turahe/blog-api/internal/core/media/domain"
 	"github.com/turahe/blog-api/internal/core/readcache"
 	userdomain "github.com/turahe/blog-api/internal/core/user/domain"
@@ -82,6 +83,13 @@ func (s *ProfileService) Update(ctx context.Context, actor, target uuid.UUID, pa
 
 	if err := s.repo.SaveProfile(ctx, target, fullName, profile, actor, now); err != nil {
 		return userdomain.ProfileView{}, err
+	}
+
+	// Field names only: profile values are personal data kept out of the audit log.
+	audit.AddMetadata(ctx, "fields", patchedFields(patch))
+
+	if view.Profile.MarketingConsent != profile.MarketingConsent {
+		audit.AddChange(ctx, "marketing_consent", view.Profile.MarketingConsent, profile.MarketingConsent)
 	}
 
 	s.invalidate(ctx)

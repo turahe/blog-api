@@ -10,6 +10,8 @@ import (
 	"strings"
 	"time"
 
+	"github.com/turahe/blog-api/internal/core/audit"
+
 	"github.com/google/uuid"
 	authdomain "github.com/turahe/blog-api/internal/core/auth/domain"
 	"github.com/turahe/blog-api/internal/core/auth/ports"
@@ -164,6 +166,8 @@ func (s *AuthService) linkByEmail(ctx context.Context, identity authdomain.OAuth
 	if err := s.oauth.identities.Link(ctx, user.UUID, identity, now); err != nil {
 		return uuid.Nil, err
 	}
+
+	audit.AddMetadata(ctx, "oauth_linked", identity.Provider)
 
 	return user.UUID, nil
 }

@@ -11,6 +11,8 @@ import (
 	"strings"
 	"time"
 
+	"github.com/turahe/blog-api/internal/core/audit"
+
 	"github.com/google/uuid"
 	authdomain "github.com/turahe/blog-api/internal/core/auth/domain"
 	"github.com/turahe/blog-api/internal/core/auth/ports"
@@ -88,6 +90,8 @@ func (s *AuthService) CompleteTwoFactor(ctx context.Context, challengeToken, cod
 	if err != nil {
 		return authdomain.TokenPair{}, err
 	}
+
+	audit.SetActor(ctx, login.UserUUID)
 
 	// Count the attempt before checking the code so parallel guesses cannot
 	// exceed the limit.

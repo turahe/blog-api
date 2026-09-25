@@ -11,6 +11,7 @@ import (
 	"unicode/utf8"
 
 	"github.com/google/uuid"
+	"github.com/turahe/blog-api/internal/core/audit"
 	"github.com/turahe/blog-api/internal/core/rbac/domain"
 	"github.com/turahe/blog-api/internal/core/rbac/ports"
 )
@@ -121,15 +122,18 @@ func (s *RoleService) AssignUserRoles(ctx context.Context, userID uuid.UUID, nam
 		return nil, fmt.Errorf("%w: send 1-%d role names", domain.ErrValidation, maxRolesPerCall)
 	}
 
-	if _, err := s.repo.UserRoles(ctx, userID); err != nil {
+	before, err := s.repo.UserRoles(ctx, userID)
+	if err != nil {
 		return nil, err
 	}
+
+	before = slices.Clone(before)
 
 	if err := s.repo.AssignRoles(ctx, userID, names); err != nil {
 		return nil, err
 	}
 
-	return s.repo.UserRoles(ctx, userID)
+	return s.recordRoles(ctx, userID, before)
 }
 
 // RevokeUserRole removes one role from the user. Administrators cannot revoke
@@ -144,15 +148,30 @@ func (s *RoleService) RevokeUserRole(ctx context.Context, actor, userID uuid.UUI
 		return nil, err
 	}
 
-	if _, err := s.repo.UserRoles(ctx, userID); err != nil {
+	before, err := s.repo.UserRoles(ctx, userID)
+	if err != nil {
 		return nil, err
 	}
+
+	before = slices.Clone(before)
 
 	if err := s.repo.RevokeRole(ctx, userID, name); err != nil {
 		return nil, err
 	}
 
-	return s.repo.UserRoles(ctx, userID)
+	return s.recordRoles(ctx, userID, before)
+}
+
+// recordRoles returns the user's roles after a change and notes it for the audit log.
+func (s *RoleService) recordRoles(ctx context.Context, userID uuid.UUID, before []string) ([]string, error) {
+	after, err := s.repo.UserRoles(ctx, userID)
+	if err != nil {
+		return nil, err
+	}
+
+	audit.AddChange(ctx, "roles", before, slices.Clone(after))
+
+	return after, nil
 }
 
 func (s *RoleService) checkPermissions(ctx context.Context, keys []string) ([]string, error) {

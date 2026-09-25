@@ -12,7 +12,9 @@ Index: [README.md](./README.md).
 operations are wired (migration `00009_comments.sql`), with ownership checks and Redis rate
 limits. The 6 admin moderation operations are wired behind `comment.moderate` /
 `comment.delete` with an append-only moderation log (migration `00010_comment_moderation.sql`).
-Audit writing and notifications are still open; the 3 notification operations return `501`.
+Audit logging is wired (migration `00016_audit_log_columns.sql`, async writer, activity
+endpoints, retention pruning). Notifications are still open; the 3 notification operations
+return `501`.
 
 ## Epic: comment model and service
 
@@ -75,12 +77,20 @@ Spec: [comments-and-moderation.md](../features/comments-and-moderation.md)
 ## Epic: audit logging
 
 - [x] `audit_logs` table
-- [ ] Audit writer service invoked from admin mutations
-- [ ] Record actor, action, subject type and ID, before/after diff, IP, and user agent
-- [ ] `admin.users.activity.list` — `GET /api/v1/admin/users/{id}/activity`
-- [ ] `me.activity.list` — `GET /api/v1/me/activity`
-- [ ] Retention policy and pruning job for audit rows
-- [ ] Ensure audit writes never block the request path on failure
+- [x] Audit writer service invoked from admin mutations (`middleware.Audit`: one entry per
+      successful admin and self-service mutation, auth events including rejected logins, and
+      signed-in public writes; services annotate through `internal/core/audit`)
+- [x] Record actor, action, subject type and ID, before/after diff, IP, and user agent
+      (migration `00016_audit_log_columns.sql`; diffs for role changes, post status, comment
+      moderation, and marketing consent; profile edits record field names only)
+- [x] `admin.users.activity.list` — `GET /api/v1/admin/users/{id}/activity` (`user.activity.read_all`)
+- [x] `me.activity.list` — `GET /api/v1/me/activity` (user-facing categories; IP reduced to its
+      network, user agent to "browser on OS")
+- [x] Retention policy and pruning job for audit rows (`AUDIT_RETENTION_DAYS`, default 395;
+      `app audit prune` and an hourly prune in `app worker`)
+- [x] Ensure audit writes never block the request path on failure (bounded queue and batch
+      writer; overflow and insert failures are logged, dropped, and counted in
+      `blog_audit_entries_dropped_total`)
 
 ## Epic: notification hooks
 

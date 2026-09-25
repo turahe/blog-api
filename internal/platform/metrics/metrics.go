@@ -21,6 +21,7 @@ type Metrics struct {
 	requests *prometheus.CounterVec
 	duration *prometheus.HistogramVec
 	inflight prometheus.Gauge
+	dropped  prometheus.Counter
 }
 
 // New registers runtime, process, build, and (when db is non-nil) sql.DB pool collectors.
@@ -45,6 +46,11 @@ func New(db *sql.DB, version string) *Metrics {
 			Name:      "http_requests_in_flight",
 			Help:      "HTTP requests currently being served.",
 		}),
+		dropped: prometheus.NewCounter(prometheus.CounterOpts{
+			Namespace: namespace,
+			Name:      "audit_entries_dropped_total",
+			Help:      "Audit entries lost to a full queue or a failed insert.",
+		}),
 	}
 
 	build := prometheus.NewGauge(prometheus.GaugeOpts{
@@ -58,7 +64,7 @@ func New(db *sql.DB, version string) *Metrics {
 	registry.MustRegister(
 		collectors.NewGoCollector(),
 		collectors.NewProcessCollector(collectors.ProcessCollectorOpts{}),
-		m.requests, m.duration, m.inflight, build,
+		m.requests, m.duration, m.inflight, m.dropped, build,
 	)
 
 	if db != nil {
@@ -89,6 +95,11 @@ func (m *Metrics) StartRequest() func() {
 func (m *Metrics) ObserveHTTP(method, route string, status int, elapsed time.Duration) {
 	m.requests.WithLabelValues(method, route, strconv.Itoa(status)).Inc()
 	m.duration.WithLabelValues(method, route).Observe(elapsed.Seconds())
+}
+
+// AuditDropped counts n audit entries that were not stored.
+func (m *Metrics) AuditDropped(n int) {
+	m.dropped.Add(float64(n))
 }
 
 // NewServer returns the metrics HTTP server for addr, serving /metrics only.

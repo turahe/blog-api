@@ -26,7 +26,6 @@ func registerContractStubs(v1 *gin.RouterGroup, auth AuthMiddleware, c Controlle
 	post(none, "/newsletter/subscribe", "public.newsletter.subscribe", pub, n, c, nil)
 	post(none, "/newsletter/unsubscribe", "public.newsletter.unsubscribe", pub, n, c, nil)
 
-	get(required, "/me/activity", "me.activity.list", self, req, c, nil)
 	get(required, "/me/activity/export", "me.activity.export", self, req, c, nil)
 	get(required, "/me/newsletter/subscriptions", "me.newsletter.subscriptions.list", self, req, c, nil)
 	get(required, "/me/notifications", "me.notifications.list", self, req, c, nil)
@@ -70,6 +69,4 @@ func registerContractStubs(v1 *gin.RouterGroup, auth AuthMiddleware, c Controlle
 	get(admin, "/settings", "admin.settings.get", ag, ar, c, nil)
 	get(admin, "/settings/history", "admin.settings.history", ag, ar, c, nil)
 	put(admin, "/settings", "admin.settings.put", ag, ar, c, nil)
-
-	get(admin, "/users/:param1/activity", "admin.users.activity.list", ag, ar, c, nil)
 }

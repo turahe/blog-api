@@ -51,7 +51,7 @@ var rolePermissions = map[string][]string{
 	roleAdmin: {
 		permAdminAccess,
 		"user.read", "user.create", "user.update", "user.profile.read", "user.profile.edit",
-		"user.password.admin_reset", "role.read", "role.manage",
+		"user.password.admin_reset", "user.activity.read_all", "role.read", "role.manage",
 		permPostRead, "post.create", "post.update", "post.publish", "post.delete",
 		"category.read", "category.create", "category.update", "category.delete",
 		"tag.create", "tag.update", "tag.delete",

@@ -9,6 +9,8 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/require"
+	"github.com/turahe/blog-api/internal/core/audit"
+	auditdomain "github.com/turahe/blog-api/internal/core/audit/domain"
 	"github.com/turahe/blog-api/internal/core/rbac/domain"
 	"github.com/turahe/blog-api/internal/core/rbac/service"
 )
@@ -285,4 +287,30 @@ func TestMapError(t *testing.T) {
 		_, _, status := service.MapError(err)
 		require.Equal(t, want, status, err.Error())
 	}
+}
+
+func TestUserRoleChangesAreAudited(t *testing.T) {
+	t.Parallel()
+
+	repo := newMemRepo()
+	svc := service.NewRoleService(repo)
+	user := uuid.New()
+	repo.users[user] = []string{}
+
+	ctx, scope := audit.WithScope(context.Background())
+	_, err := svc.AssignUserRoles(ctx, user, []string{"editor"})
+	require.NoError(t, err)
+
+	var entry auditdomain.Entry
+	scope.Apply(&entry)
+	require.Equal(t, auditdomain.Change{From: []string{}, To: []string{"editor"}}, entry.Changes["roles"])
+
+	ctx, scope = audit.WithScope(context.Background())
+	_, err = svc.RevokeUserRole(ctx, uuid.New(), user, "editor")
+	require.NoError(t, err)
+
+	entry = auditdomain.Entry{}
+	scope.Apply(&entry)
+	require.Equal(t, []string{"editor"}, entry.Changes["roles"].From)
+	require.Empty(t, entry.Changes["roles"].To)
 }

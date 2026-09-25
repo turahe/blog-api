@@ -81,6 +81,12 @@ type authStack struct {
 
 func newAuthStack(t *testing.T) *authStack {
 	t.Helper()
+	return newAuthStackWith(t, nil)
+}
+
+// newAuthStackWith lets a test add router dependencies that need the stack's transaction.
+func newAuthStackWith(t *testing.T, extend func(tx *gorm.DB, deps *httpadapter.Dependencies)) *authStack {
+	t.Helper()
 
 	tx := migratedTx(t)
 	clock := &testClock{t: time.Now().UTC()}
@@ -101,9 +107,14 @@ func newAuthStack(t *testing.T) *authStack {
 
 	gin.SetMode(gin.TestMode)
 
-	router, err := httpadapter.NewRouter(httpadapter.Dependencies{
+	deps := httpadapter.Dependencies{
 		Logger: slog.New(slog.DiscardHandler), Health: healthservice.New("test"), Version: "test", Auth: auth,
-	})
+	}
+	if extend != nil {
+		extend(tx, &deps)
+	}
+
+	router, err := httpadapter.NewRouter(deps)
 	require.NoError(t, err)
 
 	return &authStack{router: router, tx: tx, clock: clock, email: email}

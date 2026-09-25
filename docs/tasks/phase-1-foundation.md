@@ -8,11 +8,10 @@ Index: [README.md](./README.md).
 
 ## Status
 
-**Partial** — bootstrap, config, PostgreSQL persistence (bigint row ids plus public UUIDs),
+**Done** — bootstrap, config, PostgreSQL persistence (bigint row ids plus public UUIDs),
 Redis, health, password-based auth with refresh rotation, and Casbin authorization are in
-place, along with the SMTP mailer, login lockout, and a messaging readiness check. Admin user
-management and session administration are still open; admin login, TOTP 2FA and OAuth sign-in
-are done.
+place, along with the SMTP mailer, login lockout, a messaging readiness check, admin login,
+TOTP 2FA, OAuth sign-in, role administration, and per-user activity from the audit log.
 
 ## Epic: project bootstrap and configuration
 
@@ -91,7 +90,7 @@ Spec: [authentication.md](../features/authentication.md)
 - [x] `admin.users.list` — `GET /api/v1/admin/users`
 - [x] `admin.users.create` — `POST /api/v1/admin/users` (`user.create`; roles also need `role.manage`)
 - [x] `admin.users.password.admin_reset` — `POST /api/v1/admin/users/{id}/password/admin-reset`
-- [ ] `admin.users.activity.list` — `GET /api/v1/admin/users/{id}/activity`
+- [x] `admin.users.activity.list` — `GET /api/v1/admin/users/{id}/activity` (audit log, Phase 3)
 - [x] Role and permission administration endpoints, or a documented decision to seed-only
       (`/api/v1/admin/roles`, `/admin/permissions`, `/admin/users/{id}/roles`; `admin` is protected)
 - [x] Policy reload without restart when `casbin_rules` changes (Redis announcement on role
@@ -122,7 +121,7 @@ Specs: [user-management.md](../features/user-management.md),
       (assets, trust boundaries, threats with mitigations and residual risk, open items)
 - [x] Run the security checklist against the auth surface — [checklist.md](../security/checklist.md)
       (run log 2026-09-25: fixed login enumeration and timing, missing rate limits, forgot-password
-      timing and JWT issuer/`exp` checks; unknown-key rejection and audit logging stay open)
+      timing and JWT issuer/`exp` checks; unknown-key rejection stays open; audit logging landed in Phase 3)
 
 ## References
 

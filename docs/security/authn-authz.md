@@ -94,10 +94,10 @@ Google/GitHub OAuth, as implemented in `internal/core/auth` and its adapters. La
 | Privilege escalation through admin login | `admin.access` checked after the password; every admin route checks its own Casbin permission | Admin tokens are ordinary tokens; there is no separate admin session or step-up |
 | CSRF | Not applicable: the API sets no cookies and requires bearer tokens | Revisit if cookie sessions are added (see the CSRF section above) |
 | Secrets in logs | Access log records route templates, not raw paths; tokens, passwords and TOTP data are never logged | Upstream proxies may log raw URLs with reset tokens; configure them accordingly |
+| Undetected takeover or repudiated admin actions | Audit log of sign-ins (including rejected attempts on an existing account), resets, 2FA and OAuth changes, and every admin mutation; owners see their own activity at `/me/activity` | Entries are dropped (and counted) when the queue is full or the database is down; audit rows are kept for `AUDIT_RETENTION_DAYS` only |
 
 ### Open items
 
-- Audit events for login, logout, reset, 2FA and OAuth changes (phase 3 audit writer).
 - "Recent 2FA" step-up for high-risk actions.
 - Rejecting unknown JSON keys (a contract decision).
 - Optional access-token revocation (for example a per-user "tokens valid after" timestamp) if

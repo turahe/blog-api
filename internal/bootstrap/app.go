@@ -23,6 +23,7 @@ import (
 	"github.com/turahe/blog-api/internal/adapters/outbound/ratelimit"
 	outboundrbac "github.com/turahe/blog-api/internal/adapters/outbound/rbac"
 	"github.com/turahe/blog-api/internal/adapters/outbound/storage"
+	auditservice "github.com/turahe/blog-api/internal/core/audit/service"
 	authports "github.com/turahe/blog-api/internal/core/auth/ports"
 	authservice "github.com/turahe/blog-api/internal/core/auth/service"
 	categoryservice "github.com/turahe/blog-api/internal/core/category/service"
@@ -48,6 +49,9 @@ import (
 	"github.com/turahe/blog-api/internal/platform/system"
 )
 
+// auditFlushTimeout bounds how long Close waits for queued audit entries.
+const auditFlushTimeout = 5 * time.Second
+
 // Runtime holds the opened infrastructure, core services, and HTTP server.
 type Runtime struct {
 	Config   config.Config
@@ -60,6 +64,8 @@ type Runtime struct {
 	// PolicySync reloads the Casbin policy on peer announcements and on an interval;
 	// the caller starts it and Close stops it.
 	PolicySync *outboundrbac.PolicySync
+	// Audit writes audit entries in the background; Close flushes it.
+	Audit      *auditservice.Recorder
 	Auth       *authservice.AuthService
 	Users      *userservice.UserService
 	Posts      *postservice.PostService
@@ -88,9 +94,11 @@ func NewRuntime(ctx context.Context, cfg config.Config, logger *slog.Logger, ver
 		return nil, err
 	}
 
-	closeAll := func() {
+	fail := func(err error) (*Runtime, error) {
 		_ = redisClient.Close()
 		_ = db.Close()
+
+		return nil, err
 	}
 
 	users := persistence.NewUserRepository(db.GORM)
@@ -111,9 +119,7 @@ func NewRuntime(ctx context.Context, cfg config.Config, logger *slog.Logger, ver
 
 	auth, err := newAuthService(cfg, db, redisClient, users, sessions, resets, clock, ids, cacheOrNil, logger)
 	if err != nil {
-		closeAll()
-
-		return nil, err
+		return fail(err)
 	}
 
 	posts := postservice.New(postsRepo, ids, clock).WithCache(cacheOrNil)
@@ -131,28 +137,26 @@ func NewRuntime(ctx context.Context, cfg config.Config, logger *slog.Logger, ver
 
 	media, err := newMediaService(ctx, cfg, db, ids, clock, posts, cacheOrNil)
 	if err != nil {
-		closeAll()
-
-		return nil, err
+		return fail(err)
 	}
 
 	profiles, avatarMaxBytes := newProfileService(cfg, db, clock, media, cacheOrNil)
 
 	enforcer, err := outboundrbac.NewEnforcer(db.GORM)
 	if err != nil {
-		closeAll()
-
-		return nil, fmt.Errorf("create rbac enforcer: %w", err)
+		return fail(fmt.Errorf("create rbac enforcer: %w", err))
 	}
 
 	policySync := outboundrbac.NewPolicySync(enforcer, redisClient, cfg.RBACPolicyReloadInterval, logger)
 	roleStore := outboundrbac.NewRoleStore(db.GORM, enforcer).WithNotifier(policySync)
 	auth.WithRoles(roleStore).WithAccessCheck(enforcer)
 
-	metricsServer, recorder := newMetrics(cfg, db, version)
+	metricsServer, recorder, onAuditDrop := newMetrics(cfg, db, version)
+	auditRecorder, activity := newAudit(cfg, db, onAuditDrop, logger)
 
 	router, err := httpadapter.NewRouter(httpadapter.Dependencies{
-		Metrics:        recorder,
+		Metrics: recorder,
+		Audit:   auditRecorder, Activity: activity,
 		Logger:         logger,
 		Health:         healthservice.New(version, healthCheckers(cfg, db, redisClient)...),
 		Auth:           auth,
@@ -182,15 +186,13 @@ func NewRuntime(ctx context.Context, cfg config.Config, logger *slog.Logger, ver
 		CacheBypassHeader: cfg.CacheEnabled && cfg.CacheBypassHeader,
 	})
 	if err != nil {
-		closeAll()
-
-		return nil, fmt.Errorf("create router: %w", err)
+		return fail(fmt.Errorf("create router: %w", err))
 	}
 
 	return &Runtime{
 		Config: cfg, Database: db, Redis: redisClient, Cache: readCache,
 		Auth: auth, Users: userSvc, Posts: posts, Categories: categories, Media: media,
-		MetricsServer: metricsServer, PolicySync: policySync,
+		MetricsServer: metricsServer, PolicySync: policySync, Audit: auditRecorder,
 		Server: &nethttp.Server{
 			Addr: cfg.Address, Handler: router,
 			ReadTimeout: cfg.ReadTimeout, ReadHeaderTimeout: cfg.ReadHeaderTimeout,
@@ -259,15 +261,27 @@ func newCommentService(cfg config.Config, db *database.Database, ids system.UUID
 	})
 }
 
-// newMetrics returns the Prometheus server and request recorder, or nils when METRICS_ADDR is empty.
-func newMetrics(cfg config.Config, db *database.Database, version string) (*nethttp.Server, middleware.MetricsRecorder) {
+// newMetrics returns the Prometheus server, request recorder, and audit drop
+// counter, or nils when METRICS_ADDR is empty.
+func newMetrics(cfg config.Config, db *database.Database, version string) (*nethttp.Server, middleware.MetricsRecorder, func(int)) {
 	if cfg.MetricsAddr == "" {
-		return nil, nil
+		return nil, nil, nil
 	}
 
 	appMetrics := metrics.New(db.SQL, version)
 
-	return appMetrics.NewServer(cfg.MetricsAddr), appMetrics
+	return appMetrics.NewServer(cfg.MetricsAddr), appMetrics, appMetrics.AuditDropped
+}
+
+// newAudit starts the background audit writer and the activity query service.
+func newAudit(cfg config.Config, db *database.Database, onDrop func(int), logger *slog.Logger) (*auditservice.Recorder, *auditservice.Activity) {
+	repo := persistence.NewAuditRepository(db.GORM)
+	recorder := auditservice.NewRecorder(repo, logger, auditservice.RecorderOptions{
+		QueueSize: cfg.AuditQueueSize,
+		OnDrop:    onDrop,
+	})
+
+	return recorder, auditservice.NewActivity(repo)
 }
 
 // newAuthService builds the auth service with lockout, email change, and two-factor wired.
@@ -402,12 +416,21 @@ func healthCheckers(cfg config.Config, db *database.Database, redisClient *redis
 	return checkers
 }
 
-// Close releases Redis and database connections.
+// Close flushes queued audit entries and releases Redis and database connections.
 func (r *Runtime) Close() error {
 	var errs []error
 
 	if r.PolicySync != nil {
 		r.PolicySync.Stop()
+	}
+
+	if r.Audit != nil {
+		ctx, cancel := context.WithTimeout(context.Background(), auditFlushTimeout)
+		if err := r.Audit.Close(ctx); err != nil {
+			errs = append(errs, fmt.Errorf("flush audit log: %w", err))
+		}
+
+		cancel()
 	}
 
 	if r.Redis != nil {

@@ -6,13 +6,20 @@ import (
 	"os"
 	"os/signal"
 	"syscall"
+	"time"
 
 	"github.com/ThreeDotsLabs/watermill/message"
 	"github.com/spf13/cobra"
+	"github.com/turahe/blog-api/internal/adapters/outbound/persistence"
 	"github.com/turahe/blog-api/internal/bootstrap"
+	auditservice "github.com/turahe/blog-api/internal/core/audit/service"
 	"github.com/turahe/blog-api/internal/platform/config"
+	"github.com/turahe/blog-api/internal/platform/database"
 	"github.com/turahe/blog-api/internal/platform/messaging"
 )
+
+// auditPruneInterval is how often the worker deletes audit entries past retention.
+const auditPruneInterval = time.Hour
 
 func newWorkerCmd() *cobra.Command {
 	return &cobra.Command{
@@ -51,6 +58,15 @@ func newWorkerCmd() *cobra.Command {
 			defer func() { err = errors.Join(err, router.Close()) }()
 
 			router.AddMiddleware(messaging.Tracing, messaging.Recoverer)
+
+			db, err := database.Open(ctx, cfg)
+			if err != nil {
+				return err
+			}
+			defer func() { err = errors.Join(err, db.Close()) }()
+
+			activity := auditservice.NewActivity(persistence.NewAuditRepository(db.GORM))
+			go activity.PruneEvery(ctx, cfg.AuditRetention(), auditPruneInterval, logger)
 
 			topic := bus.Topic("worker.heartbeat")
 			router.AddConsumerHandler(

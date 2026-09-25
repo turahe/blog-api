@@ -1,5 +1,31 @@
 # Changelog
 
+## 2026-09-25 — Audit logging and account activity
+
+### Added
+
+- Audit log. Every successful admin and self-service change, sign-in and sign-out, password
+  reset, and signed-in public write (comments) is recorded with the actor, the resource, IP, user
+  agent, and request id. Rejected sign-ins (wrong password or code, lockout) are recorded too,
+  attributed to the account when it exists
+- Before/after changes for role assignment, post status, comment moderation, and marketing
+  consent. Profile edits record which fields changed, not their values
+- `GET /api/v1/me/activity`: the caller's account activity, filterable by category and date.
+  IP addresses are reduced to their /24 or /48 network and user agents to "browser on OS"
+- `GET /api/v1/admin/users/{id}/activity`: every entry by or about a user, with full detail.
+  Requires the new `user.activity.read_all` permission (seeded for `admin`)
+- `app audit prune [--older-than-days N]` and an hourly prune in `app worker`
+- Config `AUDIT_RETENTION_DAYS` (default 395) and `AUDIT_QUEUE_SIZE` (default 1024)
+- Metric `blog_audit_entries_dropped_total`
+- Migration `00016_audit_log_columns.sql`: `category`, `result`, `ip_address`, `user_agent`,
+  `request_id`, and indexes for activity lookups
+
+### Changed
+
+- Audit entries are written from a bounded in-memory queue by a background batch writer, so
+  auditing never delays or fails a request. When the queue is full or the insert fails, entries
+  are logged and dropped; shutdown flushes the queue before closing the database
+
 ## 2026-09-25 — Auth threat model
 
 ### Added

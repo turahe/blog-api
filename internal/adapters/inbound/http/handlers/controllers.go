@@ -29,6 +29,7 @@ type Deps struct {
 	AdminLogin  adminLoginAPI
 	OAuth       oauthAPI
 	RoleAdmin   roleAPI
+	Activity    activityAPI
 	Profiles    profileAPI
 	EmailChange authports.EmailChanger
 	// AvatarMaxBytes > 0 enables avatar upload and removal (requires media storage).
@@ -114,6 +115,8 @@ func NewControllers(deps Deps) routes.Controllers {
 	}
 
 	wireProfiles(&c.Users, deps)
+
+	c.Activity.MeList, c.Activity.AdminUserList = activityControllers(deps)
 
 	if deps.Posts != nil {
 		c.Posts = routes.Posts{

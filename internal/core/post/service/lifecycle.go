@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	"github.com/google/uuid"
+	"github.com/turahe/blog-api/internal/core/audit"
 	postdomain "github.com/turahe/blog-api/internal/core/post/domain"
 )
 
@@ -50,6 +51,8 @@ func (s *PostService) transition(ctx context.Context, id uuid.UUID, transition p
 	case postdomain.StatusScheduled, postdomain.StatusArchived:
 	}
 
+	previous := post.Status
+
 	post.Status = next
 	post.UpdatedAt = now
 	post.Version++
@@ -59,6 +62,7 @@ func (s *PostService) transition(ctx context.Context, id uuid.UUID, transition p
 		return postdomain.Post{}, err
 	}
 
+	audit.AddChange(ctx, "status", previous, next)
 	s.invalidate(ctx)
 
 	return post, nil

@@ -52,7 +52,7 @@ bearer middleware, token service. Threat model: [authn-authz.md](./authn-authz.m
 | Step-up on high-risk actions | Partial | password change and 2FA disable re-check the password (and a code); "recent 2FA" step-up is open (phase 3) |
 | Rate limits on abuse-prone endpoints | **Fixed** | refresh (`auth.refresh`) and forgot/reset password (`auth.password`) were unlimited; all anonymous auth endpoints now share `AUTH_LOGIN_PER_MINUTE` per IP |
 | No secrets in responses | Pass | only 2FA setup returns a secret, with `Cache-Control: no-store`; refresh and reset tokens are stored as keyed hashes |
-| Audit log for sensitive mutations | Open | needs the phase 3 audit writer |
+| Audit log for sensitive mutations | **Fixed** | `middleware.Audit` records admin and self-service mutations and auth events, including rejected logins, with actor, IP, user agent, and before/after changes (phase 3) |
 | Positive and negative authz tests | Pass | handler, service and PostgreSQL integration tests cover 401/403, token reuse and expiry |
 | Timing-safe forgot password | **Fixed** | see enumeration row |
 | Access token validation | **Fixed** | `ParseAccess` now requires `exp`, checks the issuer and pins ES256 through the parser options |

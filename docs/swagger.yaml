@@ -1772,6 +1772,63 @@ paths:
       summary: Create a user
       tags:
       - admin
+  /api/v1/admin/users/{param1}/activity:
+    get:
+      description: Every audit entry the user performed or that targets the user's
+        account, with IP, user agent, request id, and before/after changes. Requires
+        user.activity.read_all.
+      parameters:
+      - description: user UUID
+        in: path
+        name: param1
+        required: true
+        type: string
+      - description: comma-separated categories
+        in: query
+        name: category
+        type: string
+      - description: RFC 3339 timestamp or YYYY-MM-DD
+        in: query
+        name: from
+        type: string
+      - description: RFC 3339 timestamp or YYYY-MM-DD (inclusive)
+        in: query
+        name: to
+        type: string
+      - default: 1
+        description: page
+        in: query
+        name: page
+        type: integer
+      - default: 20
+        description: per page
+        in: query
+        name: per_page
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/responses.Envelope'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/responses.Envelope'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/responses.Envelope'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/responses.Envelope'
+      security:
+      - Bearer: []
+      summary: List a user's activity
+      tags:
+      - admin
   /api/v1/admin/users/{param1}/password/admin-reset:
     post:
       consumes:
@@ -2640,6 +2697,54 @@ paths:
       summary: Start two-factor setup
       tags:
       - self-service
+  /api/v1/me/activity:
+    get:
+      description: Sign-ins, security changes, and content actions on or by the caller's
+        account, newest first. IP addresses are reduced to their network and user
+        agents to "browser on OS".
+      parameters:
+      - description: comma-separated categories, for example login,password_change
+        in: query
+        name: category
+        type: string
+      - description: RFC 3339 timestamp or YYYY-MM-DD
+        in: query
+        name: from
+        type: string
+      - description: RFC 3339 timestamp or YYYY-MM-DD (inclusive)
+        in: query
+        name: to
+        type: string
+      - default: 1
+        description: page
+        in: query
+        name: page
+        type: integer
+      - default: 20
+        description: per page
+        in: query
+        name: per_page
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/responses.Envelope'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/responses.Envelope'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/responses.Envelope'
+      security:
+      - Bearer: []
+      summary: List my account activity
+      tags:
+      - me
   /api/v1/me/avatar:
     delete:
       produces:

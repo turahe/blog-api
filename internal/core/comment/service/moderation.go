@@ -10,6 +10,7 @@ import (
 	"unicode/utf8"
 
 	"github.com/google/uuid"
+	"github.com/turahe/blog-api/internal/core/audit"
 	commentdomain "github.com/turahe/blog-api/internal/core/comment/domain"
 )
 
@@ -99,6 +100,8 @@ func (s *Service) Moderate(ctx context.Context, in ModerateInput) (commentdomain
 	if err := s.repo.ApplyModerations(ctx, []commentdomain.Moderation{change}); err != nil {
 		return commentdomain.Comment{}, err
 	}
+
+	audit.AddChange(ctx, "status", change.From, change.Entry.ToStatus)
 
 	return s.repo.GetByID(ctx, in.CommentUUID)
 }

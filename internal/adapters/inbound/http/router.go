@@ -9,6 +9,8 @@ import (
 	"github.com/turahe/blog-api/internal/adapters/inbound/http/middleware"
 	"github.com/turahe/blog-api/internal/adapters/inbound/http/swagger"
 	"github.com/turahe/blog-api/internal/adapters/inbound/routes"
+	auditports "github.com/turahe/blog-api/internal/core/audit/ports"
+	auditservice "github.com/turahe/blog-api/internal/core/audit/service"
 	authports "github.com/turahe/blog-api/internal/core/auth/ports"
 	authservice "github.com/turahe/blog-api/internal/core/auth/service"
 	categoryservice "github.com/turahe/blog-api/internal/core/category/service"
@@ -47,6 +49,8 @@ type Dependencies struct {
 	CommentRates   handlers.CommentRates
 	LoginPerMinute int
 	Metrics        middleware.MetricsRecorder // nil disables request metrics
+	Audit          auditports.Writer          // nil disables audit logging
+	Activity       *auditservice.Activity
 	Version        string
 	TrustedProxies []string
 	SwaggerEnabled bool
@@ -72,20 +76,7 @@ func NewRouter(deps Dependencies) (*gin.Engine, error) {
 		mountSwagger = swagger.Mount
 	}
 
-	global := gin.HandlersChain{
-		middleware.RequestID(),
-		middleware.Tracing(),
-		middleware.SecurityHeaders(),
-		middleware.AccessLog(deps.Logger),
-	}
-	if deps.Metrics != nil {
-		global = append(global, middleware.Metrics(deps.Metrics))
-	}
-
-	global = append(global, middleware.Recovery(deps.Logger))
-	if deps.CacheBypassHeader {
-		global = append(global, middleware.CacheBypass())
-	}
+	global := globalMiddleware(deps)
 
 	controllerDeps := handlers.Deps{
 		Logger:         deps.Logger,
@@ -130,6 +121,10 @@ func NewRouter(deps Dependencies) (*gin.Engine, error) {
 		controllerDeps.RoleAdmin = deps.RoleAdmin
 	}
 
+	if deps.Activity != nil {
+		controllerDeps.Activity = deps.Activity
+	}
+
 	return routes.NewRouter(routes.Dependencies{
 		Logger:           deps.Logger,
 		TrustedProxies:   deps.TrustedProxies,
@@ -142,4 +137,28 @@ func NewRouter(deps Dependencies) (*gin.Engine, error) {
 		HealthAlias:  healthAlias,
 		MountSwagger: mountSwagger,
 	})
+}
+
+// globalMiddleware is the chain every request passes through, outermost first.
+func globalMiddleware(deps Dependencies) gin.HandlersChain {
+	global := gin.HandlersChain{
+		middleware.RequestID(),
+		middleware.Tracing(),
+		middleware.SecurityHeaders(),
+		middleware.AccessLog(deps.Logger),
+	}
+	if deps.Metrics != nil {
+		global = append(global, middleware.Metrics(deps.Metrics))
+	}
+
+	global = append(global, middleware.Recovery(deps.Logger))
+	if deps.Audit != nil {
+		global = append(global, middleware.Audit(deps.Audit))
+	}
+
+	if deps.CacheBypassHeader {
+		global = append(global, middleware.CacheBypass())
+	}
+
+	return global
 }

@@ -21,6 +21,13 @@ type Controllers struct {
 	Media    Media
 	Comments Comments
 	Roles    Roles
+	Activity Activity
+}
+
+// Activity holds audit activity handlers.
+type Activity struct {
+	MeList        gin.HandlerFunc
+	AdminUserList gin.HandlerFunc
 }
 
 // Roles holds role and permission administration handlers.

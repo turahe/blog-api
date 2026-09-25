@@ -5,7 +5,7 @@ Each phase file says *what is left to build*; the goals below say *what each pha
 
 | Phase | Doc | Status | Goal |
 | --- | --- | --- | --- |
-| 1 — Foundation | [phase-1-foundation.md](./phase-1-foundation.md) | Partial | Bootstrap, config, DB/Redis, health, auth, user/role/permission model |
+| 1 — Foundation | [phase-1-foundation.md](./phase-1-foundation.md) | Done | Bootstrap, config, DB/Redis, health, auth, user/role/permission model |
 | 2 — Content Core | [phase-2-content-core.md](./phase-2-content-core.md) | Done | Posts, categories, tags, media, public reads, Redis caching |
 | 3 — Collaboration and Moderation | [phase-3-collaboration-moderation.md](./phase-3-collaboration-moderation.md) | Partial | Comments, moderation, audit logging, notification hooks |
 | 4 — Event-Driven Platform | [phase-4-event-driven-platform.md](./phase-4-event-driven-platform.md) | Partial | Watermill publishing, durable outbox, workers/jobs, media cache, ops hardening |
@@ -60,7 +60,9 @@ Snapshot of the tree these files were written against:
   the generation-keyed public read cache), ES256 JWT, Argon2id, Casbin enforcer,
   S3-compatible object storage, and multi-broker Watermill messaging (`MESSAGE_BROKER`) with an
   `app worker` scaffold.
-- **Schema-only** — `audit_logs` and `outbox_events` tables exist with no service or HTTP layer.
+- **Audit log** — `audit_logs` (extended by `00016`) is written asynchronously by
+  `middleware.Audit` and read by `me.activity.list` and `admin.users.activity.list`.
+- **Schema-only** — the `outbox_events` table exists with no service or HTTP layer.
 
 ## Maintenance rules
 

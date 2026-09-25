@@ -71,6 +71,36 @@ func applyPatch(profile *userdomain.Profile, patch userdomain.ProfilePatch, now 
 }
 
 // isEmptyPatch reports whether the patch changes nothing.
+// patchedFields names the fields a patch sets, in request field names.
+func patchedFields(patch userdomain.ProfilePatch) []string {
+	set := []struct {
+		name string
+		set  bool
+	}{
+		{"full_name", patch.FullName.Set},
+		{"display_name", patch.DisplayName.Set},
+		{"bio", patch.Bio.Set},
+		{"contact_website", patch.ContactWebsite.Set},
+		{"contact_location", patch.ContactLocation.Set},
+		{"social_links.twitter", patch.Twitter.Set},
+		{"social_links.linkedin", patch.LinkedIn.Set},
+		{"social_links.github", patch.GitHub.Set},
+		{"locale", patch.Locale.Set},
+		{"timezone", patch.Timezone.Set},
+		{"marketing_consent", patch.MarketingConsent.Set},
+	}
+
+	fields := make([]string, 0, len(set))
+
+	for _, field := range set {
+		if field.set {
+			fields = append(fields, field.name)
+		}
+	}
+
+	return fields
+}
+
 func isEmptyPatch(patch userdomain.ProfilePatch) bool {
 	return !patch.FullName.Set && !patch.DisplayName.Set && !patch.Bio.Set &&
 		!patch.ContactWebsite.Set && !patch.ContactLocation.Set &&

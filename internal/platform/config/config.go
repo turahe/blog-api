@@ -73,6 +73,8 @@ type Config struct {
 	OAuthGitHubClientID           string
 	OAuthGitHubClientSecret       string
 	OAuthRedirectURIs             []string
+	AuditRetentionDays            int
+	AuditQueueSize                int
 	MessageBroker                 string
 	KafkaBrokers                  []string
 	KafkaConsumerGroup            string
@@ -420,6 +422,8 @@ func Load() (Config, error) {
 		OAuthGitHubClientID:           env("OAUTH_GITHUB_CLIENT_ID", ""),
 		OAuthGitHubClientSecret:       env("OAUTH_GITHUB_CLIENT_SECRET", ""),
 		OAuthRedirectURIs:             splitCSV(os.Getenv("OAUTH_REDIRECT_URIS")),
+		AuditRetentionDays:            integer("AUDIT_RETENTION_DAYS", 395),
+		AuditQueueSize:                integer("AUDIT_QUEUE_SIZE", 1024),
 		MessageBroker:                 strings.ToLower(env("MESSAGE_BROKER", "")),
 		KafkaBrokers:                  splitCSV(os.Getenv("KAFKA_BROKERS")),
 		KafkaConsumerGroup:            env("KAFKA_CONSUMER_GROUP", "blog-api"),
@@ -511,7 +515,7 @@ func (c *Config) validate() error {
 		return fmt.Errorf("invalid database pool limits: idle=%d open=%d", c.DBMaxIdle, c.DBMaxOpen)
 	}
 
-	for _, check := range []func() error{c.ValidateRedis, c.ValidateMessaging, c.ValidateMedia, c.ValidateSentry, c.ValidateCache, c.ValidateOAuth} {
+	for _, check := range []func() error{c.ValidateRedis, c.ValidateMessaging, c.ValidateMedia, c.ValidateSentry, c.ValidateCache, c.ValidateOAuth, c.ValidateAudit} {
 		if err := check(); err != nil {
 			return err
 		}

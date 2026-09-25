@@ -10,6 +10,8 @@ import (
 	"time"
 	"unicode"
 
+	"github.com/turahe/blog-api/internal/core/audit"
+
 	"github.com/google/uuid"
 	authdomain "github.com/turahe/blog-api/internal/core/auth/domain"
 	"github.com/turahe/blog-api/internal/core/auth/ports"
@@ -192,6 +194,9 @@ func (s *AuthService) authenticate(ctx context.Context, email, password string) 
 		return userdomain.User{}, s.loginFailed(ctx, email)
 	}
 
+	// Attempts on a real account appear in its activity, whatever the outcome.
+	audit.SetActor(ctx, user.UUID)
+
 	if !s.hasher.Compare(user.PasswordHash, password) {
 		return userdomain.User{}, s.loginFailed(ctx, email)
 	}
@@ -215,6 +220,8 @@ func (s *AuthService) timingHash() string {
 
 // completeLogin records the login and issues the session for a fully authenticated user.
 func (s *AuthService) completeLogin(ctx context.Context, user userdomain.User, userAgent, ip string, remember bool) (authdomain.TokenPair, error) {
+	audit.SetActor(ctx, user.UUID)
+
 	now := s.clock.Now()
 	if err := s.users.RecordLogin(ctx, user.UUID, now); err != nil {
 		return authdomain.TokenPair{}, fmt.Errorf("record login: %w", err)
@@ -487,6 +494,8 @@ func (s *AuthService) ResetPassword(ctx context.Context, rawToken, newPassword, 
 	if err != nil {
 		return err
 	}
+
+	audit.SetActor(ctx, token.UserUUID)
 
 	now := s.clock.Now()
 

@@ -254,6 +254,46 @@ Differences from the target rules below:
 - **Not yet enforced:** 2FA or password step-up on admin patch and avatar delete, CSRF (all
   routes use bearer tokens), and audit or outbox events for profile changes.
 
+### Audit log and account activity
+
+`middleware.Audit` writes one `audit_logs` row per audited mutating request after the handler
+returns. Writes go through a bounded in-memory queue (`AUDIT_QUEUE_SIZE`) and a background batch
+writer, so auditing never delays or fails a request; when the queue is full or the insert fails
+the entries are logged and dropped, and `blog_audit_entries_dropped_total` counts them.
+
+| Request | Recorded when |
+| --- | --- |
+| Admin and self-service `POST`/`PUT`/`PATCH`/`DELETE` | the response is `2xx` |
+| Auth endpoints | `2xx` with a known account (a login still awaiting its second factor is not recorded) |
+| `auth.login`, `admin.auth.login`, `auth.2fa.challenge`, `auth.oauth.callback`, `auth.password.reset` | also on `401`, `403` or `429`, attributed to the account when it exists |
+| Public writes (comments, flags) | `2xx` by a signed-in user |
+| `auth.refresh`, `auth.password.forgot`, `self.comments.upvote`, `admin.posts.seo.preview` | never |
+
+Each row holds the operation id as `action`, the actor, the resource (inferred from the
+operation and first path parameter; `resource_type=user` for `/me`, auth, and
+`/admin/users/{id}` operations), the result and status, IP, user agent, request id, and
+`metadata.changes` with before/after values. Services add the details only they know through
+`internal/core/audit`: the actor of a login or reset, and changes for role assignment, post
+status, comment moderation, and marketing consent. Profile edits record the field names in
+`metadata.fields`, never the values.
+
+A user's activity is every row where the user is the actor or `resource_type=user` and
+`resource_id` is the user. Operations with a user-facing category (`login`, `logout`,
+`password_reset`, `password_change`, `profile_edit`, `avatar_update`, `email_change`,
+`twofa_enable`, `twofa_disable`, `twofa_backup_codes`, `role_change`, `post_create`,
+`post_edit`, `post_publish`, `comment_create`) show on `/me/activity`; the rest are admin-only.
+
+| Operation | Method and path | Auth | Notes |
+| --- | --- | --- | --- |
+| `me.activity.list` | `GET /api/v1/me/activity` | bearer | categorized rows only; `ip_prefix` is the /24 (IPv4) or /48 (IPv6) network and `device` is "browser on OS"; no raw IP, user agent, request id, or metadata |
+| `admin.users.activity.list` | `GET /api/v1/admin/users/{id}/activity` | `user.activity.read_all` | every row, with `ip`, `user_agent`, `request_id`, `changes`, and `metadata` |
+
+Both take `category` (comma-separated), `from` and `to` (RFC 3339 or `YYYY-MM-DD`; a date `to`
+covers the whole day), `page`, and `per_page` (max 100), and return newest first.
+
+Rows older than `AUDIT_RETENTION_DAYS` (default 395) are deleted by `app audit prune`
+(`--older-than-days` overrides the setting) and hourly by `app worker`.
+
 ### Media
 
 - `public.media.transform` stays `501`; see the decision in [media.md](media.md#transform-decision-phase-2).
@@ -287,7 +327,7 @@ Differences from the target rules below:
 - `POST /api/v1/me/email/confirm-change` (confirm pending email change)
 - `GET /api/v1/me/privacy`
 - `PUT /api/v1/me/privacy` (partial patch with allowlisted privacy flags; visibility changes require reverify)
-- `GET /api/v1/me/activity` (paginated; category/date filters; CSV export via `?export=csv`)
+- `GET /api/v1/me/activity` (paginated; category/date filters) — implemented, see "Audit log and account activity"
 - `GET /api/v1/me/activity/export` (async GDPR export job)
 - `POST /api/v1/me/activity/erase` (GDPR/CCPA erasure request with password reverify)
 - `GET /api/v1/me/notifications`

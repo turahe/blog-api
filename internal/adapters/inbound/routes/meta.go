@@ -45,8 +45,8 @@ func RouteOf(c *gin.Context) (Route, bool) {
 	return route, exists && ok
 }
 
-// withMeta stores route metadata on the Gin context before the handler runs.
-func withMeta(route Route) gin.HandlerFunc {
+// WithMeta stores route metadata on the Gin context before the handler runs.
+func WithMeta(route Route) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		c.Set(routeContextKey, route)
 		c.Next()
@@ -57,7 +57,7 @@ func withMeta(route Route) gin.HandlerFunc {
 // route.Path should be the full path for logs/stubs; path is what Gin registers.
 func bindMeta(r gin.IRoutes, path string, route Route, handlers ...gin.HandlerFunc) {
 	chain := make(gin.HandlersChain, 0, 1+len(handlers))
-	chain = append(chain, withMeta(route))
+	chain = append(chain, WithMeta(route))
 	chain = append(chain, handlers...)
 	r.Handle(route.Method, path, chain...)
 }
