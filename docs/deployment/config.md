@@ -310,6 +310,7 @@ empty, and the size/TTL values must be positive.
 | `COMMENTS_FLAG_THRESHOLD` | `3` | No | Distinct flags that move an approved comment to `flagged` (hidden from readers). |
 | `COMMENTS_CREATE_PER_MINUTE` | `6` | No | Comment creates per caller per minute; `0` disables the limit. |
 | `COMMENTS_ACTIONS_PER_MINUTE` | `30` | No | Flags and upvote toggles per caller per minute; `0` disables the limit. |
+| `TURNSTILE_SECRET_KEY` | empty | No | Cloudflare Turnstile secret. When set, guest comments must include a valid `turnstile_response` (`400 comments.spam.challenge_invalid` otherwise; `503 comments.spam.challenge_unavailable` if Cloudflare cannot be reached). The token and the guest's IP are sent to Cloudflare's siteverify API. Signed-in users and honeypot hits skip the check. |
 
 Rate limits are Redis fixed windows keyed by the authenticated user, or by client IP for
 guests (see `APP_TRUSTED_PROXIES`). If Redis is unreachable, requests are let through and a

@@ -14,6 +14,12 @@ type Renderer interface {
 	Render(markdown string) string
 }
 
+// CaptchaVerifier checks a human-verification token. ok is false for a missing, invalid,
+// or reused token; err means the provider could not be asked.
+type CaptchaVerifier interface {
+	Verify(ctx context.Context, token, remoteIP string) (ok bool, err error)
+}
+
 // Repository stores comments, flags, and upvotes.
 type Repository interface {
 	// PostPolicy returns the post's comment policy, or ErrPostNotFound unless the post is

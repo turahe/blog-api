@@ -10,6 +10,8 @@ type CreateComment struct {
 	AuthorEmail string `json:"author_email" binding:"omitempty,email,max=254"`
 	// Leave empty. Anti-spam trap for bots; must stay hidden in forms.
 	Honeypot string `json:"honeypot" binding:"omitempty,max=500"`
+	// Cloudflare Turnstile token; required for guests when the server has TURNSTILE_SECRET_KEY set.
+	TurnstileResponse string `json:"turnstile_response" binding:"omitempty,max=2048"`
 }
 
 // UpdateComment is PATCH /api/v1/comments/:id.

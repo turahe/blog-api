@@ -279,6 +279,16 @@ Every post has a `comment_policy` (default `open`), returned on post responses a
 
 `/me/comments` still lists the caller's comments on any post.
 
+### Guest comment captcha
+
+When `TURNSTILE_SECRET_KEY` is set, `POST /api/v1/posts/{id}/comments` without a bearer token
+must include `turnstile_response`, the token from the Cloudflare Turnstile widget. The server
+checks it with Cloudflare's siteverify API, sending the token and the client IP. A missing or
+rejected token returns `400 comments.spam.challenge_invalid`; if Cloudflare cannot be reached
+or rejects the secret, the request fails with `503 comments.spam.challenge_unavailable` (fail
+closed). Signed-in users are not checked, and requests that fill the honeypot are stored as
+spam without a check so bots get the usual `201`.
+
 ### Audit log and account activity
 
 `middleware.Audit` writes one `audit_logs` row per audited mutating request after the handler

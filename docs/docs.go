@@ -4030,7 +4030,7 @@ const docTemplate = `{
                         "Bearer": []
                     }
                 ],
-                "description": "Signed-in users comment as themselves. Guests send author_name and author_email when guest comments are enabled; guest comments await moderation.",
+                "description": "Signed-in users comment as themselves. Guests send author_name and author_email when guest comments are enabled; guest comments await moderation. When the server has TURNSTILE_SECRET_KEY set, guests must also send turnstile_response.",
                 "consumes": [
                     "application/json"
                 ],
@@ -4098,6 +4098,12 @@ const docTemplate = `{
                     },
                     "429": {
                         "description": "Too Many Requests",
+                        "schema": {
+                            "$ref": "#/definitions/responses.Envelope"
+                        }
+                    },
+                    "503": {
+                        "description": "Service Unavailable",
                         "schema": {
                             "$ref": "#/definitions/responses.Envelope"
                         }
@@ -4411,6 +4417,11 @@ const docTemplate = `{
                 "parent_id": {
                     "type": "string",
                     "format": "uuid"
+                },
+                "turnstile_response": {
+                    "description": "Cloudflare Turnstile token; required for guests when the server has TURNSTILE_SECRET_KEY set.",
+                    "type": "string",
+                    "maxLength": 2048
                 }
             }
         },

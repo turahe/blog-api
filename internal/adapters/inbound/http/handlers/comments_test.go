@@ -212,6 +212,29 @@ func TestCommentPolicyErrors(t *testing.T) {
 	}
 }
 
+func TestCreateCommentCaptcha(t *testing.T) {
+	t.Parallel()
+
+	var got commentservice.CreateInput
+
+	for status, captchaErr := range map[int]error{
+		nethttp.StatusBadRequest:         commentdomain.ErrChallengeFailed,
+		nethttp.StatusServiceUnavailable: commentdomain.ErrChallengeUnavailable,
+	} {
+		svc := &fakeCommentService{createFn: func(_ context.Context, in commentservice.CreateInput) (commentdomain.Comment, error) {
+			got = in
+			return commentdomain.Comment{}, captchaErr
+		}}
+		c, w := commentContext(nethttp.MethodPost, "/api/v1/posts/x/comments",
+			`{"content":"hi","author_name":"Ann","author_email":"ann@example.com","turnstile_response":"tok"}`, nil, testPostID.String())
+
+		createPostCommentHandler(svc)(c)
+
+		require.Equal(t, status, w.Code)
+		require.Equal(t, "tok", got.CaptchaToken)
+	}
+}
+
 func TestDeleteCommentByNonOwnerIsForbidden(t *testing.T) {
 	t.Parallel()
 

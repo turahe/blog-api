@@ -45,6 +45,8 @@ type Config struct {
 	FlagThreshold int
 	// Renderer produces ContentHTML; nil escapes the text instead of rendering markdown.
 	Renderer ports.Renderer
+	// Captcha, when set, must accept a guest's token before the comment is stored.
+	Captcha ports.CaptchaVerifier
 }
 
 // Service implements comment use cases.
@@ -85,9 +87,11 @@ type CreateInput struct {
 	AuthorEmail string
 	Content     string
 	// Honeypot is a hidden form field; bots fill it, and the comment is silently marked spam.
-	Honeypot  string
-	ClientIP  string
-	UserAgent string
+	Honeypot string
+	// CaptchaToken is the guest's captcha response, checked when Config.Captcha is set.
+	CaptchaToken string
+	ClientIP     string
+	UserAgent    string
 }
 
 // Create validates and stores a comment; honeypot hits become spam and guest comments await approval.
@@ -113,11 +117,7 @@ func (s *Service) Create(ctx context.Context, in CreateInput) (commentdomain.Com
 	}
 
 	if in.AuthorUUID == nil {
-		if policy == commentdomain.PolicyAuthenticated {
-			return commentdomain.Comment{}, fmt.Errorf("%w: this post accepts comments from signed-in users only", commentdomain.ErrGuestDisabled)
-		}
-
-		if comment.AuthorName, comment.AuthorEmail, err = s.guestIdentity(in.AuthorName, in.AuthorEmail); err != nil {
+		if comment.AuthorName, comment.AuthorEmail, err = s.checkGuest(ctx, policy, in); err != nil {
 			return commentdomain.Comment{}, err
 		}
 	}
@@ -333,6 +333,35 @@ func (s *Service) ToggleUpvote(ctx context.Context, voterID, id uuid.UUID) (bool
 	}
 
 	return s.repo.ToggleUpvote(ctx, comment.UUID, voterID, s.clock.Now())
+}
+
+// checkGuest applies the guest rules: the post must allow guests, the identity must be
+// valid, and the captcha must pass. Honeypot hits skip the captcha so bots see the same
+// response as a stored comment.
+func (s *Service) checkGuest(ctx context.Context, policy commentdomain.Policy, in CreateInput) (string, string, error) {
+	if policy == commentdomain.PolicyAuthenticated {
+		return "", "", fmt.Errorf("%w: this post accepts comments from signed-in users only", commentdomain.ErrGuestDisabled)
+	}
+
+	name, email, err := s.guestIdentity(in.AuthorName, in.AuthorEmail)
+	if err != nil {
+		return "", "", err
+	}
+
+	if s.cfg.Captcha == nil || strings.TrimSpace(in.Honeypot) != "" {
+		return name, email, nil
+	}
+
+	ok, err := s.cfg.Captcha.Verify(ctx, in.CaptchaToken, in.ClientIP)
+	if err != nil {
+		return "", "", fmt.Errorf("%w: %w", commentdomain.ErrChallengeUnavailable, err)
+	}
+
+	if !ok {
+		return "", "", commentdomain.ErrChallengeFailed
+	}
+
+	return name, email, nil
 }
 
 func (s *Service) guestIdentity(rawName, rawEmail string) (string, string, error) {

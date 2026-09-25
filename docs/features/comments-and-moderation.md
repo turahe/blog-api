@@ -34,6 +34,7 @@ and rate limits to combat abuse.
 - **Anti-spam pipeline** (runs in order; stop on first spam decision):
   1. Honeypot field (`CommentCreateRequest.honeypot`) — non-empty → mark spam silently.
   2. Captcha (`turnstile_response`) if `comments.spam.challenge` setting is enabled.
+     Implemented for guest comments, enabled by `TURNSTILE_SECRET_KEY` (Cloudflare Turnstile).
   3. Rate limiting per IP hash plus identity: default `6/minute` create and `30/minute` read.
   4. Content checks: max length 10,000 chars; disallowed patterns; link count cap.
   5. External engine (Akismet, Mollom, internal model) → `spam_score`, `spam_verdict`.

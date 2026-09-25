@@ -134,6 +134,11 @@ definitions:
       parent_id:
         format: uuid
         type: string
+      turnstile_response:
+        description: Cloudflare Turnstile token; required for guests when the server
+          has TURNSTILE_SECRET_KEY set.
+        maxLength: 2048
+        type: string
     required:
     - content
     type: object
@@ -3138,6 +3143,7 @@ paths:
       - application/json
       description: Signed-in users comment as themselves. Guests send author_name
         and author_email when guest comments are enabled; guest comments await moderation.
+        When the server has TURNSTILE_SECRET_KEY set, guests must also send turnstile_response.
       parameters:
       - description: post UUID
         in: path
@@ -3179,6 +3185,10 @@ paths:
             $ref: '#/definitions/responses.Envelope'
         "429":
           description: Too Many Requests
+          schema:
+            $ref: '#/definitions/responses.Envelope'
+        "503":
+          description: Service Unavailable
           schema:
             $ref: '#/definitions/responses.Envelope'
       security:

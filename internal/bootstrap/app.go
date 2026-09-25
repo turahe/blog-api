@@ -15,6 +15,7 @@ import (
 	"github.com/turahe/blog-api/internal/adapters/inbound/http/handlers"
 	"github.com/turahe/blog-api/internal/adapters/inbound/http/middleware"
 	"github.com/turahe/blog-api/internal/adapters/outbound/cache"
+	"github.com/turahe/blog-api/internal/adapters/outbound/captcha"
 	"github.com/turahe/blog-api/internal/adapters/outbound/challenge"
 	"github.com/turahe/blog-api/internal/adapters/outbound/mail"
 	"github.com/turahe/blog-api/internal/adapters/outbound/markdown"
@@ -254,13 +255,18 @@ func newProfileService(
 }
 
 func newCommentService(cfg config.Config, db *database.Database, ids system.UUIDGenerator, clock system.Clock) *commentservice.Service {
-	return commentservice.New(persistence.NewCommentRepository(db.GORM), ids, clock, commentservice.Config{
+	commentCfg := commentservice.Config{
 		GuestEnabled:    cfg.CommentsGuestEnabled,
 		RequireApproval: cfg.CommentsRequireApproval,
 		EditWindow:      cfg.CommentsEditWindow,
 		FlagThreshold:   cfg.CommentsFlagThreshold,
 		Renderer:        markdown.New(),
-	})
+	}
+	if cfg.TurnstileSecretKey != "" {
+		commentCfg.Captcha = captcha.NewTurnstile(cfg.TurnstileSecretKey, "", nil)
+	}
+
+	return commentservice.New(persistence.NewCommentRepository(db.GORM), ids, clock, commentCfg)
 }
 
 // newMetrics returns the Prometheus server, request recorder, and audit drop

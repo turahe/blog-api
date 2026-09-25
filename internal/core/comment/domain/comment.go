@@ -33,6 +33,10 @@ var (
 	// ErrCommentsClosed means the post is read-only: comments are shown but not added,
 	// edited, or upvoted.
 	ErrCommentsClosed = errors.New("comments are closed on this post")
+	// ErrChallengeFailed means a guest's captcha token was missing or rejected.
+	ErrChallengeFailed = errors.New("captcha verification failed")
+	// ErrChallengeUnavailable means the captcha provider could not be reached.
+	ErrChallengeUnavailable = errors.New("captcha verification unavailable")
 )
 
 // Policy is a post's comment policy.

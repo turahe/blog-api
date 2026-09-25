@@ -99,6 +99,7 @@ type Config struct {
 	CommentsFlagThreshold         int
 	CommentsCreatePerMinute       int
 	CommentsActionsPerMinute      int
+	TurnstileSecretKey            string
 	CacheEnabled                  bool
 	CacheBypassHeader             bool
 	CacheTTLPosts                 time.Duration
@@ -448,6 +449,7 @@ func Load() (Config, error) {
 		CommentsFlagThreshold:         integer("COMMENTS_FLAG_THRESHOLD", 3),
 		CommentsCreatePerMinute:       integer("COMMENTS_CREATE_PER_MINUTE", 6),
 		CommentsActionsPerMinute:      integer("COMMENTS_ACTIONS_PER_MINUTE", 30),
+		TurnstileSecretKey:            strings.TrimSpace(env("TURNSTILE_SECRET_KEY", "")),
 		CacheEnabled:                  boolEnv("CACHE_ENABLED", true),
 		CacheBypassHeader:             boolEnv("CACHE_BYPASS_HEADER", false),
 		CacheTTLPosts:                 duration("CACHE_TTL_POSTS", time.Minute),

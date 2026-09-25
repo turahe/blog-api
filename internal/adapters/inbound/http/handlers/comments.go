@@ -75,7 +75,7 @@ func listPostCommentsHandler(comments commentAPI) gin.HandlerFunc {
 // createPostCommentHandler godoc
 //
 //	@Summary		Comment on a post
-//	@Description	Signed-in users comment as themselves. Guests send author_name and author_email when guest comments are enabled; guest comments await moderation.
+//	@Description	Signed-in users comment as themselves. Guests send author_name and author_email when guest comments are enabled; guest comments await moderation. When the server has TURNSTILE_SECRET_KEY set, guests must also send turnstile_response.
 //	@Tags			public
 //	@Accept			json
 //	@Produce		json
@@ -88,6 +88,7 @@ func listPostCommentsHandler(comments commentAPI) gin.HandlerFunc {
 //	@Failure		404		{object}	responses.Envelope
 //	@Failure		422		{object}	responses.Envelope
 //	@Failure		429		{object}	responses.Envelope
+//	@Failure		503		{object}	responses.Envelope
 //	@Security		Bearer
 //	@Router			/api/v1/posts/{param1}/comments [post]
 func createPostCommentHandler(comments commentAPI) gin.HandlerFunc {
@@ -103,13 +104,14 @@ func createPostCommentHandler(comments commentAPI) gin.HandlerFunc {
 		}
 
 		in := commentservice.CreateInput{
-			PostUUID:    postID,
-			AuthorName:  req.AuthorName,
-			AuthorEmail: req.AuthorEmail,
-			Content:     req.Content,
-			Honeypot:    req.Honeypot,
-			ClientIP:    c.ClientIP(),
-			UserAgent:   c.Request.UserAgent(),
+			PostUUID:     postID,
+			AuthorName:   req.AuthorName,
+			AuthorEmail:  req.AuthorEmail,
+			Content:      req.Content,
+			Honeypot:     req.Honeypot,
+			CaptchaToken: req.TurnstileResponse,
+			ClientIP:     c.ClientIP(),
+			UserAgent:    c.Request.UserAgent(),
 		}
 		if req.ParentID != "" {
 			parentID, err := uuid.Parse(req.ParentID)
@@ -440,33 +442,46 @@ func batchDetails(err error) any {
 	return gin.H{"ids": ids}
 }
 
+// commentErrorRule maps a comment error to a response. An empty message means the error
+// text is shown; unexpected errors are also reported to error tracking.
+type commentErrorRule struct {
+	err        error
+	status     int
+	code       string
+	message    string
+	unexpected bool
+}
+
+var commentErrorRules = []commentErrorRule{
+	{commentdomain.ErrInvalidTransition, nethttp.StatusConflict, "comment.invalid_transition", "The action is not allowed from the comment's current status", false},
+	{commentdomain.ErrValidation, nethttp.StatusBadRequest, responses.ErrorCodeValidation, "", false},
+	{commentdomain.ErrGuestDisabled, nethttp.StatusUnauthorized, responses.ErrorCodeUnauthorized, "Sign in to comment", false},
+	{commentdomain.ErrCommentsDisabled, nethttp.StatusForbidden, "comment.disabled", "Comments are disabled on this post", false},
+	{commentdomain.ErrCommentsClosed, nethttp.StatusForbidden, "comment.closed", "This post is not accepting new comments", false},
+	{commentdomain.ErrChallengeFailed, nethttp.StatusBadRequest, "comments.spam.challenge_invalid", "Captcha verification failed; please try again", false},
+	{commentdomain.ErrChallengeUnavailable, nethttp.StatusServiceUnavailable, "comments.spam.challenge_unavailable", "Captcha verification is unavailable; please try again later", true},
+	{commentdomain.ErrForbidden, nethttp.StatusForbidden, responses.ErrorCodeForbidden, "You can only change your own comments", false},
+	{commentdomain.ErrEditWindowClosed, nethttp.StatusForbidden, "comment.edit_window_closed", "The edit window for this comment has closed", false},
+	{commentdomain.ErrNotFound, nethttp.StatusNotFound, responses.ErrorCodeNotFound, "Comment not found", false},
+	{commentdomain.ErrPostNotFound, nethttp.StatusNotFound, responses.ErrorCodeNotFound, "Post not found", false},
+	{commentdomain.ErrNotEditable, nethttp.StatusConflict, "comment.not_editable", "This comment can no longer be edited", false},
+	{commentdomain.ErrParentInvalid, nethttp.StatusUnprocessableEntity, "comment.parent_invalid", "parent_id must be an approved comment on the same post", false},
+	{commentdomain.ErrDepthExceeded, nethttp.StatusUnprocessableEntity, "comment.depth_exceeded", "Replies cannot be nested deeper than 5 levels", false},
+}
+
 func classifyCommentError(err error) (status int, code, message string, known bool) {
-	switch {
-	case errors.Is(err, commentdomain.ErrInvalidTransition):
-		return nethttp.StatusConflict, "comment.invalid_transition", "The action is not allowed from the comment's current status", true
-	case errors.Is(err, commentdomain.ErrValidation):
-		return nethttp.StatusBadRequest, responses.ErrorCodeValidation, err.Error(), true
-	case errors.Is(err, commentdomain.ErrGuestDisabled):
-		return nethttp.StatusUnauthorized, responses.ErrorCodeUnauthorized, "Sign in to comment", true
-	case errors.Is(err, commentdomain.ErrCommentsDisabled):
-		return nethttp.StatusForbidden, "comment.disabled", "Comments are disabled on this post", true
-	case errors.Is(err, commentdomain.ErrCommentsClosed):
-		return nethttp.StatusForbidden, "comment.closed", "This post is not accepting new comments", true
-	case errors.Is(err, commentdomain.ErrForbidden):
-		return nethttp.StatusForbidden, responses.ErrorCodeForbidden, "You can only change your own comments", true
-	case errors.Is(err, commentdomain.ErrEditWindowClosed):
-		return nethttp.StatusForbidden, "comment.edit_window_closed", "The edit window for this comment has closed", true
-	case errors.Is(err, commentdomain.ErrNotFound):
-		return nethttp.StatusNotFound, responses.ErrorCodeNotFound, "Comment not found", true
-	case errors.Is(err, commentdomain.ErrPostNotFound):
-		return nethttp.StatusNotFound, responses.ErrorCodeNotFound, "Post not found", true
-	case errors.Is(err, commentdomain.ErrNotEditable):
-		return nethttp.StatusConflict, "comment.not_editable", "This comment can no longer be edited", true
-	case errors.Is(err, commentdomain.ErrParentInvalid):
-		return nethttp.StatusUnprocessableEntity, "comment.parent_invalid", "parent_id must be an approved comment on the same post", true
-	case errors.Is(err, commentdomain.ErrDepthExceeded):
-		return nethttp.StatusUnprocessableEntity, "comment.depth_exceeded", "Replies cannot be nested deeper than 5 levels", true
-	default:
-		return nethttp.StatusInternalServerError, responses.ErrorCodeInternal, "Failed to process comment", false
+	for _, rule := range commentErrorRules {
+		if !errors.Is(err, rule.err) {
+			continue
+		}
+
+		message = rule.message
+		if message == "" {
+			message = err.Error()
+		}
+
+		return rule.status, rule.code, message, !rule.unexpected
 	}
+
+	return nethttp.StatusInternalServerError, responses.ErrorCodeInternal, "Failed to process comment", false
 }

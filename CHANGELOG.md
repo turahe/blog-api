@@ -1,5 +1,14 @@
 # Changelog
 
+## 2026-09-25 — Guest comment captcha
+
+### Added
+
+- Cloudflare Turnstile on guest comments. With `TURNSTILE_SECRET_KEY` set, guests must send
+  `turnstile_response`; a missing or rejected token returns `400 comments.spam.challenge_invalid`
+  and an unreachable provider `503 comments.spam.challenge_unavailable`. Signed-in users and
+  honeypot hits skip the check.
+
 ## 2026-09-25 — Per-post comment policy
 
 ### Added
