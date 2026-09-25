@@ -76,7 +76,7 @@ func newOutboxRetryCmd() *cobra.Command {
 }
 
 func openOutbox(cmd *cobra.Command) (*persistence.OutboxRepository, func() error, error) {
-	cfg, err := config.Load()
+	cfg, err := config.LoadBackground()
 	if err != nil {
 		return nil, nil, err
 	}

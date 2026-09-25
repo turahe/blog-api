@@ -6,6 +6,7 @@ package mailqueue
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"log/slog"
 	"time"
@@ -87,9 +88,18 @@ func (m *Mailer) enqueue(ctx context.Context, msg ports.Message) error {
 // ErrMalformed marks a command that can never be sent; it is dead-lettered without retries.
 var ErrMalformed = fmt.Errorf("malformed email command: %w", messaging.ErrPermanent)
 
+// ErrSendFailed is returned when the mailer fails. The mailer's own error is only logged: SMTP
+// replies often echo the recipient address, and the poison queue copies handler errors into
+// plaintext broker headers.
+var ErrSendFailed = errors.New("send email failed")
+
 // Handler returns a worker handler that decrypts a command and sends it with mailer.
-// Errors never include the message body, since the poison queue copies them into metadata.
-func Handler(box Box, mailer ports.Mailer) message.NoPublishHandlerFunc {
+// Errors never include the message body or recipient.
+func Handler(box Box, mailer ports.Mailer, logger *slog.Logger) message.NoPublishHandlerFunc {
+	if logger == nil {
+		logger = slog.Default()
+	}
+
 	return func(msg *message.Message) error {
 		var cmd Command
 		if err := json.Unmarshal(msg.Payload, &cmd); err != nil || cmd.Ciphertext == "" {
@@ -107,7 +117,9 @@ func Handler(box Box, mailer ports.Mailer) message.NoPublishHandlerFunc {
 		}
 
 		if err := mailer.Send(msg.Context(), ports.Message(email)); err != nil {
-			return fmt.Errorf("send email: %w", err)
+			logger.WarnContext(msg.Context(), "mailqueue: send failed", "message_id", msg.UUID, "error", err)
+
+			return ErrSendFailed
 		}
 
 		return nil

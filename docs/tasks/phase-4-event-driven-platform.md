@@ -8,13 +8,15 @@ Index: [README.md](./README.md).
 
 ## Status
 
-**Partial** — the multi-broker Watermill layer and the `app worker` command exist. The
+**Done** — the multi-broker Watermill layer and the `app worker` command exist. The
 transactional outbox is in place: post, comment, account, and media writes record domain
 events in the same transaction, and the worker relays them with retries, parking, pruning,
 and metrics. Worker consumers run behind retry, a dead-letter topic, and a dedupe table; the
 first consumer sends queued emails. `app scheduler` runs pruning jobs once per interval across
 replicas. Image transforms are delegated to imgproxy. Workers expose readiness probes, consumers
 have concurrency limits and circuit breakers, and the API sheds load past `HTTP_MAX_INFLIGHT`.
+Broker round trips run against real Kafka and RabbitMQ in CI, the AsyncAPI contract is
+validated in CI, and Kafka supports TLS and SASL.
 
 ## Epic: messaging transports
 
@@ -122,7 +124,9 @@ Design: [2026-07-30-messaging-brokers-design.md](../superpowers/specs/2026-07-30
       (`make test-brokers`; CI runs both as service containers)
 - [x] Outbox tests proving events commit and roll back with the business write
 - [x] Consumer idempotency tests using duplicate deliveries
-- [ ] Secrets review for broker credentials — see [secrets-and-headers.md](../security/secrets-and-headers.md)
+- [x] Secrets review for broker credentials — see [secrets-and-headers.md](../security/secrets-and-headers.md)
+      (Kafka TLS and SASL; background commands no longer need the JWT keys; production imgproxy
+      key lengths; SMTP replies kept out of dead-letter headers)
 - [x] Update [checklist.md](../deployment/checklist.md) with worker rollout steps
 
 ## References

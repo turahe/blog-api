@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"log/slog"
 	"testing"
 
 	"github.com/ThreeDotsLabs/watermill/message"
@@ -61,7 +62,7 @@ func TestMailerQueuesEncryptedCommandThatHandlerSends(t *testing.T) {
 	require.NotContains(t, string(payload), "reader@example.com")
 
 	sender := &recordingMailer{}
-	require.NoError(t, Handler(box, sender)(message.NewMessage(events[0].ID.String(), payload)))
+	require.NoError(t, Handler(box, sender, slog.New(slog.DiscardHandler))(message.NewMessage(events[0].ID.String(), payload)))
 	require.Equal(t, []ports.Message{email}, sender.sent)
 }
 
@@ -95,7 +96,7 @@ func TestHandlerRejectsMalformedCommandsPermanently(t *testing.T) {
 		"wrong key":     `{"ciphertext":"` + foreign + `"}`,
 		"no recipient":  `{"ciphertext":"` + empty + `"}`,
 	} {
-		err := Handler(box, &recordingMailer{})(message.NewMessage("m", []byte(payload)))
+		err := Handler(box, &recordingMailer{}, slog.New(slog.DiscardHandler))(message.NewMessage("m", []byte(payload)))
 		require.ErrorIs(t, err, messaging.ErrPermanent, name)
 	}
 }
@@ -107,8 +108,10 @@ func TestHandlerReturnsRetryableSendError(t *testing.T) {
 	sealedEmail, err := box.Encrypt([]byte(`{"to":"a@example.com","subject":"s","text":"t"}`))
 	require.NoError(t, err)
 
-	err = Handler(box, &recordingMailer{err: errors.New("connection refused")})(
+	smtpErr := errors.New("smtp rcpt: 450 <a@example.com>: mailbox busy")
+	err = Handler(box, &recordingMailer{err: smtpErr}, slog.New(slog.DiscardHandler))(
 		message.NewMessage("m", []byte(`{"ciphertext":"`+sealedEmail+`"}`)))
-	require.ErrorContains(t, err, "connection refused")
+	require.ErrorIs(t, err, ErrSendFailed)
 	require.NotErrorIs(t, err, messaging.ErrPermanent)
+	require.NotContains(t, err.Error(), "a@example.com", "recipient must not reach dead-letter headers")
 }

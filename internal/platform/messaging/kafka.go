@@ -15,22 +15,32 @@ func openKafka(_ context.Context, bus *Bus, cfg config.Config, instance string) 
 		group = ""
 	}
 
+	publisherConfig := kafka.DefaultSaramaSyncPublisherConfig()
+	if err := applyKafkaSecurity(publisherConfig, cfg); err != nil {
+		return err
+	}
+
+	saramaConfig := kafka.DefaultSaramaSubscriberConfig()
+	if err := applyKafkaSecurity(saramaConfig, cfg); err != nil {
+		return err
+	}
+
+	if group != "" {
+		// A new group starts from the oldest offset; the relay publishes before the worker's
+		// consumers first join, and those events must not be skipped.
+		saramaConfig.Consumer.Offsets.Initial = sarama.OffsetOldest
+	}
+
 	publisher, err := kafka.NewPublisher(
 		kafka.PublisherConfig{
-			Brokers:   cfg.KafkaBrokers,
-			Marshaler: kafka.DefaultMarshaler{},
+			Brokers:               cfg.KafkaBrokers,
+			Marshaler:             kafka.DefaultMarshaler{},
+			OverwriteSaramaConfig: publisherConfig,
 		},
 		bus.Logger,
 	)
 	if err != nil {
 		return err
-	}
-
-	saramaConfig := kafka.DefaultSaramaSubscriberConfig()
-	if group != "" {
-		// A new group starts from the oldest offset; the relay publishes before the worker's
-		// consumers first join, and those events must not be skipped.
-		saramaConfig.Consumer.Offsets.Initial = sarama.OffsetOldest
 	}
 
 	subscriber, err := kafka.NewSubscriber(

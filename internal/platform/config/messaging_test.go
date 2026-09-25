@@ -117,3 +117,38 @@ func TestLoadMessagingAMQPAliasFromEnv(t *testing.T) {
 		t.Fatal("expected RABBITMQ_URL")
 	}
 }
+
+func TestValidateKafkaSecurity(t *testing.T) {
+	t.Parallel()
+
+	base := Config{MessageBroker: "kafka", KafkaBrokers: []string{"k:9093"}, KafkaConsumerGroup: "blog-api"}
+
+	cases := map[string]struct {
+		mutate  func(*Config)
+		wantErr bool
+	}{
+		"plaintext": {mutate: func(*Config) {}},
+		"scram with tls": {mutate: func(c *Config) {
+			c.KafkaSASLMechanism, c.KafkaSASLUsername, c.KafkaSASLPassword, c.KafkaTLS = KafkaSASLSCRAMSHA512, "u", "p", true
+		}},
+		"plain without tls ok": {mutate: func(c *Config) {
+			c.KafkaSASLMechanism, c.KafkaSASLUsername, c.KafkaSASLPassword = KafkaSASLPlain, "u", "p"
+		}},
+		"unknown mechanism":             {mutate: func(c *Config) { c.KafkaSASLMechanism, c.KafkaSASLUsername, c.KafkaSASLPassword = "GSSAPI", "u", "p" }, wantErr: true},
+		"missing password":              {mutate: func(c *Config) { c.KafkaSASLMechanism, c.KafkaSASLUsername = KafkaSASLPlain, "u" }, wantErr: true},
+		"credentials without mechanism": {mutate: func(c *Config) { c.KafkaSASLUsername = "u" }, wantErr: true},
+		"ca without tls":                {mutate: func(c *Config) { c.KafkaTLSCAPath = "/ca.pem" }, wantErr: true},
+		"sasl without tls in production": {mutate: func(c *Config) {
+			c.Environment, c.KafkaSASLMechanism, c.KafkaSASLUsername, c.KafkaSASLPassword = envProduction, KafkaSASLPlain, "u", "p"
+		}, wantErr: true},
+	}
+
+	for name, tc := range cases {
+		cfg := base
+		tc.mutate(&cfg)
+
+		if err := cfg.ValidateMessaging(); (err != nil) != tc.wantErr {
+			t.Errorf("%s: err=%v, wantErr=%v", name, err, tc.wantErr)
+		}
+	}
+}

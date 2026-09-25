@@ -47,7 +47,8 @@ on its own:
   (for example `0.0.0.0:9090`) on workers so the probes exist; keep that port private.
 - **Shared settings.** Workers need the same database, `MESSAGE_BROKER`, and
   `MESSAGE_TOPIC_PREFIX` as the API, plus `APP_ENCRYPTION_KEY` and `SMTP_*` to send queued
-  email. The scheduler needs only the database settings.
+  email. The scheduler needs only the database settings. Background commands never read the
+  JWT keys, so do not mount the signing key into worker or scheduler deployments.
 - **Scaling.** Relays share the outbox with `FOR UPDATE SKIP LOCKED`, and consumers share a
   subscription (Kafka consumer group, RabbitMQ queue, Pub/Sub subscription), so worker
   replicas split the load. `CONSUMER_CONCURRENCY` adds handlers inside one worker.

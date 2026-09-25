@@ -127,7 +127,7 @@ func printJobRuns(cmd *cobra.Command, jobs []scheduler.Job, runs []persistence.J
 func withScheduler(
 	ctx context.Context, fn func(*scheduler.Scheduler, *persistence.JobRunRepository, *slog.Logger) error,
 ) (err error) {
-	cfg, err := config.Load()
+	cfg, err := config.LoadBackground()
 	if err != nil {
 		return err
 	}

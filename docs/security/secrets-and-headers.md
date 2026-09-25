@@ -14,9 +14,33 @@ Source of truth for local keys: [.env.example](../../.env.example).
 | `DB_PASSWORD` | least privilege DB role in staging/prod; never commit real value |
 | `REDIS_PASSWORD` | store as a secret; network-restrict Redis and require AUTH outside local environments |
 | `S3_*` | scoped bucket credentials; no admin cloud keys in the API |
+| `APP_ENCRYPTION_KEY` | 32 bytes; encrypts TOTP secrets, phone numbers, and queued email commands. The worker needs the same key to send email. Rotating it strands in-flight email commands (they are dead-lettered as undecryptable), so drain `notification.email.requested` and the outbox first |
+| `RABBITMQ_URL` | carries the password; use `amqps://` outside local networks and a vhost-scoped user limited to the blog exchanges |
+| `KAFKA_SASL_PASSWORD` | secret store only; production requires `KAFKA_TLS=true` with SASL. Grant the user only the `MESSAGE_TOPIC_PREFIX` topics and the consumer group |
+| `GOOGLE_PUBSUB_CREDENTIALS_SOURCE` | prefer `workload-identity`; a `path:` key file must stay out of the image |
+| `SMTP_PASSWORD` | worker and API only (the worker sends queued email) |
+| `IMGPROXY_KEY` / `IMGPROXY_SALT` | hex; production requires ≥ 32 / ≥ 16 bytes. Shared only with imgproxy; a leak lets anyone mint transform URLs, so rotate both sides together |
 
 Never commit `.env`. Distroless runtime image must not bake secrets into layers
 ([Dockerfile](../../Dockerfile)).
+
+### Secrets per process
+
+Give each process only what it uses:
+
+| Process | Needs |
+| --- | --- |
+| `app serve` | everything above except worker-only use |
+| `app worker` | database, broker, `APP_ENCRYPTION_KEY`, `SMTP_*`. Not the JWT keys: it loads config with `config.LoadBackground` and never reads them |
+| `app scheduler`, `migrate`, `outbox`, `audit` | database (plus Redis settings, which are validated but unused) |
+
+### Event pipeline
+
+- Broker payloads and dead letters never carry raw tokens: email commands are AES-GCM
+  ciphertext. Handler errors are copied into plaintext dead-letter headers
+  (`reason_poisoned`), so handlers return generic errors and log the details; the email
+  consumer never puts SMTP replies (which echo recipients) into its error.
+- Worker probes and metrics listen on `METRICS_ADDR`; keep that port off public networks.
 
 ## Password and crypto
 

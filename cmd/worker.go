@@ -38,7 +38,7 @@ func newWorkerCmd() *cobra.Command {
 			ctx, stop := signal.NotifyContext(cmd.Context(), os.Interrupt, syscall.SIGTERM)
 			defer stop()
 
-			cfg, err := config.Load()
+			cfg, err := config.LoadBackground()
 			if err != nil {
 				return err
 			}
@@ -173,7 +173,7 @@ func addConsumers(
 
 	if box != nil && mailer != nil {
 		addConsumer(router, bus, cfg, emailConsumer, bus.Topic(event.NotificationEmailRequested),
-			messaging.Idempotent(dedupe, emailConsumer, mailqueue.Handler(box, mailer)), logger)
+			messaging.Idempotent(dedupe, emailConsumer, mailqueue.Handler(box, mailer, logger)), logger)
 
 		names = append(names, emailConsumer)
 	} else {

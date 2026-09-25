@@ -30,7 +30,7 @@ func newMigrateActionCmd(name string, action func(*sql.DB) error) *cobra.Command
 		Short: name + " database migrations",
 		Args:  cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) (err error) {
-			cfg, err := config.Load()
+			cfg, err := config.LoadBackground()
 			if err != nil {
 				return err
 			}

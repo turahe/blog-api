@@ -1,6 +1,7 @@
 package config
 
 import (
+	"strings"
 	"testing"
 	"time"
 )
@@ -109,5 +110,44 @@ func TestLoadMediaDefaults(t *testing.T) {
 
 	if len(cfg.MediaAllowedMIMETypes) < 4 {
 		t.Fatalf("allowlist=%v", cfg.MediaAllowedMIMETypes)
+	}
+}
+
+func TestValidateTransformsKeyStrength(t *testing.T) {
+	t.Parallel()
+
+	base := Config{
+		S3Bucket:             "blog-media",
+		S3AccessKey:          "k",
+		S3SecretKey:          "s",
+		ImgproxyURL:          "http://imgproxy:8080",
+		ImgproxyKey:          "abcd",
+		ImgproxySalt:         "ef01",
+		MediaTransformWidths: []int{256},
+		MediaTransformURLTTL: time.Hour,
+	}
+	if err := base.validateTransforms(); err != nil {
+		t.Fatalf("short keys are allowed outside production: %v", err)
+	}
+
+	notHex := base
+	notHex.ImgproxyKey = "not-hex"
+
+	if err := notHex.validateTransforms(); err == nil {
+		t.Fatal("expected hex error")
+	}
+
+	production := base
+	production.Environment = envProduction
+
+	if err := production.validateTransforms(); err == nil {
+		t.Fatal("expected short key error in production")
+	}
+
+	production.ImgproxyKey = strings.Repeat("ab", minImgproxyKeyBytes)
+	production.ImgproxySalt = strings.Repeat("cd", minImgproxySaltBytes)
+
+	if err := production.validateTransforms(); err != nil {
+		t.Fatal(err)
 	}
 }

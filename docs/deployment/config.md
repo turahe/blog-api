@@ -68,8 +68,8 @@ Do not use `0.0.0.0/0`, `*`, or arbitrary client-controlled addresses in
 | `APP_SESSION_KEY` | local development fallback | Yes in production | Pepper for opaque refresh/reset token hashes. Production requires at least 32 characters. |
 | `APP_CSRF_KEY` | empty | Not currently enforced | Reserved CSRF secret loaded into config; CSRF integration is not wired yet. |
 | `APP_PEPPER` | empty | Not currently enforced | Reserved server-side pepper loaded into config; current password hashing does not consume it. |
-| `APP_JWT_PRIVATE_KEY` / `APP_JWT_PRIVATE_KEY_PATH` | none | Yes | P-256 private key PEM for ES256 access-token signing. Path wins when both are set. |
-| `APP_JWT_PUBLIC_KEY` / `APP_JWT_PUBLIC_KEY_PATH` | none | Yes | Matching P-256 public key PEM for ES256 verification. Path wins when both are set. |
+| `APP_JWT_PRIVATE_KEY` / `APP_JWT_PRIVATE_KEY_PATH` | none | For `serve`, `seed`, `doctor` | P-256 private key PEM for ES256 access-token signing. Path wins when both are set. `worker`, `scheduler`, `migrate`, `outbox`, and `audit` never read it; do not deploy it there. |
+| `APP_JWT_PUBLIC_KEY` / `APP_JWT_PUBLIC_KEY_PATH` | none | For `serve`, `seed`, `doctor` | Matching P-256 public key PEM for ES256 verification. Path wins when both are set. |
 | `APP_JWT_ISSUER` | `blog-api` | No | JWT issuer claim. |
 | `APP_ACCESS_TOKEN_TTL` | `15m` | No | Access-token lifetime. |
 | `APP_REFRESH_TOKEN_TTL` | `720h` | No | Refresh-session lifetime for `"remember": true` logins, and the ceiling for all sessions. Other logins get `min(168h, APP_REFRESH_TOKEN_TTL)`. Each rotation renews the session for the lifetime it was issued with. |
@@ -246,6 +246,10 @@ when set). It proves reachability only; `app doctor` opens a real publisher and 
 | `MESSAGE_TOPIC_PREFIX` | `blog.` | No | Prefix applied to every topic/exchange name. Use an environment-specific value to avoid collisions. |
 | `KAFKA_BROKERS` | empty | For Kafka | Comma-separated bootstrap servers. |
 | `KAFKA_CONSUMER_GROUP` | `blog-api` | For Kafka | Consumer group name. |
+| `KAFKA_TLS` | `false` | Required with SASL in production | Connect over TLS 1.2+, verifying brokers against the system roots. |
+| `KAFKA_TLS_CA_PATH` | empty | No | PEM bundle to verify brokers instead of the system roots (needs `KAFKA_TLS=true`). |
+| `KAFKA_SASL_MECHANISM` | empty | No | `PLAIN`, `SCRAM-SHA-256`, or `SCRAM-SHA-512`. Empty connects without authentication. |
+| `KAFKA_SASL_USERNAME` / `KAFKA_SASL_PASSWORD` | empty | With `KAFKA_SASL_MECHANISM` | SASL credentials. Store the password as a secret. |
 | `RABBITMQ_URL` | empty | For RabbitMQ | AMQP connection URL. |
 | `GOOGLE_PUBSUB_PROJECT_ID` | empty | For Pub/Sub | Google Cloud project containing topics and subscriptions. |
 | `GOOGLE_PUBSUB_CREDENTIALS_SOURCE` | `workload-identity` | No | `workload-identity`, `adc`, or `path:/absolute/key.json` (service-account key file). |
@@ -257,6 +261,10 @@ Examples:
 MESSAGE_BROKER=kafka
 KAFKA_BROKERS=kafka-1:9092,kafka-2:9092
 KAFKA_CONSUMER_GROUP=blog-api-production
+KAFKA_TLS=true
+KAFKA_SASL_MECHANISM=SCRAM-SHA-512
+KAFKA_SASL_USERNAME=blog-api
+KAFKA_SASL_PASSWORD=<secret>
 MESSAGE_TOPIC_PREFIX=production.blog.
 
 # RabbitMQ
@@ -391,6 +399,8 @@ cookies, request body, and credential-bearing headers are stripped before sendin
 `config.Load` fails startup when:
 
 - `APP_ADDR` is empty;
+- the JWT keys are missing (`serve`, `seed`, and `doctor` only; background commands use
+  `config.LoadBackground`, which skips them);
 - `APP_ENV=production` and `APP_SESSION_KEY` has fewer than 32 characters;
 - production direct database configuration uses the built-in local DSN or includes
   `sslmode=disable`;
@@ -400,11 +410,15 @@ cookies, request body, and credential-bearing headers are stripped before sendin
 - direct-mode `DB_HOST`, `DB_USER`, or `DB_NAME` is empty, or `DB_PORT` is out of range;
 - database pool limits are inconsistent;
 - the Redis driver, host, port, or database number is invalid;
-- a selected message broker is unsupported or lacks its required variables.
+- a selected message broker is unsupported or lacks its required variables;
+- `KAFKA_SASL_MECHANISM` is unknown or lacks credentials, credentials are set without a
+  mechanism, `KAFKA_TLS_CA_PATH` is set without `KAFKA_TLS`, or (in production) SASL is used
+  without `KAFKA_TLS=true`;
 - media storage is enabled but `S3_DISK` is unsupported, the MIME allowlist is empty, or
   `MEDIA_MAX_UPLOAD_BYTES` / `MEDIA_PRESIGN_TTL` are not positive;
-- `IMGPROXY_URL` is set without `IMGPROXY_KEY` / `IMGPROXY_SALT`, `MEDIA_TRANSFORM_WIDTHS` has
-  an entry outside 1–8192, or `MEDIA_TRANSFORM_URL_TTL` is not positive;
+- `IMGPROXY_URL` is set without hex `IMGPROXY_KEY` / `IMGPROXY_SALT` (in production at least
+  32 and 16 bytes), `MEDIA_TRANSFORM_WIDTHS` has an entry outside 1–8192, or
+  `MEDIA_TRANSFORM_URL_TTL` is not positive;
 - `SENTRY_TRACES_SAMPLE_RATE` is outside `0`–`1`.
 
 Before deploying:

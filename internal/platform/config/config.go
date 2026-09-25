@@ -2,6 +2,7 @@
 package config
 
 import (
+	"encoding/hex"
 	"errors"
 	"fmt"
 	"net"
@@ -78,6 +79,11 @@ type Config struct {
 	MessageBroker                 string
 	KafkaBrokers                  []string
 	KafkaConsumerGroup            string
+	KafkaTLS                      bool
+	KafkaTLSCAPath                string
+	KafkaSASLMechanism            string
+	KafkaSASLUsername             string
+	KafkaSASLPassword             string
 	RabbitMQURL                   string
 	GooglePubSubProjectID         string
 	GooglePubSubCredentialsSource string
@@ -188,6 +194,12 @@ func ParseWidths(raw string) []int {
 	return widths
 }
 
+// Minimum decoded imgproxy signing key and salt lengths in production.
+const (
+	minImgproxyKeyBytes  = 32
+	minImgproxySaltBytes = 16
+)
+
 // MediaTransformsEnabled reports whether media transforms are delegated to imgproxy.
 func (c Config) MediaTransformsEnabled() bool {
 	return c.MediaEnabled() && c.ImgproxyURL != ""
@@ -240,12 +252,69 @@ func (c Config) validateTransforms() error {
 		return errors.New("IMGPROXY_KEY and IMGPROXY_SALT are required with IMGPROXY_URL")
 	}
 
+	key, keyErr := hex.DecodeString(c.ImgproxyKey)
+	salt, saltErr := hex.DecodeString(c.ImgproxySalt)
+
+	if keyErr != nil || saltErr != nil {
+		return errors.New("IMGPROXY_KEY and IMGPROXY_SALT must be hex")
+	}
+
+	// A short key lets anyone forge transform URLs and spend imgproxy CPU.
+	if c.Environment == envProduction && (len(key) < minImgproxyKeyBytes || len(salt) < minImgproxySaltBytes) {
+		return fmt.Errorf("IMGPROXY_KEY must be at least %d bytes and IMGPROXY_SALT at least %d bytes in production",
+			minImgproxyKeyBytes, minImgproxySaltBytes)
+	}
+
 	if len(c.MediaTransformWidths) == 0 {
 		return errors.New("MEDIA_TRANSFORM_WIDTHS must list widths between 1 and 8192")
 	}
 
 	if c.MediaTransformURLTTL <= 0 {
 		return errors.New("MEDIA_TRANSFORM_URL_TTL must be positive")
+	}
+
+	return nil
+}
+
+// Kafka SASL mechanisms accepted in KAFKA_SASL_MECHANISM.
+const (
+	KafkaSASLPlain       = "PLAIN"
+	KafkaSASLSCRAMSHA256 = "SCRAM-SHA-256"
+	KafkaSASLSCRAMSHA512 = "SCRAM-SHA-512"
+)
+
+func (c Config) validateKafka() error {
+	if len(c.KafkaBrokers) == 0 {
+		return errors.New("KAFKA_BROKERS is required when MESSAGE_BROKER=kafka")
+	}
+
+	if strings.TrimSpace(c.KafkaConsumerGroup) == "" {
+		return errors.New("KAFKA_CONSUMER_GROUP is required when MESSAGE_BROKER=kafka")
+	}
+
+	if c.KafkaTLSCAPath != "" && !c.KafkaTLS {
+		return errors.New("KAFKA_TLS_CA_PATH needs KAFKA_TLS=true")
+	}
+
+	switch c.KafkaSASLMechanism {
+	case "":
+		if c.KafkaSASLUsername != "" || c.KafkaSASLPassword != "" {
+			return errors.New("KAFKA_SASL_USERNAME and KAFKA_SASL_PASSWORD need KAFKA_SASL_MECHANISM")
+		}
+
+		return nil
+	case KafkaSASLPlain, KafkaSASLSCRAMSHA256, KafkaSASLSCRAMSHA512:
+	default:
+		return fmt.Errorf("unsupported KAFKA_SASL_MECHANISM %q (want PLAIN, SCRAM-SHA-256, or SCRAM-SHA-512)", c.KafkaSASLMechanism)
+	}
+
+	if c.KafkaSASLUsername == "" || c.KafkaSASLPassword == "" {
+		return errors.New("KAFKA_SASL_USERNAME and KAFKA_SASL_PASSWORD are required with KAFKA_SASL_MECHANISM")
+	}
+
+	// PLAIN sends the password as is and SCRAM exposes the exchange to offline guessing.
+	if c.Environment == envProduction && !c.KafkaTLS {
+		return errors.New("KAFKA_TLS=true is required with KAFKA_SASL_MECHANISM in production")
 	}
 
 	return nil
@@ -411,13 +480,7 @@ func (c Config) ValidateMessaging() error {
 
 	switch broker {
 	case "kafka":
-		if len(c.KafkaBrokers) == 0 {
-			return errors.New("KAFKA_BROKERS is required when MESSAGE_BROKER=kafka")
-		}
-
-		if strings.TrimSpace(c.KafkaConsumerGroup) == "" {
-			return errors.New("KAFKA_CONSUMER_GROUP is required when MESSAGE_BROKER=kafka")
-		}
+		return c.validateKafka()
 	case "rabbitmq":
 		if strings.TrimSpace(c.RabbitMQURL) == "" {
 			return errors.New("RABBITMQ_URL is required when MESSAGE_BROKER=rabbitmq")
@@ -434,7 +497,14 @@ func (c Config) ValidateMessaging() error {
 }
 
 // Load reads the environment, loads the JWT keys, and validates the result.
-func Load() (Config, error) {
+func Load() (Config, error) { return load(true) }
+
+// LoadBackground is Load for processes that never issue or verify tokens (worker, scheduler,
+// migrate, outbox, audit). The JWT keys are not read, so the signing key need not be deployed
+// where broker messages are processed.
+func LoadBackground() (Config, error) { return load(false) }
+
+func load(withJWTKeys bool) (Config, error) {
 	driver := env("DB_DRIVER", defaultDBDriver)
 
 	port := integer("DB_PORT", 0)
@@ -542,9 +612,12 @@ func Load() (Config, error) {
 	cfg.SwaggerEnabled = boolEnv("APP_SWAGGER_ENABLED", cfg.Environment == "local")
 	cfg.SentryEnvironment = env("SENTRY_ENVIRONMENT", cfg.Environment)
 	cfg.loadWorker()
+	cfg.loadKafkaSecurity()
 
-	if err := cfg.loadJWTKeys(); err != nil {
-		return Config{}, err
+	if withJWTKeys {
+		if err := cfg.loadJWTKeys(); err != nil {
+			return Config{}, err
+		}
 	}
 
 	if err := cfg.validate(); err != nil {
@@ -552,6 +625,15 @@ func Load() (Config, error) {
 	}
 
 	return cfg, nil
+}
+
+// loadKafkaSecurity reads the Kafka TLS and SASL settings.
+func (c *Config) loadKafkaSecurity() {
+	c.KafkaTLS = boolEnv("KAFKA_TLS", false)
+	c.KafkaTLSCAPath = env("KAFKA_TLS_CA_PATH", "")
+	c.KafkaSASLMechanism = strings.ToUpper(env("KAFKA_SASL_MECHANISM", ""))
+	c.KafkaSASLUsername = env("KAFKA_SASL_USERNAME", "")
+	c.KafkaSASLPassword = env("KAFKA_SASL_PASSWORD", "")
 }
 
 // loadWorker reads the outbox relay and message consumer settings.
@@ -578,6 +660,10 @@ func (c *Config) loadJWTKeys() error {
 	publicKey, err := pemFromEnvOrFile("APP_JWT_PUBLIC_KEY", "APP_JWT_PUBLIC_KEY_PATH")
 	if err != nil {
 		return fmt.Errorf("load JWT public key: %w", err)
+	}
+
+	if privateKey == "" || publicKey == "" {
+		return errors.New("JWT ES256 keys are required: set APP_JWT_PRIVATE_KEY or APP_JWT_PRIVATE_KEY_PATH, and APP_JWT_PUBLIC_KEY or APP_JWT_PUBLIC_KEY_PATH")
 	}
 
 	c.JWTPrivateKey = privateKey
@@ -625,10 +711,6 @@ func (c *Config) validateSecrets() error {
 		}
 
 		c.SessionKey = "local-dev-session-key-32bytes-min!!"
-	}
-
-	if c.JWTPrivateKey == "" || c.JWTPublicKey == "" {
-		return errors.New("JWT ES256 keys are required: set APP_JWT_PRIVATE_KEY or APP_JWT_PRIVATE_KEY_PATH, and APP_JWT_PUBLIC_KEY or APP_JWT_PUBLIC_KEY_PATH")
 	}
 
 	if c.EncryptionKey != "" {

@@ -1,5 +1,27 @@
 # Changelog
 
+## 2026-09-25 — Event pipeline secrets review
+
+### Added
+
+- Kafka TLS and SASL: `KAFKA_TLS`, `KAFKA_TLS_CA_PATH`, `KAFKA_SASL_MECHANISM` (`PLAIN`,
+  `SCRAM-SHA-256`, `SCRAM-SHA-512`), `KAFKA_SASL_USERNAME`, `KAFKA_SASL_PASSWORD`. Production
+  refuses SASL without TLS.
+- Per-process secrets table and event-pipeline notes in
+  [secrets-and-headers.md](docs/security/secrets-and-headers.md).
+
+### Changed
+
+- `app worker`, `scheduler`, `migrate`, `outbox`, and `audit` load config without the JWT
+  keys (`config.LoadBackground`), so the signing key no longer has to be deployed with them.
+- In production `IMGPROXY_KEY` must decode to at least 32 bytes and `IMGPROXY_SALT` to 16;
+  both must be hex everywhere.
+
+### Fixed
+
+- The email consumer no longer copies SMTP errors, which can echo the recipient address, into
+  its error and so into plaintext dead-letter headers. The detail is logged instead.
+
 ## 2026-09-25 — AsyncAPI validation in CI
 
 ### Added

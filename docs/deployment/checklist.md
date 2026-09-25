@@ -16,7 +16,8 @@
 - [ ] API rolled out; old replicas drained
 - [ ] Workers restarted if schema-dependent consumers exist
 - [ ] With `MESSAGE_BROKER` set: workers share the API's database, broker, and
-      `MESSAGE_TOPIC_PREFIX` settings, plus `APP_ENCRYPTION_KEY` and `SMTP_*`
+      `MESSAGE_TOPIC_PREFIX` settings, plus `APP_ENCRYPTION_KEY` and `SMTP_*`; the JWT signing
+      key is not mounted into worker or scheduler deployments
 - [ ] Workers rolled one at a time; each new worker's `GET /readyz` on `METRICS_ADDR` is 200
       before the next is replaced
 - [ ] `app scheduler` running (at least one replica) so pruning jobs keep up
