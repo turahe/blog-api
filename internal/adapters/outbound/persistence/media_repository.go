@@ -132,6 +132,10 @@ func (r *MediaRepository) List(ctx context.Context, filter mediadomain.ListFilte
 		q = q.Where("status = ?", filter.Status)
 	}
 
+	if filter.Unused {
+		q = q.Where("status = ? AND "+mediaUnreferenced, mediadomain.StatusReady)
+	}
+
 	var total int64
 	if err := q.Count(&total).Error; err != nil {
 		return mediadomain.ListResult{}, err
@@ -201,6 +205,137 @@ func (r *MediaRepository) ClearEntityReferences(ctx context.Context, id uuid.UUI
 
 		return nil
 	})
+}
+
+// mediaUnreferenced matches assets no row points at. Post bodies are not parsed.
+const mediaUnreferenced = `NOT EXISTS (SELECT 1 FROM users u WHERE u.avatar_id = media_assets.id)
+	AND NOT EXISTS (SELECT 1 FROM categories c WHERE c.image_id = media_assets.id)
+	AND NOT EXISTS (SELECT 1 FROM posts p WHERE p.cover_image_media_id = media_assets.id)
+	AND NOT EXISTS (SELECT 1 FROM post_media pm WHERE pm.media_asset_id = media_assets.id)
+	AND NOT EXISTS (SELECT 1 FROM post_seo ps WHERE ps.og_image_id = media_assets.id OR ps.twitter_image_id = media_assets.id)`
+
+// Orphan conditions; Purge re-checks them so a row that changed since it was listed stays.
+const (
+	mediaAbandoned = `deleted_at IS NULL AND status <> 'ready' AND presign_expires_at < ?`
+	mediaTrashed   = `deleted_at IS NOT NULL AND deleted_at < ?`
+)
+
+// Abandoned returns live assets that never became ready and whose presign expired before
+// expiredBefore, oldest first.
+func (r *MediaRepository) Abandoned(ctx context.Context, expiredBefore time.Time, limit int) ([]mediadomain.MediaAsset, error) {
+	return r.orphans(ctx, mediaAbandoned, expiredBefore, "presign_expires_at", limit)
+}
+
+// Trashed returns assets soft-deleted before deletedBefore, oldest first.
+func (r *MediaRepository) Trashed(ctx context.Context, deletedBefore time.Time, limit int) ([]mediadomain.MediaAsset, error) {
+	return r.orphans(ctx, mediaTrashed, deletedBefore, "deleted_at", limit)
+}
+
+func (r *MediaRepository) orphans(ctx context.Context, where string, before time.Time, order string, limit int) ([]mediadomain.MediaAsset, error) {
+	var models []MediaAssetModel
+
+	err := conn(ctx, r.db).Unscoped().Select(mediaColumns).
+		Where(where, before).Order(order + ", id").Limit(limit).Find(&models).Error
+	if err != nil {
+		return nil, err
+	}
+
+	out := make([]mediadomain.MediaAsset, 0, len(models))
+	for _, m := range models {
+		out = append(out, mapMediaAsset(m))
+	}
+
+	return out, nil
+}
+
+// Purge deletes the row while it is still soft-deleted or an upload whose presign expired
+// (which can no longer complete). References are ON DELETE SET NULL or CASCADE.
+func (r *MediaRepository) Purge(ctx context.Context, id uuid.UUID) (bool, error) {
+	res := conn(ctx, r.db).Exec(`DELETE FROM media_assets WHERE uuid = ? AND (deleted_at IS NOT NULL
+		OR (status <> 'ready' AND presign_expires_at < now()))`, id)
+
+	return res.RowsAffected > 0, res.Error
+}
+
+type usageRow struct {
+	Key   string
+	Count int64
+	Bytes int64
+}
+
+type uploaderRow struct {
+	UserUUID *uuid.UUID
+	Username *string
+	Count    int64
+	Bytes    int64
+}
+
+// Usage groups every stored asset, soft-deleted ones under "deleted", by status, content type,
+// and uploader.
+func (r *MediaRepository) Usage(ctx context.Context, filter mediadomain.UsageFilter) (mediadomain.Usage, error) {
+	db := conn(ctx, r.db)
+	scope := "TRUE"
+
+	var args []any
+
+	if filter.UploadedBy != nil {
+		scope, args = "m.uploaded_by = (SELECT id FROM users WHERE uuid = ?)", []any{*filter.UploadedBy}
+	}
+
+	group := func(key string) ([]mediadomain.UsageRow, error) {
+		var rows []usageRow
+
+		err := db.Raw(`SELECT `+key+` AS key, count(*) AS count, coalesce(sum(m.size_bytes), 0) AS bytes
+			FROM media_assets m WHERE `+scope+` GROUP BY 1 ORDER BY 3 DESC, 1`, args...).Scan(&rows).Error
+
+		out := make([]mediadomain.UsageRow, 0, len(rows))
+		for _, row := range rows {
+			out = append(out, mediadomain.UsageRow(row))
+		}
+
+		return out, err
+	}
+
+	var (
+		usage mediadomain.Usage
+		err   error
+	)
+
+	statusKey := "CASE WHEN m.deleted_at IS NOT NULL THEN '" + mediadomain.StatusDeleted + "' ELSE m.status END"
+	if usage.ByStatus, err = group(statusKey); err != nil {
+		return usage, err
+	}
+
+	if usage.ByContentType, err = group("m.content_type"); err != nil {
+		return usage, err
+	}
+
+	for _, row := range usage.ByStatus {
+		usage.Total.Count += row.Count
+		usage.Total.Bytes += row.Bytes
+	}
+
+	var uploaders []uploaderRow
+
+	err = db.Raw(`SELECT u.uuid AS user_uuid, u.username, count(*) AS count, coalesce(sum(m.size_bytes), 0) AS bytes
+		FROM media_assets m LEFT JOIN users u ON u.id = m.uploaded_by
+		WHERE `+scope+` GROUP BY u.uuid, u.username ORDER BY 4 DESC, 3 DESC, 1 LIMIT ?`,
+		append(args, filter.TopLimit)...).Scan(&uploaders).Error
+	if err != nil {
+		return usage, err
+	}
+
+	usage.TopUploaders = make([]mediadomain.UploaderUsage, 0, len(uploaders))
+	for _, u := range uploaders {
+		entry := mediadomain.UploaderUsage{UserUUID: u.UserUUID, Count: u.Count, Bytes: u.Bytes}
+		if u.Username != nil {
+			entry.Username = *u.Username
+		}
+
+		usage.TopUploaders = append(usage.TopUploaders, entry)
+	}
+
+	return usage, nil
 }
 
 func mapMediaAssetModel(asset mediadomain.MediaAsset) MediaAssetModel {

@@ -17,8 +17,7 @@ Jobs handle asynchronous and retryable work that should not block request-respon
 - send notification emails
 - process moderation side effects
 - run periodic cleanup for expired session or recovery state
-- evict expired transformed media cache entries
-- clean orphaned media metadata or storage objects after failed workflows
+- clean orphaned media metadata and storage objects (`media-orphans`)
 - materialize daily analytics aggregates
 - erase analytics data per withdrawn consent token
 - expire impersonation sessions (periodic sweeper)
@@ -60,6 +59,7 @@ in `last_error`; the job is tried again at its next interval.
 | `impersonation-expire` | 1m | Closes impersonation sessions past `expires_at` (up to 500 per run) and records `blog.impersonation.expired`; the tokens already stopped working at expiry |
 | `newsletter-release` | 1m | Queues scheduled newsletter issues whose `send_at` has passed (up to 50 per run) and records `blog.newsletter.issue.send_requested` |
 | `newsletter-tokens-prune` | 1h | Deletes newsletter confirm, unsubscribe, and preferences tokens 30 days past expiry |
+| `media-orphans` | 1h | Deletes the object and row of uploads never completed 24h after their presign expired, and of assets soft-deleted longer than `MEDIA_PURGE_AFTER` (up to 200 of each per run); skipped when media storage is not configured. See [media.md](media.md#orphan-cleanup) |
 
 Newsletter issues are sent by the `newsletter-dispatch` consumer in `app worker`, not by the
 scheduler; see [newsletter.md](newsletter.md#dispatch).

@@ -53,6 +53,7 @@ type Service struct {
 
 	transformer     ports.Transformer
 	transformWidths []int
+	policy          ports.PolicySource
 }
 
 // New returns a Service enforcing the allowed MIME types and size limit.

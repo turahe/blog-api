@@ -24,6 +24,46 @@ func MediaPresign(result mediadomain.PresignResult) gin.H {
 	}
 }
 
+// MediaAssetWithVariants serializes an asset with its preset URLs. A nil map (transforms not
+// configured) omits the variants field; assets that cannot be transformed get an empty map.
+func MediaAssetWithVariants(asset mediadomain.MediaAsset, variants map[string]string) gin.H {
+	out := MediaAsset(asset)
+	if variants != nil {
+		out["variants"] = variants
+	}
+
+	return out
+}
+
+// MediaUsage serializes a storage usage report.
+func MediaUsage(u mediadomain.Usage) gin.H {
+	rows := func(in []mediadomain.UsageRow, key string) []gin.H {
+		out := make([]gin.H, 0, len(in))
+		for _, r := range in {
+			out = append(out, gin.H{key: r.Key, "count": r.Count, "bytes": r.Bytes})
+		}
+
+		return out
+	}
+
+	uploaders := make([]gin.H, 0, len(u.TopUploaders))
+	for _, up := range u.TopUploaders {
+		var id, username any
+		if up.UserUUID != nil {
+			id, username = up.UserUUID.String(), up.Username
+		}
+
+		uploaders = append(uploaders, gin.H{"user_id": id, "username": username, "count": up.Count, "bytes": up.Bytes})
+	}
+
+	return gin.H{
+		"total":           gin.H{"count": u.Total.Count, "bytes": u.Total.Bytes},
+		"by_status":       rows(u.ByStatus, "status"),
+		"by_content_type": rows(u.ByContentType, "content_type"),
+		"top_uploaders":   uploaders,
+	}
+}
+
 // MediaAsset serializes a media asset resource.
 func MediaAsset(asset mediadomain.MediaAsset) gin.H {
 	var uploadedBy any

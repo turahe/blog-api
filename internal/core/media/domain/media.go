@@ -57,13 +57,56 @@ type PresignResult struct {
 	ExpiresAt       time.Time
 }
 
-// ListFilter selects and pages media assets.
+// ListFilter selects and pages media assets. Unused keeps ready assets that no avatar,
+// category, post cover, post attachment, or SEO image references; links inside post bodies
+// are not tracked, so an unused asset may still be linked from Markdown.
 type ListFilter struct {
 	Page    int
 	PerPage int
 	Query   string
 	Disk    string
 	Status  string
+	Unused  bool
+}
+
+// UsageFilter narrows a storage usage report to one uploader.
+type UsageFilter struct {
+	UploadedBy *uuid.UUID
+	TopLimit   int
+}
+
+// UsageRow is a count and byte total for one group.
+type UsageRow struct {
+	Key   string
+	Count int64
+	Bytes int64
+}
+
+// UploaderUsage is one uploader's share. A nil UserUUID groups assets without an uploader.
+type UploaderUsage struct {
+	UserUUID *uuid.UUID
+	Username string
+	Count    int64
+	Bytes    int64
+}
+
+// Usage is a storage usage report. Soft-deleted assets are grouped under status "deleted":
+// their objects stay in the bucket until the orphan cleanup purges them.
+type Usage struct {
+	Total         UsageRow
+	ByStatus      []UsageRow
+	ByContentType []UsageRow
+	TopUploaders  []UploaderUsage
+}
+
+// StatusDeleted is the usage group of soft-deleted assets.
+const StatusDeleted = "deleted"
+
+// PurgeResult counts what one orphan cleanup run removed.
+type PurgeResult struct {
+	Abandoned int
+	Trashed   int
+	Bytes     int64
 }
 
 // ListResult is a page of media assets.

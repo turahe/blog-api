@@ -18,6 +18,7 @@ import (
 	"github.com/turahe/blog-api/internal/bootstrap"
 	auditservice "github.com/turahe/blog-api/internal/core/audit/service"
 	"github.com/turahe/blog-api/internal/core/event"
+	mediaservice "github.com/turahe/blog-api/internal/core/media/service"
 	"github.com/turahe/blog-api/internal/core/readcache"
 	"github.com/turahe/blog-api/internal/platform/config"
 	"github.com/turahe/blog-api/internal/platform/database"
@@ -39,6 +40,8 @@ const (
 	newsletterReleaseBatch = 50
 	// newsletterTokenRetention keeps expired newsletter tokens so old links still say "expired".
 	newsletterTokenRetention = 30 * 24 * time.Hour
+	// mediaPurgeBatch bounds how many abandoned and how many deleted assets one run purges.
+	mediaPurgeBatch = 200
 )
 
 func newSchedulerCmd() *cobra.Command {
@@ -194,7 +197,7 @@ func scheduledJobs(
 	impersonation := bootstrap.NewImpersonationService(cfg, db, bootstrap.NewEvents(cfg, db), nil, nil)
 	newsletter := bootstrap.NewNewsletterService(cfg, db, bootstrap.NewEvents(cfg, db), nil, logger)
 
-	return []scheduler.Job{
+	jobs := []scheduler.Job{
 		{Name: "audit-prune", Every: time.Hour, Run: func(ctx context.Context) error {
 			return logPruned(ctx, logger, "audit entries")(activity.Prune(ctx, cfg.AuditRetention()))
 		}},
@@ -237,6 +240,33 @@ func scheduledJobs(
 			return logPruned(ctx, logger, "newsletter tokens")(newsletter.PruneTokens(ctx, newsletterTokenRetention))
 		}},
 	}
+
+	return append(jobs, mediaJobs(ctx, cfg, db, logger)...)
+}
+
+// mediaJobs returns the media orphan cleanup when media storage is configured.
+func mediaJobs(ctx context.Context, cfg config.Config, db *database.Database, logger *slog.Logger) []scheduler.Job {
+	janitor, err := bootstrap.NewMediaJanitor(ctx, cfg, db)
+	if err != nil {
+		logger.Warn("media orphan cleanup disabled", "error", err)
+		return nil
+	}
+
+	if janitor == nil {
+		return nil
+	}
+
+	policy := mediaservice.PurgePolicy{TrashRetention: cfg.MediaPurgeAfter, Limit: mediaPurgeBatch}
+
+	return []scheduler.Job{{Name: "media-orphans", Every: time.Hour, Run: func(ctx context.Context) error {
+		result, err := janitor.PurgeOrphans(ctx, policy)
+		if result.Abandoned+result.Trashed > 0 {
+			logger.InfoContext(ctx, "purged orphan media",
+				"abandoned", result.Abandoned, "trashed", result.Trashed, "bytes", result.Bytes)
+		}
+
+		return err
+	}}}
 }
 
 func logPruned(ctx context.Context, logger *slog.Logger, what string) func(int64, error) error {

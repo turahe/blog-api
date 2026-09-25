@@ -60,6 +60,25 @@ func TestURLStaysStableWithinAWindowAndExpires(t *testing.T) {
 	require.NotContains(t, first, ".webp", "an empty format keeps the source format")
 }
 
+func TestURLAddsCappedQuality(t *testing.T) {
+	t.Parallel()
+
+	s := newSigner(t, time.Unix(1_800_000_000, 0))
+	asset := mediadomain.MediaAsset{StorageKey: "k.png"}
+
+	got, err := s.URL(asset, mediadomain.Transform{Width: 128, Quality: 75})
+	require.NoError(t, err)
+	require.Contains(t, got, "/rs:fit:128:0/q:75/")
+
+	got, err = s.URL(asset, mediadomain.Transform{Width: 128, Quality: 250})
+	require.NoError(t, err)
+	require.Contains(t, got, "/q:100/")
+
+	got, err = s.URL(asset, mediadomain.Transform{Width: 128})
+	require.NoError(t, err)
+	require.NotContains(t, got, "/q:")
+}
+
 func TestNewRejectsBadConfig(t *testing.T) {
 	t.Parallel()
 

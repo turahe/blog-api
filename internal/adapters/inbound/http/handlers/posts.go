@@ -15,6 +15,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 	mediadomain "github.com/turahe/blog-api/internal/core/media/domain"
+	mediaports "github.com/turahe/blog-api/internal/core/media/ports"
 	postdomain "github.com/turahe/blog-api/internal/core/post/domain"
 	postservice "github.com/turahe/blog-api/internal/core/post/service"
 	tagdomain "github.com/turahe/blog-api/internal/core/tag/domain"
@@ -257,7 +258,7 @@ func adminUpdatePostHandlerWithDeps(posts postAdminAPI, roles RoleLookup) gin.Ha
 //	@Failure	404		{object}	responses.Envelope
 //	@Security	Bearer
 //	@Router		/api/v1/admin/posts/{param1}/media [patch]
-func adminReplacePostMediaHandler(posts *postservice.PostService) gin.HandlerFunc {
+func adminReplacePostMediaHandler(posts *postservice.PostService, media mediaports.Service) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		postID, err := uuid.Parse(strings.TrimSpace(c.Param("param1")))
 		if err != nil {
@@ -306,18 +307,9 @@ func adminReplacePostMediaHandler(posts *postservice.PostService) gin.HandlerFun
 			return
 		}
 
-		payload := make([]gin.H, 0, len(out))
-		for _, item := range out {
-			row := gin.H{
-				"media_asset_id": item.MediaAssetUUID.String(),
-				"kind":           item.Kind,
-				"sort_order":     item.SortOrder,
-			}
-			if item.Media != nil {
-				row["media"] = responses.MediaAsset(*item.Media)
-			}
-
-			payload = append(payload, row)
+		payload, ok := postMediaPayload(c, media, out)
+		if !ok {
+			return
 		}
 
 		responses.Success(c, nethttp.StatusOK, gin.H{
@@ -325,6 +317,38 @@ func adminReplacePostMediaHandler(posts *postservice.PostService) gin.HandlerFun
 			"items":   payload,
 		})
 	}
+}
+
+// postMediaPayload serializes post media rows with their assets and preset URLs. It writes the
+// error and returns false when the presets cannot be read.
+func postMediaPayload(c *gin.Context, media mediaports.Service, items []mediadomain.PostMediaItem) ([]gin.H, bool) {
+	assets := make([]mediadomain.MediaAsset, 0, len(items))
+	for _, item := range items {
+		if item.Media != nil {
+			assets = append(assets, *item.Media)
+		}
+	}
+
+	rendered, ok := renderMedia(c, media, assets...)
+	if !ok {
+		return nil, false
+	}
+
+	payload := make([]gin.H, 0, len(items))
+	for _, item := range items {
+		row := gin.H{
+			"media_asset_id": item.MediaAssetUUID.String(),
+			"kind":           item.Kind,
+			"sort_order":     item.SortOrder,
+		}
+		if item.Media != nil {
+			row["media"], rendered = rendered[0], rendered[1:]
+		}
+
+		payload = append(payload, row)
+	}
+
+	return payload, true
 }
 
 // parseNullableUUID returns (nil, true) for JSON null, (id, true) for a UUID string,

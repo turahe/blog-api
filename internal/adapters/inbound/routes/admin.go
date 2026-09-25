@@ -60,6 +60,7 @@ func registerAdmin(v1 *gin.RouterGroup, auth AuthMiddleware, c Controllers) {
 	del(admin, "/tags/:param1", "admin.tags.delete", g, AuthRequired, c, c.Tags.AdminDelete)
 
 	get(admin, "/media", "admin.media.list", g, AuthRequired, c, c.Media.AdminList)
+	get(admin, "/media/usage", "admin.media.usage", g, AuthRequired, c, c.Media.AdminUsage)
 	post(admin, "/media", "admin.media.create", g, AuthRequired, c, c.Media.AdminCreate)
 	post(admin, "/media/:param1/complete", "admin.media.complete", g, AuthRequired, c, c.Media.AdminComplete)
 	patch(admin, "/media/:param1/tags", "admin.media.tags.patch", g, AuthRequired, c, c.Media.AdminTagsPatch)

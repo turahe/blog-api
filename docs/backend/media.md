@@ -13,18 +13,12 @@ The media module handles upload, storage, metadata, dynamic image transformation
 
 ## Dynamic Image Delivery
 
-- no pre-generated resized variants are required
-- variants are generated when a transform endpoint is requested
-- support resize, crop, rotate, quality adjustment, and format conversion
-- support optimized delivery in WebP and AVIF where available
-
-## Cache Strategy
-
-Recommended tiers:
-
-- in-memory cache for hot variants
-- Redis or equivalent distributed cache for repeated transforms
-- optional object-storage-backed cached variants for heavy traffic paths
+- no resized derivatives are stored; imgproxy renders them on request (see
+  [Image transforms](#image-transforms-imgproxy))
+- resize (width, aspect kept), quality, and format conversion to WebP, AVIF, JPEG, or PNG;
+  crop and rotate are not offered
+- named presets are returned as signed URLs on media responses (see [Variants](#variants))
+- caching is the CDN in front of imgproxy, keyed by the signed URL
 
 ## Upload Workflow (MVP — implemented)
 
@@ -89,6 +83,64 @@ URLs.
 `IMGPROXY_ALLOWED_SOURCES=s3://`, and decode limits (`IMGPROXY_MAX_SRC_RESOLUTION`,
 `IMGPROXY_MAX_SRC_FILE_SIZE`). Locally: `docker compose --profile imgproxy up -d imgproxy`
 and `IMGPROXY_URL=http://127.0.0.1:8081`.
+
+**Quality and default format.** Every transform URL carries `q:<media.default_transform_quality>`
+(site setting, default 80). A request without `format` uses `media.default_transform_format`
+(default `original`, which keeps the source format). Both apply to presets too.
+
+## Variants
+
+The site setting `media.variants` lists named presets as `name:width` or `name:width:format`
+(default `thumbnail:320:webp`, `card:640:webp`, `hero:1280:webp`; at most 10, width 16–4096,
+names unique). When imgproxy is configured, each ready raster asset in these responses gains a
+`variants` object mapping preset name to a signed imgproxy URL:
+
+- admin media list, complete, and tag update (`admin.media.list`, `admin.media.complete`,
+  `admin.media.tags.patch`)
+- `public.media.get`
+- the `media` rows of `admin.posts.media.replace`
+
+SVG, pending, and failed assets get an empty object. Without `IMGPROXY_URL` the field is
+omitted. Preset widths do not have to be in `MEDIA_TRANSFORM_WIDTHS`: that allowlist bounds
+what anonymous callers of the transform endpoint can ask for, while presets are chosen by an
+admin. The URLs follow the same signing, expiry window, and caching as the transform endpoint.
+Changing a preset changes its URLs, so the CDN renders the new size on the next request;
+nothing is stored or regenerated.
+
+## Orphan cleanup
+
+The hourly `media-orphans` job in `app scheduler` (see [jobs.md](jobs.md)) deletes, up to 200
+of each per run:
+
+- **abandoned uploads**: assets never completed (`pending` or `failed`) whose presign expired
+  more than 24 hours ago; the client can no longer upload, so the row and any partial object
+  are deleted
+- **trashed assets**: assets soft-deleted longer than `MEDIA_PURGE_AFTER` (default 30 days,
+  `0` keeps them). References were cleared at soft delete.
+
+The object is deleted first and the row second, re-checking the condition, so an asset that
+was completed or restored in between is kept, and a failed object delete leaves the row for
+the next run. The job is skipped when media storage is not configured.
+
+Ready assets that nothing references are **not** deleted: post bodies are Markdown and are not
+parsed for image links, so "unreferenced" is only a hint. `GET /api/v1/admin/media?unused=true`
+lists ready assets that no avatar, category image, post cover, post media row, or post SEO
+image points at, for an admin to review and delete.
+
+## Storage usage
+
+`GET /api/v1/admin/media/usage` (`admin.media.usage`, permission `media.usage.read`, admin and
+editor) reports stored assets:
+
+- `total`: `count` and `bytes`
+- `by_status`: `pending`, `ready`, `failed`, and `deleted` (soft-deleted, not yet purged)
+- `by_content_type`
+- `top_uploaders`: `user_id`, `username`, `count`, `bytes`, largest first; assets without an
+  uploader (deleted users) are one row with `user_id: null`. `top` sets the length (default 10,
+  max 100).
+
+`user_id` limits the report to one uploader. The response is `Cache-Control: no-store`. It is
+a report only; there are no quotas.
 
 ## Featured media on posts
 

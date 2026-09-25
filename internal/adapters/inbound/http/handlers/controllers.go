@@ -95,6 +95,7 @@ const (
 	permPostSEOView          = "post.seo.view"
 	permPostSEOEdit          = "post.seo.edit"
 	permPostSlugEdit         = "post.slug.edit"
+	permMediaUsageRead       = "media.usage.read"
 )
 
 // Fallback role sets for gate when no RBAC enforcer is wired.
@@ -187,6 +188,7 @@ func NewControllers(deps Deps) routes.Controllers {
 			AdminList:       gate(deps, "media.create", authorRoles, adminListMediaHandler(deps.Media)),
 			AdminTagsPatch:  gate(deps, "media.create", authorRoles, adminPatchMediaTagsHandler(deps.Media)),
 			AdminDelete:     gate(deps, "media.delete", editorRoles, adminDeleteMediaHandler(deps.Media)),
+			AdminUsage:      gate(deps, permMediaUsageRead, editorRoles, adminMediaUsageHandler(deps.Media)),
 		}
 	}
 
@@ -242,7 +244,7 @@ func postControllers(deps Deps) routes.Posts {
 		AdminUnpublish:    write("post.publish", editorRoles, adminUnpublishPostHandler(p)),
 		AdminArchive:      write("post.publish", editorRoles, adminArchivePostHandler(p)),
 		AdminUpdate:       write("post.update", authorRoles, adminUpdatePostHandler(p, deps.Roles)),
-		AdminMediaReplace: write("post.update", authorRoles, adminReplacePostMediaHandler(p)),
+		AdminMediaReplace: write("post.update", authorRoles, adminReplacePostMediaHandler(p, deps.Media)),
 		AdminDelete:       write("post.delete", editorRoles, adminDeletePostHandler(p)),
 		AdminRestore:      write("post.delete", editorRoles, adminRestorePostHandler(p)),
 		RevisionsList:     gate(deps, permPostRevisionsView, authorRoles, adminListPostRevisionsHandler(p, allPosts)),

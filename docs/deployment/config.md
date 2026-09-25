@@ -307,6 +307,7 @@ delivery semantics are in [events.md](../backend/events.md).
 | `MEDIA_ALLOWED_MIME_TYPES` | `image/jpeg,image/png,image/webp,image/gif` | No | Comma-separated MIME allowlist for uploads. |
 | `MEDIA_MAX_UPLOAD_BYTES` | `10485760` | No | Maximum declared upload size in bytes. |
 | `MEDIA_PRESIGN_TTL` | `15m` | No | Presigned URL lifetime. |
+| `MEDIA_PURGE_AFTER` | `720h` | No | How long soft-deleted media keeps its row and object before the `media-orphans` job in `app scheduler` deletes both. `0` keeps deleted media. Must not be negative. |
 | `PRIVACY_EXPORT_RETENTION` | `72h` | No | How long a personal data export archive stays in `S3_BUCKET` (under `privacy-exports/`, which must not be publicly readable) before `app scheduler` deletes it. Must be positive. |
 | `PRIVACY_EXPORT_URL_TTL` | `15m` | No | Lifetime of each presigned export download link; a new link is issued on every `GET /me/activity/export`. 1s–168h. |
 | `AVATAR_MAX_BYTES` | `5242880` | No | Maximum avatar upload size (`POST /api/v1/me/avatar`); the smaller of this and `MEDIA_MAX_UPLOAD_BYTES` applies. Must be positive. |
@@ -425,6 +426,7 @@ cookies, request body, and credential-bearing headers are stripped before sendin
   without `KAFKA_TLS=true`;
 - media storage is enabled but `S3_DISK` is unsupported, the MIME allowlist is empty, or
   `MEDIA_MAX_UPLOAD_BYTES` / `MEDIA_PRESIGN_TTL` are not positive;
+- `MEDIA_PURGE_AFTER` is negative;
 - `IMGPROXY_URL` is set without hex `IMGPROXY_KEY` / `IMGPROXY_SALT` (in production at least
   32 and 16 bytes), `MEDIA_TRANSFORM_WIDTHS` has an entry outside 1–8192, or
   `MEDIA_TRANSFORM_URL_TTL` is not positive;

@@ -23,6 +23,12 @@ func (s *Service) WithTransforms(transformer ports.Transformer, widths []int) *S
 	return s
 }
 
+// WithPolicy applies admin-set presets, quality, and default format to transforms.
+func (s *Service) WithPolicy(policy ports.PolicySource) *Service {
+	s.policy = policy
+	return s
+}
+
 // TransformURL validates t against the allowlists and returns the signed URL of the resized
 // image. Only ready raster images can be transformed.
 func (s *Service) TransformURL(ctx context.Context, id uuid.UUID, t mediadomain.Transform) (string, error) {
@@ -43,14 +49,76 @@ func (s *Service) TransformURL(ctx context.Context, id uuid.UUID, t mediadomain.
 		return "", err
 	}
 
-	if _, ok := mediadomain.TransformableTypes[asset.ContentType]; !ok {
+	if !transformable(asset) {
 		return "", fmt.Errorf("%w: media is not a transformable image", ErrValidation)
 	}
 
-	url, err := s.transformer.URL(asset, t)
+	policy, err := s.transformPolicy(ctx)
+	if err != nil {
+		return "", err
+	}
+
+	url, err := s.transformer.URL(asset, policy.Apply(t))
 	if err != nil {
 		return "", fmt.Errorf("build transform url: %w", err)
 	}
 
 	return url, nil
+}
+
+// Variants returns the signed preset URLs of each ready raster asset. Presets are generated
+// by the server, so they are not limited to MEDIA_TRANSFORM_WIDTHS.
+func (s *Service) Variants(ctx context.Context, assets ...mediadomain.MediaAsset) (map[uuid.UUID]map[string]string, error) {
+	if s.transformer == nil {
+		return nil, nil
+	}
+
+	policy, err := s.transformPolicy(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	out := make(map[uuid.UUID]map[string]string, len(assets))
+
+	for _, asset := range assets {
+		urls := map[string]string{}
+
+		if transformable(asset) {
+			for _, v := range policy.Variants {
+				url, err := s.transformer.URL(asset, policy.Apply(mediadomain.Transform{Width: v.Width, Format: v.Format}))
+				if err != nil {
+					return nil, fmt.Errorf("build variant url: %w", err)
+				}
+
+				urls[v.Name] = url
+			}
+		}
+
+		out[asset.UUID] = urls
+	}
+
+	return out, nil
+}
+
+func (s *Service) transformPolicy(ctx context.Context) (mediadomain.TransformPolicy, error) {
+	if s.policy == nil {
+		return mediadomain.TransformPolicy{}, nil
+	}
+
+	policy, err := s.policy.TransformPolicy(ctx)
+	if err != nil {
+		return mediadomain.TransformPolicy{}, fmt.Errorf("read transform policy: %w", err)
+	}
+
+	return policy, nil
+}
+
+func transformable(asset mediadomain.MediaAsset) bool {
+	if asset.Status != mediadomain.StatusReady || asset.DeletedAt != nil {
+		return false
+	}
+
+	_, ok := mediadomain.TransformableTypes[asset.ContentType]
+
+	return ok
 }

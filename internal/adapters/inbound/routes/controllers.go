@@ -206,6 +206,7 @@ type Media struct {
 	AdminList       gin.HandlerFunc
 	AdminTagsPatch  gin.HandlerFunc
 	AdminDelete     gin.HandlerFunc
+	AdminUsage      gin.HandlerFunc
 }
 
 // Comments public, self-service, and moderation handlers.

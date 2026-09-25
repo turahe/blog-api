@@ -1510,6 +1510,19 @@ paths:
         in: query
         name: disk
         type: string
+      - description: status filter
+        enum:
+        - pending
+        - ready
+        - failed
+        in: query
+        name: status
+        type: string
+      - description: only ready assets no avatar, category, post cover, attachment,
+          or SEO image references
+        in: query
+        name: unused
+        type: boolean
       produces:
       - application/json
       responses:
@@ -1620,6 +1633,37 @@ paths:
       security:
       - Bearer: []
       summary: Patch media tags
+      tags:
+      - admin
+  /api/v1/admin/media/usage:
+    get:
+      description: Counts and bytes of stored media by status (soft-deleted assets
+        as deleted until the orphan cleanup purges them), content type, and top uploaders.
+        user_id narrows the report to one uploader.
+      parameters:
+      - description: uploader UUID
+        in: query
+        name: user_id
+        type: string
+      - default: 10
+        description: uploaders to list (1-100)
+        in: query
+        name: top
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/responses.Envelope'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/responses.Envelope'
+      security:
+      - Bearer: []
+      summary: Storage usage
       tags:
       - admin
   /api/v1/admin/newsletter/issues:

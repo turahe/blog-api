@@ -6,6 +6,7 @@ import (
 	"net/url"
 	"regexp"
 	"slices"
+	"strconv"
 	"strings"
 	"time"
 )
@@ -115,6 +116,17 @@ func DefaultCatalogue() Catalogue {
 			Key: "media.default_transform_quality", Category: CategoryMedia, Type: TypeInteger, Sensitivity: PublicSafe,
 			Description: "Default quality (1-100) for resized images", Default: int64(80), Min: 1, Max: 100,
 		},
+		Definition{
+			Key: "media.default_transform_format", Category: CategoryMedia, Type: TypeString, Sensitivity: PublicSafe,
+			Description: "Output format when a transform or preset names none; original keeps the source format",
+			Default:     "original", Enum: []string{"original", "webp", "avif", "jpeg", "png"},
+		},
+		Definition{
+			Key: "media.variants", Category: CategoryMedia, Type: TypeStringList, Sensitivity: PublicSafe,
+			Description: "Image presets returned on media responses, as name:width or name:width:format (width 16-4096)",
+			Default:     []string{"thumbnail:320:webp", "card:640:webp", "hero:1280:webp"},
+			MaxItems:    10, MaxLength: 48, Pattern: variantPattern, Check: checkVariants,
+		},
 
 		flag(CategoryAnalytics, "analytics.enabled", "Collect first-party analytics events", true),
 		flag(CategoryAnalytics, "analytics.consent_required", "Collect analytics only after visitor consent", true),
@@ -202,6 +214,38 @@ func checkURL(value any) (string, string) {
 	u, err := url.Parse(raw)
 	if err != nil || (u.Scheme != "https" && u.Scheme != "http") || u.Host == "" || u.User != nil {
 		return ReasonFormat, "value must be an absolute http(s) URL without credentials"
+	}
+
+	return "", ""
+}
+
+// variantPattern matches a media preset: name:width or name:width:format.
+var variantPattern = regexp.MustCompile(`^[a-z][a-z0-9_]{0,31}:[0-9]{2,4}(:(webp|avif|jpeg|png))?$`)
+
+// Variant width bounds, matching the media domain.
+const (
+	minVariantWidth = 16
+	maxVariantWidth = 4096
+)
+
+func checkVariants(value any) (string, string) {
+	list, _ := value.([]string)
+	names := make(map[string]struct{}, len(list))
+
+	for _, spec := range list {
+		name, rest, _ := strings.Cut(spec, ":")
+		widthText, _, _ := strings.Cut(rest, ":")
+
+		width, err := strconv.Atoi(widthText)
+		if err != nil || width < minVariantWidth || width > maxVariantWidth {
+			return ReasonOutOfRange, fmt.Sprintf("preset %q width must be between %d and %d", spec, minVariantWidth, maxVariantWidth)
+		}
+
+		if _, dup := names[name]; dup {
+			return ReasonNotAllowed, fmt.Sprintf("preset name %q is repeated", name)
+		}
+
+		names[name] = struct{}{}
 	}
 
 	return "", ""

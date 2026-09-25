@@ -19,6 +19,8 @@ import (
 	"github.com/turahe/blog-api/internal/core/media/ports"
 )
 
+const maxQuality = 100
+
 // Config locates imgproxy and the bucket it reads originals from.
 type Config struct {
 	// BaseURL is the public imgproxy origin, usually behind a CDN.
@@ -87,8 +89,12 @@ func (s *Signer) URL(asset mediadomain.MediaAsset, t mediadomain.Transform) (str
 	source := base64.RawURLEncoding.EncodeToString([]byte("s3://" + s.bucket + "/" + asset.StorageKey))
 
 	path := "/exp:" + strconv.FormatInt(s.expiry(), 10) +
-		"/rs:fit:" + strconv.Itoa(t.Width) + ":0" +
-		"/" + source + extension(t.Format)
+		"/rs:fit:" + strconv.Itoa(t.Width) + ":0"
+	if t.Quality > 0 {
+		path += "/q:" + strconv.Itoa(min(t.Quality, maxQuality))
+	}
+
+	path += "/" + source + extension(t.Format)
 
 	return s.base + "/" + s.sign(path) + path, nil
 }

@@ -85,6 +85,13 @@ func TestDefaultCatalogueChecks(t *testing.T) {
 		{"seo.title_template", `"{site}"`, false},
 		{"notifications.moderation_recipient_roles", `["editor"]`, true},
 		{"notifications.moderation_recipient_roles", `["author"]`, false},
+		{"media.variants", `["thumb:320:webp","hero:1280"]`, true},
+		{"media.variants", `[]`, true},
+		{"media.variants", `["thumb:8"]`, false},
+		{"media.variants", `["thumb:320:tiff"]`, false},
+		{"media.variants", `["thumb:320","thumb:640"]`, false},
+		{"media.default_transform_format", `"avif"`, true},
+		{"media.default_transform_format", `"gif"`, false},
 	}
 
 	for _, tc := range cases {

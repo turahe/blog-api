@@ -127,11 +127,18 @@ Spec: [newsletter-subscriptions.md](../features/newsletter-subscriptions.md)
 
 ## Epic: media pipeline improvements
 
-- [ ] Asynchronous derivative generation triggered by `media.uploaded`
-- [ ] Variant set definition (thumbnail, card, hero) driven by settings
-- [ ] Optional format conversion and compression policy
-- [ ] Orphan media detection and cleanup job
-- [ ] Storage usage reporting per user or per tenant
+- [x] Asynchronous derivative generation triggered by `media.uploaded` — superseded by the
+      decision above: imgproxy renders derivatives on request behind the CDN, so nothing is
+      generated or stored on upload
+- [x] Variant set definition (thumbnail, card, hero) driven by settings (`media.variants`;
+      signed URLs in a `variants` map on media responses)
+- [x] Optional format conversion and compression policy (`media.default_transform_format`,
+      `media.default_transform_quality`)
+- [x] Orphan media detection and cleanup job (`media-orphans`: abandoned uploads and trash
+      past `MEDIA_PURGE_AFTER`; unreferenced ready assets listed by `?unused=true`, never
+      auto-deleted)
+- [x] Storage usage reporting per user (`admin.media.usage`; single-tenant, so no per-tenant
+      breakdown)
 
 ## Dependencies and order
 

@@ -34,7 +34,7 @@ prefixes intentionally mix modes (see below).
 | `auth` | `/api/v1/auth` | 8 | 6 none, 2 required | strict per-IP and per-identity rate limits, timing-safe responses, no user enumeration |
 | `self-service` | `/api/v1/me`, `/api/v1/comments/:id` (mutations) | 22 | required | bearer or session auth, CSRF for browser clients, step-up re-verify on high-risk actions, ownership checks on owned resources |
 | `public` | `/api/v1/posts`, `/api/v1/categories`, `/api/v1/tags`, `/api/v1/media`, `/api/v1/users`, `/api/v1/comments`, `/api/v1/newsletter` | 20 | 17 none, 3 optional | anonymous-safe, cache-friendly, privacy filtering, spam and captcha checks on writes |
-| `admin` | `/api/v1/admin` | 64 | 63 required, 1 none | bearer auth, RBAC permission check, CSRF, audit logging |
+| `admin` | `/api/v1/admin` | 65 | 64 required, 1 none | bearer auth, RBAC permission check, CSRF, audit logging |
 | `analytics` | `/api/v1/analytics` | 8 | none | consent gating, bot filtering, high-volume ingest rate limits |
 
 ### Auth modes
@@ -541,7 +541,9 @@ Full wire format, client integration, security, and scaling guidance is in the f
 - `PUT /api/v1/admin/posts/:id/seo` (update SEO and/or slug; allowlisted fields + soft warnings)
 - `POST /api/v1/admin/posts/:id/seo/preview` (live SERP / OG / Twitter preview from draft SEO)
 - `POST /api/v1/admin/media`
-- `GET /api/v1/admin/media`
+- `GET /api/v1/admin/media` (`?unused=true` lists ready assets nothing references; items carry `variants`)
+- `POST /api/v1/admin/media/:id/complete`
+- `GET /api/v1/admin/media/usage` (storage report by status, content type, and uploader; `?user_id=`, `?top=`)
 - `PATCH /api/v1/admin/media/:id/tags`
 - `DELETE /api/v1/admin/media/:id`
 - `GET /api/v1/admin/settings`
@@ -621,7 +623,7 @@ Implemented; details in [impersonation.md](./impersonation.md).
 - `GET /api/v1/categories/:slug` (single category with nest metadata and `image_id`)
 - `GET /api/v1/tags`
 - `POST /api/v1/posts/:id/comments`
-- `GET /api/v1/media/:id`
+- `GET /api/v1/media/:id` (ready raster assets carry `variants`: preset name to signed imgproxy URL, from the `media.variants` setting)
 - `GET /api/v1/media/:id/transform?w=800&format=webp` (`302` to a signed imgproxy URL; `w` from `MEDIA_TRANSFORM_WIDTHS`)
 - `GET /api/v1/users/:username_or_id` (public profile; respects user_privacy_settings: 404 when private; filters contact details/email/activity via privacy toggles; `include=avatar,posts_preview,roles_brief` supported)
 

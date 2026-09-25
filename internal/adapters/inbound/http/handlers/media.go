@@ -82,7 +82,7 @@ func adminCompleteMediaHandler(media mediaports.Service) gin.HandlerFunc {
 			return
 		}
 
-		responses.Success(c, nethttp.StatusOK, responses.MediaAsset(asset))
+		writeMediaAsset(c, media, asset)
 	}
 }
 
@@ -95,6 +95,8 @@ func adminCompleteMediaHandler(media mediaports.Service) gin.HandlerFunc {
 //	@Param		per_page	query		int		false	"per page"	default(20)
 //	@Param		q			query		string	false	"search"
 //	@Param		disk		query		string	false	"disk filter"
+//	@Param		status		query		string	false	"status filter"	Enums(pending, ready, failed)
+//	@Param		unused		query		bool	false	"only ready assets no avatar, category, post cover, attachment, or SEO image references"
 //	@Success	200			{object}	responses.Envelope
 //	@Security	Bearer
 //	@Router		/api/v1/admin/media [get]
@@ -108,14 +110,16 @@ func adminListMediaHandler(media mediaports.Service) gin.HandlerFunc {
 			PerPage: perPage,
 			Query:   c.Query("q"),
 			Disk:    c.Query("disk"),
+			Status:  c.Query("status"),
+			Unused:  c.Query("unused") == "true",
 		})
 		if mapMediaError(c, err) {
 			return
 		}
 
-		items := make([]gin.H, 0, len(result.Items))
-		for _, asset := range result.Items {
-			items = append(items, responses.MediaAsset(asset))
+		items, ok := renderMedia(c, media, result.Items...)
+		if !ok {
+			return
 		}
 
 		responses.SuccessPaginatedFor(c, nethttp.StatusOK, responses.PageOpts{
@@ -181,7 +185,7 @@ func adminPatchMediaTagsHandler(media mediaports.Service) gin.HandlerFunc {
 			return
 		}
 
-		responses.Success(c, nethttp.StatusOK, responses.MediaAsset(asset))
+		writeMediaAsset(c, media, asset)
 	}
 }
 
@@ -207,7 +211,7 @@ func publicGetMediaHandler(media mediaports.Service) gin.HandlerFunc {
 			return
 		}
 
-		responses.Success(c, nethttp.StatusOK, responses.MediaAsset(asset))
+		writeMediaAsset(c, media, asset)
 	}
 }
 
@@ -257,6 +261,73 @@ func publicTransformMediaHandler(media mediaports.Service) gin.HandlerFunc {
 
 		c.Header("Cache-Control", transformRedirectCache)
 		c.Redirect(nethttp.StatusFound, target)
+	}
+}
+
+// adminMediaUsageHandler godoc
+//
+//	@Summary		Storage usage
+//	@Description	Counts and bytes of stored media by status (soft-deleted assets as deleted until the orphan cleanup purges them), content type, and top uploaders. user_id narrows the report to one uploader.
+//	@Tags			admin
+//	@Produce		json
+//	@Param			user_id	query		string	false	"uploader UUID"
+//	@Param			top		query		int		false	"uploaders to list (1-100)"	default(10)
+//	@Success		200		{object}	responses.Envelope
+//	@Failure		400		{object}	responses.Envelope
+//	@Security		Bearer
+//	@Router			/api/v1/admin/media/usage [get]
+func adminMediaUsageHandler(media mediaports.Service) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		filter := mediadomain.UsageFilter{TopLimit: parsePositiveInt(c.Query("top"), 0)}
+
+		if raw := strings.TrimSpace(c.Query("user_id")); raw != "" {
+			id, err := uuid.Parse(raw)
+			if err != nil {
+				responses.Failure(c, nethttp.StatusBadRequest, responses.ErrorCodeValidation, "user_id must be a UUID")
+				return
+			}
+
+			filter.UploadedBy = &id
+		}
+
+		usage, err := media.Usage(c.Request.Context(), filter)
+		if mapMediaError(c, err) {
+			return
+		}
+
+		c.Header("Cache-Control", "no-store")
+		responses.SuccessFor(c, nethttp.StatusOK, responses.ServiceMedia, responses.CaseSuccess, responses.MediaUsage(usage))
+	}
+}
+
+// renderMedia serializes assets with their preset URLs. It writes the error and returns false
+// when the presets cannot be read.
+func renderMedia(c *gin.Context, media mediaports.Service, assets ...mediadomain.MediaAsset) ([]gin.H, bool) {
+	var variants map[uuid.UUID]map[string]string
+
+	if media != nil {
+		var err error
+		if variants, err = media.Variants(c.Request.Context(), assets...); mapMediaError(c, err) {
+			return nil, false
+		}
+	}
+
+	out := make([]gin.H, 0, len(assets))
+	for _, asset := range assets {
+		var urls map[string]string
+		if variants != nil {
+			urls = variants[asset.UUID]
+		}
+
+		out = append(out, responses.MediaAssetWithVariants(asset, urls))
+	}
+
+	return out, true
+}
+
+func writeMediaAsset(c *gin.Context, media mediaports.Service, asset mediadomain.MediaAsset) {
+	if items, ok := renderMedia(c, media, asset); ok {
+		responses.Success(c, nethttp.StatusOK, items[0])
 	}
 }
 

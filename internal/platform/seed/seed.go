@@ -51,6 +51,8 @@ const (
 	permNewsletterIssuesRead        = "newsletter.issues.read"
 	permNewsletterIssuesEdit        = "newsletter.issues.edit"
 	permNewsletterIssuesSend        = "newsletter.issues.send"
+
+	permMediaUsageRead = "media.usage.read"
 )
 
 var roleDescriptions = map[string]string{
@@ -71,7 +73,7 @@ var rolePermissions = map[string][]string{
 		"category.read", "category.create", "category.update", "category.delete",
 		"tag.create", "tag.update", "tag.delete",
 		"settings.read", "settings.update", "settings.history.read",
-		"media.create", "media.delete",
+		"media.create", "media.delete", permMediaUsageRead,
 		permCommentModerate, permCommentDelete,
 		"impersonation.start",
 		permNewsletterSubscribersRead, permNewsletterSubscribersExport, "newsletter.subscribers.erase",
@@ -87,7 +89,7 @@ var rolePermissions = map[string][]string{
 		permSEOView, permSEOEdit, permSlugEdit,
 		"category.read", "category.create", "category.update", "category.delete",
 		"tag.create", "tag.update", "tag.delete",
-		"media.create", "media.delete",
+		"media.create", "media.delete", permMediaUsageRead,
 		permCommentModerate,
 		permNewsletterSubscribersRead, permNewsletterSubscribersExport,
 		permNewsletterIssuesRead, permNewsletterIssuesEdit, permNewsletterIssuesSend,

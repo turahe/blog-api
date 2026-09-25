@@ -31,6 +31,8 @@ passes the current rules resolves to the default and is reported in `default_app
 | `site.public_url` | http(s) URL or empty | public_safe | `""` |
 | `site.canonical_base_url` | http(s) URL or empty | public_safe | `""` |
 | `media.default_transform_quality` | integer 1–100 | public_safe | `80` |
+| `media.default_transform_format` | `original`, `webp`, `avif`, `jpeg`, `png` | public_safe | `original` |
+| `media.variants` | list of `name:width[:format]` (≤ 10, width 16–4096, unique names) | public_safe | `["thumbnail:320:webp","card:640:webp","hero:1280:webp"]` |
 | `analytics.enabled` | boolean | public_safe | `true` |
 | `analytics.consent_required` | boolean | public_safe | `true` |
 | `analytics.raw_retention_days` | integer 1–730 | admin_only | `90` |

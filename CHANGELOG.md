@@ -1,5 +1,22 @@
 # Changelog
 
+## 2026-09-25 — Media variants, orphan cleanup, and storage usage
+
+### Added
+
+- Site settings `media.variants` (named `name:width[:format]` presets, default thumbnail 320,
+  card 640, and hero 1280 in WebP) and `media.default_transform_format`. When imgproxy is
+  configured, ready raster assets on admin media, `public.media.get`, and post media responses
+  carry a `variants` map of signed URLs. Nothing is stored; the CDN caches the renders.
+- Transform URLs now carry the `media.default_transform_quality` setting.
+- `GET /api/v1/admin/media/usage` (`media.usage.read`, admin and editor): asset counts and
+  bytes by status, content type, and top uploaders, optionally for one `user_id`.
+- `GET /api/v1/admin/media?unused=true` lists ready assets that no avatar, category, post
+  cover, post media row, or SEO image references. They are never deleted automatically.
+- Hourly scheduler job `media-orphans` deletes uploads never completed 24 hours after their
+  presign expired, and soft-deleted assets after `MEDIA_PURGE_AFTER` (default 30 days, `0`
+  keeps them), object first and row second.
+
 ## 2026-09-25 — Newsletter subscriptions
 
 ### Added

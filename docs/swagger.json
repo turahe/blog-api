@@ -843,6 +843,23 @@
                         "description": "disk filter",
                         "name": "disk",
                         "in": "query"
+                    },
+                    {
+                        "enum": [
+                            "pending",
+                            "ready",
+                            "failed"
+                        ],
+                        "type": "string",
+                        "description": "status filter",
+                        "name": "status",
+                        "in": "query"
+                    },
+                    {
+                        "type": "boolean",
+                        "description": "only ready assets no avatar, category, post cover, attachment, or SEO image references",
+                        "name": "unused",
+                        "in": "query"
                     }
                 ],
                 "responses": {
@@ -896,6 +913,52 @@
                     },
                     "429": {
                         "description": "Too Many Requests",
+                        "schema": {
+                            "$ref": "#/definitions/responses.Envelope"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/admin/media/usage": {
+            "get": {
+                "security": [
+                    {
+                        "Bearer": []
+                    }
+                ],
+                "description": "Counts and bytes of stored media by status (soft-deleted assets as deleted until the orphan cleanup purges them), content type, and top uploaders. user_id narrows the report to one uploader.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "admin"
+                ],
+                "summary": "Storage usage",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "uploader UUID",
+                        "name": "user_id",
+                        "in": "query"
+                    },
+                    {
+                        "type": "integer",
+                        "default": 10,
+                        "description": "uploaders to list (1-100)",
+                        "name": "top",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/responses.Envelope"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
                         "schema": {
                             "$ref": "#/definitions/responses.Envelope"
                         }

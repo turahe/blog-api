@@ -183,7 +183,8 @@ func TestCompleteUploadExpiredPendingAsset(t *testing.T) {
 }
 
 type fakeRepo struct {
-	assets map[uuid.UUID]mediadomain.MediaAsset
+	assets      map[uuid.UUID]mediadomain.MediaAsset
+	usageFilter mediadomain.UsageFilter
 }
 
 func newFakeRepo() *fakeRepo {
@@ -255,6 +256,8 @@ type fakeObjectStorage struct {
 	puts           map[string]string
 	objects        map[string][]byte
 	readErr        error
+	deleteErr      error
+	deleted        []string
 }
 
 func (s *fakeObjectStorage) ReadPrefix(_ context.Context, key string, n int64) ([]byte, error) {

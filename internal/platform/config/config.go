@@ -99,6 +99,7 @@ type Config struct {
 	MediaAllowedMIMETypes         []string
 	MediaMaxUploadBytes           int64
 	MediaPresignTTL               time.Duration
+	MediaPurgeAfter               time.Duration
 	ImgproxyURL                   string
 	ImgproxyKey                   string
 	ImgproxySalt                  string
@@ -249,7 +250,7 @@ func (c Config) ValidateMedia() error {
 		return errors.New("AVATAR_MAX_BYTES must be positive")
 	}
 
-	if err := c.validatePrivacyExports(); err != nil {
+	if err := c.validateRetention(); err != nil {
 		return err
 	}
 
@@ -259,7 +260,11 @@ func (c Config) ValidateMedia() error {
 // maxPresignTTL is the longest lifetime S3 accepts for a presigned URL.
 const maxPresignTTL = 7 * 24 * time.Hour
 
-func (c Config) validatePrivacyExports() error {
+func (c Config) validateRetention() error {
+	if c.MediaPurgeAfter < 0 {
+		return errors.New("MEDIA_PURGE_AFTER must not be negative (0 keeps deleted media)")
+	}
+
 	if c.PrivacyExportRetention <= 0 {
 		return errors.New("PRIVACY_EXPORT_RETENTION must be positive")
 	}
@@ -603,14 +608,6 @@ func load(withJWTKeys bool) (Config, error) {
 		S3PublicBaseURL:               env("S3_PUBLIC_BASE_URL", ""),
 		S3Disk:                        strings.ToLower(env("S3_DISK", "minio")),
 		S3ForcePathStyle:              boolEnv("S3_FORCE_PATH_STYLE", true),
-		MediaAllowedMIMETypes:         ParseMIMEList(env("MEDIA_ALLOWED_MIME_TYPES", "image/jpeg,image/png,image/webp,image/gif")),
-		ImgproxyURL:                   strings.TrimSpace(env("IMGPROXY_URL", "")),
-		ImgproxyKey:                   strings.TrimSpace(env("IMGPROXY_KEY", "")),
-		ImgproxySalt:                  strings.TrimSpace(env("IMGPROXY_SALT", "")),
-		MediaTransformWidths:          ParseWidths(env("MEDIA_TRANSFORM_WIDTHS", "64,128,256,320,480,640,768,1024,1280,1536,1920")),
-		MediaTransformURLTTL:          duration("MEDIA_TRANSFORM_URL_TTL", 24*time.Hour),
-		MediaMaxUploadBytes:           int64(integer("MEDIA_MAX_UPLOAD_BYTES", 10<<20)),
-		MediaPresignTTL:               duration("MEDIA_PRESIGN_TTL", 15*time.Minute),
 		PrivacyExportRetention:        duration("PRIVACY_EXPORT_RETENTION", 72*time.Hour),
 		PrivacyExportURLTTL:           duration("PRIVACY_EXPORT_URL_TTL", 15*time.Minute),
 		SearchLanguage:                strings.ToLower(strings.TrimSpace(env("SEARCH_LANGUAGE", "simple"))),
@@ -639,6 +636,7 @@ func load(withJWTKeys bool) (Config, error) {
 	cfg.SwaggerEnabled = boolEnv("APP_SWAGGER_ENABLED", cfg.Environment == "local")
 	cfg.SentryEnvironment = env("SENTRY_ENVIRONMENT", cfg.Environment)
 	cfg.loadCache()
+	cfg.loadMedia()
 	cfg.loadWorker()
 	cfg.loadNewsletter()
 	cfg.loadKafkaSecurity()
@@ -677,6 +675,19 @@ func (c *Config) loadKafkaSecurity() {
 }
 
 // loadWorker reads the outbox relay and message consumer settings.
+// loadMedia reads the upload limits, imgproxy transforms, and media retention.
+func (c *Config) loadMedia() {
+	c.MediaAllowedMIMETypes = ParseMIMEList(env("MEDIA_ALLOWED_MIME_TYPES", "image/jpeg,image/png,image/webp,image/gif"))
+	c.ImgproxyURL = strings.TrimSpace(env("IMGPROXY_URL", ""))
+	c.ImgproxyKey = strings.TrimSpace(env("IMGPROXY_KEY", ""))
+	c.ImgproxySalt = strings.TrimSpace(env("IMGPROXY_SALT", ""))
+	c.MediaTransformWidths = ParseWidths(env("MEDIA_TRANSFORM_WIDTHS", "64,128,256,320,480,640,768,1024,1280,1536,1920"))
+	c.MediaTransformURLTTL = duration("MEDIA_TRANSFORM_URL_TTL", 24*time.Hour)
+	c.MediaMaxUploadBytes = int64(integer("MEDIA_MAX_UPLOAD_BYTES", 10<<20))
+	c.MediaPresignTTL = duration("MEDIA_PRESIGN_TTL", 15*time.Minute)
+	c.MediaPurgeAfter = duration("MEDIA_PURGE_AFTER", 30*24*time.Hour)
+}
+
 func (c *Config) loadWorker() {
 	c.OutboxBatchSize = integer("OUTBOX_BATCH_SIZE", 100)
 	c.OutboxPollInterval = duration("OUTBOX_POLL_INTERVAL", time.Second)

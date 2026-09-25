@@ -22,6 +22,8 @@ type ObjectStorage interface {
 	PutObject(ctx context.Context, key, contentType string, body []byte) error
 	// ReadPrefix returns at most n leading bytes of the object.
 	ReadPrefix(ctx context.Context, key string, n int64) ([]byte, error)
+	// DeleteObject removes the object; a missing object is not an error.
+	DeleteObject(ctx context.Context, key string) error
 }
 
 // Repository stores media assets.
@@ -32,6 +34,21 @@ type Repository interface {
 	List(ctx context.Context, filter mediadomain.ListFilter) (mediadomain.ListResult, error)
 	SoftDelete(ctx context.Context, id uuid.UUID, deletedAt time.Time) error
 	ClearEntityReferences(ctx context.Context, id uuid.UUID) error
+
+	// Abandoned returns live assets that never became ready and whose presign expired before
+	// the given time, oldest first.
+	Abandoned(ctx context.Context, expiredBefore time.Time, limit int) ([]mediadomain.MediaAsset, error)
+	// Trashed returns assets soft-deleted before the given time, oldest first.
+	Trashed(ctx context.Context, deletedBefore time.Time, limit int) ([]mediadomain.MediaAsset, error)
+	// Purge removes the row, but only while it is still abandoned or trashed; it reports
+	// whether a row was removed.
+	Purge(ctx context.Context, id uuid.UUID) (bool, error)
+	Usage(ctx context.Context, filter mediadomain.UsageFilter) (mediadomain.Usage, error)
+}
+
+// PolicySource reads the admin-set transform presets and defaults.
+type PolicySource interface {
+	TransformPolicy(ctx context.Context) (mediadomain.TransformPolicy, error)
 }
 
 // PostMediaRepository stores post media attachments.
@@ -57,4 +74,8 @@ type Service interface {
 	UpdateTags(ctx context.Context, id uuid.UUID, tags []string) (mediadomain.MediaAsset, error)
 	UploadImage(ctx context.Context, input mediadomain.ImageUpload) (mediadomain.MediaAsset, error)
 	TransformURL(ctx context.Context, id uuid.UUID, t mediadomain.Transform) (string, error)
+	// Variants returns the signed preset URLs of each ready raster asset, keyed by asset and
+	// preset name. It returns nil when transforms are not configured.
+	Variants(ctx context.Context, assets ...mediadomain.MediaAsset) (map[uuid.UUID]map[string]string, error)
+	Usage(ctx context.Context, filter mediadomain.UsageFilter) (mediadomain.Usage, error)
 }

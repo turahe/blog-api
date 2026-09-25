@@ -23,6 +23,7 @@ import (
 	"github.com/turahe/blog-api/internal/adapters/outbound/mail"
 	"github.com/turahe/blog-api/internal/adapters/outbound/mailqueue"
 	"github.com/turahe/blog-api/internal/adapters/outbound/markdown"
+	"github.com/turahe/blog-api/internal/adapters/outbound/mediapolicy"
 	"github.com/turahe/blog-api/internal/adapters/outbound/notificationbus"
 	"github.com/turahe/blog-api/internal/adapters/outbound/notify"
 	"github.com/turahe/blog-api/internal/adapters/outbound/oauth"
@@ -163,7 +164,7 @@ func NewRuntime(ctx context.Context, cfg config.Config, logger *slog.Logger, ver
 	comments := newCommentService(cfg, db, ids, clock, inbox, events)
 	hub, notificationBus := newNotificationStream(ctx, cfg, inbox, logger)
 
-	media, err := newMediaService(ctx, cfg, db, ids, clock, posts, cacheOrNil, events)
+	media, err := newMediaService(ctx, cfg, db, ids, clock, posts, cacheOrNil, events, settings)
 	if err != nil {
 		return fail(err)
 	}
@@ -287,6 +288,7 @@ func newMediaService(
 	posts *postservice.PostService,
 	readCache readcache.Cache,
 	events event.Unit,
+	settings *settingsservice.Service,
 ) (mediaports.Service, error) {
 	if !cfg.MediaEnabled() {
 		return nil, nil
@@ -309,7 +311,7 @@ func newMediaService(
 		cfg.MediaAllowedMIMETypes,
 		cfg.MediaMaxUploadBytes,
 		cfg.MediaPresignTTL,
-	).WithCache(readCache).WithEvents(events)
+	).WithCache(readCache).WithEvents(events).WithPolicy(mediapolicy.New(settings))
 
 	if cfg.MediaTransformsEnabled() {
 		signer, err := imgproxy.New(imgproxy.Config{

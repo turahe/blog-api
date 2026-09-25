@@ -23,6 +23,15 @@ type fakeMediaService struct {
 	presignFn   func(ctx context.Context, uploadedBy *uuid.UUID, filename, contentType string, sizeBytes int64, tags []string) (mediadomain.PresignResult, error)
 	completeFn  func(ctx context.Context, id uuid.UUID) (mediadomain.MediaAsset, error)
 	transformFn func(ctx context.Context, id uuid.UUID, t mediadomain.Transform) (string, error)
+	usageFn     func(ctx context.Context, filter mediadomain.UsageFilter) (mediadomain.Usage, error)
+}
+
+func (f *fakeMediaService) Variants(context.Context, ...mediadomain.MediaAsset) (map[uuid.UUID]map[string]string, error) {
+	return nil, nil
+}
+
+func (f *fakeMediaService) Usage(ctx context.Context, filter mediadomain.UsageFilter) (mediadomain.Usage, error) {
+	return f.usageFn(ctx, filter)
 }
 
 func (f *fakeMediaService) PresignUpload(ctx context.Context, uploadedBy *uuid.UUID, filename, contentType string, sizeBytes int64, tags []string) (mediadomain.PresignResult, error) {
@@ -198,6 +207,55 @@ func TestMediaPresignValidation(t *testing.T) {
 	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &envelope))
 	require.False(t, envelope.OK)
 	require.Equal(t, "validation_error", envelope.Error.Code)
+}
+
+func TestMediaUsageReport(t *testing.T) {
+	t.Parallel()
+	gin.SetMode(gin.TestMode)
+
+	userID := uuid.New()
+
+	var got mediadomain.UsageFilter
+
+	svc := &fakeMediaService{usageFn: func(_ context.Context, filter mediadomain.UsageFilter) (mediadomain.Usage, error) {
+		got = filter
+
+		return mediadomain.Usage{
+			Total:        mediadomain.UsageRow{Count: 3, Bytes: 900},
+			ByStatus:     []mediadomain.UsageRow{{Key: mediadomain.StatusReady, Count: 3, Bytes: 900}},
+			TopUploaders: []mediadomain.UploaderUsage{{UserUUID: &userID, Username: "ana", Count: 2, Bytes: 600}, {Count: 1, Bytes: 300}},
+		}, nil
+	}}
+
+	serve := func(query string) *httptest.ResponseRecorder {
+		w := httptest.NewRecorder()
+		c, _ := gin.CreateTestContext(w)
+		c.Request = httptest.NewRequestWithContext(t.Context(), nethttp.MethodGet, "/api/v1/admin/media/usage"+query, nil)
+		adminMediaUsageHandler(svc)(c)
+
+		return w
+	}
+
+	require.Equal(t, nethttp.StatusBadRequest, serve("?user_id=nope").Code)
+
+	w := serve("?user_id=" + userID.String() + "&top=5")
+	require.Equal(t, nethttp.StatusOK, w.Code)
+	require.Equal(t, "no-store", w.Header().Get("Cache-Control"))
+	require.Equal(t, 5, got.TopLimit)
+	require.Equal(t, userID, *got.UploadedBy)
+
+	var envelope struct {
+		Data struct {
+			Total        map[string]float64 `json:"total"`
+			ByStatus     []map[string]any   `json:"by_status"`
+			TopUploaders []map[string]any   `json:"top_uploaders"`
+		} `json:"data"`
+	}
+	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &envelope))
+	require.InDelta(t, 900, envelope.Data.Total["bytes"], 0)
+	require.Equal(t, "ready", envelope.Data.ByStatus[0]["status"])
+	require.Equal(t, "ana", envelope.Data.TopUploaders[0]["username"])
+	require.Nil(t, envelope.Data.TopUploaders[1]["user_id"])
 }
 
 func TestMediaCompleteMapsErrors(t *testing.T) {
