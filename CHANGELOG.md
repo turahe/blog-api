@@ -1,5 +1,41 @@
 # Changelog
 
+## 2026-09-25 — Post versioning
+
+### Added
+
+- Post revision history. Every post write records a full snapshot in the same transaction:
+  - the write types are create, update, media replace, publish, unpublish, archive, delete, and
+    undelete;
+  - each snapshot holds content, meta, tags, and media, plus a per-field diff against the
+    previous revision and a generated changelog.
+  See [post-versions.md](docs/backend/post-versions.md#implementation).
+- The following endpoints replace the `501` stubs:
+  - `GET /api/v1/admin/posts/{id}/revisions`, with filters `author_id`, `from_date`,
+    `to_date`, and `include_diff`;
+  - `GET /api/v1/admin/posts/{id}/revisions/{revision UUID or number}`;
+  - `POST /api/v1/admin/posts/{id}/revisions/{revision}/restore`.
+- Restore copies content, meta, tags, and media back as a new `restore` revision and keeps the
+  post's status. Missing categories, tags, and media, or a slug now held by another post, are
+  skipped and reported.
+- Permissions:
+  - `post.revisions.view` and `post.revisions.restore` for admin, editor, and author;
+  - `post.revisions.view_all` for admin and editor. Authors only reach their own posts' history.
+- `blog.post.revision.created` and `blog.post.revision.restored` outbox events.
+- `app revisions prune --keep N` keeps the newest N revisions of every post.
+- Migration `00024_post_revisions.sql`.
+
+### Changed
+
+- The AsyncAPI `PostRevisionCreated` type enum adds `unpublish`, `delete`, and `undelete`.
+  `author_id` (and `actor_id` on `PostRevisionRestored`) is nullable, for writes with no user.
+- Post delete, trash restore, and media replace now run in one transaction with their revision.
+
+### Upgrade notes
+
+- Run `app migrate up` and `app seed` to add the revision permissions. Existing posts get
+  revision 1 on their next write.
+
 ## 2026-09-25 — Admin settings
 
 ### Added

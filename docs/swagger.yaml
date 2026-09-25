@@ -402,6 +402,12 @@ definitions:
     - new_password
     - token
     type: object
+  requests.RestoreRevision:
+    properties:
+      restore_note:
+        maxLength: 1000
+        type: string
+    type: object
   requests.SetRolePermissions:
     properties:
       permissions:
@@ -1415,6 +1421,156 @@ paths:
       security:
       - Bearer: []
       summary: Restore deleted post
+      tags:
+      - admin
+  /api/v1/admin/posts/{param1}/revisions:
+    get:
+      description: Newest first. Authors see only their own posts' history; editors
+        and admins (post.revisions.view_all) see every post's.
+      parameters:
+      - description: post UUID
+        in: path
+        name: param1
+        required: true
+        type: string
+      - description: page (default 1)
+        in: query
+        name: page
+        type: integer
+      - description: page size (default 20, max 100)
+        in: query
+        name: per_page
+        type: integer
+      - description: only revisions by this user UUID
+        in: query
+        name: author_id
+        type: string
+      - description: RFC 3339 time or YYYY-MM-DD (inclusive)
+        in: query
+        name: from_date
+        type: string
+      - description: RFC 3339 time or YYYY-MM-DD (inclusive, whole day)
+        in: query
+        name: to_date
+        type: string
+      - description: include per-field diffs (default true)
+        in: query
+        name: include_diff
+        type: boolean
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/responses.Envelope'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/responses.Envelope'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/responses.Envelope'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/responses.Envelope'
+      security:
+      - Bearer: []
+      summary: List post revisions
+      tags:
+      - admin
+  /api/v1/admin/posts/{param1}/revisions/{param2}:
+    get:
+      description: One revision with its full snapshot (content, meta, tags, media,
+        SEO) and diff against the previous revision.
+      parameters:
+      - description: post UUID
+        in: path
+        name: param1
+        required: true
+        type: string
+      - description: revision UUID or revision number
+        in: path
+        name: param2
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/responses.Envelope'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/responses.Envelope'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/responses.Envelope'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/responses.Envelope'
+      security:
+      - Bearer: []
+      summary: Get post revision
+      tags:
+      - admin
+  /api/v1/admin/posts/{param1}/revisions/{param2}/restore:
+    post:
+      consumes:
+      - application/json
+      description: Copies the revision's title, slug, excerpt, content, comment policy,
+        category, cover, tags, and media back onto the post as a new revision of type
+        restore. The post keeps its status and published_at. Categories, tags, and
+        media that no longer exist (or media that is not ready) are skipped and listed
+        in skipped; if another post took the slug, the current slug stays.
+      parameters:
+      - description: post UUID
+        in: path
+        name: param1
+        required: true
+        type: string
+      - description: revision UUID or revision number
+        in: path
+        name: param2
+        required: true
+        type: string
+      - description: optional note
+        in: body
+        name: body
+        schema:
+          $ref: '#/definitions/requests.RestoreRevision'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/responses.Envelope'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/responses.Envelope'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/responses.Envelope'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/responses.Envelope'
+        "409":
+          description: Conflict
+          schema:
+            $ref: '#/definitions/responses.Envelope'
+      security:
+      - Bearer: []
+      summary: Restore post revision
       tags:
       - admin
   /api/v1/admin/posts/{param1}/unpublish:

@@ -8,8 +8,8 @@ Index: [README.md](./README.md).
 
 ## Status
 
-**In progress** — admin settings are implemented. Impersonation, revision, SEO, and newsletter
-operations still return `501`; search and privacy management have no schema or service yet.
+**In progress** — admin settings and post versioning are implemented. Impersonation, SEO, and
+newsletter operations still return `501`; search and privacy management have no schema or service yet.
 
 ## Decisions
 
@@ -50,12 +50,12 @@ Specs: [impersonation.md](../features/impersonation.md), [impersonation.md](../b
 
 ## Epic: post versioning
 
-- [ ] Revision storage and diffing — see [post-versions.md](../backend/post-versions.md)
-- [ ] `admin.posts.revisions.list` — `GET /api/v1/admin/posts/{id}/revisions`
-- [ ] `admin.posts.revisions.get` — `GET /api/v1/admin/posts/{id}/revisions/{revisionId}`
-- [ ] `admin.posts.revisions.restore` — `POST /api/v1/admin/posts/{id}/revisions/{revisionId}/restore`
-- [ ] Capture a revision on every post mutation, including publish transitions
-- [ ] Revision retention or pruning policy
+- [x] Revision storage and diffing — see [post-versions.md](../backend/post-versions.md)
+- [x] `admin.posts.revisions.list` — `GET /api/v1/admin/posts/{id}/revisions`
+- [x] `admin.posts.revisions.get` — `GET /api/v1/admin/posts/{id}/revisions/{revisionId}`
+- [x] `admin.posts.revisions.restore` — `POST /api/v1/admin/posts/{id}/revisions/{revisionId}/restore`
+- [x] Capture a revision on every post mutation, including publish transitions
+- [x] Revision retention or pruning policy — kept until an admin runs `app revisions prune --keep N`
 
 Spec: [post-versioning.md](../features/post-versioning.md)
 

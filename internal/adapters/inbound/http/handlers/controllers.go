@@ -74,6 +74,10 @@ const (
 	permSettingsUpdate   = "settings.update"
 	permSettingsHistory  = "settings.history.read"
 	settingsPutPerMinute = 60
+
+	permPostRevisionsView    = "post.revisions.view"
+	permPostRevisionsViewAll = "post.revisions.view_all"
+	permPostRevisionsRestore = "post.revisions.restore"
 )
 
 // Fallback role sets for gate when no RBAC enforcer is wired.
@@ -129,21 +133,7 @@ func NewControllers(deps Deps) routes.Controllers {
 	c.Activity.MeList, c.Activity.AdminUserList = activityControllers(deps)
 	c.Notifications = notificationControllers(deps)
 
-	if deps.Posts != nil {
-		c.Posts = routes.Posts{
-			PublicList:        listPublishedPostsHandler(deps.Posts),
-			PublicGet:         getPublishedPostHandler(deps.Posts),
-			AdminList:         gate(deps, "post.read", authorRoles, adminListPostsHandler(deps.Posts, deps.Roles)),
-			AdminCreate:       gate(deps, "post.create", authorRoles, adminCreatePostHandler(deps.Posts)),
-			AdminPublish:      gate(deps, "post.publish", editorRoles, adminPublishPostHandler(deps.Posts)),
-			AdminUnpublish:    gate(deps, "post.publish", editorRoles, adminUnpublishPostHandler(deps.Posts)),
-			AdminArchive:      gate(deps, "post.publish", editorRoles, adminArchivePostHandler(deps.Posts)),
-			AdminUpdate:       gate(deps, "post.update", authorRoles, adminUpdatePostHandler(deps.Posts, deps.Roles)),
-			AdminMediaReplace: gate(deps, "post.update", authorRoles, adminReplacePostMediaHandler(deps.Posts)),
-			AdminDelete:       gate(deps, "post.delete", editorRoles, adminDeletePostHandler(deps.Posts)),
-			AdminRestore:      gate(deps, "post.delete", editorRoles, adminRestorePostHandler(deps.Posts)),
-		}
-	}
+	c.Posts = postControllers(deps)
 
 	if deps.Categories != nil {
 		c.Cats = routes.Categories{
@@ -207,6 +197,37 @@ func NewControllers(deps Deps) routes.Controllers {
 	c.Settings = settingsControllers(deps)
 
 	return c
+}
+
+// postControllers wires the post handlers when the service is present. Every admin write
+// runs under withPostEditor so its revision names the signed-in user.
+func postControllers(deps Deps) routes.Posts {
+	p := deps.Posts
+	if p == nil {
+		return routes.Posts{}
+	}
+
+	write := func(permission string, roles []string, handler gin.HandlerFunc) gin.HandlerFunc {
+		return gate(deps, permission, roles, withPostEditor(handler))
+	}
+	allPosts := func(c *gin.Context) bool { return holds(c, deps, permPostRevisionsViewAll, editorRoles) }
+
+	return routes.Posts{
+		PublicList:        listPublishedPostsHandler(p),
+		PublicGet:         getPublishedPostHandler(p),
+		AdminList:         gate(deps, "post.read", authorRoles, adminListPostsHandler(p, deps.Roles)),
+		AdminCreate:       write("post.create", authorRoles, adminCreatePostHandler(p)),
+		AdminPublish:      write("post.publish", editorRoles, adminPublishPostHandler(p)),
+		AdminUnpublish:    write("post.publish", editorRoles, adminUnpublishPostHandler(p)),
+		AdminArchive:      write("post.publish", editorRoles, adminArchivePostHandler(p)),
+		AdminUpdate:       write("post.update", authorRoles, adminUpdatePostHandler(p, deps.Roles)),
+		AdminMediaReplace: write("post.update", authorRoles, adminReplacePostMediaHandler(p)),
+		AdminDelete:       write("post.delete", editorRoles, adminDeletePostHandler(p)),
+		AdminRestore:      write("post.delete", editorRoles, adminRestorePostHandler(p)),
+		RevisionsList:     gate(deps, permPostRevisionsView, authorRoles, adminListPostRevisionsHandler(p, allPosts)),
+		RevisionGet:       gate(deps, permPostRevisionsView, authorRoles, adminGetPostRevisionHandler(p, allPosts)),
+		RevisionRestore:   write(permPostRevisionsRestore, authorRoles, adminRestorePostRevisionHandler(p, allPosts)),
+	}
 }
 
 // settingsControllers wires the admin settings handlers when the service is present.

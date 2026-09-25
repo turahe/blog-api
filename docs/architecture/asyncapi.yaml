@@ -1028,12 +1028,17 @@ components:
             enum:
             - create
             - update
-            - restore
             - publish
+            - unpublish
             - archive
+            - delete
+            - undelete
+            - restore
           author_id:
             type: string
             format: uuid
+            nullable: true
+            description: User who made the change; null for system writes such as scheduled publishing.
           impersonator_id:
             type: string
             format: uuid
@@ -1069,6 +1074,7 @@ components:
           actor_id:
             type: string
             format: uuid
+            nullable: true
           impersonator_id:
             type: string
             format: uuid

@@ -118,6 +118,9 @@ type Posts struct {
 	AdminMediaReplace gin.HandlerFunc
 	AdminDelete       gin.HandlerFunc
 	AdminRestore      gin.HandlerFunc
+	RevisionsList     gin.HandlerFunc
+	RevisionGet       gin.HandlerFunc
+	RevisionRestore   gin.HandlerFunc
 }
 
 // Categories public and admin handlers.

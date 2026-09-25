@@ -526,6 +526,7 @@ like every other read in the API.
 - `GET /api/v1/admin/posts/:id/revisions/:revision_id_or_number` requires same auth as list; supports revision_number for friendly navigation
 - `POST /api/v1/admin/posts/:id/revisions/:revision_id_or_number/restore` requires `post.revisions.restore` permission + CSRF protection for browser clients
 - restore creates a new revision row (type=restore) with `restore_from_revision_id` set, never mutates existing revisions
+- implemented; ownership (`post.revisions.view_all`), the diff format, and restore's `skipped` report are in [post-versions.md](./post-versions.md#implementation)
 - restore restores content/excerpt/slug/status/category/cover/media attachments/tags/SEO snapshot exactly
 - every revision must record `author_id` (effective user) and, when applicable, impersonator metadata for audit
 

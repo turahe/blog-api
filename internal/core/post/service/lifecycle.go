@@ -70,6 +70,10 @@ func (s *PostService) transition(ctx context.Context, id uuid.UUID, transition p
 
 		post = updated
 
+		if _, err := s.revise(ctx, post, revisionType(transition), actorID, nil); err != nil {
+			return err
+		}
+
 		return s.events.Record(ctx, postEvent(transitionEvent(next), post, actorID, now))
 	})
 	if err != nil {
@@ -98,7 +102,16 @@ func (s *PostService) Delete(ctx context.Context, id uuid.UUID) error {
 	post.UpdatedAt = now
 	post.Version++
 
-	if err := s.repo.SoftDelete(ctx, post); err != nil {
+	err = s.events.InTx(ctx, func(ctx context.Context) error {
+		if err := s.repo.SoftDelete(ctx, post); err != nil {
+			return err
+		}
+
+		_, err := s.revise(ctx, post, postdomain.RevisionDelete, nil, nil)
+
+		return err
+	})
+	if err != nil {
 		return err
 	}
 
@@ -122,9 +135,20 @@ func (s *PostService) Restore(ctx context.Context, id uuid.UUID) (postdomain.Pos
 	post.UpdatedAt = now
 	post.Version++
 
-	post, err = s.withFreeSlug(ctx, post.Slug, func(ctx context.Context, free string) (postdomain.Post, error) {
-		post.Slug = free
-		return s.repo.Restore(ctx, post)
+	err = s.events.InTx(ctx, func(ctx context.Context) error {
+		restored, err := s.withFreeSlug(ctx, post.Slug, func(ctx context.Context, free string) (postdomain.Post, error) {
+			post.Slug = free
+			return s.repo.Restore(ctx, post)
+		})
+		if err != nil {
+			return err
+		}
+
+		post = restored
+
+		_, err = s.revise(ctx, post, postdomain.RevisionUndelete, nil, nil)
+
+		return err
 	})
 	if err != nil {
 		return postdomain.Post{}, err

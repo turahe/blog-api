@@ -7,6 +7,9 @@ const (
 	PostPublished = "blog.post.published"
 	PostArchived  = "blog.post.archived"
 
+	PostRevisionCreated  = "blog.post.revision.created"
+	PostRevisionRestored = "blog.post.revision.restored"
+
 	CommentCreated   = "blog.comment.created"
 	CommentModerated = "blog.comment.moderated"
 

@@ -159,3 +159,52 @@ Cache guidance:
 - restore does not mutate the original revision row but points back via `restore_from_revision_id`
 - permissions: author cannot restore/review revisions for another author's posts unless granted editor/admin permissions
 - impersonator metadata is correctly attached to revision audit when applicable
+
+## Implementation
+
+- **Storage:** migration `00024_post_revisions.sql`. Snapshot columns follow the table above, with
+  these differences:
+  - Category and cover are stored as `category_uuid` and `cover_image_media_uuid`, without foreign
+    keys, so a revision survives the referenced row's deletion.
+  - `changed_fields` is a `jsonb` array.
+  - `seo_snapshot` stays `{}` until the SEO epic fills it.
+  - `impersonation_session_id` and `updated_at` are not stored: rows are append-only, and the
+    impersonation epic adds its own columns.
+- **Revision types:** `create`, `update`, `publish`, `unpublish`, `archive`, `delete` (moved to
+  trash), `undelete` (restored from trash), and `restore`. Media replacement records an `update`.
+- **Capture:** `PostService` records one revision in the same transaction as every post write:
+  create, update, media replace, publish, unpublish, archive, delete, undelete, and restore.
+  - A failed revision write rolls the post write back.
+  - The revision is written after the post row, so the row lock orders concurrent writers.
+  - `unique(post_id, revision_number)` backs this up and maps to `409 post.version_conflict`.
+  - Posts created before this migration get revision 1 on their next write, with no diff.
+- **Attribution:** `author_id` is the acting user.
+  - Admin post handlers run under `withPostEditor`, which puts the signed-in user and request id
+    in the request context.
+  - Writes without a user, such as scheduled publishing, store `author_id = null`.
+- **Diff:**
+  - `{from, to}` for title, slug, excerpt, status, comment policy, category, cover, and SEO.
+  - `{from_length, to_length}` for content, since the snapshot holds the full text.
+  - `{added, removed}` for tags (names) and media (asset, kind, and sort order), or
+    `{reordered: true}` when only the media order changed.
+  - The changelog is generated from the diff, for example "Updated title and content" or
+    "Restored revision 3; changed slug".
+- **Restore:** copies title, slug, excerpt, content, comment policy, category, cover, tags, and
+  media. The post keeps its status and `published_at`.
+  - The response lists anything that could not be restored under `skipped`:
+    - categories and tags that were deleted;
+    - media that is deleted or no longer ready;
+    - the slug, when another live post holds it (the current slug stays).
+  - `restore_note` (at most 1000 characters) is stored as `editor_note`.
+- **Access:**
+  - `post.revisions.view` (list and get) and `post.revisions.restore` are seeded for admin,
+    editor, and author.
+  - `post.revisions.view_all` is seeded for admin and editor; it covers posts the caller does not
+    author. Without it, another author's post returns 404.
+  - Revisions of trashed posts are not reachable over HTTP until the post is undeleted.
+- **Lists:** newest first. Filters are `author_id`, `from_date`, and `to_date` (RFC 3339, or
+  `YYYY-MM-DD`, where `to_date` covers the whole day), plus `include_diff`. List rows omit the
+  snapshot; `GET …/revisions/{id or number}` returns it.
+- **Retention:** revisions are kept until an admin runs `app revisions prune --keep N`, which keeps
+  the newest N (at least 1) of every post. Pruning a restore's source sets
+  `restore_from_revision_id` to null.

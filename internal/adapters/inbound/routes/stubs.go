@@ -55,10 +55,7 @@ func registerContractStubs(v1 *gin.RouterGroup, auth AuthMiddleware, c Controlle
 	post(admin, "/newsletter/issues", "admin.newsletter.issues.send", ag, ar, c, nil)
 	put(admin, "/newsletter/provider-config", "admin.newsletter.provider_config.put", ag, ar, c, nil)
 
-	get(admin, "/posts/:param1/revisions", "admin.posts.revisions.list", ag, ar, c, nil)
-	get(admin, "/posts/:param1/revisions/:param2", "admin.posts.revisions.get", ag, ar, c, nil)
 	get(admin, "/posts/:param1/seo", "admin.posts.seo.get", ag, ar, c, nil)
-	post(admin, "/posts/:param1/revisions/:param2/restore", "admin.posts.revisions.restore", ag, ar, c, nil)
 	post(admin, "/posts/:param1/seo/preview", "admin.posts.seo.preview", ag, ar, c, nil)
 	put(admin, "/posts/:param1/seo", "admin.posts.seo.update", ag, ar, c, nil)
 }

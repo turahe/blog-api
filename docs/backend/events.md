@@ -87,6 +87,8 @@ Recorded in the same transaction as the write (only when `MESSAGE_BROKER` is set
 | `blog.media.uploaded` | Direct upload, or completing a presigned upload | Uploader |
 | `blog.media.deleted` | Delete media | Uploader of the asset |
 | `blog.settings.updated` | Admin settings update that changed at least one key (one event per request) | Admin |
+| `blog.post.revision.created` | Every post write (create, update, media replace, publish, unpublish, archive, delete, undelete, restore) | Acting user; none for system writes |
+| `blog.post.revision.restored` | Restore of a revision, alongside its `revision.created` | Restoring user |
 
 Payloads carry identifiers and state, never email addresses or content. The rest of the
 catalogue above is planned.

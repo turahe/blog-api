@@ -41,6 +41,9 @@ func registerAdmin(v1 *gin.RouterGroup, auth AuthMiddleware, c Controllers) {
 	patch(admin, "/posts/:param1", "admin.posts.update", g, AuthRequired, c, c.Posts.AdminUpdate)
 	del(admin, "/posts/:param1", "admin.posts.delete", g, AuthRequired, c, c.Posts.AdminDelete)
 	patch(admin, "/posts/:param1/media", "admin.posts.media.replace", g, AuthRequired, c, c.Posts.AdminMediaReplace)
+	get(admin, "/posts/:param1/revisions", "admin.posts.revisions.list", g, AuthRequired, c, c.Posts.RevisionsList)
+	get(admin, "/posts/:param1/revisions/:param2", "admin.posts.revisions.get", g, AuthRequired, c, c.Posts.RevisionGet)
+	post(admin, "/posts/:param1/revisions/:param2/restore", "admin.posts.revisions.restore", g, AuthRequired, c, c.Posts.RevisionRestore)
 
 	get(admin, "/categories", "admin.categories.list", g, AuthRequired, c, c.Cats.AdminList)
 	post(admin, "/categories", "admin.categories.create", g, AuthRequired, c, c.Cats.AdminCreate)

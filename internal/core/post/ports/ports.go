@@ -43,6 +43,30 @@ type Repository interface {
 	SetCoverImage(ctx context.Context, postID uuid.UUID, mediaID *uuid.UUID, updatedAt time.Time) error
 }
 
+// References lists entity ids a post points at.
+type References struct {
+	Categories []uuid.UUID
+	Tags       []uuid.UUID
+	Media      []uuid.UUID
+}
+
+// RevisionRepository stores the append-only post revision history.
+type RevisionRepository interface {
+	// Latest returns the post's newest revision, or postdomain.ErrRevisionNotFound.
+	Latest(ctx context.Context, postID uuid.UUID) (postdomain.Revision, error)
+	// Create appends rev; its number must be the next in the post's sequence.
+	Create(ctx context.Context, rev postdomain.Revision) (postdomain.Revision, error)
+	List(ctx context.Context, filter postdomain.RevisionFilter) (postdomain.RevisionPage, error)
+	// Get returns one revision of the post, or postdomain.ErrRevisionNotFound.
+	Get(ctx context.Context, postID uuid.UUID, ref postdomain.RevisionRef) (postdomain.Revision, error)
+	// Existing returns the subset of refs that still exist: live categories and tags,
+	// and ready, undeleted media.
+	Existing(ctx context.Context, refs References) (References, error)
+	// Prune deletes all but the newest keep revisions of every post, and returns how
+	// many rows it removed.
+	Prune(ctx context.Context, keep int) (int64, error)
+}
+
 // PublishNotifier tells users that a post went public. Delivery is best effort:
 // implementations log failures instead of returning them.
 type PublishNotifier interface {

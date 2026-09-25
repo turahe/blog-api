@@ -395,6 +395,14 @@ func mapPostError(c *gin.Context, err error) bool {
 			Message: err.Error(),
 			Details: nil,
 		})
+	case errors.Is(err, postdomain.ErrRevisionNotFound):
+		responses.FailureFor(c, nethttp.StatusNotFound, responses.FailureOpts{
+			Service: responses.ServicePosts,
+			Case:    responses.CaseNotFound,
+			Code:    responses.ErrorCodeNotFound,
+			Message: "Revision not found",
+			Details: nil,
+		})
 	case errors.Is(err, postdomain.ErrNotFound):
 		responses.FailureFor(c, nethttp.StatusNotFound, responses.FailureOpts{
 			Service: responses.ServicePosts,

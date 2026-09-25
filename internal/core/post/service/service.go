@@ -47,6 +47,7 @@ type PostService struct {
 	cache     readcache.Cache
 	notifier  ports.PublishNotifier
 	events    event.Unit
+	revisions ports.RevisionRepository
 }
 
 // New returns a PostService without media or tag support; see WithMedia and WithTags.
@@ -274,6 +275,10 @@ func (s *PostService) storeDraft(
 			}
 		}
 
+		if _, err := s.revise(ctx, post, postdomain.RevisionCreate, &post.AuthorUUID, nil); err != nil {
+			return err
+		}
+
 		return s.events.Record(ctx, postEvent(event.PostCreated, post, &post.AuthorUUID, post.CreatedAt))
 	})
 
@@ -295,6 +300,10 @@ func (s *PostService) storeUpdate(
 		post = updated
 
 		if tags, err = s.syncTags(ctx, post.UUID, replaceTags, resolved); err != nil {
+			return err
+		}
+
+		if _, err := s.revise(ctx, post, postdomain.RevisionUpdate, &actorID, nil); err != nil {
 			return err
 		}
 
@@ -482,15 +491,27 @@ func (s *PostService) ReplaceMedia(
 		return nil, fmt.Errorf("%w: at most one cover media item allowed", ErrValidation)
 	}
 
-	if err := s.postMedia.ReplaceAll(ctx, postID, normalized); err != nil {
+	err = s.events.InTx(ctx, func(ctx context.Context) error {
+		if err := s.postMedia.ReplaceAll(ctx, postID, normalized); err != nil {
+			return err
+		}
+
+		post.CoverImageMediaUUID = coverID
+		post.UpdatedAt = s.clock.Now()
+
+		if err := s.repo.SetCoverImage(ctx, postID, coverID, post.UpdatedAt); err != nil {
+			return err
+		}
+
+		_, err := s.revise(ctx, post, postdomain.RevisionUpdate, nil, nil)
+
+		return err
+	})
+	if err != nil {
 		return nil, err
 	}
 
-	defer s.invalidate(ctx)
-
-	if err := s.repo.SetCoverImage(ctx, postID, coverID, s.clock.Now()); err != nil {
-		return nil, err
-	}
+	s.invalidate(ctx)
 
 	return normalized, nil
 }

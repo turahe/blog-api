@@ -145,7 +145,8 @@ func NewRuntime(ctx context.Context, cfg config.Config, logger *slog.Logger, ver
 	auth.WithEvents(events)
 
 	inbox := newInbox(cfg, db, clock, logger)
-	posts := postservice.New(postsRepo, ids, clock).WithCache(cacheOrNil).WithNotifier(inbox).WithEvents(events)
+	posts := postservice.New(postsRepo, ids, clock).WithCache(cacheOrNil).WithNotifier(inbox).WithEvents(events).
+		WithRevisions(persistence.NewPostRevisionRepository(db.GORM))
 	userSvc := userservice.New(users)
 
 	categories := categoryservice.New(categoriesRepo, ids, clock).WithCache(cacheOrNil)
