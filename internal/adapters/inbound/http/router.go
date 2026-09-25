@@ -23,6 +23,7 @@ import (
 	postservice "github.com/turahe/blog-api/internal/core/post/service"
 	rbacports "github.com/turahe/blog-api/internal/core/rbac/ports"
 	rbacservice "github.com/turahe/blog-api/internal/core/rbac/service"
+	settingsservice "github.com/turahe/blog-api/internal/core/settings/service"
 	tagservice "github.com/turahe/blog-api/internal/core/tag/service"
 	userservice "github.com/turahe/blog-api/internal/core/user/service"
 )
@@ -48,6 +49,7 @@ type Dependencies struct {
 	Tags           *tagservice.Service
 	Media          mediaports.Service
 	Comments       *commentservice.Service
+	Settings       *settingsservice.Service // nil keeps the settings routes as 501 stubs
 	RateLimiter    middleware.Limiter
 	CommentRates   handlers.CommentRates
 	LoginPerMinute int
@@ -106,9 +108,7 @@ func NewRouter(deps Dependencies) (*gin.Engine, error) {
 		LoginPerMinute: deps.LoginPerMinute,
 		Version:        deps.Version,
 	}
-	if deps.Profiles != nil { // keep a nil service a nil interface
-		controllerDeps.Profiles = deps.Profiles
-	}
+	optionalServices(&controllerDeps, deps)
 
 	if deps.AdminUsers != nil {
 		controllerDeps.AdminUsers = deps.AdminUsers
@@ -156,6 +156,17 @@ func NewRouter(deps Dependencies) (*gin.Engine, error) {
 		HealthAlias:  healthAlias,
 		MountSwagger: mountSwagger,
 	})
+}
+
+// optionalServices copies services that may be absent, keeping a nil service a nil interface.
+func optionalServices(controllerDeps *handlers.Deps, deps Dependencies) {
+	if deps.Profiles != nil {
+		controllerDeps.Profiles = deps.Profiles
+	}
+
+	if deps.Settings != nil {
+		controllerDeps.Settings = deps.Settings
+	}
 }
 
 // globalMiddleware is the chain every request passes through, outermost first.

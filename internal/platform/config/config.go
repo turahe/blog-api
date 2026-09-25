@@ -131,6 +131,7 @@ type Config struct {
 	CacheTTLCategories            time.Duration
 	CacheTTLTags                  time.Duration
 	CacheTTLUsers                 time.Duration
+	CacheTTLSettings              time.Duration
 	AvatarMaxBytes                int64
 	SwaggerEnabled                bool
 	SentryDSN                     string
@@ -413,6 +414,7 @@ func (c Config) ValidateCache() error {
 		"CACHE_TTL_CATEGORIES": c.CacheTTLCategories,
 		"CACHE_TTL_TAGS":       c.CacheTTLTags,
 		"CACHE_TTL_USERS":      c.CacheTTLUsers,
+		"CACHE_TTL_SETTINGS":   c.CacheTTLSettings,
 	} {
 		if ttl < 0 {
 			return fmt.Errorf("%s must be zero or greater (got %s)", name, ttl)
@@ -591,12 +593,6 @@ func load(withJWTKeys bool) (Config, error) {
 		TurnstileSecretKey:            strings.TrimSpace(env("TURNSTILE_SECRET_KEY", "")),
 		SSEPingInterval:               duration("SSE_PING_INTERVAL", 15*time.Second),
 		SSEMaxConcurrentPerUser:       integer("SSE_MAX_CONCURRENT_PER_USER", 3),
-		CacheEnabled:                  boolEnv("CACHE_ENABLED", true),
-		CacheBypassHeader:             boolEnv("CACHE_BYPASS_HEADER", false),
-		CacheTTLPosts:                 duration("CACHE_TTL_POSTS", time.Minute),
-		CacheTTLCategories:            duration("CACHE_TTL_CATEGORIES", 10*time.Minute),
-		CacheTTLTags:                  duration("CACHE_TTL_TAGS", 10*time.Minute),
-		CacheTTLUsers:                 duration("CACHE_TTL_USERS", 15*time.Minute),
 		AvatarMaxBytes:                int64(integer("AVATAR_MAX_BYTES", 5<<20)),
 		SentryDSN:                     env("SENTRY_DSN", ""),
 		SentryTracesSampleRate:        float("SENTRY_TRACES_SAMPLE_RATE", 0.1),
@@ -611,6 +607,7 @@ func load(withJWTKeys bool) (Config, error) {
 	}
 	cfg.SwaggerEnabled = boolEnv("APP_SWAGGER_ENABLED", cfg.Environment == "local")
 	cfg.SentryEnvironment = env("SENTRY_ENVIRONMENT", cfg.Environment)
+	cfg.loadCache()
 	cfg.loadWorker()
 	cfg.loadKafkaSecurity()
 
@@ -625,6 +622,17 @@ func load(withJWTKeys bool) (Config, error) {
 	}
 
 	return cfg, nil
+}
+
+// loadCache reads the Redis read-cache switch and per-family TTLs.
+func (c *Config) loadCache() {
+	c.CacheEnabled = boolEnv("CACHE_ENABLED", true)
+	c.CacheBypassHeader = boolEnv("CACHE_BYPASS_HEADER", false)
+	c.CacheTTLPosts = duration("CACHE_TTL_POSTS", time.Minute)
+	c.CacheTTLCategories = duration("CACHE_TTL_CATEGORIES", 10*time.Minute)
+	c.CacheTTLTags = duration("CACHE_TTL_TAGS", 10*time.Minute)
+	c.CacheTTLUsers = duration("CACHE_TTL_USERS", 15*time.Minute)
+	c.CacheTTLSettings = duration("CACHE_TTL_SETTINGS", 10*time.Minute)
 }
 
 // loadKafkaSecurity reads the Kafka TLS and SASL settings.

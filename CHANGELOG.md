@@ -1,5 +1,31 @@
 # Changelog
 
+## 2026-09-25 — Admin settings
+
+### Added
+
+- `GET /api/v1/admin/settings`, `PUT /api/v1/admin/settings`, and
+  `GET /api/v1/admin/settings/history` (permissions `settings.read`, `settings.update`,
+  `settings.history.read`), replacing the `501` stubs. See
+  [settings.md](docs/backend/settings.md#implementation).
+- A typed settings catalogue in code (site, media, analytics, notifications, SEO keys) with
+  strict validation: no type coercion, ranges, enums, patterns, and URL and time zone checks.
+  Any invalid key rejects the whole update with `422` and per-key violations.
+- Optimistic locking: optional per-key `version` on updates; stale versions and concurrent
+  writes return `409 settings.version_conflict`.
+- Migration `00023_settings.sql`: `settings` (changed values only) and `settings_history`.
+- `blog.settings.updated` outbox event per applied update.
+- `settings` read-cache family and `CACHE_TTL_SETTINGS` (default `10m`).
+- Rejected settings updates by signed-in admins are audited with the submitted keys and
+  violations.
+- Phase 5 design decisions recorded in
+  [phase-5-product-expansion.md](docs/tasks/phase-5-product-expansion.md#decisions).
+
+### Upgrade notes
+
+- Run `app seed` to add the `settings.history.read` permission row. Admins already pass
+  through the `*` grant.
+
 ## 2026-09-25 — Event pipeline secrets review
 
 ### Added

@@ -65,4 +65,8 @@ func registerAdmin(v1 *gin.RouterGroup, auth AuthMiddleware, c Controllers) {
 	post(admin, "/comments/:param1/moderate", "admin.comments.moderate", g, AuthRequired, c, c.Comments.AdminModerate)
 	post(admin, "/comments/bulk-moderate", "admin.comments.bulk_moderate", g, AuthRequired, c, c.Comments.AdminBulkModerate)
 	del(admin, "/comments/:param1", "admin.comments.delete", g, AuthRequired, c, c.Comments.AdminHardDelete)
+
+	get(admin, "/settings", "admin.settings.get", g, AuthRequired, c, c.Settings.Get)
+	get(admin, "/settings/history", "admin.settings.history", g, AuthRequired, c, c.Settings.History)
+	put(admin, "/settings", "admin.settings.put", g, AuthRequired, c, c.Settings.Put)
 }

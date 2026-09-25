@@ -61,8 +61,4 @@ func registerContractStubs(v1 *gin.RouterGroup, auth AuthMiddleware, c Controlle
 	post(admin, "/posts/:param1/revisions/:param2/restore", "admin.posts.revisions.restore", ag, ar, c, nil)
 	post(admin, "/posts/:param1/seo/preview", "admin.posts.seo.preview", ag, ar, c, nil)
 	put(admin, "/posts/:param1/seo", "admin.posts.seo.update", ag, ar, c, nil)
-
-	get(admin, "/settings", "admin.settings.get", ag, ar, c, nil)
-	get(admin, "/settings/history", "admin.settings.history", ag, ar, c, nil)
-	put(admin, "/settings", "admin.settings.put", ag, ar, c, nil)
 }

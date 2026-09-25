@@ -15,13 +15,16 @@ const (
 	MediaUploaded              = "blog.media.uploaded"
 	MediaDeleted               = "blog.media.deleted"
 	NotificationEmailRequested = "notification.email.requested"
+
+	SettingsUpdated = "blog.settings.updated"
 )
 
 // Aggregate types.
 const (
-	AggregatePost    = "post"
-	AggregateComment = "comment"
-	AggregateUser    = "user"
-	AggregateMedia   = "media"
-	AggregateEmail   = "email"
+	AggregatePost     = "post"
+	AggregateComment  = "comment"
+	AggregateUser     = "user"
+	AggregateMedia    = "media"
+	AggregateEmail    = "email"
+	AggregateSettings = "settings"
 )

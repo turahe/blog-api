@@ -17,10 +17,11 @@ const (
 	Categories Family = "categories"
 	Tags       Family = "tags"
 	Users      Family = "users"
+	Settings   Family = "settings"
 )
 
 // Families lists every family, e.g. for TTL configuration and diagnostics.
-var Families = []Family{Posts, Categories, Tags, Users}
+var Families = []Family{Posts, Categories, Tags, Users, Settings}
 
 // Cache stores JSON-serialisable read results. Implementations fail open: lookup
 // errors are misses and write/invalidate errors are logged, never returned.

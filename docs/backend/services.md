@@ -79,6 +79,7 @@ behaviour.
 | `categories` | `CategoryService.GetBySlug` | `get:slug={slug}` | 10m |
 | `tags` | `TagService.List` | `list` | 10m (`CACHE_TTL_TAGS`) |
 | `users` | `ProfileService.Public` | `get:ref={lowercased username or uuid}` | 15m (`CACHE_TTL_USERS`) |
+| `settings` | `settings.Service.List`, `Values` | `stored` (the stored rows; filtering by sensitivity happens after the read) | 10m (`CACHE_TTL_SETTINGS`) |
 
 - Keys are built **after** input normalisation (page clamped to ≥ 1, `per_page` to
   1–100 else 20, slug trimmed), so equivalent requests share one entry.

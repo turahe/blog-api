@@ -250,3 +250,35 @@ func TestAuditWithoutWriterPassesThrough(t *testing.T) {
 	router.ServeHTTP(recorder, httptest.NewRequestWithContext(t.Context(), nethttp.MethodPost, "/x", nil))
 	require.Equal(t, nethttp.StatusNoContent, recorder.Code)
 }
+
+func TestAuditRecordsRejectedSettingsAttempts(t *testing.T) {
+	t.Parallel()
+
+	actor := uuid.New()
+
+	for _, status := range []int{nethttp.StatusUnprocessableEntity, nethttp.StatusForbidden, nethttp.StatusConflict} {
+		entries := runAudit(t, auditCase{
+			method: nethttp.MethodPut, path: "/settings", pattern: "/settings",
+			route: adminRoute("admin.settings.put"), actor: &actor, status: status,
+			handler: func(c *gin.Context) { audit.AddMetadata(c.Request.Context(), "keys", []string{"site.name"}) },
+		})
+
+		require.Len(t, entries, 1, status)
+		require.Equal(t, auditdomain.ResultFailure, entries[0].Result)
+		require.Equal(t, status, entries[0].Status)
+		require.Equal(t, "settings", entries[0].ResourceType)
+		require.Equal(t, []string{"site.name"}, entries[0].Metadata["keys"])
+	}
+
+	entries := runAudit(t, auditCase{
+		method: nethttp.MethodPut, path: "/settings", pattern: "/settings",
+		route: adminRoute("admin.settings.put"), status: nethttp.StatusUnauthorized,
+	})
+	require.Empty(t, entries, "anonymous rejections have no actor to account for")
+
+	entries = runAudit(t, auditCase{
+		method: nethttp.MethodPost, path: "/tags", pattern: "/tags",
+		route: adminRoute("admin.tags.create"), actor: &actor, status: nethttp.StatusBadRequest,
+	})
+	require.Empty(t, entries, "other admin validation failures stay unrecorded")
+}

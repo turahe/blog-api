@@ -86,6 +86,7 @@ Recorded in the same transaction as the write (only when `MESSAGE_BROKER` is set
 | `auth.password.reset_requested` | A reset token is issued (forgot password or admin reset) | None |
 | `blog.media.uploaded` | Direct upload, or completing a presigned upload | Uploader |
 | `blog.media.deleted` | Delete media | Uploader of the asset |
+| `blog.settings.updated` | Admin settings update that changed at least one key (one event per request) | Admin |
 
 Payloads carry identifiers and state, never email addresses or content. The rest of the
 catalogue above is planned.

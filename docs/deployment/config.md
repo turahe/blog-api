@@ -229,6 +229,7 @@ generations, invalidation) is in [services.md](../backend/services.md#public-rea
 | `CACHE_TTL_CATEGORIES` | `10m` | No | Public category list and detail. |
 | `CACHE_TTL_TAGS` | `10m` | No | Public tag list. |
 | `CACHE_TTL_USERS` | `15m` | No | Public user profiles (`GET /api/v1/users/{username}`). |
+| `CACHE_TTL_SETTINGS` | `10m` | No | Stored admin settings, read by the settings endpoints and by services. Invalidated on every change. |
 
 ## Messaging
 

@@ -46,6 +46,8 @@ import (
 	postservice "github.com/turahe/blog-api/internal/core/post/service"
 	rbacservice "github.com/turahe/blog-api/internal/core/rbac/service"
 	"github.com/turahe/blog-api/internal/core/readcache"
+	settingsdomain "github.com/turahe/blog-api/internal/core/settings/domain"
+	settingsservice "github.com/turahe/blog-api/internal/core/settings/service"
 	tagservice "github.com/turahe/blog-api/internal/core/tag/service"
 	userservice "github.com/turahe/blog-api/internal/core/user/service"
 	"github.com/turahe/blog-api/internal/platform/config"
@@ -154,6 +156,7 @@ func NewRuntime(ctx context.Context, cfg config.Config, logger *slog.Logger, ver
 	tags := tagservice.New(tagsRepo, ids, clock).WithCache(cacheOrNil)
 	posts.WithTags(tags)
 
+	settings := newSettingsService(db, ids, clock, events, cacheOrNil)
 	comments := newCommentService(cfg, db, ids, clock, inbox, events)
 	hub, notificationBus := newNotificationStream(ctx, cfg, inbox, logger)
 
@@ -197,6 +200,7 @@ func NewRuntime(ctx context.Context, cfg config.Config, logger *slog.Logger, ver
 		Tags:        tags,
 		Media:       media,
 		Comments:    comments, Notifications: inbox, NotificationStream: hub, SSEPingInterval: cfg.SSEPingInterval,
+		Settings:    settings,
 		RateLimiter: ratelimit.NewRedis(redisClient),
 		CommentRates: handlers.CommentRates{
 			CreatePerMinute:  cfg.CommentsCreatePerMinute,
@@ -337,6 +341,15 @@ func newProfileService(
 	}
 
 	return profiles.WithAvatars(media, cfg.AvatarMaxBytes), cfg.AvatarMaxBytes
+}
+
+// newSettingsService serves the admin settings catalogue; updates record settings.updated in the outbox.
+func newSettingsService(
+	db *database.Database, ids system.UUIDGenerator, clock system.Clock, events event.Unit, readCache readcache.Cache,
+) *settingsservice.Service {
+	repo := persistence.NewSettingsRepository(db.GORM)
+
+	return settingsservice.New(repo, settingsdomain.DefaultCatalogue(), ids, clock).WithEvents(events).WithCache(readCache)
 }
 
 func newCommentService(
@@ -503,6 +516,7 @@ func CacheTTLs(cfg config.Config) map[readcache.Family]time.Duration {
 		readcache.Categories: cfg.CacheTTLCategories,
 		readcache.Tags:       cfg.CacheTTLTags,
 		readcache.Users:      cfg.CacheTTLUsers,
+		readcache.Settings:   cfg.CacheTTLSettings,
 	}
 }
 

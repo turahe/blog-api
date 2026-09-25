@@ -55,7 +55,7 @@ var rolePermissions = map[string][]string{
 		permPostRead, "post.create", "post.update", "post.publish", "post.delete",
 		"category.read", "category.create", "category.update", "category.delete",
 		"tag.create", "tag.update", "tag.delete",
-		"settings.read", "settings.update",
+		"settings.read", "settings.update", "settings.history.read",
 		"media.create", "media.delete",
 		permCommentModerate, permCommentDelete,
 		"*",

@@ -412,6 +412,19 @@ definitions:
     required:
     - permissions
     type: object
+  requests.SettingUpdate:
+    properties:
+      key:
+        maxLength: 128
+        type: string
+      value:
+        type: object
+      version:
+        minimum: 0
+        type: integer
+    required:
+    - key
+    type: object
   requests.SocialLinks:
     properties:
       github:
@@ -483,6 +496,17 @@ definitions:
       description:
         maxLength: 255
         type: string
+    type: object
+  requests.UpdateSettings:
+    properties:
+      updates:
+        items:
+          $ref: '#/definitions/requests.SettingUpdate'
+        maxItems: 100
+        minItems: 1
+        type: array
+    required:
+    - updates
     type: object
   requests.UpdateTag:
     properties:
@@ -1612,6 +1636,112 @@ paths:
       security:
       - Bearer: []
       summary: Replace a role's permissions
+      tags:
+      - admin
+  /api/v1/admin/settings:
+    get:
+      description: Returns the settings catalogue with current values. server_only
+        keys are never returned; admin_only keys need include_sensitive_admin=true
+        and settings.update.
+      parameters:
+      - description: site, content, media, analytics, notifications, seo, or security
+        in: query
+        name: category
+        type: string
+      - description: include admin_only keys
+        in: query
+        name: include_sensitive_admin
+        type: boolean
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/responses.Envelope'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/responses.Envelope'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/responses.Envelope'
+      security:
+      - Bearer: []
+      summary: Get settings
+      tags:
+      - admin
+    put:
+      consumes:
+      - application/json
+      description: Validates every key, then applies the changed ones atomically.
+        Any invalid key rejects the whole request with 422; a stale per-key version
+        returns 409.
+      parameters:
+      - description: updates
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/requests.UpdateSettings'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/responses.Envelope'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/responses.Envelope'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/responses.Envelope'
+        "409":
+          description: Conflict
+          schema:
+            $ref: '#/definitions/responses.Envelope'
+        "422":
+          description: Unprocessable Entity
+          schema:
+            $ref: '#/definitions/responses.Envelope'
+      security:
+      - Bearer: []
+      summary: Update settings
+      tags:
+      - admin
+  /api/v1/admin/settings/history:
+    get:
+      parameters:
+      - description: only changes of this key
+        in: query
+        name: key
+        type: string
+      - description: page (default 1)
+        in: query
+        name: page
+        type: integer
+      - description: page size (default 20, max 100)
+        in: query
+        name: per_page
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/responses.Envelope'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/responses.Envelope'
+      security:
+      - Bearer: []
+      summary: List settings history
       tags:
       - admin
   /api/v1/admin/tags:

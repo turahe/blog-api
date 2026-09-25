@@ -24,6 +24,14 @@ type Controllers struct {
 	Activity Activity
 
 	Notifications Notifications
+	Settings      Settings
+}
+
+// Settings holds admin settings handlers.
+type Settings struct {
+	Get     gin.HandlerFunc
+	Put     gin.HandlerFunc
+	History gin.HandlerFunc
 }
 
 // Notifications holds the caller's in-app inbox handlers.

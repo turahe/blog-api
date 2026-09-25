@@ -46,6 +46,7 @@ type Deps struct {
 	Tags           *tagservice.Service
 	Media          mediaports.Service
 	Comments       *commentservice.Service
+	Settings       settingsAPI
 	RateLimiter    middleware.Limiter
 	CommentRates   CommentRates
 	// LoginPerMinute is the per-IP budget for auth.login; zero disables the limit.
@@ -66,9 +67,13 @@ const (
 	roleAuthor    = "author"
 	roleModerator = "moderator"
 
-	permCommentModerate = "comment.moderate"
-	permProfileRead     = "user.profile.read"
-	permProfileEdit     = "user.profile.edit"
+	permCommentModerate  = "comment.moderate"
+	permProfileRead      = "user.profile.read"
+	permProfileEdit      = "user.profile.edit"
+	permSettingsRead     = "settings.read"
+	permSettingsUpdate   = "settings.update"
+	permSettingsHistory  = "settings.history.read"
+	settingsPutPerMinute = 60
 )
 
 // Fallback role sets for gate when no RBAC enforcer is wired.
@@ -199,7 +204,26 @@ func NewControllers(deps Deps) routes.Controllers {
 		}
 	}
 
+	c.Settings = settingsControllers(deps)
+
 	return c
+}
+
+// settingsControllers wires the admin settings handlers when the service is present.
+func settingsControllers(deps Deps) routes.Settings {
+	s := deps.Settings
+	if s == nil {
+		return routes.Settings{}
+	}
+
+	canUpdate := func(c *gin.Context) bool { return holds(c, deps, permSettingsUpdate, adminRoles) }
+	putLimit := middleware.RateLimit(deps.RateLimiter, deps.Logger, "settings.update", settingsPutPerMinute, time.Minute)
+
+	return routes.Settings{
+		Get:     gate(deps, permSettingsRead, adminRoles, adminGetSettingsHandler(s, canUpdate)),
+		Put:     gate(deps, permSettingsUpdate, adminRoles, chain(putLimit, adminUpdateSettingsHandler(s))),
+		History: gate(deps, permSettingsHistory, adminRoles, adminSettingsHistoryHandler(s)),
+	}
 }
 
 // wireProfiles binds profile, avatar, and email change handlers for the services that are present.

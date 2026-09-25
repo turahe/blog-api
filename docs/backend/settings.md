@@ -1,5 +1,96 @@
 # Settings Backend
 
+## Implementation
+
+The sections after this one are the original design. This section describes what is built and
+where it differs.
+
+| Piece | Location |
+| --- | --- |
+| Catalogue, value types, validation | `internal/core/settings/domain` (`DefaultCatalogue`) |
+| Use cases (list, update, history, `Values` for other services) | `internal/core/settings/service` |
+| PostgreSQL repository | `internal/adapters/outbound/persistence/settings_repository.go` |
+| HTTP handlers | `internal/adapters/inbound/http/handlers/settings.go` |
+| Schema | migration `00023_settings.sql` (`settings`, `settings_history`) |
+
+### Catalogue
+
+The key catalogue lives in code, not in the database: each key declares its category, type
+(`string`, `integer`, `boolean`, `string_array`), sensitivity, default, and rules (length,
+enum, pattern, range, item limits, and custom checks such as IANA time zones and absolute
+http(s) URLs without credentials). A `settings` row exists only once a key has been changed,
+so `type`, `category`, and `sensitivity` columns are not stored. A stored value that no longer
+passes the current rules resolves to the default and is reported in `default_applied`.
+
+| Key | Type | Sensitivity | Default |
+| --- | --- | --- | --- |
+| `site.name` | string (≤ 100, no `<` `>`) | public_safe | `Blog` |
+| `site.tagline` | string (≤ 200) | public_safe | `""` |
+| `site.default_locale` | string (`en`, `pt-BR`) | public_safe | `en` |
+| `site.timezone` | IANA zone | public_safe | `UTC` |
+| `site.public_url` | http(s) URL or empty | public_safe | `""` |
+| `site.canonical_base_url` | http(s) URL or empty | public_safe | `""` |
+| `media.default_transform_quality` | integer 1–100 | public_safe | `80` |
+| `analytics.enabled` | boolean | public_safe | `true` |
+| `analytics.consent_required` | boolean | public_safe | `true` |
+| `analytics.raw_retention_days` | integer 1–730 | admin_only | `90` |
+| `notifications.moderation_recipient_roles` | subset of admin, editor, moderator | admin_only | `["admin","moderator"]` |
+| `notifications.digest_cadence` | off, daily, weekly | admin_only | `off` |
+| `seo.title_template` | string containing `{title}` (≤ 120) | public_safe | `{title} \| {site}` |
+| `seo.default_description` | string (≤ 300) | public_safe | `""` |
+| `seo.default_share_image_url` | http(s) URL or empty | public_safe | `""` |
+
+Keys that would enforce behaviour (comment switches, moderation mode, password policy,
+session lifetime) are added together with the code that enforces them, so an admin never
+changes a setting that silently does nothing. `storage.*` and `smtp.*` are not settings: the
+credentials and provider switches stay in environment variables, per the feature spec's
+"secrets stay in env vars" rule.
+
+### Behaviour
+
+- `GET /api/v1/admin/settings` needs `settings.read`. `category` filters; an unknown category
+  is `400`. `include_sensitive_admin=true` adds `admin_only` keys only when the caller also
+  holds `settings.update`. `server_only` keys are never returned. Each item carries `value`,
+  `default`, `version` (0 while the default applies), `updated_at`, and `updated_by`.
+- `PUT /api/v1/admin/settings` needs `settings.update` and is limited to 60 requests per
+  minute per admin. Up to 100 updates; each may carry the `version` it was read at. All keys
+  are validated before any is applied; any violation rejects the whole request with `422`
+  and `error.details.violations[]` (`key`, `reason`, `message`). Reasons: `unknown_key`,
+  `duplicate_key`, `read_only` (server_only), `type_mismatch` (no coercion: `"true"` and
+  `"5"` are rejected), `out_of_range`, `too_long`, `not_allowed`, `invalid_format`,
+  `too_many_items`. A stale `version`, or a concurrent write to the same key, returns `409`
+  `settings.version_conflict` and applies nothing. Values equal to the current one are listed
+  in `unchanged` and write nothing.
+- `GET /api/v1/admin/settings/history` needs `settings.history.read` (admin only by default).
+  Filters by `key`, paginates newest first (`per_page` ≤ 100). `previous_value` is the value in
+  effect before the change, including a coded default. Values of keys no longer in the
+  catalogue, or `server_only`, are returned as `null` with `redacted: true`. History is kept
+  until an admin prunes it; `changed_by` becomes `null` if the user is deleted.
+
+### Concurrency, events, cache, audit
+
+- An update runs in one transaction: it locks the existing rows (`SELECT … FOR UPDATE`),
+  writes each change conditionally (`UPDATE … WHERE version = ?`, or `INSERT … ON CONFLICT DO
+  NOTHING` for a key's first change), appends a `settings_history` row per key, and records
+  one `blog.settings.updated` outbox event (aggregate `settings`, payload per the AsyncAPI
+  `SettingsUpdatedPayload`).
+- Stored rows are cached in the `settings` read-cache family (`CACHE_TTL_SETTINGS`, default
+  10m) and invalidated after each committed change. Other services read settings through
+  `Service.Values`, which uses the same cache.
+- The audit middleware records successful updates with per-key `changes`, and, unlike other
+  admin writes, also records every 4xx rejection of a signed-in admin (validation, permission,
+  conflict) with the submitted `keys` and any `violations` in metadata.
+
+### Not implemented from the original design
+
+- Step-up 2FA for `security.*` keys: no security keys ship yet.
+- A service-level permission re-check: as in every other admin module, permissions are
+  enforced by the route gate.
+- `settings.cache.invalidated`, `settings.security.updated`, `settings.storage.updated`, and
+  `settings.smtp.updated` events: only `blog.settings.updated` is produced.
+- `ip_address` in `settings_history`: join on `request_id` to the audit log instead, which
+  already holds the request's IP.
+
 ## Hexagonal Placement
 
 Follows the same hexagonal modular structure as the rest of the backend.

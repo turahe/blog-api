@@ -60,6 +60,7 @@ Client-safe codes only; never include usernames, emails, hashes, IPs, or interna
 | `encryption.key_unavailable`                   | 500  | KMS/ENV master key not accessible at decrypt time                       |
 | `rate_limit.exceeded`                          | 429  | with Retry-After header seconds                                         |
 | `server.overloaded`                            | 503  | too many requests in flight on this replica; retry after Retry-After    |
+| `settings.version_conflict`                    | 409  | a setting changed since the submitted `version`; reload and retry       |
 | `csrf.missing` / `csrf.invalid`                | 403  | browser-origin state-changing requests without/invalid CSRF             |
 | `cors.origin_not_allowed`                      | 403  | origin not in whitelist for profile mutations                           |
 | `stepup.required`                              | 403  | missing `X-Re-Verify-Password` or recent 2FA for high-risk action       |

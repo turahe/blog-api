@@ -40,6 +40,13 @@ var auditFailures = map[string]bool{
 	"auth.password.reset": true,
 }
 
+// auditAttempts lists admin operations whose 4xx rejections of a signed-in user are all
+// recorded as failures (validation, permission, version conflict), not only auth
+// rejections, together with the reasons the service attaches.
+var auditAttempts = map[string]bool{
+	"admin.settings.put": true,
+}
+
 // auditCategories maps operations to the user-facing activity categories shown on
 // /me/activity. Operations without a category are visible to admins only.
 var auditCategories = map[string]string{
@@ -159,6 +166,10 @@ func audited(route routes.Route, status int, success, signedIn bool) bool {
 	}
 
 	if !success {
+		if auditAttempts[route.OperationID] {
+			return signedIn && status < nethttp.StatusInternalServerError
+		}
+
 		return auditFailures[route.OperationID] && isRejection(status)
 	}
 

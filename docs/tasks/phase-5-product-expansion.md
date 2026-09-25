@@ -8,18 +8,30 @@ Index: [README.md](./README.md).
 
 ## Status
 
-**Planned** — none of the settings, impersonation, revision, SEO, or newsletter operations are
-wired; all return `501`. Search and privacy management have no schema or service yet.
+**In progress** — admin settings are implemented. Impersonation, revision, SEO, and newsletter
+operations still return `501`; search and privacy management have no schema or service yet.
+
+## Decisions
+
+| Topic | Decision |
+| --- | --- |
+| Settings scope | Typed catalogue in code (site, content, media, analytics, notifications, SEO, security). Secrets, storage and SMTP credentials, and provider switching stay in env vars. Keys that enforce behaviour ship with the code that enforces them. |
+| Search backend | PostgreSQL full-text search: a `tsvector` column with a GIN index, `websearch_to_tsquery` ranking, `ts_headline` highlights, behind a swappable search port. |
+| Newsletter delivery | Built-in sending through the SMTP mailer and worker, plus a generic HMAC-signed `custom_http` adapter. Other ESPs are documented extension points. |
+| Media variants | Named imgproxy presets (width, format) defined in settings and returned as signed URLs on media responses; no stored derivatives. Orphan cleanup and storage usage reporting are built. |
+| Impersonation | A server-side impersonation session row and a separate short-lived access token with `sub` = target and an RFC 8693 `act` claim for the superadmin. No refresh token; audit records store actor and subject. |
+| Erasure | Anonymize: delete activity, consents, sessions, and tokens; scrub email, name, avatar, and phone; keep posts and comments attributed to "Deleted user"; keep audit rows with the actor id only. Runs asynchronously. Exports are a JSON archive in object storage behind an expiring link. |
 
 ## Epic: settings management
 
-- [ ] Settings schema and storage — see [settings.md](../backend/settings.md)
-- [ ] Settings service with typed groups and validation
-- [ ] `admin.settings.get` — `GET /api/v1/admin/settings`
-- [ ] `admin.settings.put` — `PUT /api/v1/admin/settings`
-- [ ] `admin.settings.history` — `GET /api/v1/admin/settings/history`
-- [ ] Cached read path with invalidation on write
-- [ ] Guard secret-bearing settings so they are never returned in plain text
+- [x] Settings schema and storage — see [settings.md](../backend/settings.md)
+- [x] Settings service with typed groups and validation
+- [x] `admin.settings.get` — `GET /api/v1/admin/settings`
+- [x] `admin.settings.put` — `PUT /api/v1/admin/settings`
+- [x] `admin.settings.history` — `GET /api/v1/admin/settings/history`
+- [x] Cached read path with invalidation on write
+- [x] Guard secret-bearing settings so they are never returned in plain text — secrets are not
+      settings at all; `server_only` keys are never returned or writable over HTTP
 
 Spec: [settings-management.md](../features/settings-management.md)
 

@@ -500,6 +500,10 @@ Full wire format, client integration, security, and scaling guidance is in the f
 
 ## Admin Settings Endpoint Rules
 
+Implemented; the built behaviour (catalogue, `422` violations, `409` version conflicts, audit
+of rejected updates) is in [settings.md](./settings.md#implementation). Reads are not audited,
+like every other read in the API.
+
 - `GET /api/v1/admin/settings` requires authentication and the `settings.read` permission
 - `PUT /api/v1/admin/settings` requires authentication and the `settings.update` permission
 - `PUT` uses partial update semantics with allowlisted keys and strict validation
