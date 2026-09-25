@@ -28,6 +28,7 @@ type Controllers struct {
 	Notifications Notifications
 	Settings      Settings
 	Analytics     Analytics
+	Exports       AnalyticsExports
 	Impersonation Impersonation
 	Newsletter    Newsletter
 }
@@ -85,6 +86,13 @@ type Analytics struct {
 	AdminRetention  gin.HandlerFunc
 	AdminSearch     gin.HandlerFunc
 	AdminRealtime   gin.HandlerFunc
+}
+
+// AnalyticsExports holds the admin rollup export handlers.
+type AnalyticsExports struct {
+	Create gin.HandlerFunc
+	List   gin.HandlerFunc
+	Get    gin.HandlerFunc
 }
 
 // Settings holds admin settings handlers.

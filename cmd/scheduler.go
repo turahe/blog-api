@@ -44,6 +44,10 @@ const (
 	mediaPurgeBatch = 200
 	// analyticsRollupEvery is how stale today's analytics rollups may get.
 	analyticsRollupEvery = 15 * time.Minute
+	// analyticsExportBatch bounds how many analytics exports one run builds.
+	analyticsExportBatch = 2
+	// analyticsRetentionEvery is how often expired analytics data is pruned.
+	analyticsRetentionEvery = time.Hour
 )
 
 func newSchedulerCmd() *cobra.Command {
@@ -198,7 +202,6 @@ func scheduledJobs(
 	privacy := bootstrap.NewPrivacyService(ctx, cfg, db, nil,
 		event.Unit{Tx: persistence.NewTransactor(db.GORM)}, readCache, logger).WithModuleErasers(newsletter)
 	impersonation := bootstrap.NewImpersonationService(cfg, db, bootstrap.NewEvents(cfg, db), nil, nil)
-	aggregator := bootstrap.NewAnalyticsAggregator(db)
 
 	jobs := []scheduler.Job{
 		{Name: "audit-prune", Every: time.Hour, Run: func(ctx context.Context) error {
@@ -242,6 +245,20 @@ func scheduledJobs(
 		{Name: "newsletter-tokens-prune", Every: time.Hour, Run: func(ctx context.Context) error {
 			return logPruned(ctx, logger, "newsletter tokens")(newsletter.PruneTokens(ctx, newsletterTokenRetention))
 		}},
+	}
+
+	jobs = append(jobs, analyticsJobs(ctx, cfg, db, logger)...)
+
+	return append(jobs, mediaJobs(ctx, cfg, db, logger)...)
+}
+
+// analyticsJobs returns the rollup builder, the export builder, and analytics retention.
+func analyticsJobs(ctx context.Context, cfg config.Config, db *database.Database, logger *slog.Logger) []scheduler.Job {
+	aggregator := bootstrap.NewAnalyticsAggregator(db)
+	exports := bootstrap.NewAnalyticsExports(ctx, cfg, db, nil, logger)
+	retention := bootstrap.NewAnalyticsRetention(db)
+
+	return []scheduler.Job{
 		{Name: "analytics-rollup", Every: analyticsRollupEvery, Run: func(ctx context.Context) error {
 			result, err := aggregator.Run(ctx)
 			if result.Rebuilt {
@@ -250,9 +267,26 @@ func scheduledJobs(
 
 			return err
 		}},
-	}
+		{Name: "analytics-exports", Every: time.Minute, Run: func(ctx context.Context) error {
+			done, err := exports.ProcessPending(ctx, analyticsExportBatch)
+			if done > 0 {
+				logger.InfoContext(ctx, "built analytics exports", "count", done)
+			}
 
-	return append(jobs, mediaJobs(ctx, cfg, db, logger)...)
+			purged, purgeErr := exports.PurgeExpired(ctx)
+
+			return errors.Join(err, logPruned(ctx, logger, "analytics export archives")(int64(purged), purgeErr))
+		}},
+		{Name: "analytics-retention", Every: analyticsRetentionEvery, Run: func(ctx context.Context) error {
+			result, err := retention.Run(ctx)
+			if result.RawDeleted > 0 || result.RollupsDeleted > 0 {
+				logger.InfoContext(ctx, "pruned analytics data", "raw_events", result.RawDeleted,
+					"raw_before", result.RawBefore, "daily_rollups", result.RollupsDeleted, "rollups_before", result.RollupsBefore)
+			}
+
+			return err
+		}},
+	}
 }
 
 // mediaJobs returns the media orphan cleanup when media storage is configured.

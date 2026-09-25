@@ -81,7 +81,11 @@ needs, and lets the data subject, and only the data subject, decide on consent.
 - **Retention.** Audit entries are kept for `AUDIT_RETENTION_DAYS` (395). Data exports stay in
   object storage for `PRIVACY_EXPORT_RETENTION` (72h); the download link is presigned for at most
   `PRIVACY_EXPORT_URL_TTL` (15m) and never past the export's own expiry, and the response is
-  `no-store`. Erasure anonymizes the account, deletes its analytics consents with the raw events
+  `no-store`. Admin analytics exports hold rollups only (no raw events, visitor hashes, or
+  session ids), need a password (and 2FA) step-up that is audited even when refused, and follow
+  the same pattern with `ANALYTICS_EXPORT_RETENTION` (72h) and `ANALYTICS_EXPORT_URL_TTL` (15m).
+  Raw analytics events are pruned after `analytics.raw_retention_days` (90) and daily rollups
+  after `analytics.rollup_day_retention_months` (25). Erasure anonymizes the account, deletes its analytics consents with the raw events
   and first-seen records linked to them (rollups hold only counts), and erases its
   newsletter subscriber (personal data, feedback, and IP hashes cleared; tokens deleted), keeping
   only the append-only consent history the law requires.

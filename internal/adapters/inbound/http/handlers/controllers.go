@@ -65,6 +65,8 @@ type Deps struct {
 	AnalyticsIngest analyticsIngestAPI
 	// AnalyticsReports answers the admin dashboard; nil keeps the report routes as 501 stubs.
 	AnalyticsReports analyticsReportsAPI
+	// AnalyticsExports queues rollup exports; nil keeps the export routes as 501 stubs.
+	AnalyticsExports analyticsExportsAPI
 	// AnalyticsLive and AnalyticsLiveStreams feed the live stream; either nil answers 503.
 	AnalyticsLive        analyticsLiveBoard
 	AnalyticsLiveStreams notificationStreamHub
@@ -165,6 +167,7 @@ func NewControllers(deps Deps) routes.Controllers {
 	c.Analytics.ConsentStore, c.Analytics.ConsentGet, c.Analytics.ConsentWithdraw, c.Analytics.IngestGate = consentControllers(deps)
 	analyticsIngestControllers(deps, &c.Analytics)
 	analyticsReportControllers(deps, &c.Analytics)
+	analyticsExportControllers(deps, &c.Exports)
 	c.Notifications = notificationControllers(deps)
 	c.Impersonation = impersonationControllers(deps)
 	c.Newsletter = newsletterControllers(deps)

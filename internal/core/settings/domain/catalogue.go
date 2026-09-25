@@ -134,6 +134,11 @@ func DefaultCatalogue() Catalogue {
 			Key: "analytics.raw_retention_days", Category: CategoryAnalytics, Type: TypeInteger, Sensitivity: AdminOnly,
 			Description: "Days to keep raw analytics events before aggregation", Default: int64(90), Min: 1, Max: 730,
 		},
+		Definition{
+			Key: "analytics.rollup_day_retention_months", Category: CategoryAnalytics, Type: TypeInteger, Sensitivity: AdminOnly,
+			Description: "Months to keep daily analytics rollups (0 keeps them forever); weekly and monthly ones are kept forever",
+			Default:     int64(25), Min: 0, Max: 120,
+		},
 
 		Definition{
 			Key: "notifications.moderation_recipient_roles", Category: CategoryNotifications, Type: TypeStringList,

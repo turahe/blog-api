@@ -255,6 +255,11 @@ func fill(w domain.Window, rows []domain.SiteRow) ([]domain.SiteRow, domain.Tota
 
 // resolve validates the query and turns it into the current and previous windows.
 func (r *Reports) resolve(ctx context.Context, q domain.ReportQuery) (Header, error) {
+	return resolveHeader(ctx, r.tz, r.clock, q)
+}
+
+// resolveHeader validates q and turns it into whole periods of the site time zone.
+func resolveHeader(ctx context.Context, tz ports.TimezoneSource, clock Clock, q domain.ReportQuery) (Header, error) {
 	if q.Limit < 0 || q.Limit > domain.MaxReportLimit {
 		return Header{}, fmt.Errorf("%w: limit must be between 1 and %d", domain.ErrValidation, domain.MaxReportLimit)
 	}
@@ -263,7 +268,7 @@ func (r *Reports) resolve(ctx context.Context, q domain.ReportQuery) (Header, er
 		return Header{}, fmt.Errorf("%w: grain must be day, week, or month", domain.ErrValidation)
 	}
 
-	name, err := r.tz.Timezone(ctx)
+	name, err := tz.Timezone(ctx)
 	if err != nil {
 		return Header{}, err
 	}
@@ -273,7 +278,7 @@ func (r *Reports) resolve(ctx context.Context, q domain.ReportQuery) (Header, er
 		return Header{}, fmt.Errorf("site time zone %q: %w", name, err)
 	}
 
-	from, to := reportDates(q, r.clock.Now().In(loc), loc)
+	from, to := reportDates(q, clock.Now().In(loc), loc)
 	if from.After(to) {
 		return Header{}, fmt.Errorf("%w: from is after to", domain.ErrValidation)
 	}

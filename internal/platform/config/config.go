@@ -116,6 +116,8 @@ type Config struct {
 	AnalyticsIngestPerMinute      int
 	AnalyticsQueueSize            int
 	AnalyticsCountryHeader        string
+	AnalyticsExportRetention      time.Duration
+	AnalyticsExportURLTTL         time.Duration
 	CommentsGuestEnabled          bool
 	CommentsRequireApproval       bool
 	CommentsEditWindow            time.Duration
@@ -274,6 +276,14 @@ func (c Config) validateRetention() error {
 
 	if c.PrivacyExportURLTTL <= 0 || c.PrivacyExportURLTTL > maxPresignTTL {
 		return errors.New("PRIVACY_EXPORT_URL_TTL must be between 1s and 168h")
+	}
+
+	if c.AnalyticsExportRetention <= 0 {
+		return errors.New("ANALYTICS_EXPORT_RETENTION must be positive")
+	}
+
+	if c.AnalyticsExportURLTTL <= 0 || c.AnalyticsExportURLTTL > maxPresignTTL {
+		return errors.New("ANALYTICS_EXPORT_URL_TTL must be between 1s and 168h")
 	}
 
 	return nil

@@ -34,6 +34,33 @@ definitions:
         description: RevokeSessions defaults to true.
         type: boolean
     type: object
+  requests.AnalyticsExport:
+    properties:
+      current_password:
+        maxLength: 128
+        type: string
+      from:
+        example: "2026-08-01"
+        type: string
+      grain:
+        enum:
+        - day
+        - week
+        - month
+        example: day
+        type: string
+      to:
+        example: "2026-08-31"
+        type: string
+      two_factor_code:
+        example: "123456"
+        maxLength: 32
+        type: string
+    required:
+    - current_password
+    - from
+    - to
+    type: object
   requests.AssignUserRoles:
     properties:
       roles:
@@ -1073,6 +1100,122 @@ info:
   title: Blog API
   version: "1.0"
 paths:
+  /api/v1/admin/analytics/export:
+    post:
+      consumes:
+      - application/json
+      description: 'Queues a ZIP of CSV files with every rollup (site, pages, referrers,
+        audience, navigation, searches, search positions, clicked results) of whole
+        periods covering from through to, plus the daily retention cohorts. No raw
+        events, visitor hashes, or session ids are exported. Requires the current
+        password, and two_factor_code when two-factor is enabled. The archive is built
+        in the background: poll GET /api/v1/admin/analytics/exports/{param1} for a
+        presigned download link. One export per user may be open; a second request
+        answers 409 with the open one in error.details.'
+      parameters:
+      - description: window and step-up credentials
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/requests.AnalyticsExport'
+      produces:
+      - application/json
+      responses:
+        "202":
+          description: Accepted
+          schema:
+            $ref: '#/definitions/responses.Envelope'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/responses.Envelope'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/responses.Envelope'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/responses.Envelope'
+        "409":
+          description: Conflict
+          schema:
+            $ref: '#/definitions/responses.Envelope'
+        "503":
+          description: Service Unavailable
+          schema:
+            $ref: '#/definitions/responses.Envelope'
+      security:
+      - Bearer: []
+      summary: Request an analytics export
+      tags:
+      - admin
+  /api/v1/admin/analytics/exports:
+    get:
+      description: The caller's 20 most recent exports, newest first. Completed exports
+        whose archive still exists carry a fresh presigned download_url valid for
+        ANALYTICS_EXPORT_URL_TTL (never past archive_expires_at).
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/responses.Envelope'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/responses.Envelope'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/responses.Envelope'
+      security:
+      - Bearer: []
+      summary: List my analytics exports
+      tags:
+      - admin
+  /api/v1/admin/analytics/exports/{param1}:
+    get:
+      description: Status of one of the caller's exports; other users' exports answer
+        404. A completed export whose archive still exists carries a fresh presigned
+        download_url; after ANALYTICS_EXPORT_RETENTION the archive is deleted and
+        status is expired.
+      parameters:
+      - description: export id
+        in: path
+        name: param1
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/responses.Envelope'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/responses.Envelope'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/responses.Envelope'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/responses.Envelope'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/responses.Envelope'
+      security:
+      - Bearer: []
+      summary: Get an analytics export
+      tags:
+      - admin
   /api/v1/admin/analytics/navigation:
     get:
       description: The most common steps between pages (with their transition type)

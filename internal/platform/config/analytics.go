@@ -4,12 +4,15 @@ import (
 	"errors"
 	"net/textproto"
 	"strings"
+	"time"
 )
 
 func (c *Config) loadAnalytics() {
 	c.AnalyticsIngestPerMinute = integer("ANALYTICS_INGEST_PER_MINUTE", 300)
 	c.AnalyticsQueueSize = integer("ANALYTICS_QUEUE_SIZE", 10_000)
 	c.AnalyticsCountryHeader = textproto.CanonicalMIMEHeaderKey(strings.TrimSpace(env("ANALYTICS_COUNTRY_HEADER", "")))
+	c.AnalyticsExportRetention = duration("ANALYTICS_EXPORT_RETENTION", 72*time.Hour)
+	c.AnalyticsExportURLTTL = duration("ANALYTICS_EXPORT_URL_TTL", 15*time.Minute)
 }
 
 // ValidateAnalytics requires a positive ingest queue, a non-negative rate limit, and a

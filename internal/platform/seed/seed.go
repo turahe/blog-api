@@ -83,7 +83,7 @@ var rolePermissions = map[string][]string{
 		permNewsletterSubscribersRead, permNewsletterSubscribersExport, "newsletter.subscribers.erase",
 		permNewsletterIssuesRead, permNewsletterIssuesEdit, permNewsletterIssuesSend,
 		"newsletter.provider_config.read", "newsletter.provider_config.update",
-		permAnalyticsRead, permAnalyticsSearchRead, permAnalyticsRealtimeRead,
+		permAnalyticsRead, permAnalyticsSearchRead, permAnalyticsRealtimeRead, "analytics.export",
 		"*",
 	},
 	roleEditor: {

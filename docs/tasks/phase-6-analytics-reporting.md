@@ -77,12 +77,17 @@ Spec: [analytics-dashboard.md](../features/analytics-dashboard.md)
 
 ## Epic: export and retention
 
-- [ ] `admin.analytics.export` — `POST /api/v1/admin/analytics/export`
-- [ ] Asynchronous export producing a downloadable artefact in object storage
-- [ ] Signed, expiring download links
-- [ ] Configurable raw-event retention with a pruning job
-- [ ] Aggregate retention independent of raw retention
-- [ ] Document retention defaults in [analytics.md](../backend/analytics.md)
+- [x] `admin.analytics.export` — `POST /api/v1/admin/analytics/export` (`analytics.export`,
+  admins only, password and 2FA step-up; rollups only, as a ZIP of CSVs)
+- [x] Asynchronous export producing a downloadable artefact in object storage (`analytics-exports`
+  job, `analytics-exports/<id>.zip`; status via `GET /api/v1/admin/analytics/exports/{id}`)
+- [x] Signed, expiring download links (`ANALYTICS_EXPORT_URL_TTL`, archive kept
+  `ANALYTICS_EXPORT_RETENTION`)
+- [x] Configurable raw-event retention with a pruning job (`analytics.raw_retention_days`,
+  `analytics-retention` job)
+- [x] Aggregate retention independent of raw retention (`analytics.rollup_day_retention_months`
+  for daily rollups; weekly, monthly, and cohorts kept)
+- [x] Document retention defaults in [analytics.md](../backend/analytics.md#retention)
 
 ## Dependencies and order
 

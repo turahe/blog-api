@@ -209,7 +209,7 @@ func NewRuntime(ctx context.Context, cfg config.Config, logger *slog.Logger, ver
 		NewsletterProvider: NewsletterProvider(cfg),
 		Consent:            consentservice.New(persistence.NewConsentRepository(db.GORM), ids, clock).WithEvents(events),
 		AnalyticsIngest:    analyticsIngest, AnalyticsIngestPerMinute: cfg.AnalyticsIngestPerMinute, AnalyticsCountryHeader: cfg.AnalyticsCountryHeader,
-		AnalyticsReports: newAnalyticsReports(db, settings), AnalyticsLive: live, AnalyticsLiveStreams: liveStreams,
+		AnalyticsReports: newAnalyticsReports(db, settings), AnalyticsLive: live, AnalyticsLiveStreams: liveStreams, AnalyticsExports: NewAnalyticsExports(ctx, cfg, db, auth, logger),
 		PrivacyRequests: NewPrivacyService(ctx, cfg, db, auth, events, cacheOrNil, logger).WithModuleErasers(newsletter),
 		RateLimiter:     ratelimit.NewRedis(redisClient),
 		CommentRates: handlers.CommentRates{

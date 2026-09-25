@@ -99,6 +99,11 @@ before its search.
 
 Times are the server's receive time, never the client's clock.
 
+`analytics_exports` (migration 00034) queues rollup exports: requester, `grain`, `first_day` and
+`last_day` (whole periods, in the stored `timezone`), `status`, `attempts`, `last_error`, and,
+once built, `storage_key`, `size_bytes`, and `expires_at`. A partial unique index allows one
+pending or running export per user. See [Export](#export).
+
 ### Rollups
 
 Dashboards read rollups (migration 00033), never raw events. Each rollup row belongs to a
@@ -154,9 +159,9 @@ restoring raw events or when the job failed for more than a day. Days before the
 event and after today are skipped. A week or month that started before the oldest raw event is
 recomputed from the events that remain, so it can shrink.
 
-Raw-event retention must keep every open period and the cohort window: the planned pruning job
-(see [Jobs and Workers](#jobs-and-workers)) must not delete events from the current or previous
-month or the last 31 days, whatever `analytics.raw_retention_days` says.
+Raw-event retention keeps every open period and the cohort window: the pruning job (see
+[Retention](#retention)) never deletes events from the current or previous month or the last 31
+days, whatever `analytics.raw_retention_days` says.
 
 ### Indexing
 
@@ -272,9 +277,9 @@ All five reports share one query:
 
 - `GET /api/v1/admin/analytics/realtime/stream` — live view over SSE; needs
   `analytics.realtime.read` (admins and editors). See [Real-Time Pipeline](#real-time-pipeline).
-- `POST /api/v1/admin/analytics/export`
-  - exports CSV/JSON for a date window
-  - requires `analytics.export` and step-up auth if 2FA is enabled
+- `POST /api/v1/admin/analytics/export`, `GET /api/v1/admin/analytics/exports`, and
+  `GET /api/v1/admin/analytics/exports/{id}` — rollup exports; need `analytics.export` (admins
+  only) and a password (plus 2FA code) step-up. See [Export](#export).
 
 ### Consent Management
 
@@ -357,6 +362,57 @@ The summary doubles as the heartbeat (`X-Accel-Buffering: no` disables proxy buf
 stream ends with `stream.closed` (code `shutdown`) when the server stops, and a client that
 reconnects simply gets a fresh summary: live data has no replay.
 
+## Export and Retention
+
+### Export
+
+`POST /api/v1/admin/analytics/export` queues a ZIP of CSV files built from the rollups only:
+
+```json
+{"from": "2026-08-01", "to": "2026-08-31", "grain": "day", "current_password": "…", "two_factor_code": "123456"}
+```
+
+- **Scope.** One CSV per rollup table (`site`, `pages`, `referrers`, `audience`, `navigation`,
+  `searches`, `search_positions`, `search_results`) holding every row of the window's periods,
+  plus `cohorts` (the daily cohorts of the window's days) and a `manifest.json` (window, time
+  zone, grain, notes). Raw events, visitor hashes, session ids, and subject ids are never
+  exported; a clicked result carries only its resource type and UUID.
+- **Window.** Same rules as the dashboard: `from` and `to` are dates in the site time zone,
+  widened to whole periods of `grain` (picked from the range length when omitted), at most 731
+  days. Visitors are distinct within one period only.
+- **Step-up.** The body must carry the caller's current password, and a TOTP or backup code when
+  two-factor is enabled; a failure is `403 analytics.step_up_required`. Every request, refused or
+  not, is audited as `admin.analytics.export` with the window (and failure reason).
+- **Queue.** One open export per user: a second request is `409 analytics.export_in_progress`
+  with the open export in `error.details`. The `analytics-exports` job builds up to two exports
+  a minute (three attempts each) and stores them at `analytics-exports/<id>.zip` in `S3_BUCKET`,
+  which must not be publicly readable. Without object storage the routes answer
+  `503 analytics.export_unavailable`.
+- **Download.** `GET /api/v1/admin/analytics/exports/{id}` (and the list of the caller's 20 most
+  recent exports) returns `status` (`pending`, `running`, `completed`, `failed`, `expired`) and,
+  while the archive exists, a presigned `download_url` valid for `ANALYTICS_EXPORT_URL_TTL`
+  (15 minutes, never past `archive_expires_at`). A new link is signed on every call. Exports of
+  other users are `404`, even for admins. Archives are deleted after
+  `ANALYTICS_EXPORT_RETENTION` (72 hours), after which the export shows `expired`.
+- **Spreadsheet safety.** Paths, hosts, and queries come from visitors, so any value starting
+  with `=`, `+`, `-`, `@`, a tab, or a carriage return is prefixed with `'`.
+
+### Retention
+
+| Data | Default | Setting | Notes |
+| --- | --- | --- | --- |
+| Raw events (all five tables) | 90 days | `analytics.raw_retention_days` (1–730) | Never the current or previous month or the last 31 days |
+| Daily rollups | 25 months | `analytics.rollup_day_retention_months` (0–120, 0 = forever) | Independent of raw retention |
+| Weekly and monthly rollups, cohorts | forever | — | Contain no identifiers |
+| First-seen times (`analytics_subject_first_seen`) | forever | — | Deleted with the subject on erasure |
+| Export archives | 72 hours | `ANALYTICS_EXPORT_RETENTION` | Rows stay as the export history |
+
+The `analytics-retention` job (hourly) deletes raw events stored before local midnight of the
+cutoff day, 5000 rows per table per batch and at most 200 batches per run, then daily rollups of
+periods starting before the rollup cutoff. Both are computed in the site time zone. Because
+rollups outlive raw events, `app analytics rollup` cannot rebuild a pruned period: it skips days
+before the oldest remaining event.
+
 ## Events
 
 Domain and integration events:
@@ -374,8 +430,10 @@ rollups publish nothing: dashboards read the rollup tables directly.
 
 - `analytics-rollup` (`app scheduler`, every 15 minutes): builds the rollups and cohorts; see
   [Aggregation](#aggregation).
-- Raw-event pruning under `analytics.raw_retention_days`: planned with the export and retention
-  epic.
+- `analytics-exports` (`app scheduler`, every minute): builds queued exports and deletes expired
+  archives; see [Export](#export).
+- `analytics-retention` (`app scheduler`, hourly): prunes raw events and daily rollups; see
+  [Retention](#retention).
 
 Events refused by consent are dropped before they are queued, so no cleanup job is needed.
 
@@ -422,7 +480,8 @@ Hard rules for the backend:
 
 - consent token is pseudonymous; never join directly to `users.id` unless the user explicitly opts into authenticated analytics (separate scope)
 - allow deletion pipeline: mark tokens as erased, then delete/mask raw events and rebuild affected aggregates. Account erasure deletes the user's consent subjects and, in the same statement, every raw event carrying their `subject_uuid`; anonymised events carry no link and are not affected
-- export pipeline: return only records tied to a consent token proof, signed or token-protected
+- export pipeline: admin exports contain rollups only (no raw events or identifiers), sit behind
+  a password (and 2FA) step-up, and are served through short-lived presigned links
 - never log raw event payloads at INFO or DEBUG levels; keep structured logs metric-only or hash-only
 
 ## Testing Strategy

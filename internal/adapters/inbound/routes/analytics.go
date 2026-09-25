@@ -32,8 +32,8 @@ func registerAnalytics(v1 *gin.RouterGroup, auth AuthMiddleware, c Controllers) 
 	registerAnalyticsReports(v1, auth, c)
 }
 
-// registerAnalyticsReports binds the admin dashboard reports, read from rollups, and the live
-// stream.
+// registerAnalyticsReports binds the admin dashboard reports, read from rollups, the live
+// stream, and rollup exports.
 func registerAnalyticsReports(v1 *gin.RouterGroup, auth AuthMiddleware, c Controllers) {
 	ag, ar := GroupAdmin, AuthRequired
 	admin := v1.Group("/admin")
@@ -45,4 +45,7 @@ func registerAnalyticsReports(v1 *gin.RouterGroup, auth AuthMiddleware, c Contro
 	get(admin, "/analytics/realtime/stream", "admin.analytics.realtime.stream", ag, ar, c, c.Analytics.AdminRealtime)
 	get(admin, "/analytics/retention", "admin.analytics.retention", ag, ar, c, c.Analytics.AdminRetention)
 	get(admin, "/analytics/search", "admin.analytics.search", ag, ar, c, c.Analytics.AdminSearch)
+	post(admin, "/analytics/export", "admin.analytics.export", ag, ar, c, c.Exports.Create)
+	get(admin, "/analytics/exports", "admin.analytics.exports.list", ag, ar, c, c.Exports.List)
+	get(admin, "/analytics/exports/:param1", "admin.analytics.exports.get", ag, ar, c, c.Exports.Get)
 }

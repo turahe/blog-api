@@ -5,6 +5,7 @@ import (
 	"context"
 	"time"
 
+	"github.com/google/uuid"
 	"github.com/turahe/blog-api/internal/core/analytics/domain"
 )
 
@@ -75,4 +76,70 @@ type ReportRepository interface {
 // TimezoneSource returns the site time zone rollups are bucketed in.
 type TimezoneSource interface {
 	Timezone(ctx context.Context) (string, error)
+}
+
+// ExportRepository stores rollup export requests.
+type ExportRepository interface {
+	// Create inserts a pending export; a second open export of the same user is
+	// domain.ErrExportOpen.
+	Create(ctx context.Context, export domain.Export) error
+	// Get returns the user's export, or domain.ErrExportNotFound.
+	Get(ctx context.Context, id, userID uuid.UUID) (domain.Export, error)
+	// Open returns the user's pending or running export, or domain.ErrExportNotFound.
+	Open(ctx context.Context, userID uuid.UUID) (domain.Export, error)
+	// List returns the user's most recent exports, newest first.
+	List(ctx context.Context, userID uuid.UUID, limit int) ([]domain.Export, error)
+	// ClaimNext marks the oldest pending export, or one running since before staleBefore,
+	// running.
+	ClaimNext(ctx context.Context, now, staleBefore time.Time) (domain.Export, bool, error)
+	Complete(ctx context.Context, id uuid.UUID, storageKey string, size int64, expiresAt, at time.Time) error
+	// Fail records message and requeues the export, or marks it failed when final.
+	Fail(ctx context.Context, id uuid.UUID, message string, final bool, at time.Time) error
+	// Archives returns exports whose archive expired before before, oldest first.
+	Archives(ctx context.Context, before time.Time, limit int) ([]domain.Export, error)
+	// ClearArchive forgets a deleted archive.
+	ClearArchive(ctx context.Context, id uuid.UUID) error
+}
+
+// ArchiveStore keeps export archives in object storage.
+type ArchiveStore interface {
+	PutObject(ctx context.Context, key, contentType string, body []byte) error
+	PresignGet(ctx context.Context, key string, ttl time.Duration) (string, error)
+	DeleteObject(ctx context.Context, key string) error
+}
+
+// TableWriter receives exported tables: Table starts one, and Row adds a row to it.
+type TableWriter interface {
+	Table(name string, columns []string) error
+	Row(values []string) error
+}
+
+// RollupExporter reads rollups as tables of text values; NULL is an empty string.
+type RollupExporter interface {
+	// ExportRollups writes every rollup table's rows of sel, and the cohorts of the local days
+	// first through last.
+	ExportRollups(ctx context.Context, sel domain.Selection, first, last string, w TableWriter) error
+}
+
+// StepUp re-verifies the current password, and the two-factor code when the user has two-factor
+// authentication enabled.
+type StepUp interface {
+	VerifyStepUp(ctx context.Context, userID uuid.UUID, password, code string) (bool, error)
+}
+
+// RetentionRepository deletes expired analytics data.
+type RetentionRepository interface {
+	// PruneRaw deletes up to limit raw events of each raw table stored before before,
+	// returning how many rows it deleted.
+	PruneRaw(ctx context.Context, before time.Time, limit int) (int64, error)
+	// PruneDayRollups deletes daily rollups of periods starting before the local date day.
+	PruneDayRollups(ctx context.Context, day string) (int64, error)
+}
+
+// RetentionSettings returns how long analytics data is kept.
+type RetentionSettings interface {
+	// RawRetentionDays is how many days raw events are kept.
+	RawRetentionDays(ctx context.Context) (int, error)
+	// DayRollupRetentionMonths is how many months daily rollups are kept; 0 keeps them forever.
+	DayRollupRetentionMonths(ctx context.Context) (int, error)
 }

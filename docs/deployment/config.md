@@ -86,6 +86,8 @@ Do not use `0.0.0.0/0`, `*`, or arbitrary client-controlled addresses in
 | `AUDIT_QUEUE_SIZE` | `1024` | No | Entries buffered for the background audit writer. When full, new entries are dropped and counted in `blog_audit_entries_dropped_total`. Must be positive. |
 | `ANALYTICS_INGEST_PER_MINUTE` | `300` | No | Requests per minute per client IP across the five `/analytics/ingest/*` routes; `0` disables the limit. See [analytics.md](../backend/analytics.md). |
 | `ANALYTICS_QUEUE_SIZE` | `10000` | No | Events buffered for the background analytics writer. When full, new events are dropped and counted in `blog_analytics_events_dropped_total`. Must be positive. |
+| `ANALYTICS_EXPORT_RETENTION` | `72h` | No | How long an admin analytics export archive stays in `S3_BUCKET` (under `analytics-exports/`, which must not be publicly readable) before `app scheduler` deletes it. Must be positive. See [analytics.md](../backend/analytics.md#export). |
+| `ANALYTICS_EXPORT_URL_TTL` | `15m` | No | Lifetime of each presigned analytics export download link; a new link is issued on every `GET /admin/analytics/exports/{id}`. 1s–168h. |
 | `ANALYTICS_COUNTRY_HEADER` | empty | No | Header carrying the visitor's ISO country code from the edge proxy (for example `CF-IPCountry`). Read only from peers in `APP_TRUSTED_PROXIES`, which must be set. Empty stores no country. |
 | `IMPERSONATION_TTL` | `1h` | No | Lifetime of an impersonation session and its token; never renewed. `5m`–`2h`. See [impersonation.md](../backend/impersonation.md). |
 | `NEWSLETTER_PROVIDER` | `smtp` | No | Newsletter issue sender: `smtp` (the SMTP settings, from `app worker`) or `custom_http` (signed JSON gateway). See [newsletter.md](../backend/newsletter.md). |

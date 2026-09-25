@@ -61,6 +61,8 @@ type Dependencies struct {
 	AnalyticsIngest *analyticsservice.Ingest
 	// AnalyticsReports answers the admin dashboard; nil keeps the report routes as 501 stubs.
 	AnalyticsReports *analyticsservice.Reports
+	// AnalyticsExports queues rollup exports; nil keeps the export routes as 501 stubs.
+	AnalyticsExports *analyticsservice.Exports
 	// AnalyticsLive and AnalyticsLiveStreams feed the live stream; nil (no broker) answers 503.
 	AnalyticsLive            *analyticsservice.Board
 	AnalyticsLiveStreams     *realtime.Hub
@@ -234,6 +236,10 @@ func optionalServices(controllerDeps *handlers.Deps, deps Dependencies) {
 
 	if deps.AnalyticsReports != nil {
 		controllerDeps.AnalyticsReports = deps.AnalyticsReports
+	}
+
+	if deps.AnalyticsExports != nil {
+		controllerDeps.AnalyticsExports = deps.AnalyticsExports
 	}
 
 	if deps.AnalyticsLive != nil && deps.AnalyticsLiveStreams != nil {

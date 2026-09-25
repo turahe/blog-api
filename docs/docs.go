@@ -22,6 +22,170 @@ const docTemplate = `{
     "host": "{{.Host}}",
     "basePath": "{{.BasePath}}",
     "paths": {
+        "/api/v1/admin/analytics/export": {
+            "post": {
+                "security": [
+                    {
+                        "Bearer": []
+                    }
+                ],
+                "description": "Queues a ZIP of CSV files with every rollup (site, pages, referrers, audience, navigation, searches, search positions, clicked results) of whole periods covering from through to, plus the daily retention cohorts. No raw events, visitor hashes, or session ids are exported. Requires the current password, and two_factor_code when two-factor is enabled. The archive is built in the background: poll GET /api/v1/admin/analytics/exports/{param1} for a presigned download link. One export per user may be open; a second request answers 409 with the open one in error.details.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "admin"
+                ],
+                "summary": "Request an analytics export",
+                "parameters": [
+                    {
+                        "description": "window and step-up credentials",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/requests.AnalyticsExport"
+                        }
+                    }
+                ],
+                "responses": {
+                    "202": {
+                        "description": "Accepted",
+                        "schema": {
+                            "$ref": "#/definitions/responses.Envelope"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/responses.Envelope"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/responses.Envelope"
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden",
+                        "schema": {
+                            "$ref": "#/definitions/responses.Envelope"
+                        }
+                    },
+                    "409": {
+                        "description": "Conflict",
+                        "schema": {
+                            "$ref": "#/definitions/responses.Envelope"
+                        }
+                    },
+                    "503": {
+                        "description": "Service Unavailable",
+                        "schema": {
+                            "$ref": "#/definitions/responses.Envelope"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/admin/analytics/exports": {
+            "get": {
+                "security": [
+                    {
+                        "Bearer": []
+                    }
+                ],
+                "description": "The caller's 20 most recent exports, newest first. Completed exports whose archive still exists carry a fresh presigned download_url valid for ANALYTICS_EXPORT_URL_TTL (never past archive_expires_at).",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "admin"
+                ],
+                "summary": "List my analytics exports",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/responses.Envelope"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/responses.Envelope"
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden",
+                        "schema": {
+                            "$ref": "#/definitions/responses.Envelope"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/admin/analytics/exports/{param1}": {
+            "get": {
+                "security": [
+                    {
+                        "Bearer": []
+                    }
+                ],
+                "description": "Status of one of the caller's exports; other users' exports answer 404. A completed export whose archive still exists carries a fresh presigned download_url; after ANALYTICS_EXPORT_RETENTION the archive is deleted and status is expired.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "admin"
+                ],
+                "summary": "Get an analytics export",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "export id",
+                        "name": "param1",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/responses.Envelope"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/responses.Envelope"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/responses.Envelope"
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden",
+                        "schema": {
+                            "$ref": "#/definitions/responses.Envelope"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/responses.Envelope"
+                        }
+                    }
+                }
+            }
+        },
         "/api/v1/admin/analytics/navigation": {
             "get": {
                 "security": [
@@ -7627,6 +7791,42 @@ const docTemplate = `{
                 "revoke_sessions": {
                     "description": "RevokeSessions defaults to true.",
                     "type": "boolean"
+                }
+            }
+        },
+        "requests.AnalyticsExport": {
+            "type": "object",
+            "required": [
+                "current_password",
+                "from",
+                "to"
+            ],
+            "properties": {
+                "current_password": {
+                    "type": "string",
+                    "maxLength": 128
+                },
+                "from": {
+                    "type": "string",
+                    "example": "2026-08-01"
+                },
+                "grain": {
+                    "type": "string",
+                    "enum": [
+                        "day",
+                        "week",
+                        "month"
+                    ],
+                    "example": "day"
+                },
+                "to": {
+                    "type": "string",
+                    "example": "2026-08-31"
+                },
+                "two_factor_code": {
+                    "type": "string",
+                    "maxLength": 32,
+                    "example": "123456"
                 }
             }
         },

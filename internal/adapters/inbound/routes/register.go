@@ -28,7 +28,6 @@ func Register(router gin.IRouter, c Controllers, auth AuthMiddleware) {
 	registerAdmin(v1, auth, c)
 	registerAnalytics(v1, auth, c)
 	registerNewsletter(v1, auth, c)
-	registerContractStubs(v1, auth, c)
 }
 
 type routeSpec struct {

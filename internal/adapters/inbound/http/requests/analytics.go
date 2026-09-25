@@ -114,6 +114,26 @@ func (r AnalyticsReport) Query() analyticsdomain.ReportQuery {
 	}
 }
 
+// AnalyticsExport is POST /api/v1/admin/analytics/export: the rollups of from through to (dates
+// in the site time zone, widened to whole periods of grain). grain is picked from the range
+// length when omitted. current_password, and two_factor_code when two-factor is enabled,
+// re-verify the caller.
+type AnalyticsExport struct {
+	From            string `json:"from"             binding:"required,datetime=2006-01-02" example:"2026-08-01"`
+	To              string `json:"to"               binding:"required,datetime=2006-01-02" example:"2026-08-31"`
+	Grain           string `json:"grain"            binding:"omitempty,oneof=day week month" example:"day"`
+	CurrentPassword string `json:"current_password" binding:"required,max=128"`
+	TwoFactorCode   string `json:"two_factor_code"  binding:"max=32" example:"123456"`
+}
+
+// Input converts the request for the exports service.
+func (r AnalyticsExport) Input() analyticsservice.ExportRequest {
+	return analyticsservice.ExportRequest{
+		Query:    analyticsdomain.ReportQuery{From: optionalDate(r.From), To: optionalDate(r.To), Grain: analyticsdomain.Grain(r.Grain)},
+		Password: r.CurrentPassword, Code: r.TwoFactorCode,
+	}
+}
+
 // optionalDate parses a validated YYYY-MM-DD field; empty is the zero time.
 func optionalDate(s string) time.Time {
 	t, err := time.Parse(time.DateOnly, s)

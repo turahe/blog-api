@@ -22,6 +22,7 @@ func TestSeededGrantsMatchHandlerFallbackRoles(t *testing.T) {
 		"newsletter.subscribers.erase":      admin,
 		"newsletter.provider_config.read":   admin,
 		"newsletter.provider_config.update": admin,
+		"analytics.export":                  admin,
 		permNewsletterSubscribersRead:       editors,
 		permNewsletterSubscribersExport:     editors,
 		permNewsletterIssuesRead:            editors,

@@ -1,5 +1,33 @@
 # Changelog
 
+## 2026-09-25 — Analytics export and retention
+
+### Added
+
+- `POST /api/v1/admin/analytics/export` queues a ZIP of CSV files with every rollup of a window
+  (site, pages, referrers, audience, navigation, searches, search positions, clicked results,
+  and daily cohorts) plus a manifest. `GET /api/v1/admin/analytics/exports` and
+  `GET /api/v1/admin/analytics/exports/{id}` report status and hand out a presigned download link
+  while the archive exists. Migration 00034 adds `analytics_exports`.
+- `app scheduler` jobs `analytics-exports` (every minute: builds queued exports, deletes expired
+  archives) and `analytics-retention` (hourly: prunes raw events and daily rollups).
+- Setting `analytics.rollup_day_retention_months` (default 25, 0 keeps daily rollups forever).
+  Weekly and monthly rollups and cohorts are kept forever.
+- Config `ANALYTICS_EXPORT_RETENTION` (72h) and `ANALYTICS_EXPORT_URL_TTL` (15m).
+
+### Changed
+
+- `analytics.raw_retention_days` (default 90) is now enforced. Pruning never reaches the current
+  or previous month or the last 31 days, which the rollup job still recomputes.
+
+### Security
+
+- New permission `analytics.export`, admins only (rerun `app seed`). Exports need the current
+  password, plus a two-factor code when enabled; every request, including refused ones, is
+  audited as `admin.analytics.export`. Exports contain no raw events, visitor hashes, session
+  ids, or subject ids, other users' exports answer 404, and CSV values that a spreadsheet would
+  run as a formula are prefixed with `'`.
+
 ## 2026-09-25 — Live analytics stream
 
 ### Added

@@ -46,6 +46,7 @@ var auditFailures = map[string]bool{
 var auditAttempts = map[string]bool{
 	"admin.settings.put":        true,
 	"admin.impersonation.start": true,
+	"admin.analytics.export":    true,
 }
 
 // auditCategories maps operations to the user-facing activity categories shown on

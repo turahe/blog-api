@@ -3,6 +3,7 @@ package config
 import (
 	"strings"
 	"testing"
+	"time"
 )
 
 func TestLoadAnalyticsDefaults(t *testing.T) {
@@ -18,6 +19,28 @@ func TestLoadAnalyticsDefaults(t *testing.T) {
 
 	if cfg.AnalyticsIngestPerMinute != 300 || cfg.AnalyticsQueueSize != 10_000 || cfg.AnalyticsCountryHeader != "" {
 		t.Fatalf("per_minute=%d queue=%d header=%q", cfg.AnalyticsIngestPerMinute, cfg.AnalyticsQueueSize, cfg.AnalyticsCountryHeader)
+	}
+
+	if cfg.AnalyticsExportRetention != 72*time.Hour || cfg.AnalyticsExportURLTTL != 15*time.Minute {
+		t.Fatalf("export retention=%s url ttl=%s", cfg.AnalyticsExportRetention, cfg.AnalyticsExportURLTTL)
+	}
+}
+
+func TestLoadRejectsBadAnalyticsExportDurations(t *testing.T) {
+	cases := map[string][2]string{
+		"retention zero": {"ANALYTICS_EXPORT_RETENTION", "0s"},
+		"url ttl zero":   {"ANALYTICS_EXPORT_URL_TTL", "0s"},
+		"url ttl long":   {"ANALYTICS_EXPORT_URL_TTL", "169h"},
+	}
+	for name, tc := range cases {
+		t.Run(name, func(t *testing.T) {
+			setJWTKeys(t)
+			t.Setenv(tc[0], tc[1])
+
+			if _, err := Load(); err == nil || !strings.Contains(err.Error(), tc[0]) {
+				t.Fatalf("err=%v, want %s", err, tc[0])
+			}
+		})
 	}
 }
 

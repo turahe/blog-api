@@ -428,6 +428,19 @@ Each item has `id`, `type`, `title`, `body`, `preview`, `data` (links such as `p
   analytics.realtime_unavailable` without a message broker, `429 analytics.realtime_limit` past
   the per-user stream limit. Details: [analytics.md](analytics.md#live-stream).
 
+### Analytics exports
+
+- `POST /api/v1/admin/analytics/export` (`analytics.export`, admins only) queues a ZIP of rollup
+  CSVs for `from`/`to` (required) and optional `grain`, and answers `202`. The body also carries
+  `current_password` and, with two-factor enabled, `two_factor_code`; a failed check is `403
+  analytics.step_up_required`. A second open export is `409 analytics.export_in_progress` (the
+  open one in `error.details`); without object storage, `503 analytics.export_unavailable`.
+- `GET /api/v1/admin/analytics/exports` lists the caller's 20 most recent exports and
+  `GET /api/v1/admin/analytics/exports/{id}` returns one (`404` for another user's). `status` is
+  `pending`, `running`, `completed`, `failed`, or `expired`; a completed export carries a new
+  presigned `download_url` on every call (valid `ANALYTICS_EXPORT_URL_TTL`, never past
+  `archive_expires_at`). Details: [analytics.md](analytics.md#export).
+
 ## Main API Areas
 
 - auth
