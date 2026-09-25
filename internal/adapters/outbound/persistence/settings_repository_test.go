@@ -82,6 +82,51 @@ func TestSettingsRepositoryVersionedSaveAndHistory(t *testing.T) {
 	assert.EqualValues(t, 1, page.Items[0].Version)
 }
 
+func TestSettingsRepositorySeedDefaultsKeepsStoredValues(t *testing.T) {
+	t.Parallel()
+
+	tx := integrationTx(t)
+	repo := NewSettingsRepository(tx)
+	ctx := t.Context()
+	prefix := "test." + uuid.NewString()
+	fresh, changed := prefix+".fresh", prefix+".changed"
+	catalogue := settingsdomain.NewCatalogue(
+		settingsdomain.Definition{Key: fresh, Type: settingsdomain.TypeStringList, Default: []string{"a", "b"}},
+		settingsdomain.Definition{Key: changed, Type: settingsdomain.TypeInteger, Default: int64(5), Max: 100},
+	)
+	at := time.Now().UTC().Truncate(time.Microsecond)
+
+	require.NoError(t, repo.Save(ctx, settingsWrite(changed, "", `42`, 0, nil, at)))
+	require.NoError(t, repo.SeedDefaults(ctx, catalogue, at))
+	require.NoError(t, repo.SeedDefaults(ctx, catalogue, at.Add(time.Second)), "seeding is idempotent")
+
+	locked, err := repo.Lock(ctx, []string{changed, fresh})
+	require.NoError(t, err)
+	require.Len(t, locked, 2)
+	assert.Equal(t, changed, locked[0].Key)
+	assert.JSONEq(t, `42`, string(locked[0].Value), "a stored value is never overwritten")
+	assert.EqualValues(t, 1, locked[0].Version)
+	assert.Equal(t, fresh, locked[1].Key)
+	assert.JSONEq(t, `["a","b"]`, string(locked[1].Value))
+	assert.EqualValues(t, 1, locked[1].Version)
+	assert.Nil(t, locked[1].UpdatedBy)
+
+	page, err := repo.History(ctx, settingsdomain.HistoryFilter{Key: fresh, Page: 1, PerPage: 10})
+	require.NoError(t, err)
+	require.Len(t, page.Items, 1, "only the first seed writes history")
+	assert.EqualValues(t, 1, page.Items[0].Version)
+	assert.Nil(t, page.Items[0].Previous)
+	assert.JSONEq(t, `["a","b"]`, string(page.Items[0].New))
+	assert.Nil(t, page.Items[0].ChangedBy)
+	assert.Equal(t, "seed", page.Items[0].RequestID)
+	assert.True(t, page.Items[0].CreatedAt.Equal(at))
+
+	page, err = repo.History(ctx, settingsdomain.HistoryFilter{Key: changed, Page: 1, PerPage: 10})
+	require.NoError(t, err)
+	require.Len(t, page.Items, 1)
+	assert.Equal(t, "req-"+changed, page.Items[0].RequestID)
+}
+
 func TestSettingsRepositoryRollsBackWithTransaction(t *testing.T) {
 	t.Parallel()
 

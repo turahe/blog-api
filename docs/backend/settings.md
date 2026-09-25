@@ -18,9 +18,17 @@ where it differs.
 The key catalogue lives in code, not in the database: each key declares its category, type
 (`string`, `integer`, `boolean`, `string_array`), sensitivity, default, and rules (length,
 enum, pattern, range, item limits, and custom checks such as IANA time zones and absolute
-http(s) URLs without credentials). A `settings` row exists only once a key has been changed,
-so `type`, `category`, and `sensitivity` columns are not stored. A stored value that no longer
+http(s) URLs without credentials). A `settings` row stores only the key and its value, so
+`type`, `category`, and `sensitivity` columns are not stored. A stored value that no longer
 passes the current rules resolves to the default and is reported in `defaultApplied`.
+
+`app seed` inserts a row at version 1 with its coded default for every catalogue key that
+has no row yet, and records one `settings_history` entry per inserted key (`previousValue`
+null, no actor, `requestId` `seed`). It never overwrites a stored row, so admin changes
+survive a re-seed and re-running it after an upgrade seeds only the new keys. After a key is
+seeded, changing its default in code does not change the stored value; update it through
+`PUT /api/v1/admin/settings` instead. Without a seed, a key has no row and resolves to its
+coded default.
 
 | Key | Type | Sensitivity | Default |
 | --- | --- | --- | --- |
@@ -56,7 +64,7 @@ credentials and provider switches stay in environment variables, per the feature
 - `GET /api/v1/admin/settings` needs `settings.read`. `category` filters; an unknown category
   is `400`. `includeSensitiveAdmin=true` adds `admin_only` keys only when the caller also
   holds `settings.update`. `server_only` keys are never returned. Each item carries `value`,
-  `default`, `version` (0 while the default applies), `updatedAt`, and `updatedBy`.
+  `default`, `version` (0 while the key has no row), `updatedAt`, and `updatedBy`.
 - `PUT /api/v1/admin/settings` needs `settings.update` and is limited to 60 requests per
   minute per admin. Up to 100 updates; each may carry the `version` it was read at. All keys
   are validated before any is applied; any violation rejects the whole request with `422`
@@ -68,7 +76,7 @@ credentials and provider switches stay in environment variables, per the feature
   in `unchanged` and write nothing.
 - `GET /api/v1/admin/settings/history` needs `settings.history.read` (admin only by default).
   Filters by `key`, paginates newest first (`perPage` ≤ 100). `previousValue` is the value in
-  effect before the change, including a coded default. Values of keys no longer in the
+  effect before the change, including a coded default, and `null` on a seed entry. Values of keys no longer in the
   catalogue, or `server_only`, are returned as `null` with `redacted: true`. History is kept
   until an admin prunes it; `changedBy` becomes `null` if the user is deleted.
 

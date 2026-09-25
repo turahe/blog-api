@@ -2,6 +2,7 @@ package persistence
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"time"
 
@@ -95,6 +96,37 @@ func (r *SettingsRepository) Save(ctx context.Context, w settingsdomain.Write) e
 		VALUES (?, ?, ?::jsonb, ?::jsonb, ?, (SELECT id FROM users WHERE uuid = ?), ?, ?)`,
 		w.HistoryID, w.Key, previous, string(w.Value), w.ExpectedVersion+1, w.ChangedBy, w.RequestID, w.At).Error; err != nil {
 		return fmt.Errorf("record setting history %s: %w", w.Key, err)
+	}
+
+	return nil
+}
+
+// settingsSeedRequestID marks history rows written by SeedDefaults.
+const settingsSeedRequestID = "seed"
+
+// SeedDefaults stores every catalogue key that has no row yet at its coded default, with
+// a version-1 history row, and never overwrites a stored value.
+func (r *SettingsRepository) SeedDefaults(ctx context.Context, catalogue settingsdomain.Catalogue, at time.Time) error {
+	c := conn(ctx, r.db)
+
+	for _, def := range catalogue.Definitions() {
+		value, err := json.Marshal(def.Default)
+		if err != nil {
+			return fmt.Errorf("encode default of setting %s: %w", def.Key, err)
+		}
+
+		if err := c.Exec(`
+			WITH seeded AS (
+				INSERT INTO settings (key, value, version, created_at, updated_at)
+				VALUES (?, ?::jsonb, 1, ?, ?)
+				ON CONFLICT (key) DO NOTHING
+				RETURNING key, value
+			)
+			INSERT INTO settings_history (setting_key, new_value, version, request_id, created_at)
+			SELECT key, value, 1, ?, ? FROM seeded`,
+			def.Key, string(value), at, at, settingsSeedRequestID, at).Error; err != nil {
+			return fmt.Errorf("seed setting %s: %w", def.Key, err)
+		}
 	}
 
 	return nil

@@ -1,5 +1,5 @@
 // Package seed idempotently creates default roles, permissions, the initial administrator,
-// and the default notification templates.
+// the default notification templates, and the default settings.
 package seed
 
 import (
@@ -13,6 +13,7 @@ import (
 	"github.com/turahe/blog-api/internal/adapters/outbound/persistence"
 	outboundrbac "github.com/turahe/blog-api/internal/adapters/outbound/rbac"
 	notificationtemplate "github.com/turahe/blog-api/internal/core/notification/template"
+	settingsdomain "github.com/turahe/blog-api/internal/core/settings/domain"
 	userdomain "github.com/turahe/blog-api/internal/core/user/domain"
 	"github.com/turahe/blog-api/internal/platform/security/password"
 	"gorm.io/gorm"
@@ -114,7 +115,8 @@ var rolePermissions = map[string][]string{
 	},
 }
 
-// Run idempotently seeds roles, permissions, Casbin policies, and the initial administrator.
+// Run idempotently seeds roles, permissions, Casbin policies, the initial administrator,
+// notification templates, and settings defaults.
 func Run(ctx context.Context, db *gorm.DB, opts Options) error {
 	opts = opts.withDefaults()
 
@@ -138,6 +140,10 @@ func Run(ctx context.Context, db *gorm.DB, opts Options) error {
 
 	if err := persistence.NewNotificationTemplateRepository(db).SeedDefaults(ctx, notificationtemplate.Defaults()); err != nil {
 		return fmt.Errorf("seed notification templates: %w", err)
+	}
+
+	if err := persistence.NewSettingsRepository(db).SeedDefaults(ctx, settingsdomain.DefaultCatalogue(), time.Now().UTC()); err != nil {
+		return fmt.Errorf("seed settings: %w", err)
 	}
 
 	return enforcer.Save()

@@ -2,6 +2,7 @@ package seed
 
 import (
 	"database/sql"
+	"encoding/json"
 	"os"
 	"strings"
 	"testing"
@@ -10,6 +11,7 @@ import (
 	_ "github.com/jackc/pgx/v5/stdlib"
 	"github.com/stretchr/testify/require"
 	outboundrbac "github.com/turahe/blog-api/internal/adapters/outbound/rbac"
+	settingsdomain "github.com/turahe/blog-api/internal/core/settings/domain"
 	"github.com/turahe/blog-api/internal/platform/migrations"
 	"gorm.io/driver/postgres"
 	"gorm.io/gorm"
@@ -49,6 +51,7 @@ func TestSeedGrantsAdminAccessToStaffRoles(t *testing.T) {
 
 	require.NoError(t, Run(ctx, tx, Options{AdminEmail: name + "@example.test", AdminUsername: name}))
 	require.NoError(t, Run(ctx, tx, Options{AdminEmail: name + "@example.test", AdminUsername: name}), "seeding is idempotent")
+	requireSettingsSeeded(t, tx)
 
 	enforcer, err := outboundrbac.NewEnforcer(tx)
 	require.NoError(t, err)
@@ -77,4 +80,26 @@ func TestSeedGrantsAdminAccessToStaffRoles(t *testing.T) {
 	allowed, err := enforcer.Enforce(ctx, newUser(""), permAdminAccess)
 	require.NoError(t, err)
 	require.False(t, allowed, "an account without a staff role has no admin access")
+}
+
+// requireSettingsSeeded checks every catalogue key is stored at its default with exactly
+// one seed history row, however often Run ran.
+func requireSettingsSeeded(t *testing.T, tx *gorm.DB) {
+	t.Helper()
+
+	for _, def := range settingsdomain.DefaultCatalogue().Definitions() {
+		var value string
+
+		require.NoError(t, tx.Raw("SELECT value::text FROM settings WHERE key = ?", def.Key).Row().Scan(&value), def.Key)
+
+		want, err := json.Marshal(def.Default)
+		require.NoError(t, err)
+		require.JSONEq(t, string(want), value, def.Key)
+
+		var seeded int64
+
+		require.NoError(t, tx.Raw("SELECT count(*) FROM settings_history WHERE setting_key = ? AND request_id = 'seed'",
+			def.Key).Row().Scan(&seeded))
+		require.EqualValues(t, 1, seeded, def.Key)
+	}
 }

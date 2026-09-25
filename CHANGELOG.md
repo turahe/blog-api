@@ -1,5 +1,14 @@
 # Changelog
 
+## 2026-09-25 — Seed default settings
+
+### Added
+
+- `app seed` stores every settings catalogue key that has no row yet at its coded default
+  (version 1), with one `settings_history` entry per key (`requestId` `seed`, no actor).
+  Existing rows are never overwritten, and re-seeding after an upgrade adds only new keys.
+  Once a key is seeded, a later change to its coded default no longer applies to it.
+
 ## 2026-09-25 — camelCase REST API
 
 ### Changed
