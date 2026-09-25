@@ -117,7 +117,8 @@ Design: [2026-07-30-messaging-brokers-design.md](../superpowers/specs/2026-07-30
 ## Cross-cutting
 
 - [x] Unit tests for broker normalization, misconfiguration, and topic prefixing
-- [ ] Integration tests against Compose Kafka and RabbitMQ, skipped when brokers are absent
+- [x] Integration tests against Compose Kafka and RabbitMQ, skipped when brokers are absent
+      (`make test-brokers`; CI runs both as service containers)
 - [x] Outbox tests proving events commit and roll back with the business write
 - [x] Consumer idempotency tests using duplicate deliveries
 - [ ] Secrets review for broker credentials — see [secrets-and-headers.md](../security/secrets-and-headers.md)

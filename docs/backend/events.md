@@ -175,6 +175,10 @@ Guarantees:
 - **Per broker.** Kafka keeps order within a partition (the relay does not set a partition
   key). RabbitMQ keeps order per queue while there is one consumer. Google Pub/Sub does not
   order messages (ordering keys are not used). All three redeliver unacknowledged messages.
+- **First start.** `app worker` subscribes its consumers before the relay publishes, because a
+  RabbitMQ fanout exchange drops messages no queue is bound for yet. A new Kafka consumer group
+  starts from the oldest offset. Topics without a consumer (most `blog.*` events today) are
+  still dropped by RabbitMQ until something subscribes.
 
 Metrics (on `METRICS_ADDR` in `app worker`): `blog_outbox_published_total`,
 `blog_outbox_publish_failures_total{terminal}`, `blog_outbox_pending`, `blog_outbox_failed`, and

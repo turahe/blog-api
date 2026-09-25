@@ -1,5 +1,20 @@
 # Changelog
 
+## 2026-09-25 — Broker integration tests
+
+### Added
+
+- Round-trip and dead-letter tests against real Kafka and RabbitMQ, skipped unless
+  `TEST_KAFKA_BROKERS` / `TEST_RABBITMQ_URL` are set. `make test-brokers` runs them against
+  Compose; CI runs both brokers as service containers.
+
+### Fixed
+
+- A new Kafka consumer group starts from the oldest offset instead of the newest, so a first
+  worker deploy no longer skips events published before its consumers joined.
+- `app worker` starts the outbox relay only after its consumers subscribe, so RabbitMQ does
+  not drop the first commands on a fresh broker.
+
 ## 2026-09-25 — Event pipeline hardening
 
 ### Added

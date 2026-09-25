@@ -3,6 +3,7 @@ package messaging
 import (
 	"context"
 
+	"github.com/IBM/sarama"
 	"github.com/ThreeDotsLabs/watermill-kafka/v3/pkg/kafka"
 	"github.com/turahe/blog-api/internal/platform/config"
 )
@@ -25,11 +26,19 @@ func openKafka(_ context.Context, bus *Bus, cfg config.Config, instance string) 
 		return err
 	}
 
+	saramaConfig := kafka.DefaultSaramaSubscriberConfig()
+	if group != "" {
+		// A new group starts from the oldest offset; the relay publishes before the worker's
+		// consumers first join, and those events must not be skipped.
+		saramaConfig.Consumer.Offsets.Initial = sarama.OffsetOldest
+	}
+
 	subscriber, err := kafka.NewSubscriber(
 		kafka.SubscriberConfig{
-			Brokers:       cfg.KafkaBrokers,
-			Unmarshaler:   kafka.DefaultMarshaler{},
-			ConsumerGroup: group,
+			Brokers:               cfg.KafkaBrokers,
+			Unmarshaler:           kafka.DefaultMarshaler{},
+			ConsumerGroup:         group,
+			OverwriteSaramaConfig: saramaConfig,
 		},
 		bus.Logger,
 	)

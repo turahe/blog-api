@@ -1,4 +1,4 @@
-.PHONY: test test-race test-integration coverage lint routes-check swagger dev-keys infra-up infra-down infra-up-messaging infra-down-messaging docker-up docker-down docker-build docker-logs docker-seed docker-migrate
+.PHONY: test test-race test-integration test-brokers asyncapi-validate coverage lint routes-check swagger dev-keys infra-up infra-down infra-up-messaging infra-down-messaging docker-up docker-down docker-build docker-logs docker-seed docker-migrate
 
 MODULE := github.com/turahe/blog-api
 TEST_PKGS := ./cmd/... ./internal/... ./docs/...
@@ -10,6 +10,7 @@ GO_IMAGE ?= golang:1.26.5-alpine
 GO_RACE_IMAGE ?= golang:1.26.5
 GOLANGCI_LINT_IMAGE ?= golangci/golangci-lint:v2.14.0
 SWAG_VERSION ?= v1.16.6
+ASYNCAPI_CLI_VERSION ?= 6.2.0
 # Containers run as root; files they write are chowned back to the host user.
 HOST_UID_GID := $(shell id -u):$(shell id -g)
 # Keep root-run git (VCS stamping, --new-from-rev) from rewriting .git/index as root.
@@ -43,6 +44,21 @@ test-integration:
 	$(DOCKER_GO) --network container:$$(docker compose ps -q postgres) \
 		-e TEST_DATABASE_URL="host=127.0.0.1 port=5432 sslmode=disable dbname=$(TEST_DB) user=$$($(PG_ENV) POSTGRES_USER) password=$$($(PG_ENV) POSTGRES_PASSWORD)" \
 		$(GO_IMAGE) go test -count=1 ./internal/adapters/outbound/persistence/...
+
+# Broker round-trip and dead-letter tests against the Compose Kafka and RabbitMQ (run
+# `make infra-up-messaging` first). Each run uses its own topics and deletes them afterwards.
+RABBIT_ENV = docker compose exec -T rabbitmq printenv
+
+test-brokers:
+	$(DOCKER_GO) --network host \
+		-e TEST_KAFKA_BROKERS=127.0.0.1:9092 \
+		-e TEST_RABBITMQ_URL="amqp://$$($(RABBIT_ENV) RABBITMQ_DEFAULT_USER):$$($(RABBIT_ENV) RABBITMQ_DEFAULT_PASS)@127.0.0.1:5672/" \
+		$(GO_IMAGE) go test -count=1 -run TestBroker ./internal/platform/messaging/...
+
+# Validate the event contract; warnings are printed, schema errors fail.
+asyncapi-validate:
+	docker run --rm -v "$(CURDIR)":/app:ro -w /app node:22-alpine \
+		npx --yes @asyncapi/cli@$(ASYNCAPI_CLI_VERSION) validate docs/architecture/asyncapi.yaml --fail-severity error
 
 # Compile + smoke-test the Gin route registration.
 routes-check:

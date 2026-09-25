@@ -93,6 +93,11 @@ func newWorkerCmd() *cobra.Command {
 				defer serveWorkerProbes(cfg, db, relay, logger)()
 			}
 
+			routerDone, err := startRouter(ctx, router, len(consumers) > 0)
+			if err != nil {
+				return err
+			}
+
 			relayDone := make(chan struct{})
 
 			go func() {
@@ -103,21 +108,50 @@ func newWorkerCmd() *cobra.Command {
 
 			logger.Info("worker started", "broker", bus.Broker, "consumers", consumers)
 
-			if len(consumers) > 0 {
-				err = router.Run(ctx)
-			} else {
-				<-ctx.Done()
-			}
+			runErr := <-routerDone
 
 			stop()
 			<-relayDone
 
-			if err != nil && ctx.Err() == nil {
-				return fmt.Errorf("router: %w", err)
+			if runErr != nil && ctx.Err() == nil {
+				return fmt.Errorf("router: %w", runErr)
 			}
 
 			return nil
 		},
+	}
+}
+
+// startRouter runs router in the background and returns once its subscriptions exist, so the
+// relay never publishes before the worker's RabbitMQ queues or Kafka group membership do (a
+// fanout exchange drops messages that no queue is bound for yet). The channel yields the
+// router's result, or nil at shutdown when there are no consumers.
+func startRouter(ctx context.Context, router *message.Router, hasConsumers bool) (<-chan error, error) {
+	done := make(chan error, 1)
+
+	if !hasConsumers {
+		go func() {
+			<-ctx.Done()
+
+			done <- nil
+		}()
+
+		return done, nil
+	}
+
+	go func() { done <- router.Run(ctx) }()
+
+	select {
+	case <-router.Running():
+		return done, nil
+	case err := <-done:
+		if err != nil && ctx.Err() == nil {
+			return nil, fmt.Errorf("router: %w", err)
+		}
+
+		done <- nil
+
+		return done, nil
 	}
 }
 

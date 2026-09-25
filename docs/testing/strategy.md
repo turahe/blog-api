@@ -39,6 +39,20 @@ make test-integration
 Migrations run once per test binary, and every test works inside a transaction that is
 rolled back at the end, so the suite can re-run against the same database.
 
+## Broker tests against Kafka and RabbitMQ
+
+`internal/platform/messaging/broker_integration_test.go` runs a round trip (message id,
+payload, and `correlation_id` survive) and a dead-letter check against real brokers. Each
+broker is skipped unless its variable is set: `TEST_KAFKA_BROKERS` (comma-separated) and
+`TEST_RABBITMQ_URL`. Every run uses its own topic prefix and Kafka consumer group and deletes
+its topics, queues, exchanges, and group afterwards. CI runs both brokers as service
+containers.
+
+```bash
+make infra-up-messaging
+make test-brokers
+```
+
 ## What to mock
 
 | Dependency | Mock? |
@@ -46,6 +60,7 @@ rolled back at the end, so the suite can re-run against the same database.
 | Domain ports (repos, mailer, clock) | Yes in unit tests |
 | Gin engine | No — use `httptest` |
 | Postgres / Redis | Real in integration; fake ports in unit |
+| Kafka / RabbitMQ | Real in `make test-brokers` and CI; in-memory `gochannel` in unit tests |
 | Hand-maintained `routes.Routes` | Edit `internal/adapters/inbound/routes/api.go`; keep OpenAPI aligned via `make routes-check` |
 
 ## Server-sent events
