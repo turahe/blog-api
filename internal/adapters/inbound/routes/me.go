@@ -24,6 +24,7 @@ func registerMe(v1 *gin.RouterGroup, auth AuthMiddleware, c Controllers) {
 	post(me, "/me/2fa/backup-codes", "me.2fa.backup_codes", g, AuthRequired, c, c.Auth.MeTwoFactorBackupCodes)
 	get(me, "/me/activity", "me.activity.list", g, AuthRequired, c, c.Activity.MeList)
 	get(me, "/me/notifications", "me.notifications.list", g, AuthRequired, c, c.Notifications.List)
+	get(me, "/me/notifications/stream", "me.notifications.stream", g, AuthRequired, c, c.Notifications.Stream)
 	post(me, "/me/notifications/:param1/read", "me.notifications.read", g, AuthRequired, c, c.Notifications.Read)
 
 	// Owners and admins may read private profiles, so the public profile accepts an optional token.

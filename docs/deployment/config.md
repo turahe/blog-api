@@ -316,6 +316,19 @@ Rate limits are Redis fixed windows keyed by the authenticated user, or by clien
 guests (see `APP_TRUSTED_PROXIES`). If Redis is unreachable, requests are let through and a
 warning is logged.
 
+## Notification stream (SSE)
+
+| Variable | Default | Required | Purpose |
+| --- | --- | --- | --- |
+| `SSE_PING_INTERVAL` | `15s` | No | How often an idle stream sends `event: ping`, to keep proxies from closing it. Values below `1s` use the default. |
+| `SSE_MAX_CONCURRENT_PER_USER` | `3` | No | Open streams per user on one API process; the next one gets `429` with `Retry-After`. |
+
+The stream needs `MESSAGE_BROKER`: each API process publishes new notifications to
+`notifications.created` (with `MESSAGE_TOPIC_PREFIX`) and reads them back through a
+subscription of its own, so a notice created on one replica reaches streams on every
+replica. Without a broker, or when the broker cannot be reached at startup, the stream
+returns `503 notifications.stream_unavailable` while the inbox endpoints keep working.
+
 ## Error tracking (Sentry)
 
 | Variable | Default | Required | Purpose |

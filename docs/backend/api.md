@@ -338,7 +338,7 @@ event happens; see [notification.md](../features/notification.md#in-app-inbox) f
 | --- | --- | --- | --- |
 | `me.notifications.list` | `GET /api/v1/me/notifications` | bearer | newest first; `unread=true` filters; `page`, `per_page` (max 100); `X-Unread-Count` header |
 | `me.notifications.read` | `POST /api/v1/me/notifications/{id}/read` | bearer | idempotent; `404` for unknown or another user's id |
-| `me.notifications.stream` | `GET /api/v1/me/notifications/stream` | bearer | `501` until the SSE stream lands |
+| `me.notifications.stream` | `GET /api/v1/me/notifications/stream` | bearer | server-sent events; needs `MESSAGE_BROKER` (`503 notifications.stream_unavailable` otherwise); `429 notifications.stream_limit` past `SSE_MAX_CONCURRENT_PER_USER`; see [realtime-notifications-sse.md](../features/realtime-notifications-sse.md#implementation-status) |
 
 Each item has `id`, `type`, `title`, `body`, `preview`, `data` (links such as `post_id`,
 `comment_id`, `url`), `actor_id`, `is_read`, `read_at`, and `created_at`.

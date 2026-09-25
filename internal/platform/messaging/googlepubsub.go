@@ -7,13 +7,20 @@ import (
 	"fmt"
 	"os"
 	"strings"
+	"time"
 
+	"cloud.google.com/go/pubsub/v2/apiv1/pubsubpb"
 	"github.com/ThreeDotsLabs/watermill-googlecloud/v2/pkg/googlecloud"
 	"github.com/turahe/blog-api/internal/platform/config"
 	"google.golang.org/api/option"
+	"google.golang.org/protobuf/types/known/durationpb"
 )
 
-func openGooglePubSub(_ context.Context, bus *Bus, cfg config.Config) error {
+// broadcastSubscriptionTTL is Pub/Sub's minimum expiration: an instance's subscription is
+// deleted after a day without subscribers.
+const broadcastSubscriptionTTL = 24 * time.Hour
+
+func openGooglePubSub(_ context.Context, bus *Bus, cfg config.Config, instance string) error {
 	opts, err := googleCredentialsOptions(cfg.GooglePubSubCredentialsSource)
 	if err != nil {
 		return err
@@ -27,11 +34,21 @@ func openGooglePubSub(_ context.Context, bus *Bus, cfg config.Config) error {
 		return fmt.Errorf("open google pubsub publisher: %w", err)
 	}
 
-	subscriber, err := googlecloud.NewSubscriber(googlecloud.SubscriberConfig{
+	subscriberConfig := googlecloud.SubscriberConfig{
 		ProjectID:                cfg.GooglePubSubProjectID,
 		ClientOptions:            opts,
 		GenerateSubscriptionName: googlecloud.TopicSubscriptionName,
-	}, bus.Logger)
+	}
+	if instance != "" {
+		subscriberConfig.GenerateSubscriptionName = googlecloud.TopicSubscriptionNameWithSuffix("_" + instance)
+		subscriberConfig.GenerateSubscription = func(googlecloud.GenerateSubscriptionParams) *pubsubpb.Subscription {
+			return &pubsubpb.Subscription{
+				ExpirationPolicy: &pubsubpb.ExpirationPolicy{Ttl: durationpb.New(broadcastSubscriptionTTL)},
+			}
+		}
+	}
+
+	subscriber, err := googlecloud.NewSubscriber(subscriberConfig, bus.Logger)
 	if err != nil {
 		_ = publisher.Close()
 		return fmt.Errorf("open google pubsub subscriber: %w", err)

@@ -73,3 +73,12 @@ func TestTopicPrefix(t *testing.T) {
 		t.Fatalf("got %q", got)
 	}
 }
+
+func TestOpenBroadcastRequiresInstance(t *testing.T) {
+	t.Parallel()
+
+	_, err := OpenBroadcast(context.Background(), config.Config{MessageBroker: BrokerKafka}, nil, " ")
+	if err == nil || !strings.Contains(err.Error(), "instance") {
+		t.Fatalf("expected an instance error, got %v", err)
+	}
+}

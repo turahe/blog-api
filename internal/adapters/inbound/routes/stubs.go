@@ -27,7 +27,6 @@ func registerContractStubs(v1 *gin.RouterGroup, auth AuthMiddleware, c Controlle
 	post(none, "/newsletter/unsubscribe", "public.newsletter.unsubscribe", pub, n, c, nil)
 
 	get(required, "/me/activity/export", "me.activity.export", self, req, c, nil)
-	get(required, "/me/notifications/stream", "me.notifications.stream", self, req, c, nil)
 	get(required, "/me/newsletter/subscriptions", "me.newsletter.subscriptions.list", self, req, c, nil)
 	get(required, "/me/privacy", "me.privacy.get", self, req, c, nil)
 	post(required, "/me/activity/erase", "me.activity.erase", self, req, c, nil)

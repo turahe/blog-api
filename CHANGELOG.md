@@ -1,5 +1,18 @@
 # Changelog
 
+## 2026-09-25 — Live notification stream
+
+### Added
+
+- `GET /api/v1/me/notifications/stream` (server-sent events): `retry` and `stream.opened` on
+  connect, `notification.created` for each new notice, `ping` every `SSE_PING_INTERVAL`
+  (default `15s`), `error` when a slow client dropped events, and `stream.closed` on shutdown.
+  `SSE_MAX_CONCURRENT_PER_USER` (default 3) streams per user per process; the next gets `429`.
+- Notices reach streams on every API replica through `MESSAGE_BROKER`: each process
+  publishes to `notifications.created` and reads it through its own subscription
+  (`messaging.OpenBroadcast`). Without a broker the stream returns
+  `503 notifications.stream_unavailable`; the inbox endpoints are unaffected.
+
 ## 2026-09-25 — Notification inbox
 
 ### Added

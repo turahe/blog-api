@@ -28,8 +28,9 @@ type Controllers struct {
 
 // Notifications holds the caller's in-app inbox handlers.
 type Notifications struct {
-	List gin.HandlerFunc
-	Read gin.HandlerFunc
+	List   gin.HandlerFunc
+	Read   gin.HandlerFunc
+	Stream gin.HandlerFunc
 }
 
 // Activity holds audit activity handlers.

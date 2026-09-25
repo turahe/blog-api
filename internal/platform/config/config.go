@@ -100,6 +100,8 @@ type Config struct {
 	CommentsCreatePerMinute       int
 	CommentsActionsPerMinute      int
 	TurnstileSecretKey            string
+	SSEPingInterval               time.Duration
+	SSEMaxConcurrentPerUser       int
 	CacheEnabled                  bool
 	CacheBypassHeader             bool
 	CacheTTLPosts                 time.Duration
@@ -450,6 +452,8 @@ func Load() (Config, error) {
 		CommentsCreatePerMinute:       integer("COMMENTS_CREATE_PER_MINUTE", 6),
 		CommentsActionsPerMinute:      integer("COMMENTS_ACTIONS_PER_MINUTE", 30),
 		TurnstileSecretKey:            strings.TrimSpace(env("TURNSTILE_SECRET_KEY", "")),
+		SSEPingInterval:               duration("SSE_PING_INTERVAL", 15*time.Second),
+		SSEMaxConcurrentPerUser:       integer("SSE_MAX_CONCURRENT_PER_USER", 3),
 		CacheEnabled:                  boolEnv("CACHE_ENABLED", true),
 		CacheBypassHeader:             boolEnv("CACHE_BYPASS_HEADER", false),
 		CacheTTLPosts:                 duration("CACHE_TTL_POSTS", time.Minute),

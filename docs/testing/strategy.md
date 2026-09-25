@@ -48,6 +48,26 @@ rolled back at the end, so the suite can re-run against the same database.
 | Postgres / Redis | Real in integration; fake ports in unit |
 | Hand-maintained `routes.Routes` | Edit `internal/adapters/inbound/routes/api.go`; keep OpenAPI aligned via `make routes-check` |
 
+## Server-sent events
+
+The notification stream is tested at three levels, none of which needs a broker:
+
+- `adapters/inbound/realtime/hub_test.go` — unit tests for the hub: routing to the recipient
+  only, the per-user limit, drop-on-full counting, and shutdown.
+- `handlers/notifications_stream_test.go` — the real handler behind `httptest.NewServer`, read
+  with a `bufio.Reader` frame by frame: headers, the `retry` and `stream.opened` handshake,
+  `notification.created` for the caller only, `ping` (interval set to one second), `429` on
+  the extra stream, cleanup after the client cancels (`require.Eventually` on the hub's
+  connection count), and `stream.closed` on shutdown. Read frames with a timeout-free reader
+  but keep the ping interval short so a missing frame fails fast.
+- `adapters/outbound/notificationbus/bus_test.go` — publish and consume through Watermill's
+  in-memory `gochannel`, including a malformed message that must not stop delivery.
+
+Broker-specific broadcast (every API process receives every event) is not in the default
+suite; verify it against the compose brokers (`docker compose --profile messaging up`) by
+opening two `messaging.OpenBroadcast` buses with different instance names and checking both
+receive one published message.
+
 ## Priority areas
 
 Start with auth, RBAC, privacy, media uploads, CSRF/step-up, SSE isolation.

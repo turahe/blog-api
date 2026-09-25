@@ -10,15 +10,18 @@ import (
 	"strings"
 	"time"
 
+	"github.com/ThreeDotsLabs/watermill"
 	"github.com/redis/go-redis/v9"
 	httpadapter "github.com/turahe/blog-api/internal/adapters/inbound/http"
 	"github.com/turahe/blog-api/internal/adapters/inbound/http/handlers"
 	"github.com/turahe/blog-api/internal/adapters/inbound/http/middleware"
+	"github.com/turahe/blog-api/internal/adapters/inbound/realtime"
 	"github.com/turahe/blog-api/internal/adapters/outbound/cache"
 	"github.com/turahe/blog-api/internal/adapters/outbound/captcha"
 	"github.com/turahe/blog-api/internal/adapters/outbound/challenge"
 	"github.com/turahe/blog-api/internal/adapters/outbound/mail"
 	"github.com/turahe/blog-api/internal/adapters/outbound/markdown"
+	"github.com/turahe/blog-api/internal/adapters/outbound/notificationbus"
 	"github.com/turahe/blog-api/internal/adapters/outbound/notify"
 	"github.com/turahe/blog-api/internal/adapters/outbound/oauth"
 	"github.com/turahe/blog-api/internal/adapters/outbound/persistence"
@@ -55,6 +58,9 @@ import (
 // auditFlushTimeout bounds how long Close waits for queued audit entries.
 const auditFlushTimeout = 5 * time.Second
 
+// sseBufferPerConnection is how many notifications one stream queues before dropping.
+const sseBufferPerConnection = 512
+
 // Runtime holds the opened infrastructure, core services, and HTTP server.
 type Runtime struct {
 	Config   config.Config
@@ -74,6 +80,8 @@ type Runtime struct {
 	Posts      *postservice.PostService
 	Categories *categoryservice.CategoryService
 	Media      mediaports.Service
+	// NotificationBus carries live notification pushes between replicas; nil without a broker.
+	NotificationBus *messaging.Bus
 }
 
 type checker struct {
@@ -138,6 +146,7 @@ func NewRuntime(ctx context.Context, cfg config.Config, logger *slog.Logger, ver
 	posts.WithTags(tags)
 
 	comments := newCommentService(cfg, db, ids, clock, inbox)
+	hub, notificationBus := newNotificationStream(ctx, cfg, inbox, logger)
 
 	media, err := newMediaService(ctx, cfg, db, ids, clock, posts, cacheOrNil)
 	if err != nil {
@@ -177,7 +186,7 @@ func NewRuntime(ctx context.Context, cfg config.Config, logger *slog.Logger, ver
 		Categories:  categories,
 		Tags:        tags,
 		Media:       media,
-		Comments:    comments, Notifications: inbox,
+		Comments:    comments, Notifications: inbox, NotificationStream: hub, SSEPingInterval: cfg.SSEPingInterval,
 		RateLimiter: ratelimit.NewRedis(redisClient),
 		CommentRates: handlers.CommentRates{
 			CreatePerMinute:  cfg.CommentsCreatePerMinute,
@@ -197,12 +206,58 @@ func NewRuntime(ctx context.Context, cfg config.Config, logger *slog.Logger, ver
 		Config: cfg, Database: db, Redis: redisClient, Cache: readCache,
 		Auth: auth, Users: userSvc, Posts: posts, Categories: categories, Media: media,
 		MetricsServer: metricsServer, PolicySync: policySync, Audit: auditRecorder,
-		Server: &nethttp.Server{
-			Addr: cfg.Address, Handler: router,
-			ReadTimeout: cfg.ReadTimeout, ReadHeaderTimeout: cfg.ReadHeaderTimeout,
-			IdleTimeout: cfg.IdleTimeout, MaxHeaderBytes: 1 << 20,
-		},
+		NotificationBus: notificationBus, Server: newServer(cfg, router, hub),
 	}, nil
+}
+
+// newServer builds the HTTP server. There is no write timeout because notification streams
+// stay open; Shutdown tells them to close so it does not wait out the grace period.
+func newServer(cfg config.Config, handler nethttp.Handler, hub *realtime.Hub) *nethttp.Server {
+	server := &nethttp.Server{
+		Addr: cfg.Address, Handler: handler,
+		ReadTimeout: cfg.ReadTimeout, ReadHeaderTimeout: cfg.ReadHeaderTimeout,
+		IdleTimeout: cfg.IdleTimeout, MaxHeaderBytes: 1 << 20,
+	}
+	if hub != nil {
+		server.RegisterOnShutdown(hub.Shutdown)
+	}
+
+	return server
+}
+
+// newNotificationStream wires live notification pushes through the message broker. Without
+// MESSAGE_BROKER, or when the broker cannot be reached, it returns nils: the stream answers
+// 503 and the inbox keeps working.
+func newNotificationStream(
+	ctx context.Context,
+	cfg config.Config,
+	inbox *notificationservice.Inbox,
+	logger *slog.Logger,
+) (*realtime.Hub, *messaging.Bus) {
+	if !cfg.MessagingEnabled() {
+		return nil, nil
+	}
+
+	bus, err := messaging.OpenBroadcast(ctx, cfg, logger, "api-"+watermill.NewShortUUID())
+	if err != nil {
+		logger.Warn("notification stream disabled: message broker unavailable", "error", err)
+		return nil, nil
+	}
+
+	topic := bus.Topic(notificationbus.Topic)
+	hub := realtime.NewHub(cfg.SSEMaxConcurrentPerUser, sseBufferPerConnection)
+
+	if err := notificationbus.Consume(ctx, bus.Subscriber, topic, hub.Deliver, logger); err != nil {
+		logger.Warn("notification stream disabled: cannot subscribe", "error", err)
+
+		_ = bus.Close()
+
+		return nil, nil
+	}
+
+	inbox.OnCreated(notificationbus.NewPublisher(bus.Publisher, topic, logger).Publish)
+
+	return hub, bus
 }
 
 // newMediaService returns nil when media storage is not configured; otherwise it
@@ -456,6 +511,10 @@ func (r *Runtime) Close() error {
 		}
 
 		cancel()
+	}
+
+	if err := r.NotificationBus.Close(); err != nil {
+		errs = append(errs, fmt.Errorf("close notification bus: %w", err))
 	}
 
 	if r.Redis != nil {

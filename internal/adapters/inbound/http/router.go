@@ -3,11 +3,13 @@ package http
 
 import (
 	"log/slog"
+	"time"
 
 	"github.com/gin-gonic/gin"
 	"github.com/turahe/blog-api/internal/adapters/inbound/http/handlers"
 	"github.com/turahe/blog-api/internal/adapters/inbound/http/middleware"
 	"github.com/turahe/blog-api/internal/adapters/inbound/http/swagger"
+	"github.com/turahe/blog-api/internal/adapters/inbound/realtime"
 	"github.com/turahe/blog-api/internal/adapters/inbound/routes"
 	auditports "github.com/turahe/blog-api/internal/core/audit/ports"
 	auditservice "github.com/turahe/blog-api/internal/core/audit/service"
@@ -53,9 +55,12 @@ type Dependencies struct {
 	Audit          auditports.Writer          // nil disables audit logging
 	Activity       *auditservice.Activity
 	Notifications  *notificationservice.Inbox // nil keeps the inbox routes as 501 stubs
-	Version        string
-	TrustedProxies []string
-	SwaggerEnabled bool
+	// NotificationStream fans live notices out to SSE clients; nil answers 503.
+	NotificationStream *realtime.Hub
+	SSEPingInterval    time.Duration
+	Version            string
+	TrustedProxies     []string
+	SwaggerEnabled     bool
 	// CacheBypassHeader honours `Cache-Control: no-cache` on public reads (debugging only).
 	CacheBypassHeader bool
 }
@@ -130,6 +135,12 @@ func NewRouter(deps Dependencies) (*gin.Engine, error) {
 	if deps.Notifications != nil {
 		controllerDeps.Notifications = deps.Notifications
 	}
+
+	if deps.NotificationStream != nil {
+		controllerDeps.NotificationStream = deps.NotificationStream
+	}
+
+	controllerDeps.SSEPingInterval = deps.SSEPingInterval
 
 	return routes.NewRouter(routes.Dependencies{
 		Logger:           deps.Logger,

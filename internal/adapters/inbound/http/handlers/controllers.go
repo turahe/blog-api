@@ -32,8 +32,11 @@ type Deps struct {
 	Activity   activityAPI
 	// Notifications serves the caller's in-app inbox; nil keeps the routes as 501 stubs.
 	Notifications notificationAPI
-	Profiles      profileAPI
-	EmailChange   authports.EmailChanger
+	// NotificationStream feeds the SSE stream; nil answers 503 (no message broker).
+	NotificationStream notificationStreamHub
+	SSEPingInterval    time.Duration
+	Profiles           profileAPI
+	EmailChange        authports.EmailChanger
 	// AvatarMaxBytes > 0 enables avatar upload and removal (requires media storage).
 	AvatarMaxBytes int64
 	Roles          RoleLookup
@@ -119,7 +122,7 @@ func NewControllers(deps Deps) routes.Controllers {
 	wireProfiles(&c.Users, deps)
 
 	c.Activity.MeList, c.Activity.AdminUserList = activityControllers(deps)
-	c.Notifications.List, c.Notifications.Read = notificationControllers(deps)
+	c.Notifications = notificationControllers(deps)
 
 	if deps.Posts != nil {
 		c.Posts = routes.Posts{

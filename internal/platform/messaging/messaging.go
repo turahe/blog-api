@@ -47,8 +47,26 @@ func NormalizeBroker(raw string) (string, error) {
 }
 
 // Open connects the publisher and subscriber for the configured broker; Watermill
-// logs through logger (slog.Default when nil).
+// logs through logger (slog.Default when nil). Subscribers share one consumer group,
+// queue, or subscription, so each message is handled by one worker.
 func Open(ctx context.Context, cfg config.Config, logger *slog.Logger) (*Bus, error) {
+	return open(ctx, cfg, logger, "")
+}
+
+// OpenBroadcast is Open with a subscriber of its own: every process that opens it receives
+// every message published after it subscribes. instance names the process's temporary
+// queue or subscription (letters, digits, and dashes); it is removed when the process
+// stops (RabbitMQ) or after a day unused (Google Pub/Sub). Kafka reads without a
+// consumer group, from the newest offset.
+func OpenBroadcast(ctx context.Context, cfg config.Config, logger *slog.Logger, instance string) (*Bus, error) {
+	if strings.TrimSpace(instance) == "" {
+		return nil, errors.New("broadcast instance name is required")
+	}
+
+	return open(ctx, cfg, logger, instance)
+}
+
+func open(ctx context.Context, cfg config.Config, logger *slog.Logger, instance string) (*Bus, error) {
 	broker, err := NormalizeBroker(cfg.MessageBroker)
 	if err != nil {
 		return nil, err
@@ -73,11 +91,11 @@ func Open(ctx context.Context, cfg config.Config, logger *slog.Logger) (*Bus, er
 
 	switch broker {
 	case BrokerKafka:
-		err = openKafka(ctx, bus, cfg)
+		err = openKafka(ctx, bus, cfg, instance)
 	case BrokerRabbitMQ:
-		err = openRabbitMQ(ctx, bus, cfg)
+		err = openRabbitMQ(ctx, bus, cfg, instance)
 	case BrokerGooglePubSub:
-		err = openGooglePubSub(ctx, bus, cfg)
+		err = openGooglePubSub(ctx, bus, cfg, instance)
 	}
 
 	if err != nil {

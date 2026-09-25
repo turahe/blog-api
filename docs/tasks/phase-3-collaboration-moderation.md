@@ -17,7 +17,8 @@ Cloudflare Turnstile token (`TURNSTILE_SECRET_KEY`). The 6 admin moderation oper
 Audit logging is wired (migration `00016_audit_log_columns.sql`, async writer, activity
 endpoints, retention pruning). The notification inbox is wired (migration
 `00019_notifications.sql`): replies, moderation outcomes, and publications create in-app
-notices, listed and marked read under `/me/notifications`. The SSE stream still returns `501`.
+notices, listed and marked read under `/me/notifications`, and pushed live over SSE through
+the message broker.
 
 ## Epic: comment model and service
 
@@ -103,10 +104,12 @@ Spec: [comments-and-moderation.md](../features/comments-and-moderation.md)
       (`notifications` table with a per-user dedupe key)
 - [x] `me.notifications.list` — `GET /api/v1/me/notifications`
 - [x] `me.notifications.read` — `POST /api/v1/me/notifications/{id}/read`
-- [ ] `me.notifications.stream` — `GET /api/v1/me/notifications/stream` (SSE)
+- [x] `me.notifications.stream` — `GET /api/v1/me/notifications/stream` (SSE)
 - [x] Emit notifications on comment reply, comment moderation, and post publish
-- [ ] SSE connection lifecycle: heartbeat, client disconnect cleanup, and proxy buffering notes
-- [ ] Fan-out strategy for multiple API replicas, coordinated with the Phase 4 event bus
+- [x] SSE connection lifecycle: heartbeat, client disconnect cleanup, and proxy buffering notes
+      (see [realtime-notifications-sse.md](../features/realtime-notifications-sse.md#implementation-status))
+- [x] Fan-out strategy for multiple API replicas: each process publishes to
+      `notifications.created` on `MESSAGE_BROKER` and reads it through its own subscription
 
 Specs: [notification.md](../features/notification.md),
 [realtime-notifications-sse.md](../features/realtime-notifications-sse.md)
@@ -124,14 +127,14 @@ Specs: [notification.md](../features/notification.md),
 - [x] Bind public and self comment handlers in `routes.Register*` (`routes/comments.go`), annotate
       them, then `make swagger` + `make routes-check`
 - [x] Bind admin comment handlers the same way (`routes/admin.go`)
-- [ ] Bind notification handlers the same way
+- [x] Bind notification handlers the same way (`routes/me.go`)
 - [x] Handler tests for ownership failures (`handlers/comments_test.go`) and comment route auth modes
 - [x] Handler tests for moderation authorization failures (`handlers/comments_admin_test.go`)
 - [x] Service tests for threading depth and edit-window expiry (`comment/service/service_test.go`)
 - [ ] Repository tests against a real database for flag dedupe, upvote toggle, reply counts,
       moderation rollback, and hard-delete scrub (covered today by manual end-to-end smokes only)
 - [ ] Abuse-and-spam section added to [overview.md](../security/overview.md)
-- [ ] SSE testing approach documented in [strategy.md](../testing/strategy.md)
+- [x] SSE testing approach documented in [strategy.md](../testing/strategy.md)
 
 ## References
 

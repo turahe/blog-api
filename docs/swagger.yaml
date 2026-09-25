@@ -3018,6 +3018,40 @@ paths:
       summary: Mark a notification read
       tags:
       - me
+  /api/v1/me/notifications/stream:
+    get:
+      description: 'Server-sent events. The stream opens with `retry: 5000` and `event:
+        stream.opened`, sends `event: notification.created` for each new notice (id
+        is the notification id), `event: ping` when idle, `event: error` with code
+        fanout.buffer_full when events were dropped for a slow client, and `event:
+        stream.closed` before a server shutdown. There is no replay: after reconnecting,
+        call GET /api/v1/me/notifications to fill gaps. Returns 429 notifications.stream_limit
+        (with Retry-After) past the per-user limit and 503 notifications.stream_unavailable
+        without a message broker.'
+      produces:
+      - text/event-stream
+      responses:
+        "200":
+          description: event stream
+          schema:
+            type: string
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/responses.Envelope'
+        "429":
+          description: Too Many Requests
+          schema:
+            $ref: '#/definitions/responses.Envelope'
+        "503":
+          description: Service Unavailable
+          schema:
+            $ref: '#/definitions/responses.Envelope'
+      security:
+      - Bearer: []
+      summary: Stream my notifications
+      tags:
+      - me
   /api/v1/me/password:
     put:
       consumes:

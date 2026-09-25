@@ -10,6 +10,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 	"github.com/turahe/blog-api/internal/adapters/inbound/http/responses"
+	"github.com/turahe/blog-api/internal/adapters/inbound/routes"
 	notificationdomain "github.com/turahe/blog-api/internal/core/notification/domain"
 )
 
@@ -21,12 +22,16 @@ type notificationAPI interface {
 	MarkRead(ctx context.Context, userID, id uuid.UUID) (notificationdomain.Notification, error)
 }
 
-func notificationControllers(deps Deps) (list, read gin.HandlerFunc) {
+func notificationControllers(deps Deps) routes.Notifications {
 	if deps.Notifications == nil {
-		return nil, nil
+		return routes.Notifications{}
 	}
 
-	return meNotificationsListHandler(deps.Notifications), meNotificationReadHandler(deps.Notifications)
+	return routes.Notifications{
+		List:   meNotificationsListHandler(deps.Notifications),
+		Read:   meNotificationReadHandler(deps.Notifications),
+		Stream: meNotificationsStreamHandler(deps.NotificationStream, deps.SSEPingInterval),
+	}
 }
 
 // meNotificationsListHandler godoc

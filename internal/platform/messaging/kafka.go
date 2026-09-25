@@ -7,7 +7,13 @@ import (
 	"github.com/turahe/blog-api/internal/platform/config"
 )
 
-func openKafka(_ context.Context, bus *Bus, cfg config.Config) error {
+// openKafka joins KAFKA_CONSUMER_GROUP, or no group at all for a broadcast instance.
+func openKafka(_ context.Context, bus *Bus, cfg config.Config, instance string) error {
+	group := cfg.KafkaConsumerGroup
+	if instance != "" {
+		group = ""
+	}
+
 	publisher, err := kafka.NewPublisher(
 		kafka.PublisherConfig{
 			Brokers:   cfg.KafkaBrokers,
@@ -23,7 +29,7 @@ func openKafka(_ context.Context, bus *Bus, cfg config.Config) error {
 		kafka.SubscriberConfig{
 			Brokers:       cfg.KafkaBrokers,
 			Unmarshaler:   kafka.DefaultMarshaler{},
-			ConsumerGroup: cfg.KafkaConsumerGroup,
+			ConsumerGroup: group,
 		},
 		bus.Logger,
 	)

@@ -15,6 +15,33 @@ client integration, testing, and scaling guidance.
 - HTTP behaviour rules: [docs/backend/api.md](../backend/api.md#L73-L88)
 - Streaming event catalogue: [docs/backend/events.md](../backend/events.md#L103-L155)
 
+## Implementation status
+
+What the server does today (`handlers/notifications_stream.go`, `adapters/inbound/realtime`,
+`adapters/outbound/notificationbus`). The rest of this chapter is the target design.
+
+| Topic | Implemented |
+| --- | --- |
+| Auth | Bearer token only (`AuthRequired`); no cookie or CSRF path |
+| Handshake | `retry: 5000`, then `event: stream.opened` with `stream_id`, `user_id`, `server_ts`, `retry_ms`, `channels`, `replay_applied: false`, `replay_count: 0` |
+| Events | `notification.created` (`id:` is the notification id; `data` has `id`, `type`, `title`, `body`, `preview`, `data`, `actor_id`, `created_at`), `ping` every `SSE_PING_INTERVAL` (default `15s`), `error` with `fanout.buffer_full` and `dropped_count`, `stream.closed` with `code: shutdown` and `retry_ms: 15000` |
+| Limits | `SSE_MAX_CONCURRENT_PER_USER` (default 3) per API process; the next stream gets `429 notifications.stream_limit` with `Retry-After: 60` |
+| Slow clients | 512 queued events per stream; further events are dropped for that stream only and reported in the next `error` frame |
+| Cleanup | The stream ends when the client disconnects (request context done) or a write fails; `app serve` shutdown sends `stream.closed` to every stream first |
+| Fan-out | Requires `MESSAGE_BROKER`. Each process publishes to `notifications.created` and reads it back through its own subscription (Kafka without a consumer group, a per-process auto-delete RabbitMQ queue, or a per-process Pub/Sub subscription that expires after a day unused). Without a broker the stream returns `503 notifications.stream_unavailable` |
+| Not implemented | `Last-Event-ID` / `replay_after` replay, the Redis replay ring, the half-open socket watchdog, `notification.read` / `notification.dismissed` / `session.*` events, Redis-backed connection limits and jail, Prometheus counters for dropped events |
+
+After reconnecting, clients should call `GET /api/v1/me/notifications` to fill any gap.
+
+### Proxy notes
+
+- Nginx: the response sets `X-Accel-Buffering: no`; also keep `proxy_http_version 1.1`, an empty
+  `Connection` header, and `proxy_read_timeout` well above `SSE_PING_INTERVAL`.
+- Load balancers: idle timeouts must exceed the ping interval (AWS ALB defaults to 60s).
+- Do not enable response compression on this path; it buffers frames.
+- The HTTP server has no write timeout, so streams are not cut; request metrics record a
+  stream's full duration.
+
 ## 1. Endpoint Usage
 
 | Property | Value |
