@@ -1,5 +1,27 @@
 # Changelog
 
+## 2026-09-25 — Staff impersonation
+
+### Added
+
+- `POST /api/v1/admin/impersonation/start`, `POST /api/v1/admin/impersonation/stop`, and
+  `GET /api/v1/admin/impersonation/current`. Start needs `impersonation.start`, a reason, the
+  current password, and a TOTP or backup code when 2FA is enabled, and returns a Bearer token with
+  `sub` = target and an RFC 8693 `act` claim for the staff member (no refresh token). Targets are
+  active users whose permissions are a subset of the caller's, never admins or other
+  impersonators. See [impersonation.md](docs/backend/impersonation.md).
+- `impersonation_sessions` table (migration 00029); one active session per staff member.
+- Config `IMPERSONATION_TTL` (default `1h`, `5m`–`2h`): a hard ceiling, never renewed.
+- Impersonation tokens are checked against their session on every request
+  (`401 auth.impersonation_ended` once stopped, expired, or revoked) and refused on credential,
+  2FA, OAuth, privacy, export, erase, logout, refresh, and chained impersonation operations
+  (`403 impersonation.forbidden_action`).
+- `audit_logs.impersonator_id` is filled for every action taken with an impersonation token;
+  admin activity returns `impersonator_id` and `/me/activity` shows `impersonated`.
+- Events `blog.impersonation.started`, `exited_manually`, `expired`, and `revoked_by_policy`;
+  scheduler job `impersonation-expire` (every minute).
+- `impersonation.start` permission, seeded on the `admin` role.
+
 ## 2026-09-25 — Post search
 
 ### Added

@@ -662,6 +662,149 @@ const docTemplate = `{
                 }
             }
         },
+        "/api/v1/admin/impersonation/current": {
+            "get": {
+                "security": [
+                    {
+                        "Bearer": []
+                    }
+                ],
+                "description": "Returns the session behind the impersonation token in the Authorization header, or the\ncaller's active session when called with their own token. data.session is null when there\nis none.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "admin"
+                ],
+                "summary": "Current impersonation session",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/responses.Envelope"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/responses.Envelope"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/admin/impersonation/start": {
+            "post": {
+                "security": [
+                    {
+                        "Bearer": []
+                    }
+                ],
+                "description": "Opens an impersonation session and returns a Bearer token that acts as the target until\nexpires_at (IMPERSONATION_TTL, never renewed; no refresh token). Requires impersonation.start,\nthe caller's current password, and a TOTP or backup code when the caller has two-factor\nenabled. The target must be active, must not be an administrator or able to impersonate, and\nevery permission the target has must be one the caller has. One active session per caller.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "admin"
+                ],
+                "summary": "Start impersonating a user",
+                "parameters": [
+                    {
+                        "description": "target, reason, and step-up proof",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/requests.StartImpersonation"
+                        }
+                    }
+                ],
+                "responses": {
+                    "201": {
+                        "description": "Created",
+                        "schema": {
+                            "$ref": "#/definitions/responses.Envelope"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/responses.Envelope"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/responses.Envelope"
+                        }
+                    },
+                    "403": {
+                        "description": "rbac.forbidden, impersonation.step_up_required, impersonation.forbidden_action",
+                        "schema": {
+                            "$ref": "#/definitions/responses.Envelope"
+                        }
+                    },
+                    "409": {
+                        "description": "impersonation.already_active",
+                        "schema": {
+                            "$ref": "#/definitions/responses.Envelope"
+                        }
+                    },
+                    "422": {
+                        "description": "impersonation.target_ineligible",
+                        "schema": {
+                            "$ref": "#/definitions/responses.Envelope"
+                        }
+                    },
+                    "429": {
+                        "description": "Too Many Requests",
+                        "schema": {
+                            "$ref": "#/definitions/responses.Envelope"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/admin/impersonation/stop": {
+            "post": {
+                "security": [
+                    {
+                        "Bearer": []
+                    }
+                ],
+                "description": "Ends the session behind the impersonation token in the Authorization header, or the caller's\nactive session when called with their own token. The impersonation token stops working\nimmediately; the client switches back to the staff member's own token.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "admin"
+                ],
+                "summary": "Stop impersonating",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/responses.Envelope"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/responses.Envelope"
+                        }
+                    },
+                    "404": {
+                        "description": "impersonation.not_found",
+                        "schema": {
+                            "$ref": "#/definitions/responses.Envelope"
+                        }
+                    }
+                }
+            }
+        },
         "/api/v1/admin/media": {
             "get": {
                 "security": [
@@ -6119,6 +6262,35 @@ const docTemplate = `{
                 },
                 "twitter": {
                     "type": "string"
+                }
+            }
+        },
+        "requests.StartImpersonation": {
+            "type": "object",
+            "required": [
+                "current_password",
+                "reason",
+                "target_user_id"
+            ],
+            "properties": {
+                "current_password": {
+                    "type": "string",
+                    "maxLength": 128
+                },
+                "reason": {
+                    "type": "string",
+                    "maxLength": 255,
+                    "minLength": 10,
+                    "example": "Ticket #4521: author cannot publish"
+                },
+                "target_user_id": {
+                    "type": "string",
+                    "example": "0b8f5c1e-3c1a-4f5e-9d7a-2a1b3c4d5e6f"
+                },
+                "two_factor_code": {
+                    "type": "string",
+                    "maxLength": 32,
+                    "example": "123456"
                 }
             }
         },

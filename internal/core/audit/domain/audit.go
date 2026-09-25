@@ -25,20 +25,22 @@ type Change struct {
 
 // Entry is one audited action.
 type Entry struct {
-	UUID         uuid.UUID
-	Action       string // operation id, for example "admin.posts.publish"
-	Category     string // user-facing activity category; empty for admin-only actions
-	ActorID      *uuid.UUID
-	ResourceType string
-	ResourceID   *uuid.UUID
-	Result       string
-	Status       int
-	Changes      map[string]Change
-	Metadata     map[string]any
-	IP           string
-	UserAgent    string
-	RequestID    string
-	OccurredAt   time.Time
+	UUID     uuid.UUID
+	Action   string // operation id, for example "admin.posts.publish"
+	Category string // user-facing activity category; empty for admin-only actions
+	ActorID  *uuid.UUID
+	// ImpersonatorID is the staff member who acted as ActorID through impersonation.
+	ImpersonatorID *uuid.UUID
+	ResourceType   string
+	ResourceID     *uuid.UUID
+	Result         string
+	Status         int
+	Changes        map[string]Change
+	Metadata       map[string]any
+	IP             string
+	UserAgent      string
+	RequestID      string
+	OccurredAt     time.Time
 }
 
 // ActivityFilter selects a user's activity: entries the user performed or that

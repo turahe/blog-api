@@ -92,6 +92,10 @@ Recorded in the same transaction as the write (only when `MESSAGE_BROKER` is set
 | `blog.post.seo.updated` | SEO update that changed at least one SEO field; `changed_fields` lists them | Editing user |
 | `blog.post.slug_changed` | Slug change through the SEO endpoint, with `old_slug` and `new_slug` | Editing user |
 | `user.privacy.updated` | A `/me/privacy` update that changed at least one flag; before/after values and `stepup_proof_present` | The user |
+| `blog.impersonation.started` | A staff member starts impersonating a user | Staff member |
+| `blog.impersonation.exited_manually` | Stop | Staff member |
+| `blog.impersonation.expired` | Expiry noticed on a request or by the `impersonation-expire` job | Staff member |
+| `blog.impersonation.revoked_by_policy` | A participant is no longer active, or the staff member lost `impersonation.start` | Staff member |
 | `user.activity.export_requested` | A new `/me/activity/export` job is queued; `job_id`, `scope`, `requested_by_admin` | The user |
 | `user.activity.erasure_requested` | A new `/me/activity/erase` request is queued; `erasure_id`, `scope` | The user |
 | `analytics.consent.granted` / `rejected` / `withdrawn` | A consent decision that changed status, one event per purpose; payload carries the pseudonymous subject id, purpose, and policy version | None |

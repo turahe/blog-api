@@ -29,6 +29,11 @@ const (
 	NotificationEmailRequested = "notification.email.requested"
 
 	SettingsUpdated = "blog.settings.updated"
+
+	ImpersonationStarted = "blog.impersonation.started"
+	ImpersonationExited  = "blog.impersonation.exited_manually"
+	ImpersonationExpired = "blog.impersonation.expired"
+	ImpersonationRevoked = "blog.impersonation.revoked_by_policy"
 )
 
 // Aggregate types.
@@ -40,4 +45,6 @@ const (
 	AggregateEmail    = "email"
 	AggregateSettings = "settings"
 	AggregateConsent  = "consent"
+
+	AggregateImpersonation = "impersonation_session"
 )

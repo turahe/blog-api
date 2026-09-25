@@ -19,6 +19,7 @@ import (
 	commentservice "github.com/turahe/blog-api/internal/core/comment/service"
 	consentservice "github.com/turahe/blog-api/internal/core/consent/service"
 	healthports "github.com/turahe/blog-api/internal/core/health/ports"
+	impservice "github.com/turahe/blog-api/internal/core/impersonation/service"
 	mediaports "github.com/turahe/blog-api/internal/core/media/ports"
 	notificationservice "github.com/turahe/blog-api/internal/core/notification/service"
 	postservice "github.com/turahe/blog-api/internal/core/post/service"
@@ -55,10 +56,13 @@ type Dependencies struct {
 	Consent        *consentservice.Service  // nil keeps the consent routes as 501 stubs
 	// PrivacyRequests queues data exports and erasures; nil keeps the routes as 501 stubs.
 	PrivacyRequests *privacyservice.Service
-	RateLimiter     middleware.Limiter
-	CommentRates    handlers.CommentRates
-	LoginPerMinute  int
-	Metrics         middleware.MetricsRecorder // nil disables request metrics
+	// Impersonation serves /admin/impersonation and verifies impersonation tokens; nil keeps
+	// the routes as 501 stubs and refuses impersonation tokens.
+	Impersonation  *impservice.Service
+	RateLimiter    middleware.Limiter
+	CommentRates   handlers.CommentRates
+	LoginPerMinute int
+	Metrics        middleware.MetricsRecorder // nil disables request metrics
 	// MaxInFlight sheds requests beyond this many concurrent ones with 503; 0 disables.
 	MaxInFlight   int
 	Audit         auditports.Writer // nil disables audit logging
@@ -76,11 +80,7 @@ type Dependencies struct {
 
 // NewRouter wires middleware + controllers into routes.NewRouter.
 func NewRouter(deps Dependencies) (*gin.Engine, error) {
-	var optional, required gin.HandlersChain
-	if deps.Auth != nil {
-		required = gin.HandlersChain{middleware.BearerAuth(deps.Auth)}
-		optional = gin.HandlersChain{middleware.OptionalBearerAuth(deps.Auth)}
-	}
+	optional, required := authChains(deps)
 
 	var healthAlias gin.HandlerFunc
 	if deps.Health != nil {
@@ -163,8 +163,28 @@ func NewRouter(deps Dependencies) (*gin.Engine, error) {
 	})
 }
 
+// authChains builds the bearer middleware. Without an impersonation service, impersonation
+// tokens are refused.
+func authChains(deps Dependencies) (optional, required gin.HandlersChain) {
+	if deps.Auth == nil {
+		return nil, nil
+	}
+
+	var sessions middleware.ImpersonationVerifier
+	if deps.Impersonation != nil {
+		sessions = deps.Impersonation
+	}
+
+	return gin.HandlersChain{middleware.OptionalBearerAuth(deps.Auth, sessions)},
+		gin.HandlersChain{middleware.BearerAuth(deps.Auth, sessions)}
+}
+
 // optionalServices copies services that may be absent, keeping a nil service a nil interface.
 func optionalServices(controllerDeps *handlers.Deps, deps Dependencies) {
+	if deps.Impersonation != nil {
+		controllerDeps.Impersonation = deps.Impersonation
+	}
+
 	if deps.Profiles != nil {
 		controllerDeps.Profiles = deps.Profiles
 		controllerDeps.Privacy = deps.Profiles

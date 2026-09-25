@@ -84,6 +84,7 @@ Do not use `0.0.0.0/0`, `*`, or arbitrary client-controlled addresses in
 | `OAUTH_REDIRECT_URIS` | empty | For OAuth | Comma-separated allowlist of client callback URLs, matched exactly. Each must be an absolute `http(s)` URL without a fragment, and `https` in production. Register the same URLs with the provider. |
 | `AUDIT_RETENTION_DAYS` | `395` | No | Days audit rows are kept; `app audit prune` and the hourly `audit-prune` job in `app scheduler` delete older rows. Must be positive. |
 | `AUDIT_QUEUE_SIZE` | `1024` | No | Entries buffered for the background audit writer. When full, new entries are dropped and counted in `blog_audit_entries_dropped_total`. Must be positive. |
+| `IMPERSONATION_TTL` | `1h` | No | Lifetime of an impersonation session and its token; never renewed. `5m`–`2h`. See [impersonation.md](../backend/impersonation.md). |
 | `SEARCH_LANGUAGE` | `simple` | No | PostgreSQL text search configuration for post search (`simple` does no stemming; `english`, `indonesian`, … stem). Changing it takes effect after `app search reindex` and an `app serve` restart; until then searches keep the indexed language and `serve` logs a warning. See [search.md](../backend/search.md). |
 
 A locked or throttled login answers `429` with `Retry-After`. Lockout is keyed by email, so

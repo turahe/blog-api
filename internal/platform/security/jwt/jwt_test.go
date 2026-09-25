@@ -6,6 +6,7 @@ import (
 	"crypto/rand"
 	"crypto/x509"
 	"encoding/pem"
+	"maps"
 	"testing"
 	"time"
 
@@ -33,6 +34,73 @@ func TestIssueAndParseAccess(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, subject, claims.Subject)
 	require.Equal(t, "a@example.com", claims.Email)
+}
+
+func TestImpersonationTokenCarriesActorAndSession(t *testing.T) {
+	t.Parallel()
+
+	svc := newTestService(t)
+	now := time.Now().UTC()
+	subject, actor := uuid.New(), uuid.New()
+
+	raw, err := svc.IssueAccess(authdomain.AccessClaims{
+		Subject: subject, ExpiresAt: now.Add(time.Minute), IssuedAt: now, Actor: &actor, SessionID: "s-1",
+	})
+	require.NoError(t, err)
+
+	claims, err := svc.ParseAccess(raw)
+	require.NoError(t, err)
+	require.True(t, claims.Impersonating())
+	require.Equal(t, actor, *claims.Actor)
+	require.Equal(t, "s-1", claims.SessionID)
+
+	_, err = svc.IssueAccess(authdomain.AccessClaims{Subject: subject, ExpiresAt: now.Add(time.Minute), Actor: &actor})
+	require.Error(t, err, "an impersonation token needs a session id")
+
+	plain, err := svc.ParseAccess(mustIssue(t, svc, authdomain.AccessClaims{Subject: subject, ExpiresAt: now.Add(time.Minute)}))
+	require.NoError(t, err)
+	require.False(t, plain.Impersonating())
+}
+
+func TestParseAccessRejectsMalformedActClaims(t *testing.T) {
+	t.Parallel()
+
+	priv := generateP256(t)
+	svc, err := jwttoken.New(encodePrivatePEM(t, priv), encodePublicPEM(t, &priv.PublicKey),
+		"01234567890123456789012345678901", "blog-api")
+	require.NoError(t, err)
+
+	subject := uuid.NewString()
+	registered := jwtlib.MapClaims{
+		"sub": subject, "iss": "blog-api", "exp": time.Now().Add(time.Minute).Unix(),
+	}
+
+	for name, extra := range map[string]jwtlib.MapClaims{
+		"sid without act":   {"sid": "s-1"},
+		"act without sid":   {"act": map[string]any{"sub": uuid.NewString()}},
+		"act not a uuid":    {"act": map[string]any{"sub": "admin"}, "sid": "s-1"},
+		"actor is subject":  {"act": map[string]any{"sub": subject}, "sid": "s-1"},
+		"act missing a sub": {"act": map[string]any{}, "sid": "s-1"},
+	} {
+		claims := jwtlib.MapClaims{}
+		maps.Copy(claims, registered)
+		maps.Copy(claims, extra)
+
+		raw, err := jwtlib.NewWithClaims(jwtlib.SigningMethodES256, claims).SignedString(priv)
+		require.NoError(t, err)
+
+		_, err = svc.ParseAccess(raw)
+		require.ErrorIs(t, err, authdomain.ErrInvalidToken, name)
+	}
+}
+
+func mustIssue(t *testing.T, svc *jwttoken.Service, claims authdomain.AccessClaims) string {
+	t.Helper()
+
+	raw, err := svc.IssueAccess(claims)
+	require.NoError(t, err)
+
+	return raw
 }
 
 func TestParseAccessRejectsForeignIssuerAndMissingExpiry(t *testing.T) {

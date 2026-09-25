@@ -156,8 +156,26 @@ func auditEntry(c *gin.Context, route routes.Route, scope *audit.Scope) (auditdo
 
 	entry.ResourceType, entry.ResourceID = inferResource(c, route, entry.ActorID)
 	scope.Apply(&entry)
+	markImpersonation(c, &entry)
 
 	return entry, true
+}
+
+// markImpersonation records the staff member behind an impersonation token, unless the
+// entry is already attributed to them (stopping the session).
+func markImpersonation(c *gin.Context, entry *auditdomain.Entry) {
+	imp, ok := CurrentImpersonation(c)
+	if !ok || (entry.ActorID != nil && *entry.ActorID == imp.ActorID) {
+		return
+	}
+
+	entry.ImpersonatorID = &imp.ActorID
+
+	if entry.Metadata == nil {
+		entry.Metadata = map[string]any{}
+	}
+
+	entry.Metadata["impersonation_session_id"] = imp.SessionID.String()
 }
 
 func audited(route routes.Route, status int, success, signedIn bool) bool {

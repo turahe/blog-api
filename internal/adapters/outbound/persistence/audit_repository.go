@@ -24,26 +24,29 @@ const (
 // AuditLogModel maps audit_logs. Metadata is JSON text so it binds as jsonb
 // under both the extended and simple query protocols.
 type AuditLogModel struct {
-	ID           int64     `gorm:"primaryKey"`
-	UUID         uuid.UUID `gorm:"type:uuid;column:uuid"`
-	ActorID      *int64
-	Action       string
-	Category     *string
-	Result       string
-	ResourceType *string
-	ResourceID   *uuid.UUID `gorm:"type:uuid"`
-	Metadata     string     `gorm:"type:jsonb"`
-	IPAddress    *string    `gorm:"column:ip_address"`
-	UserAgent    *string
-	RequestID    *string
-	OccurredAt   time.Time
-	ActorUUID    *uuid.UUID `gorm:"column:actor_uuid;->"`
+	ID               int64     `gorm:"primaryKey"`
+	UUID             uuid.UUID `gorm:"type:uuid;column:uuid"`
+	ActorID          *int64
+	ImpersonatorID   *int64
+	Action           string
+	Category         *string
+	Result           string
+	ResourceType     *string
+	ResourceID       *uuid.UUID `gorm:"type:uuid"`
+	Metadata         string     `gorm:"type:jsonb"`
+	IPAddress        *string    `gorm:"column:ip_address"`
+	UserAgent        *string
+	RequestID        *string
+	OccurredAt       time.Time
+	ActorUUID        *uuid.UUID `gorm:"column:actor_uuid;->"`
+	ImpersonatorUUID *uuid.UUID `gorm:"column:impersonator_uuid;->"`
 }
 
 // TableName implements gorm's tabler.
 func (AuditLogModel) TableName() string { return "audit_logs" }
 
-var auditLogColumns = withRefs("audit_logs", uuidRef("users", "audit_logs.actor_id", "actor_uuid"))
+var auditLogColumns = withRefs("audit_logs", uuidRef("users", "audit_logs.actor_id", "actor_uuid"),
+	uuidRef("users", "audit_logs.impersonator_id", "impersonator_uuid"))
 
 // AuditRepository implements auditports.Repository.
 type AuditRepository struct {
@@ -79,7 +82,7 @@ func (r *AuditRepository) Insert(ctx context.Context, entries []auditdomain.Entr
 		models = append(models, model)
 	}
 
-	if err := db.Omit("ID", "ActorUUID").Create(&models).Error; err != nil {
+	if err := db.Omit("ID", "ActorUUID", "ImpersonatorUUID").Create(&models).Error; err != nil {
 		return fmt.Errorf("insert audit logs: %w", err)
 	}
 
@@ -91,13 +94,15 @@ func (r *AuditRepository) actorIDs(db *gorm.DB, entries []auditdomain.Entry) (ma
 	uuids := make([]uuid.UUID, 0, len(entries))
 
 	for _, entry := range entries {
-		if entry.ActorID == nil {
-			continue
-		}
+		for _, id := range []*uuid.UUID{entry.ActorID, entry.ImpersonatorID} {
+			if id == nil {
+				continue
+			}
 
-		if _, ok := seen[*entry.ActorID]; !ok {
-			seen[*entry.ActorID] = struct{}{}
-			uuids = append(uuids, *entry.ActorID)
+			if _, ok := seen[*id]; !ok {
+				seen[*id] = struct{}{}
+				uuids = append(uuids, *id)
+			}
 		}
 	}
 
@@ -220,28 +225,38 @@ func auditModel(entry auditdomain.Entry, actors map[uuid.UUID]int64) (AuditLogMo
 		model.Result = auditdomain.ResultSuccess
 	}
 
-	if entry.ActorID != nil {
-		if id, ok := actors[*entry.ActorID]; ok {
-			model.ActorID = &id
-		}
-	}
+	model.ActorID = actorRef(actors, entry.ActorID)
+	model.ImpersonatorID = actorRef(actors, entry.ImpersonatorID)
 
 	return model, nil
 }
 
+func actorRef(actors map[uuid.UUID]int64, id *uuid.UUID) *int64 {
+	if id == nil {
+		return nil
+	}
+
+	if resolved, ok := actors[*id]; ok {
+		return &resolved
+	}
+
+	return nil
+}
+
 func auditEntry(model AuditLogModel) auditdomain.Entry {
 	entry := auditdomain.Entry{
-		UUID:         model.UUID,
-		Action:       model.Action,
-		Category:     deref(model.Category),
-		ActorID:      model.ActorUUID,
-		ResourceType: deref(model.ResourceType),
-		ResourceID:   model.ResourceID,
-		Result:       model.Result,
-		IP:           deref(model.IPAddress),
-		UserAgent:    deref(model.UserAgent),
-		RequestID:    deref(model.RequestID),
-		OccurredAt:   model.OccurredAt,
+		UUID:           model.UUID,
+		Action:         model.Action,
+		Category:       deref(model.Category),
+		ActorID:        model.ActorUUID,
+		ImpersonatorID: model.ImpersonatorUUID,
+		ResourceType:   deref(model.ResourceType),
+		ResourceID:     model.ResourceID,
+		Result:         model.Result,
+		IP:             deref(model.IPAddress),
+		UserAgent:      deref(model.UserAgent),
+		RequestID:      deref(model.RequestID),
+		OccurredAt:     model.OccurredAt,
 	}
 
 	var raw map[string]json.RawMessage

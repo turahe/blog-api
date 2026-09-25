@@ -47,6 +47,25 @@ func TestAuditRepositoryRoundTripsEntry(t *testing.T) {
 	require.Equal(t, "curl/8.0", got.UserAgent)
 	require.Equal(t, "req-1", got.RequestID)
 	require.True(t, at.Equal(got.OccurredAt))
+	require.Nil(t, got.ImpersonatorID)
+}
+
+func TestAuditRepositoryStoresImpersonator(t *testing.T) {
+	t.Parallel()
+
+	tx := integrationTx(t)
+	repo := NewAuditRepository(tx)
+	target, staff := insertUser(t, tx), insertUser(t, tx)
+
+	entry := auditAt("me.profile.update", "profile_update", &target, "", nil, time.Now().UTC())
+	entry.ImpersonatorID = &staff
+	require.NoError(t, repo.Insert(t.Context(), []auditdomain.Entry{entry}))
+
+	page, err := repo.Activity(t.Context(), auditdomain.ActivityFilter{UserID: target, Page: 1, PerPage: 10})
+	require.NoError(t, err)
+	require.Len(t, page.Items, 1)
+	require.Equal(t, &target, page.Items[0].ActorID)
+	require.Equal(t, &staff, page.Items[0].ImpersonatorID)
 }
 
 func TestAuditRepositoryActivityCoversActorAndSubject(t *testing.T) {

@@ -144,7 +144,7 @@ func NewRuntime(ctx context.Context, cfg config.Config, logger *slog.Logger, ver
 		return fail(err)
 	}
 
-	events := newEvents(cfg, db)
+	events := NewEvents(cfg, db)
 	auth.WithEvents(events)
 
 	inbox := newInbox(cfg, db, clock, logger)
@@ -193,12 +193,12 @@ func NewRuntime(ctx context.Context, cfg config.Config, logger *slog.Logger, ver
 		Users:          userSvc,
 		AdminUsers:     auth,
 		TwoFactor:      auth, AdminLogin: auth, OAuth: auth,
-		RoleAdmin:   rbacservice.NewRoleService(roleStore),
-		Profiles:    profiles,
-		EmailChange: auth,
-		Roles:       users,
-		RBAC:        enforcer,
-		Posts:       posts, Categories: categories, Tags: tags, Media: media,
+		RoleAdmin: rbacservice.NewRoleService(roleStore),
+		Profiles:  profiles, EmailChange: auth,
+		Impersonation: NewImpersonationService(cfg, db, events, impersonationPermissions{enforcer, roleStore}, auth),
+		Roles:         users,
+		RBAC:          enforcer,
+		Posts:         posts, Categories: categories, Tags: tags, Media: media,
 		Comments: comments, Notifications: inbox, NotificationStream: hub, SSEPingInterval: cfg.SSEPingInterval,
 		Settings:        settings,
 		Consent:         consentservice.New(persistence.NewConsentRepository(db.GORM), ids, clock).WithEvents(events),
@@ -412,10 +412,10 @@ func newCommentService(
 	return commentservice.New(persistence.NewCommentRepository(db.GORM), ids, clock, commentCfg)
 }
 
-// newEvents runs service writes in transactions and, when a message broker is configured,
+// NewEvents runs service writes in transactions and, when a message broker is configured,
 // stores their domain events in the outbox for app worker to relay. Without a broker the
 // events are dropped, so the outbox does not grow with nothing to drain it.
-func newEvents(cfg config.Config, db *database.Database) event.Unit {
+func NewEvents(cfg config.Config, db *database.Database) event.Unit {
 	events := event.Unit{Tx: persistence.NewTransactor(db.GORM), Recorder: event.Discard{}}
 	if cfg.MessagingEnabled() {
 		events.Recorder = persistence.NewOutboxRepository(db.GORM)

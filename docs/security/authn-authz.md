@@ -41,10 +41,18 @@ Require recent password re-verify or 2FA for:
 
 ## Impersonation
 
-- `superadmin` + `impersonation.*` only
-- short TTL; no silent renewal
-- effective permissions = target only
-- audit every lifecycle event and every subsequent action with impersonator metadata
+- `impersonation.start` plus step-up (current password, and a TOTP or backup code when the staff
+  member has 2FA enabled)
+- targets: active users other than yourself, not administrators or impersonators, whose
+  permissions are all ones you hold; one active session per staff member
+- a separate access token with `sub` = target, RFC 8693 `act.sub` = staff member, and `sid` =
+  session; `IMPERSONATION_TTL` (default 1h, 5m–2h), no refresh token, no renewal
+- every request re-checks the session (active, unexpired, participants active, permission still
+  held); stop takes effect immediately
+- refused for credential, 2FA, OAuth, privacy, export, erase, logout, refresh, and chained
+  impersonation operations (`403 impersonation.forbidden_action`)
+- every action is audited with `impersonator_id` and the session id; lifecycle events go to the
+  outbox
 
 Details: [impersonation.md](../backend/impersonation.md), [rbac-casbin.md](../backend/rbac-casbin.md).
 
@@ -91,6 +99,7 @@ Google/GitHub OAuth, as implemented in `internal/core/auth` and its adapters. La
 | 2FA bypass or brute force | Challenge token (5 min, single use, 5 attempts, per-IP limit); each TOTP step accepted once; backup codes single use; enrolled accounts fail closed without `APP_ENCRYPTION_KEY` | Losing `APP_ENCRYPTION_KEY` locks enrolled users out; there is no "recent 2FA" step-up yet |
 | OAuth login CSRF / code injection | Server-side state bound to provider and redirect URI (10 min, single use); PKCE S256; exact redirect-URI allowlist | Relies on the client keeping the state it was given; the API cannot bind the state to a browser without cookies |
 | OAuth account takeover | No account creation; linking only through a provider-verified email or an existing link; one identity per user per provider | A provider that wrongly marks an email as verified, or a recycled provider email, could sign in to the matching account |
+| Impersonation abuse or escalation | `impersonation.start` plus password and 2FA step-up; targets limited to a permission subset, never admins or other impersonators; token bound to a server-side session checked on every request; short fixed TTL; sensitive self-service operations refused; actions audited with the impersonator | A staff member can read and change everything the target can within the subset rule; the audit trail, not prevention, covers misuse. Audit entries can be dropped under load (see below) |
 | Privilege escalation through admin login | `admin.access` checked after the password; every admin route checks its own Casbin permission | Admin tokens are ordinary tokens; there is no separate admin session or step-up |
 | CSRF | Not applicable: the API sets no cookies and requires bearer tokens | Revisit if cookie sessions are added (see the CSRF section above) |
 | Secrets in logs | Access log records route templates, not raw paths; tokens, passwords and TOTP data are never logged | Upstream proxies may log raw URLs with reset tokens; configure them accordingly |

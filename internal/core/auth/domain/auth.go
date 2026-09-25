@@ -124,4 +124,13 @@ type AccessClaims struct {
 	ExpiresAt time.Time
 	IssuedAt  time.Time
 	ID        string
+	// Actor is set on impersonation tokens: the staff member acting as Subject (the RFC 8693
+	// act claim). SessionID then names the impersonation session the token belongs to.
+	Actor     *uuid.UUID
+	SessionID string
+}
+
+// Impersonating reports whether the token acts on behalf of Subject.
+func (c AccessClaims) Impersonating() bool {
+	return c.Actor != nil
 }

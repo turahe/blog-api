@@ -641,6 +641,7 @@ so it is never written by hand.
 
 - id
 - actor_id
+- impersonator_id (the staff member when the action used an impersonation token)
 - action
 - resource_type
 - resource_id
@@ -690,23 +691,21 @@ so it is never written by hand.
 
 ### impersonation_sessions
 
+Implemented (migration 00029); see [impersonation.md](impersonation.md#storage).
+
 - id
-- impersonator_user_id
-- impersonator_session_id
-- impersonated_user_id
-- state
-- started_at
-- expires_at
-- exited_at
-- revoked_reason
-- document_id
-- reason
-- stepup_verified
-- csrf_token_hash
-- request_id
+- uuid (the token's `sid`)
+- actor_id (FK users, cascade; the staff member)
+- target_id (FK users, cascade; differs from actor_id)
+- state (active, exited, expired, revoked)
+- reason (10–255 characters)
 - ip_address
-- created_at
-- updated_at
+- user_agent
+- started_at
+- expires_at (after started_at)
+- ended_at (set exactly when state is not active)
+- end_reason (manual_exit, expired, policy)
+- unique partial index on actor_id where state = 'active'
 
 ### post_revisions
 

@@ -57,5 +57,6 @@ in `last_error`; the job is tried again at its next interval.
 | `processed-messages-prune` | 1h | Deletes consumer dedupe rows older than `CONSUMER_DEDUPE_RETENTION` |
 | `auth-tokens-prune` | 1h | Deletes refresh sessions 30 days past expiry and reset/verification tokens 7 days past expiry |
 | `privacy-requests` | 1m | Runs queued `/me` data exports and erasures (up to 10 per run, 3 attempts each; a job stuck running for 15 minutes is retried) and deletes export archives past `PRIVACY_EXPORT_RETENTION` |
+| `impersonation-expire` | 1m | Closes impersonation sessions past `expires_at` (up to 500 per run) and records `blog.impersonation.expired`; the tokens already stopped working at expiry |
 
 Published outbox rows are pruned by the relay in `app worker` (`OUTBOX_RETENTION`).

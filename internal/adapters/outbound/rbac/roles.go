@@ -10,6 +10,7 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/turahe/blog-api/internal/adapters/outbound/persistence"
+	impdomain "github.com/turahe/blog-api/internal/core/impersonation/domain"
 	rbacdomain "github.com/turahe/blog-api/internal/core/rbac/domain"
 	rbacports "github.com/turahe/blog-api/internal/core/rbac/ports"
 	"gorm.io/gorm"
@@ -281,6 +282,34 @@ func (s *RoleStore) UserRoles(ctx context.Context, userID uuid.UUID) ([]string, 
 	}
 
 	return names, nil
+}
+
+// Grants returns the user's roles and the union of their permissions, as the enforcer
+// evaluates them.
+func (s *RoleStore) Grants(ctx context.Context, userID uuid.UUID) (impdomain.Grants, error) {
+	roles, err := s.UserRoles(ctx, userID)
+	if err != nil {
+		return impdomain.Grants{}, err
+	}
+
+	byRole, err := rolePermissions(s.db.WithContext(ctx), roles)
+	if err != nil {
+		return impdomain.Grants{}, err
+	}
+
+	permissions := []string{}
+
+	for _, role := range roles {
+		for _, p := range byRole[role] {
+			if !slices.Contains(permissions, p) {
+				permissions = append(permissions, p)
+			}
+		}
+	}
+
+	sort.Strings(permissions)
+
+	return impdomain.Grants{Roles: roles, Permissions: permissions}, nil
 }
 
 // RevokeRole implements rbacports.RoleRepository.

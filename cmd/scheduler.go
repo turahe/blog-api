@@ -33,6 +33,8 @@ const (
 	resetTokenRetention = 7 * 24 * time.Hour
 	// privacyBatch bounds how many export and erasure requests one run processes.
 	privacyBatch = 10
+	// impersonationBatch bounds how many expired impersonation sessions one run closes.
+	impersonationBatch = 500
 )
 
 func newSchedulerCmd() *cobra.Command {
@@ -185,6 +187,7 @@ func scheduledJobs(
 	resets := persistence.NewResetTokenRepository(db.GORM)
 	privacy := bootstrap.NewPrivacyService(ctx, cfg, db, nil,
 		event.Unit{Tx: persistence.NewTransactor(db.GORM)}, readCache, logger)
+	impersonation := bootstrap.NewImpersonationService(cfg, db, bootstrap.NewEvents(cfg, db), nil, nil)
 
 	return []scheduler.Job{
 		{Name: "audit-prune", Every: time.Hour, Run: func(ctx context.Context) error {
@@ -211,6 +214,11 @@ func scheduledJobs(
 			purged, purgeErr := privacy.PurgeExpired(ctx)
 
 			return errors.Join(err, logPruned(ctx, logger, "export archives")(int64(purged), purgeErr))
+		}},
+		{Name: "impersonation-expire", Every: time.Minute, Run: func(ctx context.Context) error {
+			closed, err := impersonation.ExpireStale(ctx, impersonationBatch)
+
+			return logPruned(ctx, logger, "expired impersonation sessions")(int64(closed), err)
 		}},
 	}
 }

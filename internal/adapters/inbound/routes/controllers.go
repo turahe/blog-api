@@ -11,6 +11,8 @@ import (
 // A nil field is mounted as NotImplemented.
 type Controllers struct {
 	Stub func(Route) gin.HandlerFunc
+	// Guard runs before every handler, after the route metadata is set; nil skips it.
+	Guard gin.HandlerFunc
 
 	Health   Health
 	Auth     Auth
@@ -26,6 +28,14 @@ type Controllers struct {
 	Notifications Notifications
 	Settings      Settings
 	Analytics     Analytics
+	Impersonation Impersonation
+}
+
+// Impersonation holds the staff impersonation handlers.
+type Impersonation struct {
+	Start   gin.HandlerFunc
+	Stop    gin.HandlerFunc
+	Current gin.HandlerFunc
 }
 
 // Analytics holds consent handlers and the gate in front of the ingestion routes.

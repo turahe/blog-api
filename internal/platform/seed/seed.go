@@ -67,6 +67,7 @@ var rolePermissions = map[string][]string{
 		"settings.read", "settings.update", "settings.history.read",
 		"media.create", "media.delete",
 		permCommentModerate, permCommentDelete,
+		"impersonation.start",
 		"*",
 	},
 	roleEditor: {

@@ -40,7 +40,9 @@ type Deps struct {
 	Privacy privacyAPI
 	// PrivacyRequests queues data exports and erasures; nil keeps the routes as 501 stubs.
 	PrivacyRequests privacyRequestsAPI
-	EmailChange     authports.EmailChanger
+	// Impersonation serves /admin/impersonation; nil keeps the routes as 501 stubs.
+	Impersonation impersonationAPI
+	EmailChange   authports.EmailChanger
 	// AvatarMaxBytes > 0 enables avatar upload and removal (requires media storage).
 	AvatarMaxBytes int64
 	Roles          RoleLookup
@@ -101,7 +103,7 @@ var (
 
 // NewControllers builds domain handlers from deps for routes.Register*; nil services fall back to 501 stubs.
 func NewControllers(deps Deps) routes.Controllers {
-	c := routes.Controllers{Stub: routes.NotImplemented}
+	c := routes.Controllers{Stub: routes.NotImplemented, Guard: middleware.ImpersonationGuard()}
 	if deps.Health != nil {
 		c.Health = routes.Health{
 			Live:    Live(deps.Health),
@@ -143,6 +145,7 @@ func NewControllers(deps Deps) routes.Controllers {
 	c.Activity.MeList, c.Activity.AdminUserList = activityControllers(deps)
 	c.Analytics.ConsentStore, c.Analytics.ConsentGet, c.Analytics.ConsentWithdraw, c.Analytics.IngestGate = consentControllers(deps)
 	c.Notifications = notificationControllers(deps)
+	c.Impersonation = impersonationControllers(deps)
 
 	c.Posts = postControllers(deps)
 

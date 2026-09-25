@@ -47,7 +47,14 @@ func mount(r gin.IRoutes, c Controllers, spec routeSpec) {
 		Group:       spec.group,
 		Auth:        spec.mode,
 	}
-	bindMeta(r, spec.path, meta, orStub(c.Stub, meta, spec.h))
+
+	handler := orStub(c.Stub, meta, spec.h)
+	if c.Guard == nil {
+		bindMeta(r, spec.path, meta, handler)
+		return
+	}
+
+	bindMeta(r, spec.path, meta, c.Guard, handler)
 }
 
 func fullPath(r gin.IRoutes, path string) string {

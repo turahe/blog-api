@@ -75,4 +75,8 @@ func registerAdmin(v1 *gin.RouterGroup, auth AuthMiddleware, c Controllers) {
 	get(admin, "/settings", "admin.settings.get", g, AuthRequired, c, c.Settings.Get)
 	get(admin, "/settings/history", "admin.settings.history", g, AuthRequired, c, c.Settings.History)
 	put(admin, "/settings", "admin.settings.put", g, AuthRequired, c, c.Settings.Put)
+
+	get(admin, "/impersonation/current", "admin.impersonation.current", g, AuthRequired, c, c.Impersonation.Current)
+	post(admin, "/impersonation/start", "admin.impersonation.start", g, AuthRequired, c, c.Impersonation.Start)
+	post(admin, "/impersonation/stop", "admin.impersonation.stop", g, AuthRequired, c, c.Impersonation.Stop)
 }

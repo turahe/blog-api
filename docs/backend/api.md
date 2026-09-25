@@ -357,8 +357,8 @@ A user's activity is every row where the user is the actor or `resource_type=use
 
 | Operation | Method and path | Auth | Notes |
 | --- | --- | --- | --- |
-| `me.activity.list` | `GET /api/v1/me/activity` | bearer | categorized rows only; `ip_prefix` is the /24 (IPv4) or /48 (IPv6) network and `device` is "browser on OS"; no raw IP, user agent, request id, or metadata |
-| `admin.users.activity.list` | `GET /api/v1/admin/users/{id}/activity` | `user.activity.read_all` | every row, with `ip`, `user_agent`, `request_id`, `changes`, and `metadata` |
+| `me.activity.list` | `GET /api/v1/me/activity` | bearer | categorized rows only; `ip_prefix` is the /24 (IPv4) or /48 (IPv6) network and `device` is "browser on OS"; `impersonated` marks actions staff took as the user; no raw IP, user agent, request id, or metadata |
+| `admin.users.activity.list` | `GET /api/v1/admin/users/{id}/activity` | `user.activity.read_all` | every row, with `ip`, `user_agent`, `request_id`, `changes`, `metadata`, and `impersonator_id` |
 
 Both take `category` (comma-separated), `from` and `to` (RFC 3339 or `YYYY-MM-DD`; a date `to`
 covers the whole day), `page`, and `per_page` (max 100), and return newest first.
@@ -550,12 +550,22 @@ like every other read in the API.
 
 ## Admin Impersonation Endpoint Rules
 
-- `POST /api/v1/admin/impersonation/start` requires `superadmin` role + `impersonation.start` permission + 2FA step-up where configured
-- `POST /api/v1/admin/impersonation/stop` requires authenticated impersonation state + `impersonation.stop` permission
-- `GET /api/v1/admin/impersonation/current` returns active impersonation state for the caller; 403 if not authorized
-- all state-changing impersonation requests require CSRF protection for browser clients
-- the impersonated session must resolve effective user = target user for downstream RBAC
-- every lifecycle event and every subsequent action performed during impersonation must be auditable
+Implemented; details in [impersonation.md](./impersonation.md).
+
+- `POST /api/v1/admin/impersonation/start` requires `impersonation.start`, a non-impersonation
+  token, a 10–255 character `reason`, `current_password`, and `two_factor_code` when the caller
+  has 2FA enabled; rate limited to 10 per minute. The target must be active, not an administrator
+  or impersonator, and hold no permission the caller lacks. Returns `201` with a Bearer token
+  (`sub` = target, `act.sub` = caller, no refresh token) valid until the session's `expires_at`
+- `POST /api/v1/admin/impersonation/stop` ends the session of the impersonation token sent, or the
+  caller's active session; no permission needed; `404 impersonation.not_found` when there is none
+- `GET /api/v1/admin/impersonation/current` returns `{active, session}` (`session` may be null)
+- an impersonation token acts as the target for RBAC and ownership, is re-checked against the
+  session on every request (`401 auth.impersonation_ended` once it is over), and is refused with
+  `403 impersonation.forbidden_action` on password, email, 2FA, OAuth, privacy, export, erase,
+  logout, refresh, and starting another impersonation
+- every action taken with an impersonation token is audited with `impersonator_id` and the
+  session id
 
 ## Admin Post Revision Endpoint Rules
 

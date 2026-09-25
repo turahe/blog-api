@@ -36,10 +36,6 @@ func registerContractStubs(v1 *gin.RouterGroup, auth AuthMiddleware, c Controlle
 	get(admin, "/analytics/search", "admin.analytics.search", ag, ar, c, nil)
 	post(admin, "/analytics/export", "admin.analytics.export", ag, ar, c, nil)
 
-	get(admin, "/impersonation/current", "admin.impersonation.current", ag, ar, c, nil)
-	post(admin, "/impersonation/start", "admin.impersonation.start", ag, ar, c, nil)
-	post(admin, "/impersonation/stop", "admin.impersonation.stop", ag, ar, c, nil)
-
 	get(admin, "/newsletter/issues", "admin.newsletter.issues.list", ag, ar, c, nil)
 	get(admin, "/newsletter/issues/:param1", "admin.newsletter.issues.get", ag, ar, c, nil)
 	get(admin, "/newsletter/provider-config", "admin.newsletter.provider_config.get", ag, ar, c, nil)

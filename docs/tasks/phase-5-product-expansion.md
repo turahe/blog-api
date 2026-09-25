@@ -9,8 +9,8 @@ Index: [README.md](./README.md).
 ## Status
 
 **In progress** — admin settings, post versioning, post SEO, and analytics consent are implemented.
-`/me/privacy` settings, the asynchronous `/me` data export and erasure, and PostgreSQL post
-search are implemented. Impersonation and newsletter operations still return `501`.
+`/me/privacy` settings, the asynchronous `/me` data export and erasure, PostgreSQL post
+search, and staff impersonation are implemented. Newsletter operations still return `501`.
 
 ## Decisions
 
@@ -20,7 +20,7 @@ search are implemented. Impersonation and newsletter operations still return `50
 | Search backend | PostgreSQL full-text search: a stored generated `tsvector` column with a GIN index, `websearch_to_tsquery` ranking, `ts_headline` highlights, behind a swappable search port. Language from `SEARCH_LANGUAGE` (default `simple`); changing it needs `app search reindex`. |
 | Newsletter delivery | Built-in sending through the SMTP mailer and worker, plus a generic HMAC-signed `custom_http` adapter. Other ESPs are documented extension points. |
 | Media variants | Named imgproxy presets (width, format) defined in settings and returned as signed URLs on media responses; no stored derivatives. Orphan cleanup and storage usage reporting are built. |
-| Impersonation | A server-side impersonation session row and a separate short-lived access token with `sub` = target and an RFC 8693 `act` claim for the superadmin. No refresh token; audit records store actor and subject. |
+| Impersonation | A server-side impersonation session row and a separate short-lived access token with `sub` = target and an RFC 8693 `act` claim for the staff member. No refresh token; audit records store actor and subject. Holders of `impersonation.start` may impersonate active users whose permissions are a subset of theirs, never admins or other impersonators; step-up is the current password plus a TOTP or backup code when 2FA is enabled; a 10–255 character reason is required. `IMPERSONATION_TTL` (default 1h, 5m–2h) is a hard ceiling. Credential, 2FA, OAuth, privacy, export, erase, logout, refresh, and chained impersonation operations are refused to impersonation tokens. |
 | Erasure | Anonymize: delete activity, consents, sessions, and tokens; scrub email, name, avatar, and phone; keep posts and comments attributed to "Deleted user"; keep audit rows with the actor id only. Runs asynchronously. Exports are a JSON archive in object storage behind an expiring link. |
 
 ## Epic: settings management
@@ -38,14 +38,15 @@ Spec: [settings-management.md](../features/settings-management.md)
 
 ## Epic: impersonation
 
-- [ ] Impersonation session model and audit trail
-- [ ] `admin.impersonation.start` — `POST /api/v1/admin/impersonation/start`
-- [ ] `admin.impersonation.stop` — `POST /api/v1/admin/impersonation/stop`
-- [ ] `admin.impersonation.current` — `GET /api/v1/admin/impersonation/current`
-- [ ] Distinguish actor from subject in JWT claims and in every audit record
-- [ ] Hard ceiling on impersonation session lifetime
-- [ ] Block privilege escalation: an impersonator must not gain permissions they lack
-- [ ] Security review before enabling in production
+- [x] Impersonation session model and audit trail — see [impersonation.md](../backend/impersonation.md)
+- [x] `admin.impersonation.start` — `POST /api/v1/admin/impersonation/start`
+- [x] `admin.impersonation.stop` — `POST /api/v1/admin/impersonation/stop`
+- [x] `admin.impersonation.current` — `GET /api/v1/admin/impersonation/current`
+- [x] Distinguish actor from subject in JWT claims and in every audit record
+- [x] Hard ceiling on impersonation session lifetime
+- [x] Block privilege escalation: an impersonator must not gain permissions they lack
+- [ ] Security review before enabling in production (needs an independent reviewer; the threat
+  model row is in [authn-authz.md](../security/authn-authz.md))
 
 Specs: [impersonation.md](../features/impersonation.md), [impersonation.md](../backend/impersonation.md)
 

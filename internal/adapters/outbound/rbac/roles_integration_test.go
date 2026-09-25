@@ -151,6 +151,11 @@ func TestRoleStoreLifecycleSyncsEnforcer(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, []string{name}, names)
 
+	grants, err := store.Grants(ctx, user)
+	require.NoError(t, err)
+	require.Equal(t, []string{name}, grants.Roles)
+	require.Equal(t, []string{perm}, grants.Permissions)
+
 	allowed, err := enforcer.Enforce(ctx, user, perm)
 	require.NoError(t, err)
 	require.True(t, allowed, "the enforcer sees the grant without a restart")

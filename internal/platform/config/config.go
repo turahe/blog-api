@@ -107,6 +107,7 @@ type Config struct {
 	PrivacyExportRetention        time.Duration
 	PrivacyExportURLTTL           time.Duration
 	SearchLanguage                string
+	ImpersonationTTL              time.Duration
 	CommentsGuestEnabled          bool
 	CommentsRequireApproval       bool
 	CommentsEditWindow            time.Duration
@@ -609,6 +610,7 @@ func load(withJWTKeys bool) (Config, error) {
 		PrivacyExportRetention:        duration("PRIVACY_EXPORT_RETENTION", 72*time.Hour),
 		PrivacyExportURLTTL:           duration("PRIVACY_EXPORT_URL_TTL", 15*time.Minute),
 		SearchLanguage:                strings.ToLower(strings.TrimSpace(env("SEARCH_LANGUAGE", "simple"))),
+		ImpersonationTTL:              duration("IMPERSONATION_TTL", time.Hour),
 		CommentsGuestEnabled:          boolEnv("COMMENTS_GUEST_ENABLED", false),
 		CommentsRequireApproval:       boolEnv("COMMENTS_REQUIRE_APPROVAL", false),
 		CommentsEditWindow:            duration("COMMENTS_EDIT_WINDOW", 15*time.Minute),
@@ -724,7 +726,7 @@ func (c *Config) validate() error {
 		return fmt.Errorf("invalid database pool limits: idle=%d open=%d", c.DBMaxIdle, c.DBMaxOpen)
 	}
 
-	for _, check := range []func() error{c.ValidateRedis, c.ValidateMessaging, c.ValidateMedia, c.ValidateSentry, c.ValidateCache, c.ValidateOAuth, c.ValidateAudit, c.ValidateSearch} {
+	for _, check := range []func() error{c.ValidateRedis, c.ValidateMessaging, c.ValidateMedia, c.ValidateSentry, c.ValidateCache, c.ValidateOAuth, c.ValidateAudit, c.ValidateSearch, c.ValidateImpersonation} {
 		if err := check(); err != nil {
 			return err
 		}
