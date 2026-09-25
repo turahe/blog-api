@@ -164,6 +164,7 @@ func NewRouter(deps Dependencies) (*gin.Engine, error) {
 func optionalServices(controllerDeps *handlers.Deps, deps Dependencies) {
 	if deps.Profiles != nil {
 		controllerDeps.Profiles = deps.Profiles
+		controllerDeps.Privacy = deps.Profiles
 	}
 
 	if deps.Settings != nil {

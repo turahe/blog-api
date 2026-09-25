@@ -51,6 +51,7 @@ import (
 	settingsdomain "github.com/turahe/blog-api/internal/core/settings/domain"
 	settingsservice "github.com/turahe/blog-api/internal/core/settings/service"
 	tagservice "github.com/turahe/blog-api/internal/core/tag/service"
+	userports "github.com/turahe/blog-api/internal/core/user/ports"
 	userservice "github.com/turahe/blog-api/internal/core/user/service"
 	"github.com/turahe/blog-api/internal/platform/config"
 	"github.com/turahe/blog-api/internal/platform/database"
@@ -167,7 +168,7 @@ func NewRuntime(ctx context.Context, cfg config.Config, logger *slog.Logger, ver
 		return fail(err)
 	}
 
-	profiles, avatarMaxBytes := newProfileService(cfg, db, clock, media, cacheOrNil)
+	profiles, avatarMaxBytes := newProfileService(cfg, db, clock, media, cacheOrNil, auth, events)
 
 	enforcer, err := outboundrbac.NewEnforcer(db.GORM)
 	if err != nil {
@@ -361,15 +362,18 @@ func newSEOImageURLs(cfg config.Config, db *database.Database) *postseo.ImageURL
 	return postseo.NewImageURLs(persistence.NewMediaRepository(db.GORM), cfg.AppPublicURL, widths, cfg.S3PublicBaseURL)
 }
 
-// newProfileService wires profiles; avatars are enabled (non-zero max bytes) only with media storage.
+// newProfileService wires profiles and privacy; avatars are enabled (non-zero max bytes) only with media storage.
 func newProfileService(
 	cfg config.Config,
 	db *database.Database,
 	clock system.Clock,
 	media mediaports.Service,
 	readCache readcache.Cache,
+	verifier userports.PasswordVerifier,
+	events event.Unit,
 ) (*userservice.ProfileService, int64) {
-	profiles := userservice.NewProfileService(persistence.NewProfileRepository(db.GORM), clock).WithCache(readCache)
+	profiles := userservice.NewProfileService(persistence.NewProfileRepository(db.GORM), clock).
+		WithCache(readCache).WithPrivacy(verifier, events)
 	if media == nil {
 		return profiles, 0
 	}

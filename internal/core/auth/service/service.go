@@ -652,6 +652,17 @@ func (s *AuthService) issuePair(
 	}, nil
 }
 
+// VerifyPassword reports whether password is the active user's current password. Accounts
+// without a password (OAuth sign-in only) never match.
+func (s *AuthService) VerifyPassword(ctx context.Context, userID uuid.UUID, password string) (bool, error) {
+	user, err := s.activeUser(ctx, userID)
+	if err != nil {
+		return false, err
+	}
+
+	return user.PasswordHash != "" && s.hasher.Compare(user.PasswordHash, password), nil
+}
+
 // activeUser loads the user, reporting a missing or inactive account as ErrUserInactive.
 func (s *AuthService) activeUser(ctx context.Context, id uuid.UUID) (userdomain.User, error) {
 	user, err := s.users.FindByID(ctx, id)

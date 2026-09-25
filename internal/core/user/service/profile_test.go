@@ -87,6 +87,19 @@ func (r *fakeProfileRepo) SetAvatar(_ context.Context, id uuid.UUID, mediaID *uu
 	return nil
 }
 
+func (r *fakeProfileRepo) SavePrivacy(_ context.Context, id uuid.UUID, privacy userdomain.Privacy, _ time.Time) error {
+	if r.saveErr != nil {
+		return r.saveErr
+	}
+
+	r.saved++
+	view := r.views[id]
+	view.Privacy = privacy
+	r.views[id] = view
+
+	return nil
+}
+
 type fakeAvatarStore struct {
 	assets    map[uuid.UUID]mediadomain.MediaAsset
 	uploadErr error

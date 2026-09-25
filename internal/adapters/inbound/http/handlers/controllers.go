@@ -36,7 +36,9 @@ type Deps struct {
 	NotificationStream notificationStreamHub
 	SSEPingInterval    time.Duration
 	Profiles           profileAPI
-	EmailChange        authports.EmailChanger
+	// Privacy serves /me/privacy; nil keeps the routes as 501 stubs.
+	Privacy     privacyAPI
+	EmailChange authports.EmailChanger
 	// AvatarMaxBytes > 0 enables avatar upload and removal (requires media storage).
 	AvatarMaxBytes int64
 	Roles          RoleLookup
@@ -276,6 +278,11 @@ func wireProfiles(users *routes.Users, deps Deps) {
 	if deps.Profiles != nil && deps.AvatarMaxBytes > 0 {
 		users.MeAvatarUpload = limit("profile.avatar", 10, time.Minute, meUploadAvatarHandler(deps.Profiles, deps.AvatarMaxBytes))
 		users.MeAvatarDelete = limit("profile.avatar", 10, time.Minute, meDeleteAvatarHandler(deps.Profiles))
+	}
+
+	if deps.Privacy != nil {
+		users.MePrivacyGet = meGetPrivacyHandler(deps.Privacy)
+		users.MePrivacyUpdate = limit("privacy.update", 10, time.Minute, meUpdatePrivacyHandler(deps.Privacy))
 	}
 
 	if deps.EmailChange != nil {

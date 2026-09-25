@@ -21,6 +21,7 @@ const (
 
 	UserCreated                = "blog.user.created"
 	UserPasswordResetRequested = "auth.password.reset_requested"
+	UserPrivacyUpdated         = "user.privacy.updated"
 	MediaUploaded              = "blog.media.uploaded"
 	MediaDeleted               = "blog.media.deleted"
 	NotificationEmailRequested = "notification.email.requested"

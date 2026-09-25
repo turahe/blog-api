@@ -1,5 +1,16 @@
 # Changelog
 
+## 2026-09-25 — Privacy settings
+
+### Added
+
+- `GET /api/v1/me/privacy` and `PUT /api/v1/me/privacy` read and update profile visibility,
+  email and contact visibility, and search indexing. See
+  [api.md](docs/backend/api.md#profiles-and-email-change).
+- Narrowing profile visibility requires `current_password`
+  (`403 privacy.level_change_requires_reauth` otherwise). Rate limited to 10 updates per minute.
+- Event `user.privacy.updated` with before/after values.
+
 ## 2026-09-25 — Analytics consent
 
 ### Added

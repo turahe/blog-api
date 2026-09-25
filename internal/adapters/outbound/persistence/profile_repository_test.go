@@ -66,6 +66,32 @@ func TestProfileRepositoryDefaultsUpsertAndLookup(t *testing.T) {
 	require.ErrorIs(t, repo.SaveProfile(ctx, uuid.New(), nil, profile, userID, now), userdomain.ErrNotFound)
 }
 
+func TestProfileRepositorySavePrivacy(t *testing.T) {
+	t.Parallel()
+
+	tx := integrationTx(t)
+	ctx := t.Context()
+	repo := NewProfileRepository(tx)
+	userID := insertUser(t, tx)
+	now := time.Now().UTC()
+
+	want := userdomain.Privacy{Visibility: userdomain.VisibilityUnlisted, ShowEmail: true}
+	require.NoError(t, repo.SavePrivacy(ctx, userID, want, now))
+
+	view, err := repo.GetView(ctx, userID)
+	require.NoError(t, err)
+	require.Equal(t, want, view.Privacy)
+
+	want = userdomain.Privacy{Visibility: userdomain.VisibilityPrivate, ShowContact: true, AllowIndexing: true}
+	require.NoError(t, repo.SavePrivacy(ctx, userID, want, now.Add(time.Minute)))
+
+	view, err = repo.GetView(ctx, userID)
+	require.NoError(t, err)
+	require.Equal(t, want, view.Privacy, "a second save updates the row")
+
+	require.ErrorIs(t, repo.SavePrivacy(ctx, uuid.New(), want, now), userdomain.ErrNotFound)
+}
+
 func TestProfileRepositoryDisplayNameIsUniqueCaseInsensitively(t *testing.T) {
 	t.Parallel()
 

@@ -9,6 +9,7 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/turahe/blog-api/internal/core/audit"
+	"github.com/turahe/blog-api/internal/core/event"
 	mediadomain "github.com/turahe/blog-api/internal/core/media/domain"
 	"github.com/turahe/blog-api/internal/core/readcache"
 	userdomain "github.com/turahe/blog-api/internal/core/user/domain"
@@ -36,6 +37,8 @@ type ProfileService struct {
 	avatars        ports.AvatarStore
 	avatarMaxBytes int64
 	cache          readcache.Cache
+	verifier       ports.PasswordVerifier
+	events         event.Unit
 }
 
 // NewProfileService returns a ProfileService; avatars stay unavailable until WithAvatars.

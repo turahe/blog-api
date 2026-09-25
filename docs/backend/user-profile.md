@@ -181,6 +181,8 @@ Body: `{token}` → verify → update users.email + email_verified_at = now → 
 
 GET: returns current user_privacy_settings row; no cache.
 PUT: partial patch, allowlisted keys only; when visibility reduces (public→private) require re-verification password. Invalidate public profile cache, emit `user.privacy.updated`.
+Implemented; the password travels in the body as `current_password`, not in a header. See
+[api.md](api.md#profiles-and-email-change).
 
 #### `GET /api/v1/me/activity`
 

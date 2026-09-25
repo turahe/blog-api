@@ -594,6 +594,25 @@ definitions:
       twitter_title:
         type: string
     type: object
+  requests.UpdatePrivacy:
+    properties:
+      current_password:
+        maxLength: 128
+        type: string
+      search_allow_indexing:
+        type: boolean
+      visibility_contact:
+        type: boolean
+      visibility_email:
+        type: boolean
+      visibility_profile:
+        enum:
+        - public
+        - unlisted
+        - private
+        example: private
+        type: string
+    type: object
   requests.UpdateRole:
     properties:
       description:
@@ -3698,6 +3717,65 @@ paths:
       security:
       - Bearer: []
       summary: Change own password
+      tags:
+      - self-service
+  /api/v1/me/privacy:
+    get:
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/responses.Envelope'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/responses.Envelope'
+      security:
+      - Bearer: []
+      summary: Get my privacy settings
+      tags:
+      - self-service
+    put:
+      consumes:
+      - application/json
+      description: |-
+        Partial update; omitted flags are kept. Narrowing visibility_profile (public → unlisted → private)
+        requires current_password; widening it and the other flags do not.
+      parameters:
+      - description: privacy flags
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/requests.UpdatePrivacy'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/responses.Envelope'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/responses.Envelope'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/responses.Envelope'
+        "403":
+          description: privacy.level_change_requires_reauth
+          schema:
+            $ref: '#/definitions/responses.Envelope'
+        "429":
+          description: Too Many Requests
+          schema:
+            $ref: '#/definitions/responses.Envelope'
+      security:
+      - Bearer: []
+      summary: Update my privacy settings
       tags:
       - self-service
   /api/v1/me/profile:

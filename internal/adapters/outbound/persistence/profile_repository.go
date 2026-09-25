@@ -151,6 +151,29 @@ func (r *ProfileRepository) SetAvatar(ctx context.Context, userID uuid.UUID, med
 	return nil
 }
 
+// SavePrivacy upserts the live user's privacy settings.
+func (r *ProfileRepository) SavePrivacy(ctx context.Context, userID uuid.UUID, privacy userdomain.Privacy, at time.Time) error {
+	db := conn(ctx, r.db)
+
+	id, err := idByUUID(db, "users", userID)
+	if errors.Is(err, errUnknownReference) {
+		return userdomain.ErrNotFound
+	}
+
+	if err != nil {
+		return err
+	}
+
+	return db.Exec(`INSERT INTO user_privacy_settings (user_id, visibility_profile, visibility_email,
+	visibility_contact, search_allow_indexing, created_at, updated_at)
+VALUES (?, ?, ?, ?, ?, ?, ?)
+ON CONFLICT (user_id) DO UPDATE SET
+	visibility_profile = EXCLUDED.visibility_profile, visibility_email = EXCLUDED.visibility_email,
+	visibility_contact = EXCLUDED.visibility_contact, search_allow_indexing = EXCLUDED.search_allow_indexing,
+	updated_at = EXCLUDED.updated_at`,
+		id, string(privacy.Visibility), privacy.ShowEmail, privacy.ShowContact, privacy.AllowIndexing, at, at).Error
+}
+
 func mapProfileRow(row profileRow) (userdomain.ProfileView, error) {
 	profile := userdomain.DefaultProfile()
 	profile.DisplayName = row.DisplayName

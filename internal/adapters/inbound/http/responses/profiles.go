@@ -26,14 +26,9 @@ func Profile(view userdomain.ProfileView) gin.H {
 		"timezone":                     profile.Timezone,
 		"marketing_consent":            profile.MarketingConsent,
 		"marketing_consent_updated_at": RFC3339(profile.MarketingConsentUpdatedAt),
-		"privacy": gin.H{
-			"visibility_profile":    string(privacy.Visibility),
-			"visibility_email":      privacy.ShowEmail,
-			"visibility_contact":    privacy.ShowContact,
-			"search_allow_indexing": privacy.AllowIndexing,
-		},
-		"created_at":         user.CreatedAt.UTC().Format(time.RFC3339),
-		"profile_updated_at": RFC3339(profile.UpdatedAt),
+		"privacy":                      Privacy(privacy),
+		"created_at":                   user.CreatedAt.UTC().Format(time.RFC3339),
+		"profile_updated_at":           RFC3339(profile.UpdatedAt),
 	}
 }
 
@@ -70,6 +65,16 @@ func PublicProfile(view userdomain.ProfileView) gin.H {
 	}
 
 	return out
+}
+
+// Privacy renders a user's privacy settings.
+func Privacy(privacy userdomain.Privacy) gin.H {
+	return gin.H{
+		"visibility_profile":    string(privacy.Visibility),
+		"visibility_email":      privacy.ShowEmail,
+		"visibility_contact":    privacy.ShowContact,
+		"search_allow_indexing": privacy.AllowIndexing,
+	}
 }
 
 func contact(profile userdomain.Profile) gin.H {

@@ -4652,6 +4652,97 @@ const docTemplate = `{
                 }
             }
         },
+        "/api/v1/me/privacy": {
+            "get": {
+                "security": [
+                    {
+                        "Bearer": []
+                    }
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "self-service"
+                ],
+                "summary": "Get my privacy settings",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/responses.Envelope"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/responses.Envelope"
+                        }
+                    }
+                }
+            },
+            "put": {
+                "security": [
+                    {
+                        "Bearer": []
+                    }
+                ],
+                "description": "Partial update; omitted flags are kept. Narrowing visibility_profile (public → unlisted → private)\nrequires current_password; widening it and the other flags do not.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "self-service"
+                ],
+                "summary": "Update my privacy settings",
+                "parameters": [
+                    {
+                        "description": "privacy flags",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/requests.UpdatePrivacy"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/responses.Envelope"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/responses.Envelope"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/responses.Envelope"
+                        }
+                    },
+                    "403": {
+                        "description": "privacy.level_change_requires_reauth",
+                        "schema": {
+                            "$ref": "#/definitions/responses.Envelope"
+                        }
+                    },
+                    "429": {
+                        "description": "Too Many Requests",
+                        "schema": {
+                            "$ref": "#/definitions/responses.Envelope"
+                        }
+                    }
+                }
+            }
+        },
         "/api/v1/me/profile": {
             "patch": {
                 "security": [
@@ -6047,6 +6138,33 @@ const docTemplate = `{
                 },
                 "twitter_title": {
                     "type": "string"
+                }
+            }
+        },
+        "requests.UpdatePrivacy": {
+            "type": "object",
+            "properties": {
+                "current_password": {
+                    "type": "string",
+                    "maxLength": 128
+                },
+                "search_allow_indexing": {
+                    "type": "boolean"
+                },
+                "visibility_contact": {
+                    "type": "boolean"
+                },
+                "visibility_email": {
+                    "type": "boolean"
+                },
+                "visibility_profile": {
+                    "type": "string",
+                    "enum": [
+                        "public",
+                        "unlisted",
+                        "private"
+                    ],
+                    "example": "private"
                 }
             }
         },

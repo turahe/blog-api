@@ -26,11 +26,9 @@ func registerContractStubs(v1 *gin.RouterGroup, auth AuthMiddleware, c Controlle
 
 	get(required, "/me/activity/export", "me.activity.export", self, req, c, nil)
 	get(required, "/me/newsletter/subscriptions", "me.newsletter.subscriptions.list", self, req, c, nil)
-	get(required, "/me/privacy", "me.privacy.get", self, req, c, nil)
 	post(required, "/me/activity/erase", "me.activity.erase", self, req, c, nil)
 	post(required, "/me/newsletter/subscribe", "me.newsletter.subscribe", self, req, c, nil)
 	post(required, "/me/newsletter/unsubscribe", "me.newsletter.unsubscribe", self, req, c, nil)
-	put(required, "/me/privacy", "me.privacy.update", self, req, c, nil)
 
 	get(admin, "/analytics/navigation", "admin.analytics.navigation", ag, ar, c, nil)
 	get(admin, "/analytics/overview", "admin.analytics.overview", ag, ar, c, nil)

@@ -107,6 +107,8 @@ type Users struct {
 	MeAvatarDelete       gin.HandlerFunc
 	MeEmailRequestChange gin.HandlerFunc
 	MeEmailConfirmChange gin.HandlerFunc
+	MePrivacyGet         gin.HandlerFunc
+	MePrivacyUpdate      gin.HandlerFunc
 	PublicProfile        gin.HandlerFunc
 	AdminUsersList       gin.HandlerFunc
 	AdminCreate          gin.HandlerFunc

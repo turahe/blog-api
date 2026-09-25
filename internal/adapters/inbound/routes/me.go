@@ -17,6 +17,8 @@ func registerMe(v1 *gin.RouterGroup, auth AuthMiddleware, c Controllers) {
 	del(me, "/me/avatar", "me.avatar.delete", g, AuthRequired, c, c.Users.MeAvatarDelete)
 	post(me, "/me/email/request-change", "me.email.request_change", g, AuthRequired, c, c.Users.MeEmailRequestChange)
 	post(me, "/me/email/confirm-change", "me.email.confirm_change", g, AuthRequired, c, c.Users.MeEmailConfirmChange)
+	get(me, "/me/privacy", "me.privacy.get", g, AuthRequired, c, c.Users.MePrivacyGet)
+	put(me, "/me/privacy", "me.privacy.update", g, AuthRequired, c, c.Users.MePrivacyUpdate)
 	get(me, "/me/2fa", "me.2fa.get", g, AuthRequired, c, c.Auth.MeTwoFactorGet)
 	del(me, "/me/2fa", "me.2fa.disable", g, AuthRequired, c, c.Auth.MeTwoFactorDisable)
 	post(me, "/me/2fa/setup", "me.2fa.setup", g, AuthRequired, c, c.Auth.MeTwoFactorSetup)

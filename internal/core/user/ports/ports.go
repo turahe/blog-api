@@ -33,6 +33,14 @@ type ProfileRepository interface {
 	SaveProfile(ctx context.Context, userID uuid.UUID, fullName *string, profile userdomain.Profile, updatedBy uuid.UUID, at time.Time) error
 	// SetAvatar points the user at a media asset, or clears it when mediaID is nil.
 	SetAvatar(ctx context.Context, userID uuid.UUID, mediaID *uuid.UUID, at time.Time) error
+	// SavePrivacy upserts the user's privacy settings.
+	SavePrivacy(ctx context.Context, userID uuid.UUID, privacy userdomain.Privacy, at time.Time) error
+}
+
+// PasswordVerifier checks a user's current password for step-up actions.
+type PasswordVerifier interface {
+	// VerifyPassword reports whether password matches; accounts without a password never match.
+	VerifyPassword(ctx context.Context, userID uuid.UUID, password string) (bool, error)
 }
 
 // AvatarStore uploads and removes avatar images.

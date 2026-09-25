@@ -9,8 +9,8 @@ Index: [README.md](./README.md).
 ## Status
 
 **In progress** — admin settings, post versioning, post SEO, and analytics consent are implemented.
-Impersonation and newsletter operations still return `501`; search and the `/me` privacy, export,
-and erase endpoints have no schema or service yet.
+`/me/privacy` settings are implemented. Impersonation and newsletter operations still return `501`;
+search and the `/me` export and erase endpoints have no schema or service yet.
 
 ## Decisions
 
@@ -113,8 +113,8 @@ Spec: [newsletter-subscriptions.md](../features/newsletter-subscriptions.md)
 - [x] `analytics.consent.store` — `POST /api/v1/analytics/consent`
 - [x] `analytics.consent.get` — `GET /api/v1/analytics/consent`
 - [x] `analytics.consent.withdraw` — `DELETE /api/v1/analytics/consent/{id}`
-- [ ] `me.privacy.get` — `GET /api/v1/me/privacy`
-- [ ] `me.privacy.update` — `PUT /api/v1/me/privacy`
+- [x] `me.privacy.get` — `GET /api/v1/me/privacy`
+- [x] `me.privacy.update` — `PUT /api/v1/me/privacy`
 - [ ] `me.activity.export` — `GET /api/v1/me/activity/export`
 - [ ] `me.activity.erase` — `POST /api/v1/me/activity/erase`
 - [x] Enforce consent at the analytics ingest boundary, not only in the UI

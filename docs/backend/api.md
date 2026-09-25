@@ -211,6 +211,8 @@ limit the answer is `429 rate_limited` with `Retry-After`.
 | `me.avatar.delete` | `DELETE /api/v1/me/avatar` | required | `profile.avatar` 10/min |
 | `me.email.request_change` | `POST /api/v1/me/email/request-change` | required | `email.change.request` 3/hour |
 | `me.email.confirm_change` | `POST /api/v1/me/email/confirm-change` | required | `email.change.confirm` 10/min |
+| `me.privacy.get` | `GET /api/v1/me/privacy` | required | — |
+| `me.privacy.update` | `PUT /api/v1/me/privacy` | required | `privacy.update` 10/min |
 | `public.users.profile` | `GET /api/v1/users/{username_or_id}` | optional | — |
 | `admin.users.profile.get` | `GET /api/v1/admin/users/{id}/profile` | `user.profile.read` | — |
 | `admin.users.profile.patch` | `PATCH /api/v1/admin/users/{id}/profile` | `user.profile.edit` | — |
@@ -250,7 +252,17 @@ Differences from the target rules below:
   `user.profile.read`, and for inactive users. The email is shown only when
   `visibility_email` is on, and contact fields only when `visibility_contact` is on.
   `X-Robots-Tag: noindex` is sent when indexing is disallowed or the profile is not public.
-  `followers_only`, `include=`, and the `/me/privacy` endpoints are not implemented yet.
+  `followers_only` and `include=` are not implemented yet.
+- **Privacy settings:** `GET /me/privacy` returns `visibility_profile` (`public`, `unlisted`,
+  `private`), `visibility_email`, `visibility_contact`, and `search_allow_indexing`. `PUT` takes
+  any of those keys plus `current_password`; omitted keys are kept. Narrowing
+  `visibility_profile` (public → unlisted → private) requires `current_password`; without it,
+  or with a wrong one, the answer is `403 privacy.level_change_requires_reauth`. Accounts that
+  sign in only with OAuth have no password, so they must set one through the password reset
+  flow first. Widening visibility and the other flags need no proof. A change invalidates cached
+  public profiles, records `user.privacy.updated` with the before/after values and
+  `stepup_proof_present`, and adds the changed fields to the audit entry. An unchanged update
+  writes nothing.
 - **Not yet enforced:** 2FA or password step-up on admin patch and avatar delete, CSRF (all
   routes use bearer tokens), and audit or outbox events for profile changes.
 
