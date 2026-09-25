@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/turahe/blog-api/internal/core/event"
 	mediadomain "github.com/turahe/blog-api/internal/core/media/domain"
 	mediaports "github.com/turahe/blog-api/internal/core/media/ports"
 	postdomain "github.com/turahe/blog-api/internal/core/post/domain"
@@ -45,6 +46,7 @@ type PostService struct {
 	clock     Clock
 	cache     readcache.Cache
 	notifier  ports.PublishNotifier
+	events    event.Unit
 }
 
 // New returns a PostService without media or tag support; see WithMedia and WithTags.
@@ -69,6 +71,12 @@ func (s *PostService) WithCache(cache readcache.Cache) *PostService {
 // WithNotifier sends a notice whenever a post is published.
 func (s *PostService) WithNotifier(notifier ports.PublishNotifier) *PostService {
 	s.notifier = notifier
+	return s
+}
+
+// WithEvents records post events through events, in the same transaction as each write.
+func (s *PostService) WithEvents(events event.Unit) *PostService {
+	s.events = events
 	return s
 }
 
@@ -179,24 +187,12 @@ func (s *PostService) CreateDraft(
 		UpdatedAt:     now,
 	}
 
-	post, err = s.withFreeSlug(ctx, slug, func(free string) (postdomain.Post, error) {
-		post.Slug = free
-		return s.repo.Create(ctx, post)
-	})
+	post, err = s.storeDraft(ctx, post, slug, tags != nil, resolvedTags)
 	if err != nil {
 		return postdomain.Post{}, nil, err
 	}
 
 	if tags != nil {
-		tagIDs := make([]uuid.UUID, 0, len(resolvedTags))
-		for _, tag := range resolvedTags {
-			tagIDs = append(tagIDs, tag.UUID)
-		}
-
-		if err := s.tags.ReplacePostTags(ctx, post.UUID, tagIDs); err != nil {
-			return postdomain.Post{}, nil, err
-		}
-
 		return post, resolvedTags, nil
 	}
 
@@ -241,19 +237,71 @@ func (s *PostService) Update(
 	post.UpdatedAt = s.clock.Now()
 	post.Version++
 
-	post, err = s.repo.Update(ctx, post)
+	post, tags, err := s.storeUpdate(ctx, post, actorID, in.Tags != nil, resolvedTags)
 	if err != nil {
 		return postdomain.Post{}, nil, err
 	}
 
-	defer s.invalidate(ctx)
-
-	tags, err := s.syncTags(ctx, post.UUID, in.Tags != nil, resolvedTags)
-	if err != nil {
-		return postdomain.Post{}, nil, err
-	}
+	s.invalidate(ctx)
 
 	return post, tags, nil
+}
+
+// storeDraft creates post under the first free slug from base, links its tags when
+// replaceTags is set, and records its event, all in one transaction.
+func (s *PostService) storeDraft(
+	ctx context.Context, post postdomain.Post, base string, replaceTags bool, tags []tagdomain.Tag,
+) (postdomain.Post, error) {
+	err := s.events.InTx(ctx, func(ctx context.Context) error {
+		created, err := s.withFreeSlug(ctx, base, func(ctx context.Context, free string) (postdomain.Post, error) {
+			post.Slug = free
+			return s.repo.Create(ctx, post)
+		})
+		if err != nil {
+			return err
+		}
+
+		post = created
+
+		if replaceTags {
+			tagIDs := make([]uuid.UUID, 0, len(tags))
+			for _, tag := range tags {
+				tagIDs = append(tagIDs, tag.UUID)
+			}
+
+			if err := s.tags.ReplacePostTags(ctx, post.UUID, tagIDs); err != nil {
+				return err
+			}
+		}
+
+		return s.events.Record(ctx, postEvent(event.PostCreated, post, &post.AuthorUUID, post.CreatedAt))
+	})
+
+	return post, err
+}
+
+// storeUpdate saves post, syncs its tags, and records its event in one transaction.
+func (s *PostService) storeUpdate(
+	ctx context.Context, post postdomain.Post, actorID uuid.UUID, replaceTags bool, resolved []tagdomain.Tag,
+) (postdomain.Post, []tagdomain.Tag, error) {
+	var tags []tagdomain.Tag
+
+	err := s.events.InTx(ctx, func(ctx context.Context) error {
+		updated, err := s.repo.Update(ctx, post)
+		if err != nil {
+			return err
+		}
+
+		post = updated
+
+		if tags, err = s.syncTags(ctx, post.UUID, replaceTags, resolved); err != nil {
+			return err
+		}
+
+		return s.events.Record(ctx, postEvent(event.PostUpdated, post, &actorID, post.UpdatedAt))
+	})
+
+	return post, tags, err
 }
 
 // editablePost loads a live post the actor may edit; non-owners without

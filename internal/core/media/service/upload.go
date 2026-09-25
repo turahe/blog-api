@@ -15,6 +15,7 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/turahe/blog-api/internal/core/event"
 	mediadomain "github.com/turahe/blog-api/internal/core/media/domain"
 	"golang.org/x/image/webp"
 )
@@ -66,7 +67,7 @@ func (s *Service) UploadImage(ctx context.Context, input mediadomain.ImageUpload
 	width, height := config.Width, config.Height
 	now := s.clock.Now()
 
-	return s.repo.Create(ctx, mediadomain.MediaAsset{
+	asset := mediadomain.MediaAsset{
 		UUID:             id,
 		StorageKey:       key,
 		OriginalFilename: sanitized,
@@ -81,7 +82,23 @@ func (s *Service) UploadImage(ctx context.Context, input mediadomain.ImageUpload
 		Tags:             append([]string(nil), input.Tags...),
 		CreatedAt:        now,
 		UpdatedAt:        now,
+	}
+
+	err = s.events.InTx(ctx, func(ctx context.Context) error {
+		created, err := s.repo.Create(ctx, asset)
+		if err != nil {
+			return err
+		}
+
+		asset = created
+
+		return s.events.Record(ctx, mediaEvent(event.MediaUploaded, asset, now))
 	})
+	if err != nil {
+		return mediadomain.MediaAsset{}, err
+	}
+
+	return asset, nil
 }
 
 // uploadLimit is the smaller positive limit of the service and the caller.

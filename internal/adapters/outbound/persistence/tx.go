@@ -19,13 +19,11 @@ func NewTransactor(db *gorm.DB) *Transactor {
 	return &Transactor{db: db}
 }
 
-// InTx runs fn in a transaction, or in the caller's transaction when ctx already has one.
+// InTx runs fn in a transaction. Inside the caller's transaction it uses a savepoint, so
+// an error in fn (such as a unique violation the caller retries) rolls back fn's writes
+// only and leaves the outer transaction usable.
 func (t *Transactor) InTx(ctx context.Context, fn func(ctx context.Context) error) error {
-	if _, ok := ctx.Value(txKey{}).(*gorm.DB); ok {
-		return fn(ctx)
-	}
-
-	return t.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+	return conn(ctx, t.db).Transaction(func(tx *gorm.DB) error {
 		return fn(context.WithValue(ctx, txKey{}, tx))
 	})
 }

@@ -14,7 +14,6 @@ const (
 	UserPasswordResetRequested = "auth.password.reset_requested"
 	MediaUploaded              = "blog.media.uploaded"
 	MediaDeleted               = "blog.media.deleted"
-	MediaTransformRequested    = "blog.media.transform_requested"
 	NotificationEmailRequested = "notification.email.requested"
 )
 

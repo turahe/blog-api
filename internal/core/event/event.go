@@ -49,6 +49,31 @@ type Transactor interface {
 	InTx(ctx context.Context, fn func(ctx context.Context) error) error
 }
 
+// Unit is what a service holds to record events atomically. The zero value runs fn
+// without a transaction and drops events.
+type Unit struct {
+	Tx       Transactor
+	Recorder Recorder
+}
+
+// InTx runs fn through Tx, or directly when Tx is nil.
+func (u Unit) InTx(ctx context.Context, fn func(ctx context.Context) error) error {
+	if u.Tx == nil {
+		return fn(ctx)
+	}
+
+	return u.Tx.InTx(ctx, fn)
+}
+
+// Record hands events to Recorder, or drops them when Recorder is nil.
+func (u Unit) Record(ctx context.Context, events ...Event) error {
+	if u.Recorder == nil || len(events) == 0 {
+		return nil
+	}
+
+	return u.Recorder.Record(ctx, events...)
+}
+
 // Discard is a Recorder that drops events, for deployments without a message broker.
 type Discard struct{}
 

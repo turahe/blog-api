@@ -15,6 +15,7 @@ import (
 	"github.com/google/uuid"
 	authdomain "github.com/turahe/blog-api/internal/core/auth/domain"
 	"github.com/turahe/blog-api/internal/core/auth/ports"
+	"github.com/turahe/blog-api/internal/core/event"
 	rbacdomain "github.com/turahe/blog-api/internal/core/rbac/domain"
 	rbacports "github.com/turahe/blog-api/internal/core/rbac/ports"
 	"github.com/turahe/blog-api/internal/core/readcache"
@@ -53,6 +54,7 @@ type AuthService struct {
 	cfg      Config
 	mfa      twoFactorDeps
 	oauth    oauthDeps
+	events   event.Unit
 
 	dummyOnce sync.Once
 	dummyHash string
@@ -62,6 +64,12 @@ type AuthService struct {
 // Tracker errors never block a login: lockout fails open like rate limiting.
 func (s *AuthService) WithLoginAttempts(attempts ports.LoginAttempts) *AuthService {
 	s.attempts = attempts
+	return s
+}
+
+// WithEvents records account events in the same transaction as each write.
+func (s *AuthService) WithEvents(events event.Unit) *AuthService {
+	s.events = events
 	return s
 }
 
@@ -421,15 +429,23 @@ func (s *AuthService) issuePasswordReset(ctx context.Context, user userdomain.Us
 	}
 
 	now := s.clock.Now()
-	if err := s.resets.RevokePending(ctx, user.UUID, authdomain.PurposePasswordReset, now); err != nil {
-		return time.Time{}, err
-	}
-
 	token := authdomain.PasswordResetToken{
 		UUID: s.ids.New(), UserUUID: user.UUID, JTI: jti, TokenHash: hash,
 		Purpose: authdomain.PurposePasswordReset, ExpiresAt: now.Add(s.cfg.ResetTokenTTL), CreatedAt: now,
 	}
-	if err := s.resets.Create(ctx, token); err != nil {
+
+	err = s.events.InTx(ctx, func(ctx context.Context) error {
+		if err := s.resets.RevokePending(ctx, user.UUID, authdomain.PurposePasswordReset, now); err != nil {
+			return err
+		}
+
+		if err := s.resets.Create(ctx, token); err != nil {
+			return err
+		}
+
+		return s.events.Record(ctx, passwordResetRequestedEvent(user, token))
+	})
+	if err != nil {
 		return time.Time{}, err
 	}
 

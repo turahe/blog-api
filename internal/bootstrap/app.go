@@ -34,6 +34,7 @@ import (
 	categoryservice "github.com/turahe/blog-api/internal/core/category/service"
 	commentports "github.com/turahe/blog-api/internal/core/comment/ports"
 	commentservice "github.com/turahe/blog-api/internal/core/comment/service"
+	"github.com/turahe/blog-api/internal/core/event"
 	healthports "github.com/turahe/blog-api/internal/core/health/ports"
 	healthservice "github.com/turahe/blog-api/internal/core/health/service"
 	mediaports "github.com/turahe/blog-api/internal/core/media/ports"
@@ -133,8 +134,11 @@ func NewRuntime(ctx context.Context, cfg config.Config, logger *slog.Logger, ver
 		return fail(err)
 	}
 
+	events := newEvents(cfg, db)
+	auth.WithEvents(events)
+
 	inbox := newInbox(cfg, db, clock, logger)
-	posts := postservice.New(postsRepo, ids, clock).WithCache(cacheOrNil).WithNotifier(inbox)
+	posts := postservice.New(postsRepo, ids, clock).WithCache(cacheOrNil).WithNotifier(inbox).WithEvents(events)
 	userSvc := userservice.New(users)
 
 	categories := categoryservice.New(categoriesRepo, ids, clock).WithCache(cacheOrNil)
@@ -145,10 +149,10 @@ func NewRuntime(ctx context.Context, cfg config.Config, logger *slog.Logger, ver
 	tags := tagservice.New(tagsRepo, ids, clock).WithCache(cacheOrNil)
 	posts.WithTags(tags)
 
-	comments := newCommentService(cfg, db, ids, clock, inbox)
+	comments := newCommentService(cfg, db, ids, clock, inbox, events)
 	hub, notificationBus := newNotificationStream(ctx, cfg, inbox, logger)
 
-	media, err := newMediaService(ctx, cfg, db, ids, clock, posts, cacheOrNil)
+	media, err := newMediaService(ctx, cfg, db, ids, clock, posts, cacheOrNil, events)
 	if err != nil {
 		return fail(err)
 	}
@@ -270,6 +274,7 @@ func newMediaService(
 	clock system.Clock,
 	posts *postservice.PostService,
 	readCache readcache.Cache,
+	events event.Unit,
 ) (mediaports.Service, error) {
 	if !cfg.MediaEnabled() {
 		return nil, nil
@@ -292,7 +297,7 @@ func newMediaService(
 		cfg.MediaAllowedMIMETypes,
 		cfg.MediaMaxUploadBytes,
 		cfg.MediaPresignTTL,
-	).WithCache(readCache), nil
+	).WithCache(readCache).WithEvents(events), nil
 }
 
 // newProfileService wires profiles; avatars are enabled (non-zero max bytes) only with media storage.
@@ -317,6 +322,7 @@ func newCommentService(
 	ids system.UUIDGenerator,
 	clock system.Clock,
 	notifier commentports.Notifier,
+	events event.Unit,
 ) *commentservice.Service {
 	commentCfg := commentservice.Config{
 		GuestEnabled:    cfg.CommentsGuestEnabled,
@@ -325,12 +331,25 @@ func newCommentService(
 		FlagThreshold:   cfg.CommentsFlagThreshold,
 		Renderer:        markdown.New(),
 		Notifier:        notifier,
+		Events:          events,
 	}
 	if cfg.TurnstileSecretKey != "" {
 		commentCfg.Captcha = captcha.NewTurnstile(cfg.TurnstileSecretKey, "", nil)
 	}
 
 	return commentservice.New(persistence.NewCommentRepository(db.GORM), ids, clock, commentCfg)
+}
+
+// newEvents runs service writes in transactions and, when a message broker is configured,
+// stores their domain events in the outbox for app worker to relay. Without a broker the
+// events are dropped, so the outbox does not grow with nothing to drain it.
+func newEvents(cfg config.Config, db *database.Database) event.Unit {
+	events := event.Unit{Tx: persistence.NewTransactor(db.GORM), Recorder: event.Discard{}}
+	if cfg.MessagingEnabled() {
+		events.Recorder = persistence.NewOutboxRepository(db.GORM)
+	}
+
+	return events
 }
 
 // newInbox stores in-app notifications for comment replies, moderation, and publications.

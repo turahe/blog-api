@@ -74,13 +74,14 @@ channels:
       operationId: publishCommentCreated
     message:
       $ref: '#/components/messages/CommentCreated'
-  blog.comment.approved:
+  blog.comment.moderated:
+    description: A moderator approved, rejected, marked as spam, restored, or hard-deleted a comment.
     subscribe:
-      operationId: onCommentApproved
+      operationId: onCommentModerated
     publish:
-      operationId: publishCommentApproved
+      operationId: publishCommentModerated
     message:
-      $ref: '#/components/messages/CommentApproved'
+      $ref: '#/components/messages/CommentModerated'
   blog.auth.logged_in:
     subscribe:
       operationId: onAuthLoggedIn
@@ -405,7 +406,7 @@ channels:
     message:
       $ref: '#/components/messages/UserPasswordAdminResetTriggered'
   auth.password.reset_requested:
-    description: Public forgot-password attempt (timing-safe; does not imply user existence).
+    description: A password reset token was issued (forgot-password or admin reset). Attempts for unknown or inactive accounts record nothing.
     subscribe:
       operationId: onAuthPasswordResetRequested
     publish:
@@ -588,7 +589,7 @@ components:
       - $ref: '#/components/messageTraits/EventEnvelope'
       payload:
         $ref: '#/components/schemas/CommentEventPayload'
-    CommentApproved:
+    CommentModerated:
       traits:
       - $ref: '#/components/messageTraits/EventEnvelope'
       payload:
@@ -1254,9 +1255,17 @@ components:
           type: string
           enum:
           - draft
-          - review
+          - scheduled
           - published
           - archived
+        slug:
+          type: string
+        version:
+          type: integer
+        published_at:
+          type: string
+          format: date-time
+          nullable: true
         category_id:
           type: string
           format: uuid
@@ -1275,6 +1284,7 @@ components:
       required:
       - comment_id
       - post_id
+      - status
       properties:
         comment_id:
           type: string
@@ -1286,8 +1296,21 @@ components:
           type: string
           format: uuid
           nullable: true
+        author_id:
+          type: string
+          format: uuid
+          nullable: true
+          description: Null for guest comments.
         status:
           type: string
+          description: Status after the change.
+        action:
+          type: string
+          enum: [approve, reject, spam, restore, hard_delete]
+          description: Moderation events only.
+        from_status:
+          type: string
+          description: Moderation events only.
     UserEventPayload:
       type: object
       required:
@@ -1296,9 +1319,12 @@ components:
         user_id:
           type: string
           format: uuid
-        email:
+        username:
           type: string
-          format: email
+        roles:
+          type: array
+          items:
+            type: string
         status:
           type: string
         avatar_id:
@@ -1547,55 +1573,21 @@ components:
           nullable: true
     AuthPasswordResetRequestedPayload:
       type: object
+      description: Envelope fields (event id, time, correlation id) travel in the message headers.
       required:
-      - event_id
-      - event_name
-      - occurred_at
-      - aggregate_id
-      - actor_id
+      - user_id
       - status
-      - attempted_email_hash
+      - expires_at
       properties:
-        event_id:
+        user_id:
           type: string
           format: uuid
-        event_name:
-          const: auth.password.reset_requested
-        occurred_at:
-          type: string
-          format: date-time
-        aggregate_id:
-          type: string
-          format: uuid
-        actor_id:
-          type: string
-          format: uuid
-          nullable: true
-          description: System or anonymous actor when null.
-        impersonator_id:
-          type: string
-          format: uuid
-          nullable: true
-        impersonation_session_id:
-          type: string
-          format: uuid
-          nullable: true
-        request_id:
-          type: string
-          nullable: true
         status:
           type: string
-          const: attempted
-        attempted_email_hash:
+          const: issued
+        expires_at:
           type: string
-          description: Peppered HMAC of the attempted email address; never plain.
-        issued_ip_truncated:
-          type: string
-          nullable: true
-        matched_user:
-          type: boolean
-          nullable: true
-          description: Only used internally. Public-facing responses MUST be timing-safe.
+          format: date-time
     UserPasswordResetCompletedPayload:
       type: object
       required:

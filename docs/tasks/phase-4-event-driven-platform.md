@@ -9,9 +9,9 @@ Index: [README.md](./README.md).
 ## Status
 
 **Partial** — the multi-broker Watermill layer and the `app worker` command exist. The
-transactional outbox is in place: services can record events inside a unit of work, and the
-worker relays them with retries, parking, pruning, and metrics. No service records domain
-events yet, and the worker's only consumer is a heartbeat handler.
+transactional outbox is in place: post, comment, account, and media writes record domain
+events in the same transaction, and the worker relays them with retries, parking, pruning,
+and metrics. The worker's only consumer is still a heartbeat handler.
 
 ## Epic: messaging transports
 
@@ -35,13 +35,16 @@ Design: [2026-07-30-messaging-brokers-design.md](../superpowers/specs/2026-07-30
 ## Epic: domain event publishing
 
 - [x] `outbox_events` table from migration `00001`
-- [ ] Event catalogue matching the channels in [asyncapi.yaml](../architecture/asyncapi.yaml)
+- [x] Event catalogue matching the channels in [asyncapi.yaml](../architecture/asyncapi.yaml)
+      (`internal/core/event/types.go`; emitted list in [events.md](../backend/events.md#emitted-today))
 - [x] Outbound event-publisher port in the core layer with no Watermill import (`internal/core/event`)
-- [ ] Publish `post.published` from the post service
-- [ ] Publish `post.created` and `post.updated`
-- [ ] Publish `comment.created` and `comment.moderated` (needs Phase 3)
-- [ ] Publish `user.registered` and `user.password_reset_requested`
-- [ ] Publish `media.uploaded` and `media.transform_requested` (needs Phase 2 media)
+- [x] Publish `post.published` from the post service (and `blog.post.archived`)
+- [x] Publish `post.created` and `post.updated`
+- [x] Publish `comment.created` and `comment.moderated` (needs Phase 3)
+- [x] Publish `user.registered` and `user.password_reset_requested` (`blog.user.created` on admin
+      create, since there is no self-registration; `auth.password.reset_requested` when a token is issued)
+- [x] Publish `media.uploaded` and `media.transform_requested` (needs Phase 2 media) — `blog.media.uploaded`
+      and `blog.media.deleted`; transforms are on demand, so there is no transform request event
 - [ ] Keep [asyncapi.yaml](../architecture/asyncapi.yaml) authoritative and validate it in CI
 
 ## Epic: durable outbox
@@ -64,7 +67,8 @@ Design: [2026-07-30-messaging-brokers-design.md](../superpowers/specs/2026-07-30
 - [ ] Consumer middleware: correlation ID propagation, panic recovery, retry, and poison queue
 - [ ] Scheduled jobs runner for pruning, digests, and retention tasks — see [jobs.md](../backend/jobs.md)
 - [ ] Single-flight or leader election so scheduled jobs do not double-run across replicas
-- [ ] Notification fan-out consumer feeding the Phase 3 SSE streams
+- [x] Notification fan-out consumer feeding the Phase 3 SSE streams (each API process subscribes to
+      `notifications.created` through `messaging.OpenBroadcast`)
 - [ ] Email dispatch consumer replacing inline mail sends
 
 ## Epic: transformed media cache

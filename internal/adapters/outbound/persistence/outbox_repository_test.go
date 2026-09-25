@@ -10,7 +10,9 @@ import (
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/require"
 	"github.com/turahe/blog-api/internal/core/event"
+	postservice "github.com/turahe/blog-api/internal/core/post/service"
 	"github.com/turahe/blog-api/internal/platform/logging"
+	"github.com/turahe/blog-api/internal/platform/system"
 	"gorm.io/gorm"
 )
 
@@ -162,4 +164,51 @@ func TestOutboxRelayBatchOutcomes(t *testing.T) {
 	require.NoError(t, err)
 	require.EqualValues(t, 1, pruned)
 	require.Zero(t, outboxCount(t, tx, "uuid = ?", ok.ID))
+}
+
+func TestTransactorNestedFailureKeepsOuterTransactionUsable(t *testing.T) {
+	t.Parallel()
+
+	tx := integrationTx(t)
+	transactor := NewTransactor(tx)
+	outbox := NewOutboxRepository(tx)
+	postID := insertPublishedPost(t, tx)
+
+	var slug string
+	require.NoError(t, tx.Raw(`SELECT slug FROM posts WHERE uuid = ?`, postID).Scan(&slug).Error)
+
+	committed := event.New(event.PostCreated, event.AggregatePost, uuid.New(), nil, time.Now(), map[string]string{})
+
+	require.NoError(t, transactor.InTx(t.Context(), func(ctx context.Context) error {
+		conflict := transactor.InTx(ctx, func(ctx context.Context) error {
+			return conn(ctx, tx).Exec(`
+				INSERT INTO posts (author_id, title, slug, content, status, version)
+				SELECT author_id, 'dup', slug, '', 'draft', 1 FROM posts WHERE uuid = ?`, postID).Error
+		})
+		require.Error(t, conflict, "duplicate slug")
+
+		return outbox.Record(ctx, committed)
+	}))
+
+	require.EqualValues(t, 1, outboxCount(t, tx, "uuid = ?", committed.ID))
+}
+
+func TestPostServiceStoresEventsInOutbox(t *testing.T) {
+	t.Parallel()
+
+	tx := integrationTx(t)
+	author := insertUser(t, tx)
+	events := event.Unit{Tx: NewTransactor(tx), Recorder: NewOutboxRepository(tx)}
+	posts := postservice.New(NewPostRepository(tx), system.UUIDGenerator{}, system.Clock{}).WithEvents(events)
+
+	post, _, err := posts.CreateDraft(t.Context(), author, "Outbox post", "", "", "body", nil, nil)
+	require.NoError(t, err)
+
+	_, err = posts.PublishBy(t.Context(), author, post.UUID)
+	require.NoError(t, err)
+
+	var topics []string
+	require.NoError(t, tx.Raw(`SELECT topic FROM outbox_events WHERE aggregate_id = ? ORDER BY id`, post.UUID).
+		Scan(&topics).Error)
+	require.Equal(t, []string{event.PostCreated, event.PostPublished}, topics)
 }

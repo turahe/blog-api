@@ -62,7 +62,16 @@ func (s *PostService) transition(ctx context.Context, id uuid.UUID, transition p
 	post.UpdatedAt = now
 	post.Version++
 
-	post, err = s.repo.Update(ctx, post)
+	err = s.events.InTx(ctx, func(ctx context.Context) error {
+		updated, err := s.repo.Update(ctx, post)
+		if err != nil {
+			return err
+		}
+
+		post = updated
+
+		return s.events.Record(ctx, postEvent(transitionEvent(next), post, actorID, now))
+	})
 	if err != nil {
 		return postdomain.Post{}, err
 	}
@@ -113,7 +122,7 @@ func (s *PostService) Restore(ctx context.Context, id uuid.UUID) (postdomain.Pos
 	post.UpdatedAt = now
 	post.Version++
 
-	post, err = s.withFreeSlug(ctx, post.Slug, func(free string) (postdomain.Post, error) {
+	post, err = s.withFreeSlug(ctx, post.Slug, func(ctx context.Context, free string) (postdomain.Post, error) {
 		post.Slug = free
 		return s.repo.Restore(ctx, post)
 	})
@@ -140,8 +149,11 @@ func (s *PostService) livePost(ctx context.Context, id uuid.UUID) (postdomain.Po
 }
 
 // withFreeSlug runs write with the first free slug derived from base, retrying with a
-// fresh choice when a concurrent write claims it first.
-func (s *PostService) withFreeSlug(ctx context.Context, base string, write func(slug string) (postdomain.Post, error)) (postdomain.Post, error) {
+// fresh choice when a concurrent write claims it first. Each attempt runs in its own
+// (nested) transaction, so a conflict inside the caller's transaction can be retried.
+func (s *PostService) withFreeSlug(
+	ctx context.Context, base string, write func(ctx context.Context, slug string) (postdomain.Post, error),
+) (postdomain.Post, error) {
 	var err error
 
 	for range slugAttempts {
@@ -154,7 +166,13 @@ func (s *PostService) withFreeSlug(ctx context.Context, base string, write func(
 
 		var post postdomain.Post
 
-		post, err = write(slug)
+		err = s.events.InTx(ctx, func(ctx context.Context) error {
+			var werr error
+
+			post, werr = write(ctx, slug)
+
+			return werr
+		})
 		if !isSlugConflict(err) {
 			return post, err
 		}

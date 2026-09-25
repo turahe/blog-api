@@ -29,7 +29,7 @@ Platform factory: `internal/platform/messaging`. Core domain code must not impor
 - `blog.post.published`
 - `blog.post.archived`
 - `blog.comment.created`
-- `blog.comment.approved`
+- `blog.comment.moderated`
 - `blog.auth.logged_in`
 - `blog.user.created`
 - `blog.user.role_assigned`
@@ -65,6 +65,26 @@ Platform factory: `internal/platform/messaging`. Core domain code must not impor
 - `user.activity.erasure_requested` — GDPR/CCPA erasure; scope and retention window; erase_marker uuid
 - `user.session.invalidated_family` — emitted when password/email/avatar-security changes invalidate all refresh tokens
 - `user.consent.marketing_granted` / `user.consent.marketing_withdrawn` — mirror ConsentService events when marketing_consent changes via profile endpoint; drives email unsubscribe lists
+
+### Emitted today
+
+Recorded in the same transaction as the write (only when `MESSAGE_BROKER` is set):
+
+| Event | Recorded by | Actor |
+| --- | --- | --- |
+| `blog.post.created` | Create draft | Author |
+| `blog.post.updated` | Update; unpublish (back to draft) | Editor; none |
+| `blog.post.published` | Publish | Admin who published, when known |
+| `blog.post.archived` | Archive | None |
+| `blog.comment.created` | Create comment (any initial status, including `pending` and `spam`) | Author; none for guests |
+| `blog.comment.moderated` | Moderate, bulk moderate (one event per comment), hard delete | Moderator |
+| `blog.user.created` | Admin creates a user | None |
+| `auth.password.reset_requested` | A reset token is issued (forgot password or admin reset) | None |
+| `blog.media.uploaded` | Direct upload, or completing a presigned upload | Uploader |
+| `blog.media.deleted` | Delete media | Uploader of the asset |
+
+Payloads carry identifiers and state, never email addresses or content. The rest of the
+catalogue above is planned.
 
 ## Event Consumers
 

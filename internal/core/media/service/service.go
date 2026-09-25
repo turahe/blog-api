@@ -11,6 +11,7 @@ import (
 	"unicode"
 
 	"github.com/google/uuid"
+	"github.com/turahe/blog-api/internal/core/event"
 	mediadomain "github.com/turahe/blog-api/internal/core/media/domain"
 	"github.com/turahe/blog-api/internal/core/media/ports"
 	"github.com/turahe/blog-api/internal/core/readcache"
@@ -48,6 +49,7 @@ type Service struct {
 	maxBytes   int64
 	presignTTL time.Duration
 	cache      readcache.Cache
+	events     event.Unit
 }
 
 // New returns a Service enforcing the allowed MIME types and size limit.
@@ -81,6 +83,12 @@ func New(
 		maxBytes:   maxBytes,
 		presignTTL: presignTTL,
 	}
+}
+
+// WithEvents records media events in the same transaction as each write.
+func (s *Service) WithEvents(events event.Unit) *Service {
+	s.events = events
+	return s
 }
 
 // WithCache lets Delete invalidate cached post and category reads that referenced the asset.
@@ -180,7 +188,16 @@ func (s *Service) CompleteUpload(ctx context.Context, id uuid.UUID) (mediadomain
 	asset.ContentType = contentType
 	asset.UpdatedAt = s.clock.Now()
 
-	asset, err = s.repo.Update(ctx, asset)
+	err = s.events.InTx(ctx, func(ctx context.Context) error {
+		updated, err := s.repo.Update(ctx, asset)
+		if err != nil {
+			return err
+		}
+
+		asset = updated
+
+		return s.events.Record(ctx, mediaEvent(event.MediaUploaded, asset, asset.UpdatedAt))
+	})
 	if err != nil {
 		return mediadomain.MediaAsset{}, err
 	}
@@ -268,18 +285,31 @@ func (s *Service) GetReady(ctx context.Context, id uuid.UUID) (mediadomain.Media
 
 // Delete clears references to the asset from users, categories, and posts, then soft-deletes it.
 func (s *Service) Delete(ctx context.Context, id uuid.UUID) error {
-	if _, err := s.Get(ctx, id); err != nil {
+	asset, err := s.Get(ctx, id)
+	if err != nil {
 		return err
 	}
 
 	now := s.clock.Now()
-	if err := s.repo.ClearEntityReferences(ctx, id); err != nil {
+
+	err = s.events.InTx(ctx, func(ctx context.Context) error {
+		if err := s.repo.ClearEntityReferences(ctx, id); err != nil {
+			return err
+		}
+
+		if err := s.repo.SoftDelete(ctx, id, now); err != nil {
+			return err
+		}
+
+		return s.events.Record(ctx, mediaEvent(event.MediaDeleted, asset, now))
+	})
+	if err != nil {
 		return err
 	}
 
 	readcache.Invalidate(ctx, s.cache, readcache.Posts, readcache.Categories, readcache.Users)
 
-	return s.repo.SoftDelete(ctx, id, now)
+	return nil
 }
 
 // UpdateTags replaces the asset's tags.

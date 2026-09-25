@@ -97,7 +97,7 @@ func (s *Service) Moderate(ctx context.Context, in ModerateInput) (commentdomain
 		return commentdomain.Comment{}, err
 	}
 
-	if err := s.repo.ApplyModerations(ctx, []commentdomain.Moderation{change}); err != nil {
+	if err := s.applyModerations(ctx, []commentdomain.Moderation{change}); err != nil {
 		return commentdomain.Comment{}, err
 	}
 
@@ -145,7 +145,7 @@ func (s *Service) BulkModerate(ctx context.Context, in BulkModerateInput) (int, 
 		return 0, err
 	}
 
-	if err := s.repo.ApplyModerations(ctx, changes); err != nil {
+	if err := s.applyModerations(ctx, changes); err != nil {
 		return 0, err
 	}
 
@@ -211,7 +211,7 @@ func (s *Service) HardDelete(ctx context.Context, moderatorID, id uuid.UUID, rea
 		return false, err
 	}
 
-	return s.repo.HardDelete(ctx, id, commentdomain.ModerationEntry{
+	entry := commentdomain.ModerationEntry{
 		UUID:          s.ids.New(),
 		CommentUUID:   comment.UUID,
 		ModeratorUUID: &moderatorID,
@@ -221,6 +221,30 @@ func (s *Service) HardDelete(ctx context.Context, moderatorID, id uuid.UUID, rea
 		Reason:        reason,
 		Before:        comment.Snapshot(),
 		CreatedAt:     s.clock.Now(),
+	}
+
+	var scrubbed bool
+
+	err = s.cfg.Events.InTx(ctx, func(ctx context.Context) error {
+		var err error
+		if scrubbed, err = s.repo.HardDelete(ctx, id, entry); err != nil {
+			return err
+		}
+
+		return s.cfg.Events.Record(ctx, commentModeratedEvent(comment, entry, entry.CreatedAt))
+	})
+
+	return scrubbed, err
+}
+
+// applyModerations stores changes and their events together.
+func (s *Service) applyModerations(ctx context.Context, changes []commentdomain.Moderation) error {
+	return s.cfg.Events.InTx(ctx, func(ctx context.Context) error {
+		if err := s.repo.ApplyModerations(ctx, changes); err != nil {
+			return err
+		}
+
+		return s.cfg.Events.Record(ctx, moderationEvents(changes)...)
 	})
 }
 

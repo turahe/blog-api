@@ -55,9 +55,20 @@ func (s *AuthService) AdminCreateUser(ctx context.Context, in authdomain.NewUser
 
 	now := s.clock.Now()
 
-	user, err := s.users.Create(ctx, userdomain.User{
-		UUID: s.ids.New(), Email: in.Email, Username: in.Username, FullName: in.FullName,
-		PasswordHash: hash, Status: userdomain.StatusActive, CreatedAt: now, UpdatedAt: now,
+	var user userdomain.User
+
+	err = s.events.InTx(ctx, func(ctx context.Context) error {
+		var err error
+
+		user, err = s.users.Create(ctx, userdomain.User{
+			UUID: s.ids.New(), Email: in.Email, Username: in.Username, FullName: in.FullName,
+			PasswordHash: hash, Status: userdomain.StatusActive, CreatedAt: now, UpdatedAt: now,
+		})
+		if err != nil {
+			return err
+		}
+
+		return s.events.Record(ctx, userCreatedEvent(user, in.Roles))
 	})
 	if err != nil {
 		return userdomain.User{}, err

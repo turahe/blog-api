@@ -1,5 +1,23 @@
 # Changelog
 
+## 2026-09-25 — Domain events
+
+### Added
+
+- Services record domain events in the same transaction as the write (when `MESSAGE_BROKER`
+  is set): `blog.post.created`, `blog.post.updated`, `blog.post.published`,
+  `blog.post.archived`, `blog.comment.created`, `blog.comment.moderated`, `blog.user.created`,
+  `auth.password.reset_requested`, `blog.media.uploaded`, and `blog.media.deleted`. See
+  [events.md](docs/backend/events.md#emitted-today).
+
+### Changed
+
+- Post, comment, account, and media writes that touch several rows (for example media delete
+  clearing references, or a post and its tags) now commit or roll back together.
+- Nested transactions use savepoints, so a slug conflict retried inside a transaction works.
+- AsyncAPI: `blog.comment.approved` is replaced by `blog.comment.moderated`; the comment,
+  user, post, and password-reset payloads match what is emitted (no email addresses).
+
 ## 2026-09-25 — Transactional outbox and relay
 
 ### Added

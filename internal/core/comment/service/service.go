@@ -15,6 +15,7 @@ import (
 	"github.com/google/uuid"
 	commentdomain "github.com/turahe/blog-api/internal/core/comment/domain"
 	"github.com/turahe/blog-api/internal/core/comment/ports"
+	"github.com/turahe/blog-api/internal/core/event"
 )
 
 const (
@@ -49,6 +50,8 @@ type Config struct {
 	Captcha ports.CaptchaVerifier
 	// Notifier receives reply and moderation notices; nil sends none.
 	Notifier ports.Notifier
+	// Events records comment events in the same transaction as each write.
+	Events event.Unit
 }
 
 // Service implements comment use cases.
@@ -152,7 +155,7 @@ func (s *Service) Create(ctx context.Context, in CreateInput) (commentdomain.Com
 	comment.CreatedAt = now
 	comment.UpdatedAt = now
 
-	created, err := s.repo.Create(ctx, comment)
+	created, err := s.store(ctx, comment)
 	if err != nil {
 		return commentdomain.Comment{}, err
 	}
@@ -162,6 +165,22 @@ func (s *Service) Create(ctx context.Context, in CreateInput) (commentdomain.Com
 	}
 
 	return created, nil
+}
+
+// store creates comment and records its event in one transaction.
+func (s *Service) store(ctx context.Context, comment commentdomain.Comment) (commentdomain.Comment, error) {
+	var created commentdomain.Comment
+
+	err := s.cfg.Events.InTx(ctx, func(ctx context.Context) error {
+		var err error
+		if created, err = s.repo.Create(ctx, comment); err != nil {
+			return err
+		}
+
+		return s.cfg.Events.Record(ctx, commentCreatedEvent(created))
+	})
+
+	return created, err
 }
 
 // ListForPost lists public comments on a public post: roots by default, or the direct
