@@ -395,3 +395,40 @@ func TestRefreshTreatsMissingUserAsInactive(t *testing.T) {
 	_, err := newService(users, sessions, resets, nil).Refresh(context.Background(), "orphan", "ua", "127.0.0.1")
 	require.ErrorIs(t, err, authdomain.ErrUserInactive)
 }
+
+func TestRefreshExpiredSessionIsUnauthorized(t *testing.T) {
+	t.Parallel()
+
+	f := newTwoFactorFixture(t)
+
+	res, err := f.svc.Login(t.Context(), tfEmail, tfPassword, "ua", "127.0.0.1", false)
+	require.NoError(t, err)
+
+	f.clock.t = f.clock.t.Add(7*24*time.Hour + time.Second)
+
+	_, err = f.svc.Refresh(t.Context(), res.Tokens.RefreshToken, "ua", "127.0.0.1")
+	require.ErrorIs(t, err, authdomain.ErrSessionExpired)
+
+	code, _, status := authservice.MapError(err)
+	require.Equal(t, "unauthorized", code, "not the password-reset expiry code")
+	require.Equal(t, 401, status)
+}
+
+func TestRefreshKeepsShortSessionLifetime(t *testing.T) {
+	t.Parallel()
+
+	f := newTwoFactorFixture(t)
+
+	res, err := f.svc.Login(t.Context(), tfEmail, tfPassword, "ua", "127.0.0.1", false)
+	require.NoError(t, err)
+
+	f.clock.t = f.clock.t.Add(6 * 24 * time.Hour)
+
+	pair, err := f.svc.Refresh(t.Context(), res.Tokens.RefreshToken, "ua", "127.0.0.1")
+	require.NoError(t, err)
+
+	f.clock.t = f.clock.t.Add(7*24*time.Hour + time.Second)
+
+	_, err = f.svc.Refresh(t.Context(), pair.RefreshToken, "ua", "127.0.0.1")
+	require.ErrorIs(t, err, authdomain.ErrSessionExpired, "rotation keeps the 7-day lifetime")
+}

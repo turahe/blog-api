@@ -71,7 +71,7 @@ Do not use `0.0.0.0/0`, `*`, or arbitrary client-controlled addresses in
 | `APP_JWT_PUBLIC_KEY` / `APP_JWT_PUBLIC_KEY_PATH` | none | Yes | Matching P-256 public key PEM for ES256 verification. Path wins when both are set. |
 | `APP_JWT_ISSUER` | `blog-api` | No | JWT issuer claim. |
 | `APP_ACCESS_TOKEN_TTL` | `15m` | No | Access-token lifetime. |
-| `APP_REFRESH_TOKEN_TTL` | `720h` | No | Refresh-session lifetime. |
+| `APP_REFRESH_TOKEN_TTL` | `720h` | No | Refresh-session lifetime for `"remember": true` logins, and the ceiling for all sessions. Other logins get `min(168h, APP_REFRESH_TOKEN_TTL)`. Each rotation renews the session for the lifetime it was issued with. |
 | `AUTH_LOGIN_PER_MINUTE` | `10` | No | Per-IP request budget for `POST /api/v1/auth/login`; `0` disables it. |
 | `AUTH_LOGIN_MAX_FAILURES` | `5` | No | Failed logins per email (known or unknown) before a lockout; `0` disables lockout. |
 | `AUTH_LOGIN_LOCKOUT` | `15m` | No | Lockout length, and the window in which failures are counted. |

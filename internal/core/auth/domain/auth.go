@@ -15,6 +15,7 @@ var (
 	ErrInvalidToken       = errors.New("invalid token")
 	ErrTokenExpired       = errors.New("token expired")
 	ErrTokenRevoked       = errors.New("token revoked")
+	ErrSessionExpired     = errors.New("refresh session expired")
 	ErrTokenUsed          = errors.New("token already used")
 	ErrValidation         = errors.New("validation error")
 	ErrPasswordStrength   = errors.New("password strength")

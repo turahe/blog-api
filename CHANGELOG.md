@@ -1,5 +1,20 @@
 # Changelog
 
+## 2026-09-25 — Auth cycle integration tests
+
+### Added
+
+- End-to-end tests of login, refresh, logout, and expired, reused and unknown refresh tokens
+  through the HTTP router, against PostgreSQL with ES256 tokens and Argon2id hashing
+
+### Fixed
+
+- An expired refresh token answered `400 auth.password.reset_token_expired`. It now answers
+  `401 unauthorized` like other dead refresh tokens (new `ErrSessionExpired`)
+- Refreshing a 7-day (non-"remember me") session re-issued it for `APP_REFRESH_TOKEN_TTL`
+  (30 days by default). Rotation now keeps the lifetime the session was issued with, and
+  `APP_REFRESH_TOKEN_TTL` caps the 7-day lifetime
+
 ## 2026-09-25 — Route and Swagger parity test
 
 ### Added

@@ -26,6 +26,9 @@ type Config struct {
 	EmailChangeTTL time.Duration
 }
 
+// shortSessionTTL is the refresh session lifetime of a login without "remember me".
+const shortSessionTTL = 7 * 24 * time.Hour
+
 // AuthService implements ports.Service.
 type AuthService struct {
 	users    ports.UserRepository
@@ -199,7 +202,7 @@ func (s *AuthService) completeLogin(ctx context.Context, user userdomain.User, u
 
 	ttl := s.cfg.RefreshTTL
 	if !remember {
-		ttl = 7 * 24 * time.Hour
+		ttl = min(shortSessionTTL, s.cfg.RefreshTTL)
 	}
 
 	return s.issuePair(ctx, user.UUID, user.Email, user.Username, userAgent, ip, ttl)
@@ -266,7 +269,7 @@ func (s *AuthService) Refresh(ctx context.Context, refreshToken, userAgent, ip s
 	}
 
 	if !session.ExpiresAt.After(now) {
-		return authdomain.TokenPair{}, authdomain.ErrTokenExpired
+		return authdomain.TokenPair{}, authdomain.ErrSessionExpired
 	}
 
 	user, err := s.activeUser(ctx, session.UserUUID)
@@ -284,7 +287,7 @@ func (s *AuthService) Refresh(ctx context.Context, refreshToken, userAgent, ip s
 		UserUUID:  user.UUID,
 		FamilyID:  session.FamilyID,
 		TokenHash: newHash,
-		ExpiresAt: now.Add(s.cfg.RefreshTTL),
+		ExpiresAt: now.Add(sessionLifetime(session, s.cfg.RefreshTTL)),
 		UserAgent: userAgent,
 		IPAddress: ip,
 		CreatedAt: now,
@@ -315,6 +318,17 @@ func (s *AuthService) Refresh(ctx context.Context, refreshToken, userAgent, ip s
 		TokenType:    "Bearer",
 		ExpiresIn:    int64(s.cfg.AccessTTL.Seconds()),
 	}, nil
+}
+
+// sessionLifetime is the lifetime session was issued with, so rotation keeps a
+// short (non-remember) session short. It never exceeds refreshTTL.
+func sessionLifetime(session authdomain.RefreshSession, refreshTTL time.Duration) time.Duration {
+	lifetime := session.ExpiresAt.Sub(session.CreatedAt)
+	if lifetime <= 0 || lifetime > refreshTTL {
+		return refreshTTL
+	}
+
+	return lifetime
 }
 
 // Logout revokes the user's refresh session; unknown tokens are ignored.
@@ -665,6 +679,7 @@ var errorMappings = []errorMapping{
 	{authdomain.ErrTokenExpired, "auth.password.reset_token_expired", "Reset token expired", 400},
 	{authdomain.ErrInvalidToken, codeUnauthorized, "Invalid or expired token", 401},
 	{authdomain.ErrTokenRevoked, codeUnauthorized, "Invalid or expired token", 401},
+	{authdomain.ErrSessionExpired, codeUnauthorized, "Invalid or expired token", 401},
 }
 
 // MapError maps auth errors to an error code, message, and HTTP status.

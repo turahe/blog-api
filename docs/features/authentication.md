@@ -23,6 +23,18 @@
 - hash backup codes
 - rate limit login and challenge endpoints
 
+## Implemented: sessions
+
+- Login issues an ES256 access token (`APP_ACCESS_TOKEN_TTL`, 15 minutes by default) and an opaque refresh token. The refresh session
+  lasts `APP_REFRESH_TOKEN_TTL` with `"remember": true`, otherwise 7 days (capped by the TTL).
+- `POST /api/v1/auth/refresh` rotates the token and renews the session for the lifetime it was
+  issued with, so rotation never turns a 7-day session into a 30-day one.
+- Reusing a rotated token revokes the whole rotation family. Expired, revoked, reused and unknown
+  refresh tokens all answer `401 unauthorized`.
+- `POST /api/v1/auth/logout` (bearer required) revokes the given refresh session. Access tokens
+  stay valid until they expire.
+- Covered end to end against PostgreSQL by `internal/bootstrap/auth_integration_test.go`.
+
 ## Implemented: admin login
 
 `POST /api/v1/admin/auth/login` is the regular login, restricted to accounts holding

@@ -114,8 +114,10 @@ Specs: [user-management.md](../features/user-management.md),
 - [x] Route smoke tests (`make routes-check`) for `routes.Register*` auth ordering, route metadata, and 501 stubs
 - [x] Test that every mounted Gin route has a matching operation in `docs/swagger.json` and vice versa
       (`routes/swagger_parity_test.go`; 501 stubs are excluded until they get a handler)
-- [ ] Integration tests for the full login / refresh / logout cycle against a real database
-- [ ] Negative-path tests for expired and reused refresh tokens
+- [x] Integration tests for the full login / refresh / logout cycle against a real database
+      (`internal/bootstrap/auth_integration_test.go`, real repositories, ES256 and Argon2id)
+- [x] Negative-path tests for expired and reused refresh tokens (expired, reused, logged-out and
+      unknown tokens answer `401`; reuse revokes the family, other families survive)
 - [ ] Document the auth threat model in [authn-authz.md](../security/authn-authz.md)
 - [ ] Run the security checklist against the auth surface — [checklist.md](../security/checklist.md)
 
