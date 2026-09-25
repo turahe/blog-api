@@ -10,7 +10,8 @@ Index: [README.md](./README.md).
 
 **Partial** — the comment core, repository, and all 8 public and self-service comment
 operations are wired (migration `00009_comments.sql`), with ownership checks, Redis rate
-limits, and sanitized `content_html` (migration `00017_comment_content_html.sql`). The 6 admin moderation operations are wired behind `comment.moderate` /
+limits, sanitized `content_html` (migration `00017_comment_content_html.sql`), and per-post
+comment policies (migration `00018_post_comment_policy.sql`). The 6 admin moderation operations are wired behind `comment.moderate` /
 `comment.delete` with an append-only moderation log (migration `00010_comment_moderation.sql`).
 Audit logging is wired (migration `00016_audit_log_columns.sql`, async writer, activity
 endpoints, retention pruning). Notifications are still open; the 3 notification operations
@@ -44,7 +45,8 @@ return `501`.
 - [x] Ownership checks so `self.*` operations cannot touch another user's comment
 - [x] Rate limiting on create, flag, and upvote (`COMMENTS_CREATE_PER_MINUTE`, `COMMENTS_ACTIONS_PER_MINUTE`)
 - [ ] Captcha (`turnstile_response`) on guest create when a challenge setting is enabled
-- [ ] Per-post comment policy (disabled, read-only, authenticated-only)
+- [x] Per-post comment policy (`posts.comment_policy`: open, authenticated, read_only, disabled;
+      disabled hides existing comments; migration `00018_post_comment_policy.sql`)
 
 ## Epic: moderation workflow
 

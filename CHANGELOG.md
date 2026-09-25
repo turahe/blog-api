@@ -1,5 +1,20 @@
 # Changelog
 
+## 2026-09-25 — Per-post comment policy
+
+### Added
+
+- Posts have a `comment_policy` (migration `00018_post_comment_policy.sql`), returned on post
+  responses and set with `PATCH /api/v1/admin/posts/{id}`: `open` (default), `authenticated`
+  (guests get `401`), `read_only` (comments shown; create, edit, and upvote return
+  `403 comment.closed`), or `disabled` (list and get also return `403 comment.disabled`).
+  Flagging stays available on read-only posts, and authors can always delete their own comments.
+
+### Changed
+
+- Editing or upvoting a comment now requires its post to be published, like reading and
+  creating already did.
+
 ## 2026-09-25 — Sanitized comment HTML
 
 ### Added

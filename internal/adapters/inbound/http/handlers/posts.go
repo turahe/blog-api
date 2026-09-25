@@ -219,6 +219,11 @@ func adminUpdatePostHandlerWithDeps(posts postAdminAPI, roles RoleLookup) gin.Ha
 			Content: req.Content,
 			Tags:    req.Tags,
 		}
+		if req.CommentPolicy != nil {
+			policy := postdomain.CommentPolicy(*req.CommentPolicy)
+			in.CommentPolicy = &policy
+		}
+
 		if len(req.CategoryID) > 0 {
 			in.CategoryUUID.Present = true
 

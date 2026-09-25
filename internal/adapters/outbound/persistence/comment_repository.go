@@ -72,22 +72,22 @@ func NewCommentRepository(db *gorm.DB) *CommentRepository {
 	return &CommentRepository{db: db}
 }
 
-// PostIsPublic returns ErrPostNotFound unless the post exists and is published.
-func (r *CommentRepository) PostIsPublic(ctx context.Context, postID uuid.UUID) error {
-	var n int64
+// PostPolicy returns the comment policy of a published post, or ErrPostNotFound.
+func (r *CommentRepository) PostPolicy(ctx context.Context, postID uuid.UUID) (commentdomain.Policy, error) {
+	var policies []string
 
 	err := r.db.WithContext(ctx).Table("posts").
 		Where("uuid = ? AND status = ? AND deleted_at IS NULL", postID, string(postdomain.StatusPublished)).
-		Count(&n).Error
+		Limit(1).Pluck("comment_policy", &policies).Error
 	if err != nil {
-		return err
+		return "", err
 	}
 
-	if n == 0 {
-		return commentdomain.ErrPostNotFound
+	if len(policies) == 0 {
+		return "", commentdomain.ErrPostNotFound
 	}
 
-	return nil
+	return commentdomain.Policy(policies[0]), nil
 }
 
 // GetByID returns the comment with the given UUID or ErrNotFound.

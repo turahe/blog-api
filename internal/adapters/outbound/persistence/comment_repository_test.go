@@ -69,6 +69,37 @@ func TestCommentRepositoryPersistsContentHTML(t *testing.T) {
 	require.Equal(t, "<p><em>edited</em></p>", list.Items[0].ContentHTML)
 }
 
+func TestCommentRepositoryPostPolicy(t *testing.T) {
+	t.Parallel()
+
+	tx := integrationTx(t)
+	posts := NewPostRepository(tx)
+	repo := NewCommentRepository(tx)
+
+	postID := insertPublishedPost(t, tx)
+
+	policy, err := repo.PostPolicy(t.Context(), postID)
+	require.NoError(t, err)
+	require.Equal(t, commentdomain.PolicyOpen, policy)
+
+	post, err := posts.GetByID(t.Context(), postID)
+	require.NoError(t, err)
+	require.Equal(t, postdomain.CommentPolicyOpen, post.CommentPolicy)
+
+	post.CommentPolicy = postdomain.CommentPolicyDisabled
+	post.Version++
+	_, err = posts.Update(t.Context(), post)
+	require.NoError(t, err)
+
+	policy, err = repo.PostPolicy(t.Context(), postID)
+	require.NoError(t, err)
+	require.Equal(t, commentdomain.PolicyDisabled, policy)
+
+	draft := createPost(t, posts, postFixture{author: insertUser(t, tx), createdAt: time.Now().UTC()})
+	_, err = repo.PostPolicy(t.Context(), draft.UUID)
+	require.ErrorIs(t, err, commentdomain.ErrPostNotFound)
+}
+
 func TestCommentRepositoryHardDeleteScrubClearsContentHTML(t *testing.T) {
 	t.Parallel()
 

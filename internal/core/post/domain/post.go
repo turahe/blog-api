@@ -33,6 +33,27 @@ const (
 	StatusArchived  Status = "archived"
 )
 
+// CommentPolicy controls who may read and write comments on a post.
+type CommentPolicy string
+
+// Comment policies.
+const (
+	CommentPolicyOpen          CommentPolicy = "open"
+	CommentPolicyAuthenticated CommentPolicy = "authenticated"
+	CommentPolicyReadOnly      CommentPolicy = "read_only"
+	CommentPolicyDisabled      CommentPolicy = "disabled"
+)
+
+// Valid reports whether p is a known comment policy.
+func (p CommentPolicy) Valid() bool {
+	switch p {
+	case CommentPolicyOpen, CommentPolicyAuthenticated, CommentPolicyReadOnly, CommentPolicyDisabled:
+		return true
+	default:
+		return false
+	}
+}
+
 // Transition is a publication status change requested by an editor.
 type Transition string
 
@@ -78,6 +99,7 @@ type Post struct {
 	Content             string
 	CoverImageMediaUUID *uuid.UUID
 	Status              Status
+	CommentPolicy       CommentPolicy
 	Version             int64
 	PublishedAt         *time.Time
 	CreatedAt           time.Time
@@ -115,12 +137,13 @@ type OptionalCategoryID struct {
 
 // UpdateInput holds optional post changes; nil fields are left unchanged.
 type UpdateInput struct {
-	Title        *string
-	Slug         *string
-	Excerpt      *string
-	Content      *string
-	CategoryUUID OptionalCategoryID
-	Tags         *[]string
+	Title         *string
+	Slug          *string
+	Excerpt       *string
+	Content       *string
+	CategoryUUID  OptionalCategoryID
+	Tags          *[]string
+	CommentPolicy *CommentPolicy
 }
 
 // ListResult is a page of posts.

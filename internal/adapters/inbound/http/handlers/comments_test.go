@@ -193,6 +193,25 @@ func TestPatchCommentAfterEditWindow(t *testing.T) {
 	require.Equal(t, "comment.edit_window_closed", decodeEnvelope(t, w).Error.Code)
 }
 
+func TestCommentPolicyErrors(t *testing.T) {
+	t.Parallel()
+
+	for code, policyErr := range map[string]error{
+		"comment.disabled": commentdomain.ErrCommentsDisabled,
+		"comment.closed":   commentdomain.ErrCommentsClosed,
+	} {
+		svc := &fakeCommentService{listFn: func(context.Context, uuid.UUID, *uuid.UUID, int, int) (commentdomain.ListResult, error) {
+			return commentdomain.ListResult{}, policyErr
+		}}
+		c, w := commentContext(nethttp.MethodGet, "/api/v1/posts/x/comments", "", nil, testPostID.String())
+
+		listPostCommentsHandler(svc)(c)
+
+		require.Equal(t, nethttp.StatusForbidden, w.Code, code)
+		require.Equal(t, code, decodeEnvelope(t, w).Error.Code)
+	}
+}
+
 func TestDeleteCommentByNonOwnerIsForbidden(t *testing.T) {
 	t.Parallel()
 

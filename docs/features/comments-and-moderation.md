@@ -60,7 +60,9 @@ and rate limits to combat abuse.
   (or guest email) receives a transactional email with the action + reason and a link back
   to the post.
 - **Post-level policy controls**: Each post may override site policy via a Post option —
-  comments disabled, read-only, authenticated-only, or full permissions.
+  comments disabled, read-only, authenticated-only, or full permissions. Implemented as
+  `posts.comment_policy` (`open`, `authenticated`, `read_only`, `disabled`; disabled also hides
+  existing comments); see [api.md](../backend/api.md#comment-policy).
 
 ## Key Entities
 

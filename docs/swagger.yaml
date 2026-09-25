@@ -451,6 +451,15 @@ definitions:
           it.
         format: uuid
         type: string
+      comment_policy:
+        description: 'Who may comment: open, authenticated, read_only, or disabled
+          (hides existing comments).'
+        enum:
+        - open
+        - authenticated
+        - read_only
+        - disabled
+        type: string
       content:
         type: string
       excerpt:
@@ -2402,6 +2411,10 @@ paths:
           description: OK
           schema:
             $ref: '#/definitions/responses.Envelope'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/responses.Envelope'
         "404":
           description: Not Found
           schema:
@@ -2487,6 +2500,10 @@ paths:
           description: Bad Request
           schema:
             $ref: '#/definitions/responses.Envelope'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/responses.Envelope'
         "404":
           description: Not Found
           schema:
@@ -2517,6 +2534,10 @@ paths:
             $ref: '#/definitions/responses.Envelope'
         "401":
           description: Unauthorized
+          schema:
+            $ref: '#/definitions/responses.Envelope'
+        "403":
+          description: Forbidden
           schema:
             $ref: '#/definitions/responses.Envelope'
         "404":
@@ -3101,6 +3122,10 @@ paths:
           description: Bad Request
           schema:
             $ref: '#/definitions/responses.Envelope'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/responses.Envelope'
         "404":
           description: Not Found
           schema:
@@ -3138,6 +3163,10 @@ paths:
             $ref: '#/definitions/responses.Envelope'
         "401":
           description: Unauthorized
+          schema:
+            $ref: '#/definitions/responses.Envelope'
+        "403":
+          description: Forbidden
           schema:
             $ref: '#/definitions/responses.Envelope'
         "404":

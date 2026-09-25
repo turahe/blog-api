@@ -61,6 +61,7 @@ type PostModel struct {
 	Content             string
 	CoverImageMediaID   *int64 `gorm:"column:cover_image_media_id"`
 	Status              string
+	CommentPolicy       string `gorm:"column:comment_policy;default:open"`
 	Version             int64
 	PublishedAt         *time.Time
 	CreatedAt           time.Time

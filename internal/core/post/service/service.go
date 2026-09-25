@@ -159,16 +159,17 @@ func (s *PostService) CreateDraft(
 
 	now := s.clock.Now()
 	post := postdomain.Post{
-		UUID:         s.ids.New(),
-		AuthorUUID:   authorID,
-		CategoryUUID: categoryID,
-		Title:        title,
-		Excerpt:      strings.TrimSpace(excerpt),
-		Content:      content,
-		Status:       postdomain.StatusDraft,
-		Version:      1,
-		CreatedAt:    now,
-		UpdatedAt:    now,
+		UUID:          s.ids.New(),
+		AuthorUUID:    authorID,
+		CategoryUUID:  categoryID,
+		Title:         title,
+		Excerpt:       strings.TrimSpace(excerpt),
+		Content:       content,
+		Status:        postdomain.StatusDraft,
+		CommentPolicy: postdomain.CommentPolicyOpen,
+		Version:       1,
+		CreatedAt:     now,
+		UpdatedAt:     now,
 	}
 
 	post, err = s.withFreeSlug(ctx, slug, func(free string) (postdomain.Post, error) {
@@ -211,7 +212,8 @@ func (s *PostService) Update(
 	unrestricted bool,
 	in postdomain.UpdateInput,
 ) (postdomain.Post, []tagdomain.Tag, error) {
-	if in.Title == nil && in.Slug == nil && in.Excerpt == nil && in.Content == nil && !in.CategoryUUID.Present && in.Tags == nil {
+	if in.Title == nil && in.Slug == nil && in.Excerpt == nil && in.Content == nil &&
+		!in.CategoryUUID.Present && in.Tags == nil && in.CommentPolicy == nil {
 		return postdomain.Post{}, nil, fmt.Errorf("%w: no fields to update", ErrValidation)
 	}
 
@@ -295,6 +297,14 @@ func (s *PostService) applyUpdate(ctx context.Context, post *postdomain.Post, in
 
 	if in.CategoryUUID.Present {
 		post.CategoryUUID = in.CategoryUUID.Value
+	}
+
+	if in.CommentPolicy != nil {
+		if !in.CommentPolicy.Valid() {
+			return fmt.Errorf("%w: comment_policy must be open, authenticated, read_only, or disabled", ErrValidation)
+		}
+
+		post.CommentPolicy = *in.CommentPolicy
 	}
 
 	return nil

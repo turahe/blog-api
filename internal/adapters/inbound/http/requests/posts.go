@@ -21,6 +21,8 @@ type UpdatePost struct {
 	// Category UUID; null clears the category, omitting the field keeps it.
 	CategoryID json.RawMessage `json:"category_id" swaggertype:"string" format:"uuid"`
 	Tags       *[]string       `json:"tags"`
+	// Who may comment: open, authenticated, read_only, or disabled (hides existing comments).
+	CommentPolicy *string `json:"comment_policy" binding:"omitempty,oneof=open authenticated read_only disabled" enums:"open,authenticated,read_only,disabled"`
 }
 
 // ReplacePostMedia is PATCH /api/v1/admin/posts/:id/media.

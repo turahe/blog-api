@@ -16,8 +16,9 @@ type Renderer interface {
 
 // Repository stores comments, flags, and upvotes.
 type Repository interface {
-	// PostIsPublic returns ErrPostNotFound unless the post is published and not deleted.
-	PostIsPublic(ctx context.Context, postID uuid.UUID) error
+	// PostPolicy returns the post's comment policy, or ErrPostNotFound unless the post is
+	// published and not deleted.
+	PostPolicy(ctx context.Context, postID uuid.UUID) (commentdomain.Policy, error)
 	GetByID(ctx context.Context, id uuid.UUID) (commentdomain.Comment, error)
 	List(ctx context.Context, filter commentdomain.ListFilter) (commentdomain.ListResult, error)
 	Create(ctx context.Context, comment commentdomain.Comment) (commentdomain.Comment, error)

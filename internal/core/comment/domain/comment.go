@@ -28,7 +28,45 @@ var (
 	ErrDepthExceeded    = errors.New("reply depth exceeded")
 	ErrParentInvalid    = errors.New("invalid parent comment")
 	ErrGuestDisabled    = errors.New("guest comments are disabled")
+	// ErrCommentsDisabled means the post's policy hides its comments and accepts none.
+	ErrCommentsDisabled = errors.New("comments are disabled on this post")
+	// ErrCommentsClosed means the post is read-only: comments are shown but not added,
+	// edited, or upvoted.
+	ErrCommentsClosed = errors.New("comments are closed on this post")
 )
+
+// Policy is a post's comment policy.
+type Policy string
+
+// Post comment policies.
+const (
+	PolicyOpen          Policy = "open"
+	PolicyAuthenticated Policy = "authenticated"
+	PolicyReadOnly      Policy = "read_only"
+	PolicyDisabled      Policy = "disabled"
+)
+
+// Readable returns ErrCommentsDisabled when the policy hides comments.
+func (p Policy) Readable() error {
+	if p == PolicyDisabled {
+		return ErrCommentsDisabled
+	}
+
+	return nil
+}
+
+// Writable returns the error that blocks new comments, edits, and upvotes, or nil.
+func (p Policy) Writable() error {
+	switch p {
+	case PolicyDisabled:
+		return ErrCommentsDisabled
+	case PolicyReadOnly:
+		return ErrCommentsClosed
+	case PolicyOpen, PolicyAuthenticated:
+	}
+
+	return nil
+}
 
 // Status is a comment moderation state.
 type Status string

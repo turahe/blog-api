@@ -39,6 +39,7 @@ type commentAPI interface {
 //	@Param			per_page	query		int		false	"per page"	default(20)
 //	@Success		200			{object}	responses.Envelope
 //	@Failure		400			{object}	responses.Envelope
+//	@Failure		403			{object}	responses.Envelope
 //	@Failure		404			{object}	responses.Envelope
 //	@Router			/api/v1/posts/{param1}/comments [get]
 func listPostCommentsHandler(comments commentAPI) gin.HandlerFunc {
@@ -83,6 +84,7 @@ func listPostCommentsHandler(comments commentAPI) gin.HandlerFunc {
 //	@Success		201		{object}	responses.Envelope
 //	@Failure		400		{object}	responses.Envelope
 //	@Failure		401		{object}	responses.Envelope
+//	@Failure		403		{object}	responses.Envelope
 //	@Failure		404		{object}	responses.Envelope
 //	@Failure		422		{object}	responses.Envelope
 //	@Failure		429		{object}	responses.Envelope
@@ -143,6 +145,7 @@ func createPostCommentHandler(comments commentAPI) gin.HandlerFunc {
 //	@Produce	json
 //	@Param		param1	path		string	true	"comment UUID"
 //	@Success	200		{object}	responses.Envelope
+//	@Failure	403		{object}	responses.Envelope
 //	@Failure	404		{object}	responses.Envelope
 //	@Router		/api/v1/comments/{param1} [get]
 func getCommentHandler(comments commentAPI) gin.HandlerFunc {
@@ -172,6 +175,7 @@ func getCommentHandler(comments commentAPI) gin.HandlerFunc {
 //	@Param			body	body		requests.FlagComment	true	"flag"
 //	@Success		202		{object}	responses.Envelope
 //	@Failure		400		{object}	responses.Envelope
+//	@Failure		403		{object}	responses.Envelope
 //	@Failure		404		{object}	responses.Envelope
 //	@Failure		429		{object}	responses.Envelope
 //	@Security		Bearer
@@ -321,6 +325,7 @@ func deleteCommentHandler(comments commentAPI) gin.HandlerFunc {
 //	@Param		param1	path		string	true	"comment UUID"
 //	@Success	200		{object}	responses.Envelope
 //	@Failure	401		{object}	responses.Envelope
+//	@Failure	403		{object}	responses.Envelope
 //	@Failure	404		{object}	responses.Envelope
 //	@Failure	429		{object}	responses.Envelope
 //	@Security	Bearer
@@ -443,6 +448,10 @@ func classifyCommentError(err error) (status int, code, message string, known bo
 		return nethttp.StatusBadRequest, responses.ErrorCodeValidation, err.Error(), true
 	case errors.Is(err, commentdomain.ErrGuestDisabled):
 		return nethttp.StatusUnauthorized, responses.ErrorCodeUnauthorized, "Sign in to comment", true
+	case errors.Is(err, commentdomain.ErrCommentsDisabled):
+		return nethttp.StatusForbidden, "comment.disabled", "Comments are disabled on this post", true
+	case errors.Is(err, commentdomain.ErrCommentsClosed):
+		return nethttp.StatusForbidden, "comment.closed", "This post is not accepting new comments", true
 	case errors.Is(err, commentdomain.ErrForbidden):
 		return nethttp.StatusForbidden, responses.ErrorCodeForbidden, "You can only change your own comments", true
 	case errors.Is(err, commentdomain.ErrEditWindowClosed):

@@ -414,6 +414,27 @@ func TestPostServiceUpdateReturnsConflictWhenSlugTaken(t *testing.T) {
 	require.Equal(t, 0, repo.updateCalls)
 }
 
+func TestPostServiceUpdateCommentPolicy(t *testing.T) {
+	t.Parallel()
+
+	postID := uuid.New()
+	actorID := uuid.New()
+	repo := newFakePostRepo(postdomain.Post{
+		UUID: postID, AuthorUUID: actorID, Title: "Title", Slug: "slug", Version: 1,
+		CommentPolicy: postdomain.CommentPolicyOpen,
+	})
+	svc := New(repo, nil, fixedClock{now: time.Now()})
+
+	bad := postdomain.CommentPolicy("everyone")
+	_, _, err := svc.Update(context.Background(), postID, actorID, false, postdomain.UpdateInput{CommentPolicy: &bad})
+	require.ErrorIs(t, err, ErrValidation)
+
+	policy := postdomain.CommentPolicyReadOnly
+	got, _, err := svc.Update(context.Background(), postID, actorID, false, postdomain.UpdateInput{CommentPolicy: &policy})
+	require.NoError(t, err)
+	require.Equal(t, postdomain.CommentPolicyReadOnly, got.CommentPolicy)
+}
+
 func TestPostServiceUpdateRejectsEmptyUpdate(t *testing.T) {
 	t.Parallel()
 

@@ -20,6 +20,7 @@ func (seqIDs) New() uuid.UUID { return uuid.New() }
 
 type fakeRepo struct {
 	publicPosts map[uuid.UUID]bool
+	policies    map[uuid.UUID]commentdomain.Policy
 	comments    map[uuid.UUID]commentdomain.Comment
 	flags       []commentdomain.Flag
 	upvotes     map[uuid.UUID]map[uuid.UUID]bool
@@ -30,17 +31,22 @@ type fakeRepo struct {
 func newFakeRepo() *fakeRepo {
 	return &fakeRepo{
 		publicPosts: map[uuid.UUID]bool{},
+		policies:    map[uuid.UUID]commentdomain.Policy{},
 		comments:    map[uuid.UUID]commentdomain.Comment{},
 		upvotes:     map[uuid.UUID]map[uuid.UUID]bool{},
 	}
 }
 
-func (r *fakeRepo) PostIsPublic(_ context.Context, postID uuid.UUID) error {
+func (r *fakeRepo) PostPolicy(_ context.Context, postID uuid.UUID) (commentdomain.Policy, error) {
 	if !r.publicPosts[postID] {
-		return commentdomain.ErrPostNotFound
+		return "", commentdomain.ErrPostNotFound
 	}
 
-	return nil
+	if policy, ok := r.policies[postID]; ok {
+		return policy, nil
+	}
+
+	return commentdomain.PolicyOpen, nil
 }
 
 func (r *fakeRepo) GetByID(_ context.Context, id uuid.UUID) (commentdomain.Comment, error) {

@@ -364,6 +364,7 @@ erDiagram
  text content "Sanitized HTML markdown AST never raw user HTML"
  bigint cover_image_media_id FK
  varchar status "ENUM: draft review published archived"
+ varchar comment_policy "ENUM: open authenticated read_only disabled default open"
  datetime published_at "NULL until first publish"
  datetime created_at ""
  datetime updated_at ""

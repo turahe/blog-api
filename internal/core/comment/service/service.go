@@ -106,14 +106,20 @@ func (s *Service) Create(ctx context.Context, in CreateInput) (commentdomain.Com
 		IPHash:      hashIdentity(in.ClientIP),
 		UserAgent:   truncateRunes(strings.TrimSpace(in.UserAgent), maxUserAgentRunes),
 	}
+
+	policy, err := s.writablePolicy(ctx, in.PostUUID)
+	if err != nil {
+		return commentdomain.Comment{}, err
+	}
+
 	if in.AuthorUUID == nil {
+		if policy == commentdomain.PolicyAuthenticated {
+			return commentdomain.Comment{}, fmt.Errorf("%w: this post accepts comments from signed-in users only", commentdomain.ErrGuestDisabled)
+		}
+
 		if comment.AuthorName, comment.AuthorEmail, err = s.guestIdentity(in.AuthorName, in.AuthorEmail); err != nil {
 			return commentdomain.Comment{}, err
 		}
-	}
-
-	if err := s.repo.PostIsPublic(ctx, in.PostUUID); err != nil {
-		return commentdomain.Comment{}, err
 	}
 
 	if in.ParentUUID != nil {
@@ -143,9 +149,14 @@ func (s *Service) Create(ctx context.Context, in CreateInput) (commentdomain.Com
 }
 
 // ListForPost lists public comments on a public post: roots by default, or the direct
-// replies of parentID.
+// replies of parentID. A post whose policy is disabled returns ErrCommentsDisabled.
 func (s *Service) ListForPost(ctx context.Context, postID uuid.UUID, parentID *uuid.UUID, page, perPage int) (commentdomain.ListResult, error) {
-	if err := s.repo.PostIsPublic(ctx, postID); err != nil {
+	policy, err := s.repo.PostPolicy(ctx, postID)
+	if err != nil {
+		return commentdomain.ListResult{}, err
+	}
+
+	if err := policy.Readable(); err != nil {
 		return commentdomain.ListResult{}, err
 	}
 
@@ -218,6 +229,10 @@ func (s *Service) Update(ctx context.Context, actorID, id uuid.UUID, content str
 		return commentdomain.Comment{}, commentdomain.ErrEditWindowClosed
 	}
 
+	if _, err := s.writablePolicy(ctx, comment.PostUUID); err != nil {
+		return commentdomain.Comment{}, err
+	}
+
 	comment.Content = content
 	comment.ContentHTML = s.cfg.Renderer.Render(content)
 	comment.EditedAt = &now
@@ -282,6 +297,10 @@ func (s *Service) Flag(ctx context.Context, in FlagInput) error {
 		return commentdomain.ErrNotFound
 	}
 
+	if err := s.readablePost(ctx, comment.PostUUID); err != nil {
+		return err
+	}
+
 	flag := commentdomain.Flag{
 		CommentUUID:  comment.UUID,
 		ReporterUUID: in.ReporterUUID,
@@ -307,6 +326,10 @@ func (s *Service) ToggleUpvote(ctx context.Context, voterID, id uuid.UUID) (bool
 
 	if comment.Status != commentdomain.StatusApproved {
 		return false, 0, commentdomain.ErrNotFound
+	}
+
+	if _, err := s.writablePolicy(ctx, comment.PostUUID); err != nil {
+		return false, 0, err
 	}
 
 	return s.repo.ToggleUpvote(ctx, comment.UUID, voterID, s.clock.Now())
@@ -363,11 +386,36 @@ func (s *Service) getPublic(ctx context.Context, id uuid.UUID) (commentdomain.Co
 		return commentdomain.Comment{}, commentdomain.ErrNotFound
 	}
 
-	if err := s.repo.PostIsPublic(ctx, comment.PostUUID); err != nil {
-		return commentdomain.Comment{}, commentdomain.ErrNotFound
+	if err := s.readablePost(ctx, comment.PostUUID); err != nil {
+		return commentdomain.Comment{}, err
 	}
 
 	return comment, nil
+}
+
+// readablePost returns ErrNotFound when the comment's post is not public, and
+// ErrCommentsDisabled when its policy hides comments.
+func (s *Service) readablePost(ctx context.Context, postID uuid.UUID) error {
+	policy, err := s.repo.PostPolicy(ctx, postID)
+	if errors.Is(err, commentdomain.ErrPostNotFound) {
+		return commentdomain.ErrNotFound
+	}
+
+	if err != nil {
+		return err
+	}
+
+	return policy.Readable()
+}
+
+// writablePolicy returns the policy of a public post that accepts comment writes.
+func (s *Service) writablePolicy(ctx context.Context, postID uuid.UUID) (commentdomain.Policy, error) {
+	policy, err := s.repo.PostPolicy(ctx, postID)
+	if err != nil {
+		return "", err
+	}
+
+	return policy, policy.Writable()
 }
 
 func (s *Service) getOwned(ctx context.Context, actorID, id uuid.UUID) (commentdomain.Comment, error) {

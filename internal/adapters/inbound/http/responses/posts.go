@@ -30,6 +30,7 @@ func Post(post postdomain.Post) gin.H {
 		"content":              post.Content,
 		"cover_image_media_id": coverImageMediaID,
 		"status":               string(post.Status),
+		"comment_policy":       string(post.CommentPolicy),
 		"published_at":         RFC3339(post.PublishedAt),
 		"created_at":           post.CreatedAt.UTC().Format(time.RFC3339),
 		"updated_at":           post.UpdatedAt.UTC().Format(time.RFC3339),

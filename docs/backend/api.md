@@ -265,6 +265,20 @@ other elements are reduced to their text. Clients may insert `content_html` as H
 must still be escaped. Both fields are empty on deleted comments in public responses; the
 admin view keeps them. Rows stored before `00017_comment_content_html.sql` are rendered on read.
 
+### Comment policy
+
+Every post has a `comment_policy` (default `open`), returned on post responses and set with
+`PATCH /api/v1/admin/posts/{id}`. Admin comment operations ignore it.
+
+| Policy | Read (list, get) | Create | Edit, upvote | Flag | Delete own |
+| --- | --- | --- | --- | --- | --- |
+| `open` | yes | signed-in users; guests when `COMMENTS_GUEST_ENABLED` | yes | yes | yes |
+| `authenticated` | yes | signed-in users only (`401` for guests) | yes | yes | yes |
+| `read_only` | yes | `403 comment.closed` | `403 comment.closed` | yes | yes |
+| `disabled` | `403 comment.disabled` | `403 comment.disabled` | `403 comment.disabled` | `403 comment.disabled` | yes |
+
+`/me/comments` still lists the caller's comments on any post.
+
 ### Audit log and account activity
 
 `middleware.Audit` writes one `audit_logs` row per audited mutating request after the handler
@@ -431,7 +445,7 @@ Full wire format, client integration, security, and scaling guidance is in the f
 - `GET /api/v1/admin/posts`
 - `POST /api/v1/admin/posts` (optional `tags: string[]` create-or-link attach on create)
 - `POST /api/v1/admin/posts/:id/publish`
-- `PATCH /api/v1/admin/posts/:id` (partial post update; ownership-aware; optional `tags: string[]` create-or-link attach)
+- `PATCH /api/v1/admin/posts/:id` (partial post update; ownership-aware; optional `tags: string[]` create-or-link attach; optional `comment_policy`, see [Comment policy](#comment-policy))
 - `PATCH /api/v1/admin/posts/:id/media` (replace post attachments join rows)
 - `POST /api/v1/admin/tags` (create curated tag; slug optional, derived from name)
 - `PATCH /api/v1/admin/tags/:id` (rename or reslug tag)

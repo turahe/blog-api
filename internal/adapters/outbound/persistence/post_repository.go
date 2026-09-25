@@ -170,7 +170,7 @@ func (r *PostRepository) Create(ctx context.Context, post postdomain.Post) (post
 		UUID: post.UUID, AuthorID: authorID, CategoryID: categoryID,
 		Title: post.Title, Slug: post.Slug, Content: post.Content,
 		CoverImageMediaID: coverID,
-		Status:            string(post.Status), Version: post.Version,
+		Status:            string(post.Status), CommentPolicy: string(post.CommentPolicy), Version: post.Version,
 		PublishedAt: post.PublishedAt, CreatedAt: post.CreatedAt, UpdatedAt: post.UpdatedAt,
 	}
 	if post.Excerpt != "" {
@@ -207,6 +207,7 @@ func (r *PostRepository) Update(ctx context.Context, post postdomain.Post) (post
 		"slug":                 post.Slug,
 		"content":              post.Content,
 		"status":               string(post.Status),
+		"comment_policy":       string(commentPolicyOrOpen(post.CommentPolicy)),
 		"version":              post.Version,
 		"published_at":         post.PublishedAt,
 		"updated_at":           post.UpdatedAt,
@@ -346,6 +347,14 @@ func slugConflict(err error) error {
 	return err
 }
 
+func commentPolicyOrOpen(policy postdomain.CommentPolicy) postdomain.CommentPolicy {
+	if policy == "" {
+		return postdomain.CommentPolicyOpen
+	}
+
+	return policy
+}
+
 func mapPost(model PostModel) postdomain.Post {
 	post := postdomain.Post{
 		ID:                  model.ID,
@@ -357,6 +366,7 @@ func mapPost(model PostModel) postdomain.Post {
 		Content:             model.Content,
 		CoverImageMediaUUID: model.CoverImageMediaUUID,
 		Status:              postdomain.Status(model.Status),
+		CommentPolicy:       commentPolicyOrOpen(postdomain.CommentPolicy(model.CommentPolicy)),
 		Version:             model.Version,
 		PublishedAt:         model.PublishedAt,
 		CreatedAt:           model.CreatedAt,

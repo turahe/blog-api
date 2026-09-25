@@ -2866,6 +2866,12 @@ const docTemplate = `{
                             "$ref": "#/definitions/responses.Envelope"
                         }
                     },
+                    "403": {
+                        "description": "Forbidden",
+                        "schema": {
+                            "$ref": "#/definitions/responses.Envelope"
+                        }
+                    },
                     "404": {
                         "description": "Not Found",
                         "schema": {
@@ -3048,6 +3054,12 @@ const docTemplate = `{
                             "$ref": "#/definitions/responses.Envelope"
                         }
                     },
+                    "403": {
+                        "description": "Forbidden",
+                        "schema": {
+                            "$ref": "#/definitions/responses.Envelope"
+                        }
+                    },
                     "404": {
                         "description": "Not Found",
                         "schema": {
@@ -3095,6 +3107,12 @@ const docTemplate = `{
                     },
                     "401": {
                         "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/responses.Envelope"
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden",
                         "schema": {
                             "$ref": "#/definitions/responses.Envelope"
                         }
@@ -3992,6 +4010,12 @@ const docTemplate = `{
                             "$ref": "#/definitions/responses.Envelope"
                         }
                     },
+                    "403": {
+                        "description": "Forbidden",
+                        "schema": {
+                            "$ref": "#/definitions/responses.Envelope"
+                        }
+                    },
                     "404": {
                         "description": "Not Found",
                         "schema": {
@@ -4050,6 +4074,12 @@ const docTemplate = `{
                     },
                     "401": {
                         "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/responses.Envelope"
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden",
                         "schema": {
                             "$ref": "#/definitions/responses.Envelope"
                         }
@@ -4834,6 +4864,16 @@ const docTemplate = `{
                     "description": "Category UUID; null clears the category, omitting the field keeps it.",
                     "type": "string",
                     "format": "uuid"
+                },
+                "comment_policy": {
+                    "description": "Who may comment: open, authenticated, read_only, or disabled (hides existing comments).",
+                    "type": "string",
+                    "enum": [
+                        "open",
+                        "authenticated",
+                        "read_only",
+                        "disabled"
+                    ]
                 },
                 "content": {
                     "type": "string"
