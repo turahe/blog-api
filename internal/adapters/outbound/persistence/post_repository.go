@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/google/uuid"
@@ -11,11 +12,16 @@ import (
 	"gorm.io/gorm"
 )
 
-var postColumns = withRefs("posts",
+// postColumns lists columns explicitly so reads never carry posts.search_vector.
+var postColumns = strings.Join([]string{
+	"posts.id", "posts.uuid", "posts.author_id", "posts.category_id", "posts.title", "posts.slug",
+	"posts.excerpt", "posts.content", "posts.cover_image_media_id", "posts.status",
+	"posts.comment_policy", "posts.version", "posts.published_at", "posts.created_at",
+	"posts.updated_at", "posts.deleted_at",
 	uuidRef("users", "posts.author_id", "author_uuid"),
 	uuidRef("categories", "posts.category_id", "category_uuid"),
 	uuidRef("media_assets", "posts.cover_image_media_id", "cover_image_media_uuid"),
-)
+}, ", ")
 
 // PostRepository implements postports.Repository.
 type PostRepository struct {

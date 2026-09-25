@@ -51,6 +51,7 @@ type PostService struct {
 	seo         ports.SEORepository
 	seoDefaults ports.SEODefaultsSource
 	images      ports.ImageURLs
+	search      ports.Searcher
 }
 
 // New returns a PostService without media or tag support; see WithMedia and WithTags.

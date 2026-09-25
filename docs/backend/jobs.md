@@ -38,6 +38,8 @@ Jobs handle asynchronous and retryable work that should not block request-respon
 - run recurring jobs with `app scheduler`; `app scheduler status` shows the last run of each
   job and `app scheduler run <job>` runs one now
 - prune audit rows once with `app audit prune [--older-than-days N]`
+- rebuild the post search index after changing `SEARCH_LANGUAGE` with `app search reindex`
+  (see [search.md](search.md))
 - validate worker/scheduler health before startup using `app doctor`
 
 ## Scheduled Jobs

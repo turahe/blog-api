@@ -37,6 +37,15 @@ func Post(post postdomain.Post) gin.H {
 	}
 }
 
+// PostSearchHit serializes a search hit: the post plus its rank and highlighted fragments
+// (HTML-escaped, matches wrapped in <mark>).
+func PostSearchHit(hit postdomain.SearchHit) gin.H {
+	out := Post(hit.Post)
+	out["search"] = gin.H{"rank": hit.Rank, "title": hit.Title, "snippet": hit.Snippet}
+
+	return out
+}
+
 // PostWithTags serializes a post including its tags.
 func PostWithTags(post postdomain.Post, tags []tagdomain.Tag) gin.H {
 	payload := Post(post)

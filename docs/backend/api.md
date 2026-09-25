@@ -81,6 +81,9 @@ the wired Phase 2 surface and where it deliberately differs from the target.
 
 - Publishing accepts draft, scheduled and archived posts. Other transitions return `409`.
 - `admin.posts.list?trashed=true` lists only soft-deleted posts (default `false`).
+- `public.posts.list?q=…` runs a full-text search: best match first, and each item gains
+  `search.rank`, `search.title`, and `search.snippet` (HTML-escaped, matches in `<mark>`). See
+  [search.md](search.md).
 - On create and restore a taken slug gets the lowest free `-2`, `-3`, … suffix, so the same
   collisions always yield the same slug. On update a taken slug returns `409`.
 - Public post, category, tag and user-profile reads are cached; the contract is in

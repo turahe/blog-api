@@ -106,6 +106,7 @@ type Config struct {
 	MediaTransformURLTTL          time.Duration
 	PrivacyExportRetention        time.Duration
 	PrivacyExportURLTTL           time.Duration
+	SearchLanguage                string
 	CommentsGuestEnabled          bool
 	CommentsRequireApproval       bool
 	CommentsEditWindow            time.Duration
@@ -607,6 +608,7 @@ func load(withJWTKeys bool) (Config, error) {
 		MediaPresignTTL:               duration("MEDIA_PRESIGN_TTL", 15*time.Minute),
 		PrivacyExportRetention:        duration("PRIVACY_EXPORT_RETENTION", 72*time.Hour),
 		PrivacyExportURLTTL:           duration("PRIVACY_EXPORT_URL_TTL", 15*time.Minute),
+		SearchLanguage:                strings.ToLower(strings.TrimSpace(env("SEARCH_LANGUAGE", "simple"))),
 		CommentsGuestEnabled:          boolEnv("COMMENTS_GUEST_ENABLED", false),
 		CommentsRequireApproval:       boolEnv("COMMENTS_REQUIRE_APPROVAL", false),
 		CommentsEditWindow:            duration("COMMENTS_EDIT_WINDOW", 15*time.Minute),
@@ -722,7 +724,7 @@ func (c *Config) validate() error {
 		return fmt.Errorf("invalid database pool limits: idle=%d open=%d", c.DBMaxIdle, c.DBMaxOpen)
 	}
 
-	for _, check := range []func() error{c.ValidateRedis, c.ValidateMessaging, c.ValidateMedia, c.ValidateSentry, c.ValidateCache, c.ValidateOAuth, c.ValidateAudit} {
+	for _, check := range []func() error{c.ValidateRedis, c.ValidateMessaging, c.ValidateMedia, c.ValidateSentry, c.ValidateCache, c.ValidateOAuth, c.ValidateAudit, c.ValidateSearch} {
 		if err := check(); err != nil {
 			return err
 		}

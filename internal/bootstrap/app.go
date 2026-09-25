@@ -158,7 +158,7 @@ func NewRuntime(ctx context.Context, cfg config.Config, logger *slog.Logger, ver
 	}
 
 	tags := tagservice.New(tagsRepo, ids, clock).WithCache(cacheOrNil)
-	posts.WithTags(tags)
+	posts.WithTags(tags).WithSearch(newPostSearch(ctx, cfg, db, logger))
 
 	comments := newCommentService(cfg, db, ids, clock, inbox, events)
 	hub, notificationBus := newNotificationStream(ctx, cfg, inbox, logger)

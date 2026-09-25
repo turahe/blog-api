@@ -43,6 +43,12 @@ type Repository interface {
 	SetCoverImage(ctx context.Context, postID uuid.UUID, mediaID *uuid.UUID, updatedAt time.Time) error
 }
 
+// Searcher runs full-text search over published, non-deleted posts. The database adapter
+// indexes on write; an external engine adapter would pair with an event consumer.
+type Searcher interface {
+	SearchPublished(ctx context.Context, filter postdomain.SearchFilter) (postdomain.SearchResult, error)
+}
+
 // References lists entity ids a post points at.
 type References struct {
 	Categories []uuid.UUID

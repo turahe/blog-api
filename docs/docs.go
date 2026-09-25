@@ -5014,6 +5014,7 @@ const docTemplate = `{
         },
         "/api/v1/posts": {
             "get": {
+                "description": "Newest first. With q, runs a full-text search instead: best match first, and each item\ngains search.rank, search.title, and search.snippet (HTML-escaped, matches in \u003cmark\u003e).\nq uses web search syntax: \"quoted phrase\", or, -excluded.",
                 "produces": [
                     "application/json"
                 ],
@@ -5022,6 +5023,12 @@ const docTemplate = `{
                 ],
                 "summary": "List published posts",
                 "parameters": [
+                    {
+                        "type": "string",
+                        "description": "full-text search query (max 200 characters)",
+                        "name": "q",
+                        "in": "query"
+                    },
                     {
                         "type": "integer",
                         "default": 1,
@@ -5058,6 +5065,12 @@ const docTemplate = `{
                     },
                     "400": {
                         "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/responses.Envelope"
+                        }
+                    },
+                    "503": {
+                        "description": "search.unavailable",
                         "schema": {
                             "$ref": "#/definitions/responses.Envelope"
                         }

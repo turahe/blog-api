@@ -9,15 +9,15 @@ Index: [README.md](./README.md).
 ## Status
 
 **In progress** — admin settings, post versioning, post SEO, and analytics consent are implemented.
-`/me/privacy` settings and the asynchronous `/me` data export and erasure are implemented.
-Impersonation and newsletter operations still return `501`; search has no schema or service yet.
+`/me/privacy` settings, the asynchronous `/me` data export and erasure, and PostgreSQL post
+search are implemented. Impersonation and newsletter operations still return `501`.
 
 ## Decisions
 
 | Topic | Decision |
 | --- | --- |
 | Settings scope | Typed catalogue in code (site, content, media, analytics, notifications, SEO, security). Secrets, storage and SMTP credentials, and provider switching stay in env vars. Keys that enforce behaviour ship with the code that enforces them. |
-| Search backend | PostgreSQL full-text search: a `tsvector` column with a GIN index, `websearch_to_tsquery` ranking, `ts_headline` highlights, behind a swappable search port. |
+| Search backend | PostgreSQL full-text search: a stored generated `tsvector` column with a GIN index, `websearch_to_tsquery` ranking, `ts_headline` highlights, behind a swappable search port. Language from `SEARCH_LANGUAGE` (default `simple`); changing it needs `app search reindex`. |
 | Newsletter delivery | Built-in sending through the SMTP mailer and worker, plus a generic HMAC-signed `custom_http` adapter. Other ESPs are documented extension points. |
 | Media variants | Named imgproxy presets (width, format) defined in settings and returned as signed URLs on media responses; no stored derivatives. Orphan cleanup and storage usage reporting are built. |
 | Impersonation | A server-side impersonation session row and a separate short-lived access token with `sub` = target and an RFC 8693 `act` claim for the superadmin. No refresh token; audit records store actor and subject. |
@@ -100,12 +100,14 @@ Spec: [newsletter-subscriptions.md](../features/newsletter-subscriptions.md)
 
 ## Epic: search integration
 
-- [ ] Choose the search backend: database full-text versus an external engine, and record the decision
-- [ ] Search port in the core layer with a swappable outbound adapter
-- [ ] Search query support on `public.posts.list`, or a dedicated search operation bound in `routes.Register*`
-- [ ] Indexing on publish, update, and delete, driven by Phase 4 events
-- [ ] Reindex command exposed through `cmd`
-- [ ] Relevance and highlighting expectations documented
+- [x] Choose the search backend: database full-text versus an external engine, and record the decision
+- [x] Search port in the core layer with a swappable outbound adapter (`postports.Searcher`)
+- [x] Search query support on `public.posts.list` (`?q=`)
+- [x] Indexing on publish, update, and delete — `posts.search_vector` is a stored generated
+      column, so it changes with every write and needs no consumer; an external engine adapter
+      would subscribe to `blog.post.revision.created`
+- [x] Reindex command exposed through `cmd` (`app search reindex`, for `SEARCH_LANGUAGE` changes)
+- [x] Relevance and highlighting expectations documented — [search.md](../backend/search.md)
 
 ## Epic: privacy and consent management
 
@@ -155,6 +157,7 @@ Spec: [newsletter-subscriptions.md](../features/newsletter-subscriptions.md)
 | Settings | [settings.md](../backend/settings.md) |
 | Post versions | [post-versions.md](../backend/post-versions.md) |
 | Post SEO | [post-seo.md](../backend/post-seo.md) |
+| Search | [search.md](../backend/search.md) |
 | Impersonation | [impersonation.md](../backend/impersonation.md) |
 | Media | [media.md](../backend/media.md) |
 | Email | [email.md](../backend/email.md) |

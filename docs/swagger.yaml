@@ -3972,7 +3972,15 @@ paths:
       - public
   /api/v1/posts:
     get:
+      description: |-
+        Newest first. With q, runs a full-text search instead: best match first, and each item
+        gains search.rank, search.title, and search.snippet (HTML-escaped, matches in <mark>).
+        q uses web search syntax: "quoted phrase", or, -excluded.
       parameters:
+      - description: full-text search query (max 200 characters)
+        in: query
+        name: q
+        type: string
       - default: 1
         description: page
         in: query
@@ -4000,6 +4008,10 @@ paths:
             $ref: '#/definitions/responses.Envelope'
         "400":
           description: Bad Request
+          schema:
+            $ref: '#/definitions/responses.Envelope'
+        "503":
+          description: search.unavailable
           schema:
             $ref: '#/definitions/responses.Envelope'
       summary: List published posts

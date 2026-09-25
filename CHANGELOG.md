@@ -1,5 +1,22 @@
 # Changelog
 
+## 2026-09-25 — Post search
+
+### Added
+
+- `GET /api/v1/posts?q=…` searches published posts with PostgreSQL full-text search (web search
+  syntax, best match first) and returns `search.rank`, `search.title`, and `search.snippet` with
+  matches in `<mark>`. See [search.md](docs/backend/search.md).
+- `posts.search_vector` generated column with a GIN index (migration 00028): title, excerpt, and
+  the first 100,000 characters of content, weighted in that order.
+- Config `SEARCH_LANGUAGE` (default `simple`) and `app search reindex` to rebuild the index after
+  changing it.
+
+### Changed
+
+- Post reads list their columns explicitly instead of `posts.*`, so they never load the search
+  vector.
+
 ## 2026-09-25 — Data export and erasure
 
 ### Added

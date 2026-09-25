@@ -14,16 +14,21 @@ import (
 
 // listPublishedPostsHandler godoc
 //
-//	@Summary	List published posts
-//	@Tags		public
-//	@Produce	json
-//	@Param		page		query		int		false	"page"		default(1)
-//	@Param		per_page	query		int		false	"per page"	default(20)
-//	@Param		category_id	query		string	false	"category UUID"
-//	@Param		tag_id		query		string	false	"tag UUID"
-//	@Success	200			{object}	responses.Envelope
-//	@Failure	400			{object}	responses.Envelope
-//	@Router		/api/v1/posts [get]
+//	@Summary		List published posts
+//	@Description	Newest first. With q, runs a full-text search instead: best match first, and each item
+//	@Description	gains search.rank, search.title, and search.snippet (HTML-escaped, matches in <mark>).
+//	@Description	q uses web search syntax: "quoted phrase", or, -excluded.
+//	@Tags			public
+//	@Produce		json
+//	@Param			q			query		string	false	"full-text search query (max 200 characters)"
+//	@Param			page		query		int		false	"page"		default(1)
+//	@Param			per_page	query		int		false	"per page"	default(20)
+//	@Param			category_id	query		string	false	"category UUID"
+//	@Param			tag_id		query		string	false	"tag UUID"
+//	@Success		200			{object}	responses.Envelope
+//	@Failure		400			{object}	responses.Envelope
+//	@Failure		503			{object}	responses.Envelope	"search.unavailable"
+//	@Router			/api/v1/posts [get]
 func listPublishedPostsHandler(posts *postservice.PostService) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		page, _ := strconv.Atoi(c.DefaultQuery("page", "1"))
@@ -38,6 +43,14 @@ func listPublishedPostsHandler(posts *postservice.PostService) gin.HandlerFunc {
 		tagID, err := postservice.ParseOptionalUUID(c.Query("tag_id"))
 		if err != nil {
 			responses.Failure(c, nethttp.StatusBadRequest, responses.ErrorCodeValidation, "Invalid tag_id")
+			return
+		}
+
+		if query := strings.TrimSpace(c.Query("q")); query != "" {
+			searchPublishedPosts(c, posts, postdomain.SearchFilter{
+				Query: query, Page: page, PerPage: perPage, CategoryUUID: categoryID, TagUUID: tagID,
+			})
+
 			return
 		}
 
@@ -62,6 +75,35 @@ func listPublishedPostsHandler(posts *postservice.PostService) gin.HandlerFunc {
 			Total:   result.Total,
 		})
 	}
+}
+
+func searchPublishedPosts(c *gin.Context, posts *postservice.PostService, filter postdomain.SearchFilter) {
+	result, err := posts.Search(c.Request.Context(), filter)
+
+	switch {
+	case errors.Is(err, postservice.ErrValidation):
+		responses.Failure(c, nethttp.StatusBadRequest, responses.ErrorCodeValidation, err.Error())
+		return
+	case errors.Is(err, postdomain.ErrSearchUnavailable):
+		responses.Failure(c, nethttp.StatusServiceUnavailable, "search.unavailable", "Search is not available")
+		return
+	case err != nil:
+		responses.Internal(c, err, "Failed to search posts")
+		return
+	}
+
+	items := make([]gin.H, 0, len(result.Items))
+	for _, hit := range result.Items {
+		items = append(items, responses.PostSearchHit(hit))
+	}
+
+	responses.SuccessPaginatedFor(c, nethttp.StatusOK, responses.PageOpts{
+		Service: responses.ServicePosts,
+		Data:    items,
+		Page:    result.Page,
+		PerPage: result.PerPage,
+		Total:   result.Total,
+	})
 }
 
 // getPublishedPostHandler godoc

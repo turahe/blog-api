@@ -536,6 +536,7 @@ so it is never written by hand.
 - created_at
 - updated_at
 - deleted_at
+- search_vector (stored generated tsvector with a GIN index; see [search.md](search.md))
 
 ### post_media
 
