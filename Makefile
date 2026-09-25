@@ -1,4 +1,4 @@
-.PHONY: test test-race test-integration test-brokers asyncapi-validate coverage lint routes-check swagger dev-keys infra-up infra-down infra-up-messaging infra-down-messaging docker-up docker-down docker-build docker-logs docker-seed docker-migrate
+.PHONY: test test-race test-integration test-brokers asyncapi-validate coverage lint routes-check swagger dev-keys infra-up infra-down infra-up-messaging infra-down-messaging docker-up docker-down docker-build docker-logs docker-seed docker-migrate trivy
 
 MODULE := github.com/turahe/blog-api
 TEST_PKGS := ./cmd/... ./internal/... ./docs/...
@@ -103,6 +103,14 @@ docker-down:
 
 docker-build:
 	docker compose build api
+
+trivy:
+	docker build -t blog-api:local .
+	docker run --rm -v /var/run/docker.sock:/var/run/docker.sock \
+		aquasec/trivy:0.36.0 image \
+		--severity HIGH,CRITICAL \
+		--exit-code 1 \
+		blog-api:local
 
 docker-logs:
 	docker compose logs -f api

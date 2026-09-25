@@ -176,7 +176,7 @@ services:
 
   rabbitmq:
     profiles: ["messaging"]
-    image: rabbitmq:3.13-management-alpine
+    image: rabbitmq:4-management-alpine
     ports:
       - "5672:5672"
       - "15672:15672"
