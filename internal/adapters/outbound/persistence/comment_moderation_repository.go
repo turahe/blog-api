@@ -169,7 +169,7 @@ func (r *CommentRepository) HardDelete(ctx context.Context, id uuid.UUID, entry 
 
 		return tx.Exec(`
 			UPDATE comments
-			SET content = '', author_id = NULL, author_name = NULL, author_email = NULL,
+			SET content = '', content_html = '', author_id = NULL, author_name = NULL, author_email = NULL,
 			    ip_hash = NULL, user_agent = NULL, flag_count = 0, upvote_count = 0,
 			    status = ?, deleted_at = COALESCE(deleted_at, ?), deleted_by = ?,
 			    moderated_by = ?, moderation_reason = ?, moderated_at = ?, updated_at = ?

@@ -9,8 +9,8 @@ Index: [README.md](./README.md).
 ## Status
 
 **Partial** — the comment core, repository, and all 8 public and self-service comment
-operations are wired (migration `00009_comments.sql`), with ownership checks and Redis rate
-limits. The 6 admin moderation operations are wired behind `comment.moderate` /
+operations are wired (migration `00009_comments.sql`), with ownership checks, Redis rate
+limits, and sanitized `content_html` (migration `00017_comment_content_html.sql`). The 6 admin moderation operations are wired behind `comment.moderate` /
 `comment.delete` with an append-only moderation log (migration `00010_comment_moderation.sql`).
 Audit logging is wired (migration `00016_audit_log_columns.sql`, async writer, activity
 endpoints, retention pruning). Notifications are still open; the 3 notification operations
@@ -28,8 +28,8 @@ return `501`.
       `user_id`/`body` to `author_id`/`content` and adds guest identity, `ip_hash`, `user_agent`,
       `depth` (0–5, DB-checked), `edited_at`, `deleted_by`, and the `flagged` status. `reply_count`
       is computed on read. Moderation and spam columns are tracked under the moderation epic.
-- [ ] Render `content` to sanitized `content_html` (allow-list markdown); clients must escape
-      `content` until then
+- [x] Render `content` to sanitized `content_html` (allow-list markdown; goldmark plus
+      bluemonday, migration `00017_comment_content_html.sql`); clients must still escape `content`
 
 ## Epic: public and self comment endpoints
 

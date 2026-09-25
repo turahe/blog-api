@@ -27,6 +27,7 @@ type CommentModel struct {
 	IPHash           *string
 	UserAgent        *string
 	Content          string
+	ContentHTML      string `gorm:"column:content_html"`
 	Status           string
 	Depth            int
 	UpvoteCount      int
@@ -196,6 +197,7 @@ func (r *CommentRepository) Create(ctx context.Context, comment commentdomain.Co
 		IPHash:      nullableString(comment.IPHash),
 		UserAgent:   nullableString(comment.UserAgent),
 		Content:     comment.Content,
+		ContentHTML: comment.ContentHTML,
 		Status:      string(comment.Status),
 		Depth:       comment.Depth,
 		CreatedAt:   comment.CreatedAt,
@@ -218,12 +220,13 @@ func (r *CommentRepository) Update(ctx context.Context, comment commentdomain.Co
 	}
 
 	res := db.Model(&CommentModel{}).Where("uuid = ?", comment.UUID).Updates(map[string]any{
-		"content":    comment.Content,
-		"status":     string(comment.Status),
-		"edited_at":  comment.EditedAt,
-		"deleted_at": comment.DeletedAt,
-		"deleted_by": deletedBy,
-		"updated_at": comment.UpdatedAt,
+		"content":      comment.Content,
+		"content_html": comment.ContentHTML,
+		"status":       string(comment.Status),
+		"edited_at":    comment.EditedAt,
+		"deleted_at":   comment.DeletedAt,
+		"deleted_by":   deletedBy,
+		"updated_at":   comment.UpdatedAt,
 	})
 	if res.Error != nil {
 		return commentdomain.Comment{}, res.Error
@@ -346,6 +349,7 @@ func mapComment(model CommentModel) commentdomain.Comment {
 		IPHash:         derefString(model.IPHash),
 		UserAgent:      derefString(model.UserAgent),
 		Content:        model.Content,
+		ContentHTML:    model.ContentHTML,
 		Status:         commentdomain.Status(model.Status),
 		Depth:          model.Depth,
 		UpvoteCount:    model.UpvoteCount,

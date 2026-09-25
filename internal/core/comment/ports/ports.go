@@ -9,6 +9,11 @@ import (
 	commentdomain "github.com/turahe/blog-api/internal/core/comment/domain"
 )
 
+// Renderer turns comment markdown into HTML that is safe to embed without further escaping.
+type Renderer interface {
+	Render(markdown string) string
+}
+
 // Repository stores comments, flags, and upvotes.
 type Repository interface {
 	// PostIsPublic returns ErrPostNotFound unless the post is published and not deleted.

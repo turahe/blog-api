@@ -232,12 +232,12 @@ func TestGetCommentHidesDeletedContentAndAuthor(t *testing.T) {
 		return commentdomain.Thread{
 			Comment: commentdomain.Comment{
 				UUID: testCommentID, PostUUID: testPostID, AuthorUUID: &testUserID, AuthorUsername: "ann",
-				AuthorEmail: "ann@example.com", IPHash: "abc", Content: "secret", Status: commentdomain.StatusDeleted,
-				DeletedAt: &deletedAt, CreatedAt: testTime, UpdatedAt: testTime,
+				AuthorEmail: "ann@example.com", IPHash: "abc", Content: "secret", ContentHTML: "<p>secret</p>",
+				Status: commentdomain.StatusDeleted, DeletedAt: &deletedAt, CreatedAt: testTime, UpdatedAt: testTime,
 			},
 			Replies: commentdomain.ListResult{Items: []commentdomain.Comment{{
 				UUID: uuid.New(), PostUUID: testPostID, ParentUUID: &testCommentID, AuthorName: "Guest",
-				AuthorEmail: "guest@example.com", Content: "reply", Status: commentdomain.StatusApproved, Depth: 1,
+				AuthorEmail: "guest@example.com", Content: "reply", ContentHTML: "<p>reply</p>", Status: commentdomain.StatusApproved, Depth: 1,
 				CreatedAt: testTime, UpdatedAt: testTime,
 			}}, Total: 1},
 		}, nil
@@ -252,6 +252,7 @@ func TestGetCommentHidesDeletedContentAndAuthor(t *testing.T) {
 
 	data := as[map[string]any](t, decodeEnvelope(t, w).Data)
 	require.Empty(t, data["content"])
+	require.Empty(t, data["content_html"])
 	require.Nil(t, data["author"])
 
 	replies := as[[]any](t, data["replies"])
@@ -260,6 +261,7 @@ func TestGetCommentHidesDeletedContentAndAuthor(t *testing.T) {
 	reply := as[map[string]any](t, replies[0])
 	require.Equal(t, map[string]any{"id": nil, "name": "Guest", "guest": true}, reply["author"])
 	require.Equal(t, testCommentID.String(), reply["parent_id"])
+	require.Equal(t, "<p>reply</p>", reply["content_html"])
 }
 
 func TestListPostCommentsPaginatesAndParsesParent(t *testing.T) {

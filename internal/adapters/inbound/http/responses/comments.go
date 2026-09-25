@@ -15,11 +15,11 @@ func Comment(comment commentdomain.Comment) gin.H {
 		parentID = comment.ParentUUID.String()
 	}
 
-	content := comment.Content
+	content, contentHTML := comment.Content, comment.ContentHTML
 
 	author := commentAuthor(comment)
 	if comment.Status == commentdomain.StatusDeleted {
-		content = ""
+		content, contentHTML = "", ""
 		author = nil
 	}
 
@@ -30,6 +30,7 @@ func Comment(comment commentdomain.Comment) gin.H {
 		"depth":        comment.Depth,
 		"author":       author,
 		"content":      content,
+		"content_html": contentHTML,
 		"status":       string(comment.Status),
 		"upvote_count": comment.UpvoteCount,
 		"reply_count":  comment.ReplyCount,

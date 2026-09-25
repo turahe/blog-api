@@ -40,6 +40,8 @@ and rate limits to combat abuse.
 - **Sanitization and storage**: Raw markdown/text stored in `content`. `content_html` is generated
   server-side via an allow-list markdown processor (bold, italic, links, code, blockquote, lists)
   and a strict DOMPurify-style XSS sanitizer. HTML is never accepted from clients.
+  Implemented with goldmark and bluemonday in `internal/adapters/outbound/markdown`; see
+  [api.md](../backend/api.md#comment-content) for the exact allow-list.
 - **Edit grace window**: Authors can edit their own comment for `N` minutes after creation
   (default 15; site setting `comments.edit_grace_minutes`). After the window, any edit
   requires moderation permissions. `edited_at` and `edited_reason` are recorded when an

@@ -13,6 +13,7 @@ import (
 func AdminComment(comment commentdomain.Comment) gin.H {
 	payload := Comment(comment)
 	payload["content"] = comment.Content
+	payload["content_html"] = comment.ContentHTML
 	payload["author"] = commentAuthor(comment)
 	payload["author_email"] = emptyToNil(comment.AuthorEmail)
 	payload["ip_hash"] = emptyToNil(comment.IPHash)

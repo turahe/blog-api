@@ -1,5 +1,16 @@
 # Changelog
 
+## 2026-09-25 — Sanitized comment HTML
+
+### Added
+
+- Comments now return `content_html` next to `content`: the markdown is rendered with goldmark
+  and sanitized with bluemonday to paragraphs, bold, italic, code, blockquotes, lists, and
+  `http`/`https`/`mailto` links (`rel="nofollow noreferrer"`). Raw HTML, images, and headings are
+  never emitted. It is rendered on create and edit and stored in `comments.content_html`
+  (migration `00017_comment_content_html.sql`); older rows are rendered on read. Public
+  responses blank it for deleted comments, and a moderator hard delete clears it.
+
 ## 2026-09-25 — Audit logging and account activity
 
 ### Added

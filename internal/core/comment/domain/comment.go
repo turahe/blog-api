@@ -65,16 +65,18 @@ type Comment struct {
 	IPHash         string
 	UserAgent      string
 	Content        string
-	Status         Status
-	Depth          int
-	UpvoteCount    int
-	FlagCount      int
-	ReplyCount     int
-	EditedAt       *time.Time
-	CreatedAt      time.Time
-	UpdatedAt      time.Time
-	DeletedAt      *time.Time
-	DeletedByUUID  *uuid.UUID
+	// ContentHTML is Content rendered from markdown and sanitized to the comment allow-list.
+	ContentHTML   string
+	Status        Status
+	Depth         int
+	UpvoteCount   int
+	FlagCount     int
+	ReplyCount    int
+	EditedAt      *time.Time
+	CreatedAt     time.Time
+	UpdatedAt     time.Time
+	DeletedAt     *time.Time
+	DeletedByUUID *uuid.UUID
 	// ModeratedByUUID, ModerationReason, and ModeratedAt describe the latest moderator decision.
 	ModeratedByUUID  *uuid.UUID
 	ModerationReason string

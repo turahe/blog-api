@@ -254,6 +254,17 @@ Differences from the target rules below:
 - **Not yet enforced:** 2FA or password step-up on admin patch and avatar delete, CSRF (all
   routes use bearer tokens), and audit or outbox events for profile changes.
 
+### Comment content
+
+Comments are written as markdown in `content` and returned with both `content` (the raw text)
+and `content_html`. `content_html` is rendered on create and edit (CommonMark via goldmark),
+then sanitized with bluemonday to an allow-list: `p`, `br`, `strong`, `em`, `code`, `pre`,
+`blockquote`, `ul`, `ol`, `li`, and `a` with an `http`, `https`, or `mailto` `href` and
+`rel="nofollow noreferrer"`. Raw HTML in the input is dropped; headings, images, tables, and
+other elements are reduced to their text. Clients may insert `content_html` as HTML; `content`
+must still be escaped. Both fields are empty on deleted comments in public responses; the
+admin view keeps them. Rows stored before `00017_comment_content_html.sql` are rendered on read.
+
 ### Audit log and account activity
 
 `middleware.Audit` writes one `audit_logs` row per audited mutating request after the handler

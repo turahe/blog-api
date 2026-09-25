@@ -439,7 +439,7 @@ erDiagram
  varchar ip_hash "SHA-256 of client IP for spam correlation never plaintext stored"
  varchar user_agent "Up to 500 chars full user-agent string"
  text content "Submitted raw text rendered as HTML only after markdown plus XSS sanitization pipeline"
- text content_html "Cached safe HTML after sanitize null until rendered first time"
+ text content_html "Sanitized HTML rendered on create and edit empty for rows rendered on read"
  varchar status "ENUM: pending approved rejected spam flagged deleted soft-deleted"
  smallint depth "0 = root reply max depth 5 enforced by trigger and API validator"
  bigint moderation_reviewed_by FK "Admin user who moderated SET NULL when admin removed"

@@ -43,6 +43,8 @@ type Config struct {
 	EditWindow time.Duration
 	// FlagThreshold is the flag count that moves an approved comment to flagged.
 	FlagThreshold int
+	// Renderer produces ContentHTML; nil escapes the text instead of rendering markdown.
+	Renderer ports.Renderer
 }
 
 // Service implements comment use cases.
@@ -61,6 +63,14 @@ func New(repo ports.Repository, ids IDGenerator, clock Clock, cfg Config) *Servi
 
 	if cfg.FlagThreshold < 1 {
 		cfg.FlagThreshold = 3
+	}
+
+	if cfg.Renderer == nil {
+		cfg.Renderer = escapeRenderer{}
+	}
+
+	if repo != nil {
+		repo = renderingRepository{Repository: repo, renderer: cfg.Renderer}
 	}
 
 	return &Service{repo: repo, ids: ids, clock: clock, cfg: cfg}
@@ -88,12 +98,13 @@ func (s *Service) Create(ctx context.Context, in CreateInput) (commentdomain.Com
 	}
 
 	comment := commentdomain.Comment{
-		UUID:       s.ids.New(),
-		PostUUID:   in.PostUUID,
-		AuthorUUID: in.AuthorUUID,
-		Content:    content,
-		IPHash:     hashIdentity(in.ClientIP),
-		UserAgent:  truncateRunes(strings.TrimSpace(in.UserAgent), maxUserAgentRunes),
+		UUID:        s.ids.New(),
+		PostUUID:    in.PostUUID,
+		AuthorUUID:  in.AuthorUUID,
+		Content:     content,
+		ContentHTML: s.cfg.Renderer.Render(content),
+		IPHash:      hashIdentity(in.ClientIP),
+		UserAgent:   truncateRunes(strings.TrimSpace(in.UserAgent), maxUserAgentRunes),
 	}
 	if in.AuthorUUID == nil {
 		if comment.AuthorName, comment.AuthorEmail, err = s.guestIdentity(in.AuthorName, in.AuthorEmail); err != nil {
@@ -208,6 +219,7 @@ func (s *Service) Update(ctx context.Context, actorID, id uuid.UUID, content str
 	}
 
 	comment.Content = content
+	comment.ContentHTML = s.cfg.Renderer.Render(content)
 	comment.EditedAt = &now
 	comment.UpdatedAt = now
 

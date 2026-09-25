@@ -17,6 +17,7 @@ import (
 	"github.com/turahe/blog-api/internal/adapters/outbound/cache"
 	"github.com/turahe/blog-api/internal/adapters/outbound/challenge"
 	"github.com/turahe/blog-api/internal/adapters/outbound/mail"
+	"github.com/turahe/blog-api/internal/adapters/outbound/markdown"
 	"github.com/turahe/blog-api/internal/adapters/outbound/notify"
 	"github.com/turahe/blog-api/internal/adapters/outbound/oauth"
 	"github.com/turahe/blog-api/internal/adapters/outbound/persistence"
@@ -258,6 +259,7 @@ func newCommentService(cfg config.Config, db *database.Database, ids system.UUID
 		RequireApproval: cfg.CommentsRequireApproval,
 		EditWindow:      cfg.CommentsEditWindow,
 		FlagThreshold:   cfg.CommentsFlagThreshold,
+		Renderer:        markdown.New(),
 	})
 }
 
