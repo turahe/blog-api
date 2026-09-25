@@ -63,6 +63,20 @@ See `docs/backend/api.md` → Two-factor authentication for the contract.
 
 See `docs/backend/api.md` → OAuth sign-in for the contract.
 
+## Implemented: registration
+
+- Off by default; the `security.registration_enabled` setting opens it.
+- `POST /api/v1/auth/register` stores a pending sign-up, not a user, and emails a
+  verification token. It always answers `202`, so it doesn't reveal which emails have
+  accounts; an existing owner gets an "you already have an account" email instead.
+- `POST /api/v1/auth/verify-email` takes the token and the sign-up password, creates the
+  account (verified, no role) and signs it in. Requiring both stops anyone from claiming an
+  address they don't own, or from planting an account on someone else's address in advance.
+- Unverified sign-ups never exist as users, so OAuth email linking can't attach to one.
+- Limits: 10 sign-ups per hour per IP, 3 pending sign-ups per address, 24 h token lifetime.
+
+See `docs/backend/api.md` → Registration for the contract.
+
 ## Related Documents
 
 - `docs/architecture/security.md`

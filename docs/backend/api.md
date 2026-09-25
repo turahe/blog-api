@@ -137,8 +137,42 @@ deployments must re-run `app seed` to grant `admin.access`.
 
 Every anonymous auth endpoint is limited per client IP to `AUTH_LOGIN_PER_MINUTE` requests per
 minute, in these buckets: `auth.login`, `admin.auth.login`, `auth.refresh`, `auth.password`
-(forgot, reset-token check and reset share one bucket), `auth.2fa` and `auth.oauth`. Over the
+(forgot, reset-token check and reset share one bucket), `auth.2fa`, `auth.oauth` and
+`auth.verify_email`. `auth.register` is stricter: 10 requests per hour per IP. Over the
 limit the answer is `429 rate_limited` with `Retry-After`.
+
+### Registration
+
+| Operation | Route | Auth | Rate limit |
+| --- | --- | --- | --- |
+| `auth.register` | `POST /api/v1/auth/register` | none | `auth.register` = 10 per hour per IP |
+| `auth.verify_email` | `POST /api/v1/auth/verify-email` | none | `auth.verify_email` = `AUTH_LOGIN_PER_MINUTE` per IP |
+
+- **Switch.** Off by default. An admin turns it on with the `security.registration_enabled`
+  setting. While it is off, both routes answer `403 auth.registration.closed`.
+- **Register.** Body `{"email", "username", "full_name", "password"}`. The email is trimmed
+  and lowercased. The password follows the usual strength rules (12–128 characters, upper,
+  lower and a digit → `422 password.strength`). A taken username is `409 user.username.taken`.
+  The answer is always `202` with the same body, whether or not the email already has an
+  account, so the route can't be used to find out who is registered:
+  - new email: a pending sign-up is stored in `registrations` (Argon2id password hash,
+    SHA-256 of the token, 24 h expiry) and an `account.verify` email carries the token;
+  - existing account: nothing is stored and the owner gets an `account.exists` email that
+    points to password reset.
+  An address can have at most 3 live pending sign-ups; further requests still answer `202`
+  but send nothing. Emails go out after the response is written.
+- **Verify.** Body `{"token", "password"}`. The password must match the one given at
+  sign-up, so someone who registers another person's address can't finish the account
+  without them, and the address owner can't finish it without the password. On success the
+  account is created in one transaction: active, `email_verified_at` set, no role (a plain
+  reader), `blog.user.created` event. Every other pending sign-up for the address is removed,
+  and the answer is `201` with a token pair, as for `POST /auth/login`.
+- **Verify errors.** Unknown or used token → `400 auth.registration.token_invalid`; expired
+  token → `400 auth.registration.token_expired` (register again); wrong password →
+  `401 unauthorized`, which counts toward the per-email lockout; locked email →
+  `429 auth.login.locked` with `Retry-After`; the email or username was taken meanwhile → `409`.
+  A failed verification never uses up the token.
+- **Cleanup.** `auth-tokens-prune` deletes expired pending sign-ups every hour.
 
 ### OAuth sign-in (Google, GitHub)
 
@@ -477,6 +511,8 @@ Each item has `id`, `type`, `title`, `body`, `preview`, `data` (links such as `p
 - `GET /api/v1/me/notifications`
 - `GET /api/v1/me/notifications/stream` (SSE)
 - `POST /api/v1/me/notifications/:id/read`
+- `POST /api/v1/auth/register` (off unless `security.registration_enabled`; always `202`)
+- `POST /api/v1/auth/verify-email` (token + sign-up password → account + token pair)
 - `POST /api/v1/auth/login`
 - `POST /api/v1/auth/refresh`
 - `POST /api/v1/auth/logout`

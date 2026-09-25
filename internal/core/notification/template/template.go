@@ -29,7 +29,10 @@ const eventNotificationCreated = "notification.created"
 
 // Types are stable notification identifiers.
 const (
-	TypeAccountVerify        = "account.verify"
+	TypeAccountVerify = "account.verify"
+	// TypeAccountExists tells an account holder that someone tried to register their address.
+	// It is email only.
+	TypeAccountExists        = "account.exists"
 	TypePasswordReset        = "password.reset"
 	TypePasswordChanged      = "password.changed"
 	TypeEmailChangeConfirm   = "email.change.confirm"
@@ -355,6 +358,12 @@ var catalogue = map[string]map[Channel]spec{
 			event:   eventNotificationCreated,
 			title:   "Verify your email",
 			preview: "Check your email to confirm this account.",
+		},
+	},
+	TypeAccountExists: {
+		ChannelEmail: {
+			subject: "You already have an account",
+			body:    "Hi {{.Name}},\n\nSomeone tried to create an account with {{.Email}}, which already has one. Nothing was changed.\n\nIf it was you and you forgot your password, request a reset: POST {{.PublicURL}}/api/v1/auth/password/forgot\n\nIf it was not you, ignore this message.\n",
 		},
 	},
 	TypePasswordReset: {

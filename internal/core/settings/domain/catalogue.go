@@ -140,6 +140,9 @@ func DefaultCatalogue() Catalogue {
 			Default:     int64(25), Min: 0, Max: 120,
 		},
 
+		flag(CategorySecurity, "security.registration_enabled",
+			"Let visitors create accounts at POST /api/v1/auth/register (verified by email)", false),
+
 		Definition{
 			Key: "notifications.moderation_recipient_roles", Category: CategoryNotifications, Type: TypeStringList,
 			Sensitivity: AdminOnly, Description: "Roles notified about comments awaiting moderation",

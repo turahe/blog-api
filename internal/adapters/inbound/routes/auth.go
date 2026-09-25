@@ -10,6 +10,8 @@ func registerAuth(v1 *gin.RouterGroup, auth AuthMiddleware, c Controllers) {
 
 	none := v1.Group("")
 	post(none, "/auth/login", "auth.login", g, AuthNone, c, c.Auth.Login)
+	post(none, "/auth/register", "auth.register", g, AuthNone, c, c.Auth.Register)
+	post(none, "/auth/verify-email", "auth.verify_email", g, AuthNone, c, c.Auth.VerifyEmail)
 	post(none, "/auth/refresh", "auth.refresh", g, AuthNone, c, c.Auth.Refresh)
 	post(none, "/auth/password/forgot", "auth.password.forgot", g, AuthNone, c, c.Auth.PasswordForgot)
 	get(none, "/auth/password/reset/:param1", "auth.password.reset_token_validity", g, AuthNone, c, c.Auth.PasswordResetValidity)

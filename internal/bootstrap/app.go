@@ -199,7 +199,7 @@ func NewRuntime(ctx context.Context, cfg config.Config, logger *slog.Logger, ver
 		AdminUsers:     auth,
 		TwoFactor:      auth, AdminLogin: auth, OAuth: auth,
 		RoleAdmin: rbacservice.NewRoleService(roleStore),
-		Profiles:  profiles, EmailChange: auth,
+		Profiles:  profiles, EmailChange: auth, Registration: auth,
 		Impersonation: NewImpersonationService(cfg, db, events, impersonationPermissions{enforcer, roleStore}, auth),
 		Roles:         users,
 		RBAC:          enforcer,
@@ -514,10 +514,13 @@ func newAuthService(
 		return nil, err
 	}
 
+	notifier := newNotifier(cfg, db, box, logger)
+
 	auth := authservice.New(users, sessions, resets, password.New(), tokens, clock, ids, authservice.Config{
 		AccessTTL:  cfg.AccessTokenTTL,
 		RefreshTTL: cfg.RefreshTokenTTL,
-	}, nil).WithEmailChange(newNotifier(cfg, db, box, logger), cacheOrNil)
+	}, nil).WithEmailChange(notifier, cacheOrNil).
+		WithRegistration(persistence.NewRegistrationRepository(db.GORM), registrationPolicy{newSettingsReader(db)}, notifier)
 	if cfg.AuthLoginMaxFailures > 0 {
 		auth.WithLoginAttempts(ratelimit.NewLoginLockout(redisClient, cfg.AuthLoginMaxFailures, cfg.AuthLoginLockout))
 	}
@@ -613,7 +616,27 @@ func CacheTTLs(cfg config.Config) map[readcache.Family]time.Duration {
 // newNotifier sends account emails over SMTP, or logs them when SMTP is not configured. With
 // a message broker and APP_ENCRYPTION_KEY, emails are queued as encrypted outbox commands for
 // app worker, falling back to SMTP when a command cannot be stored.
-func newNotifier(cfg config.Config, db *database.Database, box authports.SecretBox, logger *slog.Logger) authports.EmailChangeNotifier {
+// accountNotifier delivers every account email the auth service sends.
+type accountNotifier interface {
+	authports.EmailChangeNotifier
+	authports.RegistrationNotifier
+}
+
+// registrationPolicy opens public sign-up with the security.registration_enabled setting.
+type registrationPolicy struct {
+	settings *settingsservice.Service
+}
+
+func (p registrationPolicy) RegistrationOpen(ctx context.Context) (bool, error) {
+	values, err := p.settings.Values(ctx)
+	if err != nil {
+		return false, err
+	}
+
+	return values.Bool("security.registration_enabled"), nil
+}
+
+func newNotifier(cfg config.Config, db *database.Database, box authports.SecretBox, logger *slog.Logger) accountNotifier {
 	mailer := NewTransactionalMailer(cfg, db, box, logger)
 	if mailer == nil {
 		return notify.NewLog(logger)

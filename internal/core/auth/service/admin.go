@@ -136,6 +136,11 @@ func (s *AuthService) ensureIdentityFree(ctx context.Context, email, username st
 		return err
 	}
 
+	return s.usernameFree(ctx, username)
+}
+
+// usernameFree returns userdomain.ErrUsernameTaken when a live account uses username.
+func (s *AuthService) usernameFree(ctx context.Context, username string) error {
 	existing, err := s.users.FindByUsernameOrEmail(ctx, username)
 	if err == nil && strings.EqualFold(existing.Username, username) {
 		return userdomain.ErrUsernameTaken

@@ -48,6 +48,8 @@ type Deps struct {
 	// NewsletterProvider is the read-only delivery provider shown in the admin provider config.
 	NewsletterProvider responses.NewsletterProvider
 	EmailChange        authports.EmailChanger
+	// Registration serves public sign-up; nil keeps the routes as 501 stubs.
+	Registration authports.Registrar
 	// AvatarMaxBytes > 0 enables avatar upload and removal (requires media storage).
 	AvatarMaxBytes int64
 	Roles          RoleLookup
@@ -103,6 +105,8 @@ const (
 	permSettingsUpdate   = "settings.update"
 	permSettingsHistory  = "settings.history.read"
 	settingsPutPerMinute = 60
+	// registerPerHour is the per-IP sign-up budget.
+	registerPerHour = 10
 
 	permPostRevisionsView    = "post.revisions.view"
 	permPostRevisionsViewAll = "post.revisions.view_all"
@@ -370,6 +374,12 @@ func authControllers(deps Deps) routes.Auth {
 			PasswordReset:         chain(password, resetPasswordHandler(deps.Auth)),
 			MePasswordUpdate:      changePasswordHandler(deps.Auth),
 		}
+	}
+
+	if r := deps.Registration; r != nil {
+		a.Register = chain(middleware.RateLimit(deps.RateLimiter, deps.Logger, "auth.register", registerPerHour, time.Hour),
+			registerHandler(r))
+		a.VerifyEmail = chain(limit("auth.verify_email"), verifyEmailHandler(r))
 	}
 
 	if deps.AdminLogin != nil {

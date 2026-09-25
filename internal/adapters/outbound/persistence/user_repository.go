@@ -68,13 +68,14 @@ func (r *UserRepository) RecordLogin(ctx context.Context, id uuid.UUID, at time.
 // Create inserts a user and returns it with its assigned id.
 func (r *UserRepository) Create(ctx context.Context, user userdomain.User) (userdomain.User, error) {
 	model := UserModel{
-		UUID:      user.UUID,
-		Email:     user.Email,
-		Username:  user.Username,
-		FullName:  user.FullName,
-		Status:    string(user.Status),
-		CreatedAt: user.CreatedAt,
-		UpdatedAt: user.UpdatedAt,
+		UUID:            user.UUID,
+		Email:           user.Email,
+		Username:        user.Username,
+		FullName:        user.FullName,
+		Status:          string(user.Status),
+		EmailVerifiedAt: user.EmailVerifiedAt,
+		CreatedAt:       user.CreatedAt,
+		UpdatedAt:       user.UpdatedAt,
 	}
 	if user.PasswordHash != "" {
 		model.PasswordHash = &user.PasswordHash

@@ -24,6 +24,10 @@ var (
 	ErrEmailTaken         = errors.New("email already in use")
 	ErrAccountLocked      = errors.New("account temporarily locked")
 	ErrTargetInactive     = errors.New("target account inactive")
+
+	ErrRegistrationClosed       = errors.New("registration closed")
+	ErrRegistrationTokenInvalid = errors.New("invalid registration token")
+	ErrRegistrationTokenExpired = errors.New("registration token expired")
 )
 
 // LockedError is ErrAccountLocked with the time left until login is allowed again.
@@ -63,6 +67,27 @@ type NewUser struct {
 	FullName string
 	Password string
 	Roles    []string
+}
+
+// SignUp is a public registration request.
+type SignUp struct {
+	Email    string
+	Username string
+	FullName string
+	Password string
+}
+
+// Registration is a sign-up waiting for its address to be verified. It becomes a user only
+// when its token is presented with the password it was created with.
+type Registration struct {
+	UUID         uuid.UUID
+	Email        string
+	Username     string
+	FullName     string
+	PasswordHash string
+	TokenHash    string
+	ExpiresAt    time.Time
+	CreatedAt    time.Time
 }
 
 // AdminReset is the result of an administrator-initiated password reset.

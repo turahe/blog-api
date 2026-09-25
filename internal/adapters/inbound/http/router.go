@@ -47,6 +47,7 @@ type Dependencies struct {
 	RoleAdmin      *rbacservice.RoleService
 	Profiles       *userservice.ProfileService
 	EmailChange    authports.EmailChanger
+	Registration   authports.Registrar
 	AvatarMaxBytes int64 // > 0 enables avatar routes
 	Roles          handlers.RoleLookup
 	RBAC           rbacports.Enforcer
@@ -118,6 +119,7 @@ func NewRouter(deps Dependencies) (*gin.Engine, error) {
 		Auth:           deps.Auth,
 		Users:          deps.Users,
 		EmailChange:    deps.EmailChange,
+		Registration:   deps.Registration,
 		AvatarMaxBytes: deps.AvatarMaxBytes,
 		Roles:          deps.Roles,
 		RBAC:           deps.RBAC,

@@ -198,6 +198,7 @@ func scheduledJobs(
 	processed := persistence.NewProcessedMessageRepository(db.GORM)
 	sessions := persistence.NewSessionRepository(db.GORM)
 	resets := persistence.NewResetTokenRepository(db.GORM)
+	registrations := persistence.NewRegistrationRepository(db.GORM)
 	newsletter := bootstrap.NewNewsletterService(cfg, db, bootstrap.NewEvents(cfg, db), nil, logger)
 	privacy := bootstrap.NewPrivacyService(ctx, cfg, db, nil,
 		event.Unit{Tx: persistence.NewTransactor(db.GORM)}, readCache, logger).WithModuleErasers(newsletter)
@@ -216,8 +217,10 @@ func scheduledJobs(
 				sessions.PruneExpiredBefore(ctx, time.Now().Add(-sessionRetention)))
 			resetsErr := logPruned(ctx, logger, "reset tokens")(
 				resets.PruneExpiredBefore(ctx, time.Now().Add(-resetTokenRetention)))
+			registrationsErr := logPruned(ctx, logger, "expired registrations")(
+				registrations.PruneExpired(ctx, time.Now()))
 
-			return errors.Join(sessionsErr, resetsErr)
+			return errors.Join(sessionsErr, resetsErr, registrationsErr)
 		}},
 		{Name: "privacy-requests", Every: time.Minute, Run: func(ctx context.Context) error {
 			done, err := privacy.ProcessPending(ctx, privacyBatch)

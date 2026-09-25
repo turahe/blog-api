@@ -5271,6 +5271,134 @@
                 }
             }
         },
+        "/api/v1/auth/register": {
+            "post": {
+                "description": "Starts a sign-up while the `security.registration_enabled` setting is on and emails a\nverification token, valid for 24 hours, to complete at POST /api/v1/auth/verify-email. The answer\nis the same `202` whether or not the email already has an account; that account is\nemailed about the attempt instead. No account exists, and the username stays free,\nuntil the email is verified. At most 3 unexpired sign-ups per address are kept; further\nattempts send nothing. Limited to 10 requests per hour per client IP.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "auth"
+                ],
+                "summary": "Register an account",
+                "parameters": [
+                    {
+                        "description": "sign-up",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/requests.Register"
+                        }
+                    }
+                ],
+                "responses": {
+                    "202": {
+                        "description": "Accepted",
+                        "schema": {
+                            "$ref": "#/definitions/responses.Envelope"
+                        }
+                    },
+                    "400": {
+                        "description": "validation_error",
+                        "schema": {
+                            "$ref": "#/definitions/responses.Envelope"
+                        }
+                    },
+                    "403": {
+                        "description": "auth.registration.closed",
+                        "schema": {
+                            "$ref": "#/definitions/responses.Envelope"
+                        }
+                    },
+                    "409": {
+                        "description": "user.username.taken",
+                        "schema": {
+                            "$ref": "#/definitions/responses.Envelope"
+                        }
+                    },
+                    "422": {
+                        "description": "password.strength",
+                        "schema": {
+                            "$ref": "#/definitions/responses.Envelope"
+                        }
+                    },
+                    "429": {
+                        "description": "rate limited; see Retry-After",
+                        "schema": {
+                            "$ref": "#/definitions/responses.Envelope"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/auth/verify-email": {
+            "post": {
+                "description": "Exchanges the emailed sign-up token, together with the password chosen at sign-up, for an\nactive account with a verified email, and signs it in (same token pair as login, with a\n7-day session). Requiring the password means neither someone who registered another\nperson's address nor the owner of an address someone else registered can activate the\naccount alone. A wrong password counts toward the login lockout. Using a token removes\nevery other pending sign-up for the address.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "auth"
+                ],
+                "summary": "Verify email and activate a registered account",
+                "parameters": [
+                    {
+                        "description": "token and password",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/requests.VerifyEmail"
+                        }
+                    }
+                ],
+                "responses": {
+                    "201": {
+                        "description": "Created",
+                        "schema": {
+                            "$ref": "#/definitions/responses.Envelope"
+                        }
+                    },
+                    "400": {
+                        "description": "auth.registration.token_invalid, auth.registration.token_expired",
+                        "schema": {
+                            "$ref": "#/definitions/responses.Envelope"
+                        }
+                    },
+                    "401": {
+                        "description": "wrong password",
+                        "schema": {
+                            "$ref": "#/definitions/responses.Envelope"
+                        }
+                    },
+                    "403": {
+                        "description": "auth.registration.closed",
+                        "schema": {
+                            "$ref": "#/definitions/responses.Envelope"
+                        }
+                    },
+                    "409": {
+                        "description": "auth.email.taken, user.username.taken",
+                        "schema": {
+                            "$ref": "#/definitions/responses.Envelope"
+                        }
+                    },
+                    "429": {
+                        "description": "rate limited or locked; see Retry-After",
+                        "schema": {
+                            "$ref": "#/definitions/responses.Envelope"
+                        }
+                    }
+                }
+            }
+        },
         "/api/v1/categories": {
             "get": {
                 "produces": [
@@ -8857,6 +8985,35 @@
                 }
             }
         },
+        "requests.Register": {
+            "type": "object",
+            "required": [
+                "email",
+                "full_name",
+                "password",
+                "username"
+            ],
+            "properties": {
+                "email": {
+                    "type": "string",
+                    "maxLength": 254
+                },
+                "full_name": {
+                    "type": "string",
+                    "maxLength": 120
+                },
+                "password": {
+                    "type": "string",
+                    "maxLength": 128,
+                    "minLength": 12
+                },
+                "username": {
+                    "type": "string",
+                    "maxLength": 32,
+                    "minLength": 3
+                }
+            }
+        },
         "requests.ReplacePostMedia": {
             "type": "object",
             "required": [
@@ -9218,6 +9375,23 @@
                     "type": "string",
                     "maxLength": 100,
                     "minLength": 1
+                }
+            }
+        },
+        "requests.VerifyEmail": {
+            "type": "object",
+            "required": [
+                "password",
+                "token"
+            ],
+            "properties": {
+                "password": {
+                    "type": "string",
+                    "maxLength": 128
+                },
+                "token": {
+                    "type": "string",
+                    "maxLength": 512
                 }
             }
         },

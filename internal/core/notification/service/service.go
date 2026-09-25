@@ -7,6 +7,7 @@ import (
 	"strings"
 	"time"
 
+	authdomain "github.com/turahe/blog-api/internal/core/auth/domain"
 	authports "github.com/turahe/blog-api/internal/core/auth/ports"
 	"github.com/turahe/blog-api/internal/core/notification/ports"
 	"github.com/turahe/blog-api/internal/core/notification/template"
@@ -21,7 +22,10 @@ type Service struct {
 	publicURL string
 }
 
-var _ authports.EmailChangeNotifier = (*Service)(nil)
+var (
+	_ authports.EmailChangeNotifier  = (*Service)(nil)
+	_ authports.RegistrationNotifier = (*Service)(nil)
+)
 
 // New returns a notification service. publicURL is the API origin used in message text.
 // Copy comes from the built-in catalogue until WithTemplates sets a store.
@@ -67,6 +71,19 @@ func (s *Service) PasswordReset(ctx context.Context, user userdomain.User, rawTo
 	data := s.data(user, expiresAt)
 	data.Token = rawToken
 	s.sendTemplate(ctx, user.Email, template.TypePasswordReset, data)
+}
+
+// AccountVerify sends the sign-up verification token to the registered address.
+func (s *Service) AccountVerify(ctx context.Context, registration authdomain.Registration, rawToken string) {
+	data := s.data(userdomain.User{Email: registration.Email, Username: registration.Username, FullName: registration.FullName},
+		registration.ExpiresAt)
+	data.Token = rawToken
+	s.sendTemplate(ctx, registration.Email, template.TypeAccountVerify, data)
+}
+
+// AccountExists tells an account that someone tried to register its address.
+func (s *Service) AccountExists(ctx context.Context, user userdomain.User) {
+	s.sendTemplate(ctx, user.Email, template.TypeAccountExists, s.data(user, time.Time{}))
 }
 
 // PasswordChanged tells the account that its password was updated.

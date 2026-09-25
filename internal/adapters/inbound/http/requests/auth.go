@@ -42,6 +42,20 @@ type Logout struct {
 	RefreshToken string `json:"refresh_token" binding:"omitempty"`
 }
 
+// Register is POST /api/v1/auth/register.
+type Register struct {
+	Email    string `json:"email" binding:"required,email,max=254"`
+	Username string `json:"username" binding:"required,min=3,max=32"`
+	FullName string `json:"full_name" binding:"required,max=120"`
+	Password string `json:"password" binding:"required,min=12,max=128"`
+}
+
+// VerifyEmail is POST /api/v1/auth/verify-email. Password is the one chosen at sign-up.
+type VerifyEmail struct {
+	Token    string `json:"token" binding:"required,max=512"`
+	Password string `json:"password" binding:"required,max=128"`
+}
+
 // ForgotPassword is POST /api/v1/auth/password/forgot.
 type ForgotPassword struct {
 	EmailOrUsername string `json:"email_or_username" binding:"required"`

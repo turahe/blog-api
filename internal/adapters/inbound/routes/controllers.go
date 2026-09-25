@@ -141,6 +141,8 @@ type Health struct {
 // Auth and password handlers.
 type Auth struct {
 	Login                 gin.HandlerFunc
+	Register              gin.HandlerFunc
+	VerifyEmail           gin.HandlerFunc
 	Refresh               gin.HandlerFunc
 	Logout                gin.HandlerFunc
 	PasswordForgot        gin.HandlerFunc

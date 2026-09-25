@@ -28,6 +28,8 @@ type Config struct {
 	RefreshTTL     time.Duration
 	ResetTokenTTL  time.Duration
 	EmailChangeTTL time.Duration
+	// RegistrationTTL is how long a sign-up's verification token stays valid.
+	RegistrationTTL time.Duration
 }
 
 // shortSessionTTL is the refresh session lifetime of a login without "remember me".
@@ -54,6 +56,7 @@ type AuthService struct {
 	cfg      Config
 	mfa      twoFactorDeps
 	oauth    oauthDeps
+	signup   signupDeps
 	events   event.Unit
 
 	dummyOnce sync.Once
@@ -99,6 +102,10 @@ func New(
 
 	if cfg.EmailChangeTTL <= 0 {
 		cfg.EmailChangeTTL = time.Hour
+	}
+
+	if cfg.RegistrationTTL <= 0 {
+		cfg.RegistrationTTL = 24 * time.Hour
 	}
 
 	return &AuthService{
@@ -457,15 +464,20 @@ func (s *AuthService) issuePasswordReset(ctx context.Context, user userdomain.Us
 	// Delivered in the background: a slow mail server must not reveal, through
 	// response time, that the account exists.
 	if s.notifier != nil {
-		go func() {
-			ctx, cancel := context.WithTimeout(context.WithoutCancel(ctx), deliveryTimeout)
-			defer cancel()
-
-			s.notifier.PasswordReset(ctx, user, raw, token.ExpiresAt)
-		}()
+		deliverLater(ctx, func(ctx context.Context) { s.notifier.PasswordReset(ctx, user, raw, token.ExpiresAt) })
 	}
 
 	return token.ExpiresAt, nil
+}
+
+// deliverLater runs send in the background with its own deadline, detached from the request.
+func deliverLater(ctx context.Context, send func(context.Context)) {
+	go func() {
+		ctx, cancel := context.WithTimeout(context.WithoutCancel(ctx), deliveryTimeout)
+		defer cancel()
+
+		send(ctx)
+	}()
 }
 
 // CheckResetToken reports whether a reset token can still be used.
@@ -744,6 +756,9 @@ var errorMappings = []errorMapping{
 	{authdomain.ErrOAuthLinkConflict, "auth.oauth.link_conflict", "The account is already linked to another identity at this provider", 409},
 	{rbacdomain.ErrRoleNotFound, "rbac.role.not_found", "", 422},
 	{authdomain.ErrPasswordStrength, "password.strength", "Password does not meet strength requirements", 422},
+	{authdomain.ErrRegistrationClosed, "auth.registration.closed", "Registration is closed", 403},
+	{authdomain.ErrRegistrationTokenInvalid, "auth.registration.token_invalid", "Invalid verification token", 400},
+	{authdomain.ErrRegistrationTokenExpired, "auth.registration.token_expired", "Verification token expired; register again", 400},
 	{authdomain.ErrTokenUsed, "auth.password.reset_token_used", "Reset token already used", 400},
 	{authdomain.ErrTokenExpired, "auth.password.reset_token_expired", "Reset token expired", 400},
 	{authdomain.ErrInvalidToken, codeUnauthorized, "Invalid or expired token", 401},

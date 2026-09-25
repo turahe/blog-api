@@ -47,6 +47,7 @@ Values are inserted as plain text. Newlines in values are collapsed so they cann
 | Type | Email subject | Web title | SSE preview |
 | --- | --- | --- | --- |
 | `account.verify` | Verify your email address | Verify your email | Check your email to confirm this account. |
+| `account.exists` | You already have an account | — | — |
 | `password.reset` | Reset your password | Reset your password | Check your email for the reset token. |
 | `password.changed` | Your password was changed | Your password was changed | If this was not you, reset your password. |
 | `email.change.confirm` | Confirm your new email address | Confirm your new email | Check the new address for the confirmation token. |
@@ -59,6 +60,8 @@ Values are inserted as plain text. Newlines in values are collapsed so they cann
 | `comment.moderated` | — | Your comment was `{{.Outcome}}` | `{{.PostTitle}}` |
 
 Types with no email subject are in-app only: they have web and SSE templates and are never mailed.
+`account.exists` is the reverse: email only, sent when someone registers with an address that
+already has an account. `account.verify` and `account.exists` go to the address, not to a user.
 
 SSE frames use `event: notification.created`. The `data` object carries `type`, `title`, and `preview`. Web uses the same `type` and `title`, plus the longer `body`. Email uses `subject` and the plain-text `body`, which is the only place a reset or confirmation token appears.
 

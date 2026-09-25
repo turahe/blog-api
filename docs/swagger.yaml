@@ -798,6 +798,28 @@ definitions:
     required:
     - refresh_token
     type: object
+  requests.Register:
+    properties:
+      email:
+        maxLength: 254
+        type: string
+      full_name:
+        maxLength: 120
+        type: string
+      password:
+        maxLength: 128
+        minLength: 12
+        type: string
+      username:
+        maxLength: 32
+        minLength: 3
+        type: string
+    required:
+    - email
+    - full_name
+    - password
+    - username
+    type: object
   requests.ReplacePostMedia:
     properties:
       enforce_cover_consistency:
@@ -1051,6 +1073,18 @@ definitions:
         maxLength: 100
         minLength: 1
         type: string
+    type: object
+  requests.VerifyEmail:
+    properties:
+      password:
+        maxLength: 128
+        type: string
+      token:
+        maxLength: 512
+        type: string
+    required:
+    - password
+    - token
     type: object
   responses.Envelope:
     properties:
@@ -4622,6 +4656,102 @@ paths:
           schema:
             $ref: '#/definitions/responses.Envelope'
       summary: Refresh access token
+      tags:
+      - auth
+  /api/v1/auth/register:
+    post:
+      consumes:
+      - application/json
+      description: |-
+        Starts a sign-up while the `security.registration_enabled` setting is on and emails a
+        verification token, valid for 24 hours, to complete at POST /api/v1/auth/verify-email. The answer
+        is the same `202` whether or not the email already has an account; that account is
+        emailed about the attempt instead. No account exists, and the username stays free,
+        until the email is verified. At most 3 unexpired sign-ups per address are kept; further
+        attempts send nothing. Limited to 10 requests per hour per client IP.
+      parameters:
+      - description: sign-up
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/requests.Register'
+      produces:
+      - application/json
+      responses:
+        "202":
+          description: Accepted
+          schema:
+            $ref: '#/definitions/responses.Envelope'
+        "400":
+          description: validation_error
+          schema:
+            $ref: '#/definitions/responses.Envelope'
+        "403":
+          description: auth.registration.closed
+          schema:
+            $ref: '#/definitions/responses.Envelope'
+        "409":
+          description: user.username.taken
+          schema:
+            $ref: '#/definitions/responses.Envelope'
+        "422":
+          description: password.strength
+          schema:
+            $ref: '#/definitions/responses.Envelope'
+        "429":
+          description: rate limited; see Retry-After
+          schema:
+            $ref: '#/definitions/responses.Envelope'
+      summary: Register an account
+      tags:
+      - auth
+  /api/v1/auth/verify-email:
+    post:
+      consumes:
+      - application/json
+      description: |-
+        Exchanges the emailed sign-up token, together with the password chosen at sign-up, for an
+        active account with a verified email, and signs it in (same token pair as login, with a
+        7-day session). Requiring the password means neither someone who registered another
+        person's address nor the owner of an address someone else registered can activate the
+        account alone. A wrong password counts toward the login lockout. Using a token removes
+        every other pending sign-up for the address.
+      parameters:
+      - description: token and password
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/requests.VerifyEmail'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            $ref: '#/definitions/responses.Envelope'
+        "400":
+          description: auth.registration.token_invalid, auth.registration.token_expired
+          schema:
+            $ref: '#/definitions/responses.Envelope'
+        "401":
+          description: wrong password
+          schema:
+            $ref: '#/definitions/responses.Envelope'
+        "403":
+          description: auth.registration.closed
+          schema:
+            $ref: '#/definitions/responses.Envelope'
+        "409":
+          description: auth.email.taken, user.username.taken
+          schema:
+            $ref: '#/definitions/responses.Envelope'
+        "429":
+          description: rate limited or locked; see Retry-After
+          schema:
+            $ref: '#/definitions/responses.Envelope'
+      summary: Verify email and activate a registered account
       tags:
       - auth
   /api/v1/categories:

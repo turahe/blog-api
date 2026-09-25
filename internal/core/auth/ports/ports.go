@@ -54,6 +54,37 @@ type EmailChangeNotifier interface {
 	PasswordChanged(ctx context.Context, user userdomain.User)
 }
 
+// RegistrationNotifier delivers sign-up emails, under the same contract as EmailChangeNotifier.
+type RegistrationNotifier interface {
+	// AccountVerify sends the verification token to the registration's address.
+	AccountVerify(ctx context.Context, registration authdomain.Registration, rawToken string)
+	// AccountExists tells an account that someone tried to register its address again.
+	AccountExists(ctx context.Context, user userdomain.User)
+}
+
+// RegistrationRepository stores sign-ups waiting for email verification.
+type RegistrationRepository interface {
+	// Create stores the registration unless its address already has maxLive unexpired ones,
+	// and reports whether it was stored.
+	Create(ctx context.Context, registration authdomain.Registration, maxLive int) (bool, error)
+	// FindByTokenHash returns authdomain.ErrRegistrationTokenInvalid when no registration matches.
+	FindByTokenHash(ctx context.Context, hash string) (authdomain.Registration, error)
+	// Consume deletes the registration with tokenHash and every other one for the same address;
+	// false when it was already gone.
+	Consume(ctx context.Context, tokenHash string) (bool, error)
+}
+
+// RegistrationPolicy reports whether public sign-up is open.
+type RegistrationPolicy interface {
+	RegistrationOpen(ctx context.Context) (bool, error)
+}
+
+// Registrar is the public sign-up use-case API consumed by HTTP handlers.
+type Registrar interface {
+	Register(ctx context.Context, in authdomain.SignUp) error
+	VerifyEmail(ctx context.Context, rawToken, password, userAgent, ip string) (authdomain.TokenPair, error)
+}
+
 // EmailChanger is the email change use-case API consumed by HTTP handlers.
 type EmailChanger interface {
 	RequestEmailChange(ctx context.Context, userID uuid.UUID, newEmail, password string) (authdomain.EmailChangeRequest, error)

@@ -8,6 +8,7 @@ import (
 	"time"
 	"unicode/utf8"
 
+	authdomain "github.com/turahe/blog-api/internal/core/auth/domain"
 	authports "github.com/turahe/blog-api/internal/core/auth/ports"
 	userdomain "github.com/turahe/blog-api/internal/core/user/domain"
 )
@@ -18,7 +19,10 @@ type Log struct {
 	logger *slog.Logger
 }
 
-var _ authports.EmailChangeNotifier = (*Log)(nil)
+var (
+	_ authports.EmailChangeNotifier  = (*Log)(nil)
+	_ authports.RegistrationNotifier = (*Log)(nil)
+)
 
 // NewLog returns a log notifier.
 func NewLog(logger *slog.Logger) *Log {
@@ -50,6 +54,22 @@ func (l *Log) PasswordReset(ctx context.Context, user userdomain.User, _ string,
 		"user_id", user.UUID,
 		"to", MaskEmail(user.Email),
 		"expires_at", expiresAt,
+	)
+}
+
+// AccountVerify logs that a verification message would be sent. The token is never logged.
+func (l *Log) AccountVerify(ctx context.Context, registration authdomain.Registration, _ string) {
+	l.logger.InfoContext(ctx, "notify: account verification",
+		"to", MaskEmail(registration.Email),
+		"expires_at", registration.ExpiresAt,
+	)
+}
+
+// AccountExists logs the notice sent when an address is registered again.
+func (l *Log) AccountExists(ctx context.Context, user userdomain.User) {
+	l.logger.InfoContext(ctx, "notify: account already exists",
+		"user_id", user.UUID,
+		"to", MaskEmail(user.Email),
 	)
 }
 

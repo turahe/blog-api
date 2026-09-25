@@ -1,5 +1,30 @@
 # Changelog
 
+## 2026-09-25 — Self-registration with email verification
+
+### Added
+
+- `POST /api/v1/auth/register` and `POST /api/v1/auth/verify-email`. A visitor signs up with
+  email, username, full name and password, gets a verification token by email, and posts it
+  back with the same password to create the account (verified, no role) and sign in.
+- `security.registration_enabled` setting, off by default. While it is off both routes answer
+  `403 auth.registration.closed`.
+- `registrations` table (migration 00036) for pending sign-ups; `auth-tokens-prune` removes
+  expired ones.
+- `account.exists` email template, sent when someone registers with an address that already
+  has an account. `SeedDefaults` adds it to existing databases without touching edited rows.
+
+### Security
+
+- Register always answers `202`, hashes the password on every path, and sends email after the
+  response, so it doesn't reveal which addresses have accounts.
+- Pending sign-ups are not users: OAuth email linking and login can't reach an unverified
+  account, and usernames aren't reserved until verification.
+- Verification needs the sign-up password as well as the token, which blocks
+  pre-registration of someone else's address. Wrong passwords count toward the per-email
+  login lockout and never use up the token.
+- Limits: 10 sign-ups per hour per IP, 3 pending sign-ups per address, 24 hour tokens.
+
 ## 2026-09-25 — Analytics load, performance, and privacy review
 
 ### Added

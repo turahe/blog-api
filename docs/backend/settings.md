@@ -36,6 +36,7 @@ passes the current rules resolves to the default and is reported in `default_app
 | `analytics.enabled` | boolean | public_safe | `true` |
 | `analytics.consent_required` | boolean | public_safe | `true` |
 | `analytics.raw_retention_days` | integer 1–730 | admin_only | `90` |
+| `security.registration_enabled` | boolean — opens `POST /api/v1/auth/register` | public_safe | `false` |
 | `notifications.moderation_recipient_roles` | subset of admin, editor, moderator | admin_only | `["admin","moderator"]` |
 | `notifications.digest_cadence` | off, daily, weekly | admin_only | `off` |
 | `seo.title_template` | string containing `{title}` (≤ 120) | public_safe | `{title} \| {site}` |

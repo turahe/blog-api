@@ -147,6 +147,18 @@ erDiagram
  datetime created_at ""
  }
 
+ registrations {
+ bigint id PK
+ uuid uuid UK "Public identifier"
+ varchar email "Lowercased; at most 3 live rows per address"
+ varchar username "Not reserved until verified"
+ varchar full_name ""
+ text password_hash "Argon2id; must match again at verification"
+ varchar token_hash UK "SHA-256 of the emailed token"
+ datetime expires_at "24 h; pruned hourly"
+ datetime created_at ""
+ }
+
  casbin_rules {
  bigint id PK
  uuid uuid UK "Public identifier"
