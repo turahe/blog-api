@@ -1,5 +1,14 @@
 # Changelog
 
+## 2026-09-25 — Comment abuse controls documented; phase 3 done
+
+### Changed
+
+- `docs/security/overview.md` gains an "Abuse and spam" section covering rate limits, post
+  policies, the guest gate, Turnstile, the honeypot, content limits, community flags,
+  moderation, IP hashing, and the known gaps.
+- Phase 3 (collaboration and moderation) is marked done.
+
 ## 2026-09-25 — Comment repository tests
 
 ### Added

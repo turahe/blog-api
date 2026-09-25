@@ -7,7 +7,7 @@ Each phase file says *what is left to build*; the goals below say *what each pha
 | --- | --- | --- | --- |
 | 1 — Foundation | [phase-1-foundation.md](./phase-1-foundation.md) | Done | Bootstrap, config, DB/Redis, health, auth, user/role/permission model |
 | 2 — Content Core | [phase-2-content-core.md](./phase-2-content-core.md) | Done | Posts, categories, tags, media, public reads, Redis caching |
-| 3 — Collaboration and Moderation | [phase-3-collaboration-moderation.md](./phase-3-collaboration-moderation.md) | Partial | Comments, moderation, audit logging, notification hooks |
+| 3 — Collaboration and Moderation | [phase-3-collaboration-moderation.md](./phase-3-collaboration-moderation.md) | Done | Comments, moderation, audit logging, notification hooks |
 | 4 — Event-Driven Platform | [phase-4-event-driven-platform.md](./phase-4-event-driven-platform.md) | Partial | Watermill publishing, durable outbox, workers/jobs, media cache, ops hardening |
 | 5 — Product Expansion | [phase-5-product-expansion.md](./phase-5-product-expansion.md) | Planned | Richer admin UX, search, analytics dashboard, privacy/consent, media pipeline |
 | 6 — Analytics and Reporting | [phase-6-analytics-reporting.md](./phase-6-analytics-reporting.md) | Planned | Telemetry ingest, popular/retention widgets, search CTR, realtime admin views, export/retention |

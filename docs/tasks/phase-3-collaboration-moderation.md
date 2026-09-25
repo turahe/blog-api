@@ -8,7 +8,7 @@ Index: [README.md](./README.md).
 
 ## Status
 
-**Partial** — the comment core, repository, and all 8 public and self-service comment
+**Done** — the comment core, repository, and all 8 public and self-service comment
 operations are wired (migration `00009_comments.sql`), with ownership checks, Redis rate
 limits, sanitized `content_html` (migration `00017_comment_content_html.sql`), and per-post
 comment policies (migration `00018_post_comment_policy.sql`). Guest comments can require a
@@ -133,7 +133,7 @@ Specs: [notification.md](../features/notification.md),
 - [x] Service tests for threading depth and edit-window expiry (`comment/service/service_test.go`)
 - [x] Repository tests against a real database for flag dedupe, upvote toggle, reply counts,
       moderation rollback, and hard-delete scrub (`persistence/comment_repository_test.go`)
-- [ ] Abuse-and-spam section added to [overview.md](../security/overview.md)
+- [x] Abuse-and-spam section added to [overview.md](../security/overview.md)
 - [x] SSE testing approach documented in [strategy.md](../testing/strategy.md)
 
 ## References
