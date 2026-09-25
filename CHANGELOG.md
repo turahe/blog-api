@@ -1,5 +1,15 @@
 # Changelog
 
+## 2026-09-25 — Comment repository tests
+
+### Added
+
+- PostgreSQL tests for the comment repository: one flag per user or guest identity and the
+  flag threshold (approved comments only), upvote toggling and counts, reply counts that
+  include only approved replies and deleted placeholders, a moderation batch rolled back
+  when one comment has changed status, and hard delete (a leaf is removed but its log entry
+  stays; a parent with replies is scrubbed and its flags and upvotes are cleared).
+
 ## 2026-09-25 — Live notification stream
 
 ### Added

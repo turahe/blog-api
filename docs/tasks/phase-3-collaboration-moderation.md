@@ -131,8 +131,8 @@ Specs: [notification.md](../features/notification.md),
 - [x] Handler tests for ownership failures (`handlers/comments_test.go`) and comment route auth modes
 - [x] Handler tests for moderation authorization failures (`handlers/comments_admin_test.go`)
 - [x] Service tests for threading depth and edit-window expiry (`comment/service/service_test.go`)
-- [ ] Repository tests against a real database for flag dedupe, upvote toggle, reply counts,
-      moderation rollback, and hard-delete scrub (covered today by manual end-to-end smokes only)
+- [x] Repository tests against a real database for flag dedupe, upvote toggle, reply counts,
+      moderation rollback, and hard-delete scrub (`persistence/comment_repository_test.go`)
 - [ ] Abuse-and-spam section added to [overview.md](../security/overview.md)
 - [x] SSE testing approach documented in [strategy.md](../testing/strategy.md)
 
