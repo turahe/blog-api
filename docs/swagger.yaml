@@ -571,6 +571,17 @@ paths:
       tags:
       - admin
   /api/v1/admin/categories:
+    get:
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/responses.Envelope'
+      summary: List categories
+      tags:
+      - public
     post:
       consumes:
       - application/json
@@ -2055,7 +2066,7 @@ paths:
       summary: Logout
       tags:
       - auth
-  /api/v1/auth/oauth/{provider}/callback:
+  /api/v1/auth/oauth/{param1}/callback:
     post:
       consumes:
       - application/json
@@ -2067,7 +2078,7 @@ paths:
       parameters:
       - description: google or github
         in: path
-        name: provider
+        name: param1
         required: true
         type: string
       - description: code and state
@@ -2106,7 +2117,7 @@ paths:
       summary: Complete an OAuth sign-in
       tags:
       - auth
-  /api/v1/auth/oauth/{provider}/start:
+  /api/v1/auth/oauth/{param1}/start:
     get:
       description: |-
         Returns the provider authorization URL (with state and a PKCE challenge) for the
@@ -2115,7 +2126,7 @@ paths:
       parameters:
       - description: google or github
         in: path
-        name: provider
+        name: param1
         required: true
         type: string
       - description: registered client callback URL

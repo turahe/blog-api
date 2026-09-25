@@ -16,3 +16,7 @@ Published HTTP docs are swag-generated under [`docs/`](../../../../docs/) (`make
 ```bash
 go test ./internal/adapters/inbound/routes/...
 ```
+
+`swagger_parity_test.go` fails when an implemented route has no swag annotation, or when
+`docs/swagger.json` documents a route that is not mounted. Routes mounted with a nil handler
+(501 stubs) are exempt. Use `{param1}` in `@Router` paths to match the Gin `:param1` names.

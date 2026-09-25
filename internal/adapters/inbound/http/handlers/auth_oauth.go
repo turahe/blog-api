@@ -27,13 +27,13 @@ type oauthAPI interface {
 //	@Description	is single use and expires after 10 minutes.
 //	@Tags			auth
 //	@Produce		json
-//	@Param			provider		path		string	true	"google or github"
+//	@Param			param1			path		string	true	"google or github"
 //	@Param			redirect_uri	query		string	true	"registered client callback URL"
 //	@Success		200				{object}	responses.Envelope
 //	@Failure		400				{object}	responses.Envelope
 //	@Failure		404				{object}	responses.Envelope
 //	@Failure		429				{object}	responses.Envelope
-//	@Router			/api/v1/auth/oauth/{provider}/start [get]
+//	@Router			/api/v1/auth/oauth/{param1}/start [get]
 func oauthStartHandler(api oauthAPI) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		redirectURI := strings.TrimSpace(c.Query("redirect_uri"))
@@ -66,15 +66,15 @@ func oauthStartHandler(api oauthAPI) gin.HandlerFunc {
 //	@Tags			auth
 //	@Accept			json
 //	@Produce		json
-//	@Param			provider	path		string					true	"google or github"
-//	@Param			body		body		requests.OAuthCallback	true	"code and state"
-//	@Success		200			{object}	responses.Envelope
-//	@Failure		400			{object}	responses.Envelope
-//	@Failure		401			{object}	responses.Envelope
-//	@Failure		404			{object}	responses.Envelope
-//	@Failure		409			{object}	responses.Envelope
-//	@Failure		429			{object}	responses.Envelope
-//	@Router			/api/v1/auth/oauth/{provider}/callback [post]
+//	@Param			param1	path		string					true	"google or github"
+//	@Param			body	body		requests.OAuthCallback	true	"code and state"
+//	@Success		200		{object}	responses.Envelope
+//	@Failure		400		{object}	responses.Envelope
+//	@Failure		401		{object}	responses.Envelope
+//	@Failure		404		{object}	responses.Envelope
+//	@Failure		409		{object}	responses.Envelope
+//	@Failure		429		{object}	responses.Envelope
+//	@Router			/api/v1/auth/oauth/{param1}/callback [post]
 func oauthCallbackHandler(api oauthAPI) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		var req requests.OAuthCallback

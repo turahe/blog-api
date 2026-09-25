@@ -81,6 +81,23 @@ const docTemplate = `{
             }
         },
         "/api/v1/admin/categories": {
+            "get": {
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "public"
+                ],
+                "summary": "List categories",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/responses.Envelope"
+                        }
+                    }
+                }
+            },
             "post": {
                 "security": [
                     {
@@ -2394,7 +2411,7 @@ const docTemplate = `{
                 }
             }
         },
-        "/api/v1/auth/oauth/{provider}/callback": {
+        "/api/v1/auth/oauth/{param1}/callback": {
             "post": {
                 "description": "Exchanges the code and state the provider sent to the client's redirect_uri. Signs in\nthe account linked to the provider identity, or the existing account whose email the\nprovider verified (the identity is then linked). No account is ever created.\nResponds like POST /api/v1/auth/login: a token pair or a two-factor challenge.",
                 "consumes": [
@@ -2411,7 +2428,7 @@ const docTemplate = `{
                     {
                         "type": "string",
                         "description": "google or github",
-                        "name": "provider",
+                        "name": "param1",
                         "in": "path",
                         "required": true
                     },
@@ -2465,7 +2482,7 @@ const docTemplate = `{
                 }
             }
         },
-        "/api/v1/auth/oauth/{provider}/start": {
+        "/api/v1/auth/oauth/{param1}/start": {
             "get": {
                 "description": "Returns the provider authorization URL (with state and a PKCE challenge) for the\nbrowser to visit. redirect_uri must be listed in OAUTH_REDIRECT_URIS. The state\nis single use and expires after 10 minutes.",
                 "produces": [
@@ -2479,7 +2496,7 @@ const docTemplate = `{
                     {
                         "type": "string",
                         "description": "google or github",
-                        "name": "provider",
+                        "name": "param1",
                         "in": "path",
                         "required": true
                     },

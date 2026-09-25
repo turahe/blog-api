@@ -1,5 +1,19 @@
 # Changelog
 
+## 2026-09-25 — Route and Swagger parity test
+
+### Added
+
+- `routes/swagger_parity_test.go` checks that every implemented route has an operation in
+  `docs/swagger.json` and that every documented operation is mounted. It runs with
+  `make routes-check`
+
+### Fixed
+
+- `GET /api/v1/admin/categories` was missing from the Swagger spec
+- The OAuth operations used `{provider}` in their Swagger paths; they now use `{param1}` like
+  the mounted routes
+
 ## 2026-09-25 — Google and GitHub OAuth sign-in
 
 ### Added

@@ -32,6 +32,7 @@ type categoryAPI interface {
 //	@Produce	json
 //	@Success	200	{object}	responses.Envelope
 //	@Router		/api/v1/categories [get]
+//	@Router		/api/v1/admin/categories [get]
 func listCategoriesHandler(cats categoryAPI) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		items, err := cats.List(c.Request.Context())

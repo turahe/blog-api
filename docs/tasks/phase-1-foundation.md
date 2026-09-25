@@ -112,7 +112,8 @@ Specs: [user-management.md](../features/user-management.md),
 
 - [x] Unit tests for JWT, config messaging validation, and database driver normalization
 - [x] Route smoke tests (`make routes-check`) for `routes.Register*` auth ordering, route metadata, and 501 stubs
-- [ ] Test that every mounted Gin route has a matching operation in `docs/swagger.json` and vice versa
+- [x] Test that every mounted Gin route has a matching operation in `docs/swagger.json` and vice versa
+      (`routes/swagger_parity_test.go`; 501 stubs are excluded until they get a handler)
 - [ ] Integration tests for the full login / refresh / logout cycle against a real database
 - [ ] Negative-path tests for expired and reused refresh tokens
 - [ ] Document the auth threat model in [authn-authz.md](../security/authn-authz.md)
