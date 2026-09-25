@@ -1,8 +1,7 @@
 asyncapi: 2.6.0
 info:
   title: Blog Platform AsyncAPI
-  summary: Event-driven and streaming interfaces for the blog platform (Watermill outbox, pub/sub, and SSE streams).
-  description: "This AsyncAPI contract documents the asynchronous communication for the blog backend:\n  - Transactional outbox events published via Watermill\n  - Internal pub/sub topic conventions for consumers\n  - Server-Sent Events streams realtime notifications and admin live views\nThis contract aligns with `docs/backend/events.md`, `docs/backend/notification.md`, `docs/backend/impersonation.md`, and the analytics dashboards in `docs/features/analytics-dashboard.md` and `docs/backend/analytics.md`.\n"
+  description: "Event-driven and streaming interfaces for the blog platform (Watermill outbox, pub/sub, and SSE streams).\n\nThis AsyncAPI contract documents the asynchronous communication for the blog backend:\n  - Transactional outbox events published via Watermill\n  - Internal pub/sub topic conventions for consumers\n  - Server-Sent Events streams realtime notifications and admin live views\nThis contract aligns with `docs/backend/events.md`, `docs/backend/notification.md`, `docs/backend/impersonation.md`, and the analytics dashboards in `docs/features/analytics-dashboard.md` and `docs/backend/analytics.md`.\n"
   contact:
     name: Platform Team
   version: 1.0.0
@@ -49,243 +48,317 @@ channels:
   blog.post.updated:
     subscribe:
       operationId: onPostUpdated
+      message:
+        $ref: '#/components/messages/PostUpdated'
     publish:
       operationId: publishPostUpdated
-    message:
-      $ref: '#/components/messages/PostUpdated'
+      message:
+        $ref: '#/components/messages/PostUpdated'
   blog.post.published:
     subscribe:
       operationId: onPostPublished
+      message:
+        $ref: '#/components/messages/PostPublished'
     publish:
       operationId: publishPostPublished
-    message:
-      $ref: '#/components/messages/PostPublished'
+      message:
+        $ref: '#/components/messages/PostPublished'
   blog.post.archived:
     subscribe:
       operationId: onPostArchived
+      message:
+        $ref: '#/components/messages/PostArchived'
     publish:
       operationId: publishPostArchived
-    message:
-      $ref: '#/components/messages/PostArchived'
+      message:
+        $ref: '#/components/messages/PostArchived'
   blog.comment.created:
     subscribe:
       operationId: onCommentCreated
+      message:
+        $ref: '#/components/messages/CommentCreated'
     publish:
       operationId: publishCommentCreated
-    message:
-      $ref: '#/components/messages/CommentCreated'
+      message:
+        $ref: '#/components/messages/CommentCreated'
   blog.comment.moderated:
     description: A moderator approved, rejected, marked as spam, restored, or hard-deleted a comment.
     subscribe:
       operationId: onCommentModerated
+      message:
+        $ref: '#/components/messages/CommentModerated'
     publish:
       operationId: publishCommentModerated
-    message:
-      $ref: '#/components/messages/CommentModerated'
+      message:
+        $ref: '#/components/messages/CommentModerated'
   blog.auth.logged_in:
     subscribe:
       operationId: onAuthLoggedIn
+      message:
+        $ref: '#/components/messages/AuthLoggedIn'
     publish:
       operationId: publishAuthLoggedIn
-    message:
-      $ref: '#/components/messages/AuthLoggedIn'
+      message:
+        $ref: '#/components/messages/AuthLoggedIn'
   blog.user.created:
     subscribe:
       operationId: onUserCreated
+      message:
+        $ref: '#/components/messages/UserCreated'
     publish:
       operationId: publishUserCreated
-    message:
-      $ref: '#/components/messages/UserCreated'
+      message:
+        $ref: '#/components/messages/UserCreated'
   blog.user.role_assigned:
     subscribe:
       operationId: onUserRoleAssigned
+      message:
+        $ref: '#/components/messages/UserRoleAssigned'
     publish:
       operationId: publishUserRoleAssigned
-    message:
-      $ref: '#/components/messages/UserRoleAssigned'
+      message:
+        $ref: '#/components/messages/UserRoleAssigned'
   blog.user.avatar_updated:
     description: Raised when a user avatar_id changes, used to invalidate user caches and fan-out UI updates.
     subscribe:
       operationId: onUserAvatarUpdated
+      message:
+        $ref: '#/components/messages/UserAvatarUpdated'
     publish:
       operationId: publishUserAvatarUpdated
-    message:
-      $ref: '#/components/messages/UserAvatarUpdated'
+      message:
+        $ref: '#/components/messages/UserAvatarUpdated'
   blog.role.updated:
     subscribe:
       operationId: onRoleUpdated
+      message:
+        $ref: '#/components/messages/RoleUpdated'
     publish:
       operationId: publishRoleUpdated
-    message:
-      $ref: '#/components/messages/RoleUpdated'
+      message:
+        $ref: '#/components/messages/RoleUpdated'
   blog.media.uploaded:
     subscribe:
       operationId: onMediaUploaded
+      message:
+        $ref: '#/components/messages/MediaUploaded'
     publish:
       operationId: publishMediaUploaded
-    message:
-      $ref: '#/components/messages/MediaUploaded'
+      message:
+        $ref: '#/components/messages/MediaUploaded'
   blog.media.deleted:
     subscribe:
       operationId: onMediaDeleted
+      message:
+        $ref: '#/components/messages/MediaDeleted'
     publish:
       operationId: publishMediaDeleted
-    message:
-      $ref: '#/components/messages/MediaDeleted'
+      message:
+        $ref: '#/components/messages/MediaDeleted'
   notification.email.requested:
     description: Command to send one rendered email. The API records it in the outbox when a broker and APP_ENCRYPTION_KEY are configured; the worker's email-dispatch consumer decrypts and sends it.
     subscribe:
       operationId: onNotificationEmailRequested
+      message:
+        $ref: '#/components/messages/NotificationEmailRequested'
     publish:
       operationId: publishNotificationEmailRequested
-    message:
-      $ref: '#/components/messages/NotificationEmailRequested'
+      message:
+        $ref: '#/components/messages/NotificationEmailRequested'
   blog.dead_letter:
     description: Messages a worker consumer could not handle after its retries. The original payload and headers are kept, plus the Watermill poison-queue headers.
     subscribe:
       operationId: onDeadLetter
+      message:
+        $ref: '#/components/messages/DeadLetter'
     publish:
       operationId: publishDeadLetter
-    message:
-      $ref: '#/components/messages/DeadLetter'
+      message:
+        $ref: '#/components/messages/DeadLetter'
   blog.media.variant.generated:
     subscribe:
       operationId: onMediaVariantGenerated
+      message:
+        $ref: '#/components/messages/MediaVariantGenerated'
     publish:
       operationId: publishMediaVariantGenerated
-    message:
-      $ref: '#/components/messages/MediaVariantGenerated'
+      message:
+        $ref: '#/components/messages/MediaVariantGenerated'
   blog.post.media_updated:
     description: Raised when post_media associations change; consumers invalidate entity caches.
     subscribe:
       operationId: onPostMediaUpdated
+      message:
+        $ref: '#/components/messages/PostMediaUpdated'
     publish:
       operationId: publishPostMediaUpdated
-    message:
-      $ref: '#/components/messages/PostMediaUpdated'
+      message:
+        $ref: '#/components/messages/PostMediaUpdated'
   blog.category.image_updated:
     description: Raised when a category cover image_id changes.
     subscribe:
       operationId: onCategoryImageUpdated
+      message:
+        $ref: '#/components/messages/CategoryImageUpdated'
     publish:
       operationId: publishCategoryImageUpdated
-    message:
-      $ref: '#/components/messages/CategoryImageUpdated'
+      message:
+        $ref: '#/components/messages/CategoryImageUpdated'
   blog.settings.updated:
     subscribe:
       operationId: onSettingsUpdated
+      message:
+        $ref: '#/components/messages/SettingsUpdated'
     publish:
       operationId: publishSettingsUpdated
-    message:
-      $ref: '#/components/messages/SettingsUpdated'
+      message:
+        $ref: '#/components/messages/SettingsUpdated'
   blog.settings.cache.invalidated:
     subscribe:
       operationId: onSettingsCacheInvalidated
+      message:
+        $ref: '#/components/messages/SettingsCacheInvalidated'
     publish:
       operationId: publishSettingsCacheInvalidated
-    message:
-      $ref: '#/components/messages/SettingsCacheInvalidated'
+      message:
+        $ref: '#/components/messages/SettingsCacheInvalidated'
   blog.settings.security.updated:
     subscribe:
       operationId: onSettingsSecurityUpdated
+      message:
+        $ref: '#/components/messages/SettingsSecurityUpdated'
     publish:
       operationId: publishSettingsSecurityUpdated
-    message:
-      $ref: '#/components/messages/SettingsSecurityUpdated'
+      message:
+        $ref: '#/components/messages/SettingsSecurityUpdated'
   blog.impersonation.start_attempted:
     subscribe:
       operationId: onImpersonationStartAttempted
+      message:
+        $ref: '#/components/messages/ImpersonationLifecycle'
     publish:
       operationId: publishImpersonationStartAttempted
-    message:
-      $ref: '#/components/messages/ImpersonationLifecycle'
+      message:
+        $ref: '#/components/messages/ImpersonationLifecycle'
   blog.impersonation.started:
     subscribe:
       operationId: onImpersonationStarted
+      message:
+        $ref: '#/components/messages/ImpersonationLifecycle'
     publish:
       operationId: publishImpersonationStarted
-    message:
-      $ref: '#/components/messages/ImpersonationLifecycle'
+      message:
+        $ref: '#/components/messages/ImpersonationLifecycle'
   blog.impersonation.start_failed:
     subscribe:
       operationId: onImpersonationStartFailed
+      message:
+        $ref: '#/components/messages/ImpersonationLifecycle'
     publish:
       operationId: publishImpersonationStartFailed
-    message:
-      $ref: '#/components/messages/ImpersonationLifecycle'
+      message:
+        $ref: '#/components/messages/ImpersonationLifecycle'
   blog.impersonation.exited_manually:
     subscribe:
       operationId: onImpersonationExitedManually
+      message:
+        $ref: '#/components/messages/ImpersonationLifecycle'
     publish:
       operationId: publishImpersonationExitedManually
-    message:
-      $ref: '#/components/messages/ImpersonationLifecycle'
+      message:
+        $ref: '#/components/messages/ImpersonationLifecycle'
   blog.impersonation.expired:
     subscribe:
       operationId: onImpersonationExpired
+      message:
+        $ref: '#/components/messages/ImpersonationLifecycle'
     publish:
       operationId: publishImpersonationExpired
-    message:
-      $ref: '#/components/messages/ImpersonationLifecycle'
+      message:
+        $ref: '#/components/messages/ImpersonationLifecycle'
   blog.impersonation.revoked_by_policy:
     subscribe:
       operationId: onImpersonationRevokedByPolicy
+      message:
+        $ref: '#/components/messages/ImpersonationLifecycle'
     publish:
       operationId: publishImpersonationRevokedByPolicy
-    message:
-      $ref: '#/components/messages/ImpersonationLifecycle'
+      message:
+        $ref: '#/components/messages/ImpersonationLifecycle'
   blog.impersonation.action_performed:
     description: Optional high-grain event for audited business actions performed while impersonating.
     subscribe:
       operationId: onImpersonationActionPerformed
+      message:
+        $ref: '#/components/messages/ImpersonationActionPerformed'
     publish:
       operationId: publishImpersonationActionPerformed
-    message:
-      $ref: '#/components/messages/ImpersonationActionPerformed'
+      message:
+        $ref: '#/components/messages/ImpersonationActionPerformed'
   blog.post.revision.created:
     description: Raised when a new post revision is appended (create/update/publish/archive/restore).
     subscribe:
       operationId: onPostRevisionCreated
+      tags:
+      - name: post
+      - name: outbox
+      message:
+        $ref: '#/components/messages/PostRevisionCreated'
     publish:
       operationId: publishPostRevisionCreated
-    tags:
-    - name: post
-    - name: outbox
-    message:
-      $ref: '#/components/messages/PostRevisionCreated'
+      tags:
+      - name: post
+      - name: outbox
+      message:
+        $ref: '#/components/messages/PostRevisionCreated'
   blog.post.revision.restored:
     description: Raised when a previous revision is successfully restored as the current post content.
     subscribe:
       operationId: onPostRevisionRestored
+      tags:
+      - name: post
+      - name: outbox
+      message:
+        $ref: '#/components/messages/PostRevisionRestored'
     publish:
       operationId: publishPostRevisionRestored
-    tags:
-    - name: post
-    - name: outbox
-    message:
-      $ref: '#/components/messages/PostRevisionRestored'
+      tags:
+      - name: post
+      - name: outbox
+      message:
+        $ref: '#/components/messages/PostRevisionRestored'
   blog.post.seo.updated:
     description: Raised when post SEO configuration is changed (fields, canonical, robots flags). Triggers SEO cache invalidation and sitemap updates.
     subscribe:
       operationId: onPostSEOUpdated
+      tags:
+      - name: post
+      - name: outbox
+      message:
+        $ref: '#/components/messages/PostSEOUpdated'
     publish:
       operationId: publishPostSEOUpdated
-    tags:
-    - name: post
-    - name: outbox
-    message:
-      $ref: '#/components/messages/PostSEOUpdated'
+      tags:
+      - name: post
+      - name: outbox
+      message:
+        $ref: '#/components/messages/PostSEOUpdated'
   blog.post.slug_changed:
     description: Raised when a post URL slug changes; consumers create redirect rules, update internal references, sitemaps, and analytics URL mapping.
     subscribe:
       operationId: onPostSlugChanged
+      tags:
+      - name: post
+      - name: outbox
+      message:
+        $ref: '#/components/messages/PostSlugChanged'
     publish:
       operationId: publishPostSlugChanged
-    tags:
-    - name: post
-    - name: outbox
-    message:
-      $ref: '#/components/messages/PostSlugChanged'
+      tags:
+      - name: post
+      - name: outbox
+      message:
+        $ref: '#/components/messages/PostSlugChanged'
   notifications.user.{user_id}.stream:
     parameters:
       user_id:
@@ -351,34 +424,42 @@ channels:
     description: Erase user data per withdrawn consent token.
     subscribe:
       operationId: handleAnalyticsEraseByConsent
+      message:
+        $ref: '#/components/messages/JobCommand'
     publish:
       operationId: scheduleAnalyticsEraseByConsent
-    message:
-      $ref: '#/components/messages/JobCommand'
+      message:
+        $ref: '#/components/messages/JobCommand'
   media.job.cleanup_orphan_transforms:
     description: Clean up cached media transforms that are past TTL.
     subscribe:
       operationId: handleCleanupOrphanTransforms
+      message:
+        $ref: '#/components/messages/JobCommand'
     publish:
       operationId: scheduleCleanupOrphanTransforms
-    message:
-      $ref: '#/components/messages/JobCommand'
+      message:
+        $ref: '#/components/messages/JobCommand'
   impersonation.job.expire_sessions:
     description: Periodic impersonation session expiry sweeper.
     subscribe:
       operationId: handleExpireImpersonationSessions
+      message:
+        $ref: '#/components/messages/JobCommand'
     publish:
       operationId: scheduleExpireImpersonationSessions
-    message:
-      $ref: '#/components/messages/JobCommand'
+      message:
+        $ref: '#/components/messages/JobCommand'
   settings.job.rebuild_cache:
     description: Rebuild settings cache after invalidation events.
     subscribe:
       operationId: handleSettingsRebuildCache
+      message:
+        $ref: '#/components/messages/JobCommand'
     publish:
       operationId: scheduleSettingsRebuildCache
-    message:
-      $ref: '#/components/messages/JobCommand'
+      message:
+        $ref: '#/components/messages/JobCommand'
   outbox.publish:
     description: Internal topic consumed by the Watermill outbox publisher; publishes transactional outbox rows on commit.
     subscribe:
@@ -393,140 +474,164 @@ channels:
     description: Self-service or admin edit of profile display/bio/contact/social/locale/timezone/marketing-consent fields.
     subscribe:
       operationId: onUserProfileUpdated
+      message:
+        $ref: '#/components/messages/UserProfileUpdated'
     publish:
       operationId: publishUserProfileUpdated
-    message:
-      $ref: '#/components/messages/UserProfileUpdated'
+      message:
+        $ref: '#/components/messages/UserProfileUpdated'
   user.profile.avatar_updated:
     description: Avatar attached, detached, or replaced on a user record.
     subscribe:
-      operationId: onUserAvatarUpdated
+      operationId: onUserProfileAvatarUpdated
+      message:
+        $ref: '#/components/messages/UserAvatarUpdated'
     publish:
-      operationId: publishUserAvatarUpdated
-    message:
-      $ref: '#/components/messages/UserAvatarUpdated'
+      operationId: publishUserProfileAvatarUpdated
+      message:
+        $ref: '#/components/messages/UserAvatarUpdated'
   user.password.changed:
     description: Authenticated password change completed successfully.
     subscribe:
       operationId: onUserPasswordChanged
+      message:
+        $ref: '#/components/messages/UserPasswordChanged'
     publish:
       operationId: publishUserPasswordChanged
-    message:
-      $ref: '#/components/messages/UserPasswordChanged'
+      message:
+        $ref: '#/components/messages/UserPasswordChanged'
   user.password.admin_reset_triggered:
     description: Admin triggered a password reset email or set force-password-on-next-login for a user.
     subscribe:
       operationId: onUserPasswordAdminResetTriggered
+      message:
+        $ref: '#/components/messages/UserPasswordAdminResetTriggered'
     publish:
       operationId: publishUserPasswordAdminResetTriggered
-    message:
-      $ref: '#/components/messages/UserPasswordAdminResetTriggered'
+      message:
+        $ref: '#/components/messages/UserPasswordAdminResetTriggered'
   auth.password.reset_requested:
     description: A password reset token was issued (forgot-password or admin reset). Attempts for unknown or inactive accounts record nothing.
     subscribe:
       operationId: onAuthPasswordResetRequested
+      message:
+        $ref: '#/components/messages/AuthPasswordResetRequested'
     publish:
       operationId: publishAuthPasswordResetRequested
-    message:
-      $ref: '#/components/messages/AuthPasswordResetRequested'
+      message:
+        $ref: '#/components/messages/AuthPasswordResetRequested'
   user.password.reset_completed:
     description: Forgot-password reset token consumed and new password applied.
     subscribe:
       operationId: onUserPasswordResetCompleted
+      message:
+        $ref: '#/components/messages/UserPasswordResetCompleted'
     publish:
       operationId: publishUserPasswordResetCompleted
-    message:
-      $ref: '#/components/messages/UserPasswordResetCompleted'
+      message:
+        $ref: '#/components/messages/UserPasswordResetCompleted'
   user.email.change_requested:
     description: User submitted new email address + password proof; verification email sent.
     subscribe:
       operationId: onUserEmailChangeRequested
+      message:
+        $ref: '#/components/messages/UserEmailChangeRequested'
     publish:
       operationId: publishUserEmailChangeRequested
-    message:
-      $ref: '#/components/messages/UserEmailChangeRequested'
+      message:
+        $ref: '#/components/messages/UserEmailChangeRequested'
   user.email.changed:
     description: Email change confirmed and applied; sessions invalidated.
     subscribe:
       operationId: onUserEmailChanged
+      message:
+        $ref: '#/components/messages/UserEmailChanged'
     publish:
       operationId: publishUserEmailChanged
-    message:
-      $ref: '#/components/messages/UserEmailChanged'
+      message:
+        $ref: '#/components/messages/UserEmailChanged'
   user.email.change_cancelled:
     description: Pending email change cancelled by user via warning link.
     subscribe:
       operationId: onUserEmailChangeCancelled
+      message:
+        $ref: '#/components/messages/UserEmailChangeCancelled'
     publish:
       operationId: publishUserEmailChangeCancelled
-    message:
-      $ref: '#/components/messages/UserEmailChangeCancelled'
+      message:
+        $ref: '#/components/messages/UserEmailChangeCancelled'
   user.privacy.updated:
     description: Any privacy-setting flag changed for a user.
     subscribe:
       operationId: onUserPrivacyUpdated
+      message:
+        $ref: '#/components/messages/UserPrivacyUpdated'
     publish:
       operationId: publishUserPrivacyUpdated
-    message:
-      $ref: '#/components/messages/UserPrivacyUpdated'
+      message:
+        $ref: '#/components/messages/UserPrivacyUpdated'
   user.activity.export_requested:
     description: User or admin requested a GDPR/CCPA activity CSV export.
     subscribe:
       operationId: onUserActivityExportRequested
+      message:
+        $ref: '#/components/messages/UserActivityExportRequested'
     publish:
       operationId: publishUserActivityExportRequested
-    message:
-      $ref: '#/components/messages/UserActivityExportRequested'
+      message:
+        $ref: '#/components/messages/UserActivityExportRequested'
   user.activity.erasure_requested:
     description: User submitted a PII erasure request for activity history.
     subscribe:
       operationId: onUserActivityErasureRequested
+      message:
+        $ref: '#/components/messages/UserActivityErasureRequested'
     publish:
       operationId: publishUserActivityErasureRequested
-    message:
-      $ref: '#/components/messages/UserActivityErasureRequested'
+      message:
+        $ref: '#/components/messages/UserActivityErasureRequested'
   user.session.invalidated_family:
     description: Refresh token family was rotated/invalidated for a user (password change, email change, admin action).
     subscribe:
       operationId: onUserSessionInvalidatedFamily
+      message:
+        $ref: '#/components/messages/UserSessionInvalidatedFamily'
     publish:
       operationId: publishUserSessionInvalidatedFamily
-    message:
-      $ref: '#/components/messages/UserSessionInvalidatedFamily'
+      message:
+        $ref: '#/components/messages/UserSessionInvalidatedFamily'
   user.consent.marketing_granted:
     description: User granted marketing consent via profile or sign-up.
     subscribe:
       operationId: onUserConsentMarketingGranted
+      message:
+        $ref: '#/components/messages/UserConsentMarketingGranted'
     publish:
       operationId: publishUserConsentMarketingGranted
-    message:
-      $ref: '#/components/messages/UserConsentMarketingGranted'
+      message:
+        $ref: '#/components/messages/UserConsentMarketingGranted'
   user.consent.marketing_withdrawn:
     description: User withdrew marketing consent via profile or unsubscribe link.
     subscribe:
       operationId: onUserConsentMarketingWithdrawn
+      message:
+        $ref: '#/components/messages/UserConsentMarketingWithdrawn'
     publish:
       operationId: publishUserConsentMarketingWithdrawn
-    message:
-      $ref: '#/components/messages/UserConsentMarketingWithdrawn'
+      message:
+        $ref: '#/components/messages/UserConsentMarketingWithdrawn'
 components:
   securitySchemes:
     httpBearerAuth:
       type: http
       scheme: bearer
       bearerFormat: JWT
-      scopes:
-        notifications.read: Read notifications
-        notifications.self.read: Read current user notifications (granted implicitly for self-service)
-        analytics.read: Read admin analytics
-        analytics.realtime.read: Subscribe to admin realtime stream
+      description: 'JWT bearer token. Scopes: `notifications.read` (Read notifications); `notifications.self.read` (Read current user notifications (granted implicitly for self-service)); `analytics.read` (Read admin analytics); `analytics.realtime.read` (Subscribe to admin realtime stream).'
     userPassword:
       type: userPassword
   parameters:
     user_id:
       description: Authenticated user ID scoping a notification SSE stream
-      in: path
-      required: true
       schema:
         type: string
         format: uuid
@@ -572,7 +677,6 @@ components:
             type: string
             format: uuid
             nullable: true
-      payload: {}
   messages:
     PostCreated:
       traits:
@@ -793,32 +897,7 @@ components:
       traits:
       - $ref: '#/components/messageTraits/EventEnvelope'
       payload:
-        type: object
-        required:
-        - changed_keys
-        properties:
-          changed_keys:
-            type: array
-            items:
-              type: object
-              required:
-              - key
-              properties:
-                key:
-                  type: string
-                previous_value: {}
-                new_value: {}
-                sensitivity:
-                  type: string
-                  enum:
-                  - public_safe
-                  - admin_only
-                  - server_only
-          actor_id:
-            type: string
-            format: uuid
-          request_id:
-            type: string
+        $ref: '#/components/schemas/SettingsUpdatedPayload'
     SettingsCacheInvalidated:
       traits:
       - $ref: '#/components/messageTraits/EventEnvelope'
@@ -837,7 +916,7 @@ components:
       traits:
       - $ref: '#/components/messageTraits/EventEnvelope'
       payload:
-        $ref: '#/components/schemas/SettingsUpdated'
+        $ref: '#/components/schemas/SettingsUpdatedPayload'
     ImpersonationLifecycle:
       traits:
       - $ref: '#/components/messageTraits/EventEnvelope'
@@ -1340,7 +1419,12 @@ components:
           description: Status after the change.
         action:
           type: string
-          enum: [approve, reject, spam, restore, hard_delete]
+          enum:
+          - approve
+          - reject
+          - spam
+          - restore
+          - hard_delete
           description: Moderation events only.
         from_status:
           type: string
@@ -2083,3 +2167,30 @@ components:
         ip_truncated:
           type: string
           nullable: true
+    SettingsUpdatedPayload:
+      type: object
+      required:
+      - changed_keys
+      properties:
+        changed_keys:
+          type: array
+          items:
+            type: object
+            required:
+            - key
+            properties:
+              key:
+                type: string
+              previous_value: {}
+              new_value: {}
+              sensitivity:
+                type: string
+                enum:
+                - public_safe
+                - admin_only
+                - server_only
+        actor_id:
+          type: string
+          format: uuid
+        request_id:
+          type: string

@@ -78,7 +78,7 @@ Use environment variables for:
 - build application artifact
 - validate API and event contracts locally
   - Swagger: `make swagger` and commit `docs/`
-  - AsyncAPI: `npx @asyncapi/cli validate docs/architecture/asyncapi.yaml`
+  - AsyncAPI: `make asyncapi-validate` (also run by the `AsyncAPI` workflow)
 - run automated tests
 - apply database migrations with `app migrate up`
 - deploy API (`app serve`)

@@ -8,6 +8,10 @@ The authoritative events and streaming contract lives at:
 
 Use `docs/backend/events.md` as a human overview; the AsyncAPI contract is the source of truth for channel names, message payloads, security requirements, SSE bindings, and job topics.
 
+Two checks keep it honest: the `AsyncAPI` workflow (`make asyncapi-validate` locally) fails on
+schema errors, and `TestEventTypesHaveAsyncAPIChannels` fails when an event type in
+`internal/core/event/types.go` has no channel.
+
 ## Event Bus Strategy
 
 Use Watermill for domain and integration events. Prefer transactional consistency through an outbox pattern.

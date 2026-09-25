@@ -664,7 +664,7 @@ This is the documented release checklist from
 1. **Build** the tagged container and a `migrate` binary.
 2. **Validate contracts** locally or in CI:
   - Swagger: `make swagger` + committed `docs/`
-  - AsyncAPI: `npx @asyncapi/cli validate docs/architecture/asyncapi.yaml`
+  - AsyncAPI: `make asyncapi-validate` (also run by the `AsyncAPI` workflow)
 3. **Run automated tests**: `go test -count=1 ./...`
 4. **Apply DB migrations** *before* enabling new traffic:
   `./app migrate up` (with `DB_HOST` / `DB_USER` / `DB_PASSWORD` / `DB_NAME` set)

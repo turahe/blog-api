@@ -7,7 +7,7 @@
 | Unit | `internal/core/**/service`, `domain` | Pure rules, no Gin/GORM/Redis |
 | Adapter unit | `internal/adapters/inbound/http` | Middleware, envelopes, route registration |
 | Integration | `internal/adapters/outbound/persistence` (repository tests) | Postgres via Compose; the Redis adapter uses miniredis |
-| Contract | CI + committed `docs/` (swag) | Swagger / AsyncAPI validity |
+| Contract | CI + committed `docs/` (swag); `AsyncAPI` workflow; event-type parity test | Swagger / AsyncAPI validity |
 | Smoke | post-deploy | Health, login, one admin + one public path |
 
 ## Package rules

@@ -1,0 +1,28 @@
+name: AsyncAPI
+
+on:
+  push:
+    branches: [main, dev]
+    paths:
+      - "docs/architecture/asyncapi.yaml"
+      - ".github/workflows/asyncapi.yml"
+  pull_request:
+    paths:
+      - "docs/architecture/asyncapi.yaml"
+      - ".github/workflows/asyncapi.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    name: Validate event contract
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v7
+
+      # Warnings (missing messageId) are reported; only schema errors fail the job.
+      - name: Validate asyncapi.yaml
+        run: npx --yes @asyncapi/cli@6.2.0 validate docs/architecture/asyncapi.yaml --fail-severity error

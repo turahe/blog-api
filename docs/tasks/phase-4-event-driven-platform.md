@@ -49,7 +49,8 @@ Design: [2026-07-30-messaging-brokers-design.md](../superpowers/specs/2026-07-30
       create, since there is no self-registration; `auth.password.reset_requested` when a token is issued)
 - [x] Publish `media.uploaded` and `media.transform_requested` (needs Phase 2 media) — `blog.media.uploaded`
       and `blog.media.deleted`; transforms are on demand, so there is no transform request event
-- [ ] Keep [asyncapi.yaml](../architecture/asyncapi.yaml) authoritative and validate it in CI
+- [x] Keep [asyncapi.yaml](../architecture/asyncapi.yaml) authoritative and validate it in CI
+      (`AsyncAPI` workflow; `TestEventTypesHaveAsyncAPIChannels` checks every event type has a channel)
 
 ## Epic: durable outbox
 

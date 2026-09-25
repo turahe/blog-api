@@ -1,5 +1,21 @@
 # Changelog
 
+## 2026-09-25 — AsyncAPI validation in CI
+
+### Added
+
+- `AsyncAPI` workflow and `make asyncapi-validate` validate
+  `docs/architecture/asyncapi.yaml` with `@asyncapi/cli` 6.2.0; schema errors fail.
+- `TestEventTypesHaveAsyncAPIChannels` fails when an event type has no channel in the spec.
+
+### Fixed
+
+- `asyncapi.yaml` was not valid AsyncAPI 2.6 (131 errors): channel-level `message` moved into
+  the `publish`/`subscribe` operations, channel `tags` moved onto operations, `info.summary`
+  folded into the description, the payload removed from the `EventEnvelope` trait, HTTP
+  bearer scopes and parameter `in`/`required` dropped, a duplicate `operationId` renamed, and
+  the missing `SettingsUpdated` schema added as `SettingsUpdatedPayload`.
+
 ## 2026-09-25 — Broker integration tests
 
 ### Added
