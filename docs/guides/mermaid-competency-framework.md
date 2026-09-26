@@ -100,7 +100,7 @@ Goal: Author correct, readable, semantically-named diagrams for every documentat
 - **Beginner — L1 C4 System Context: 3-4 boxes, 5 relationships.**
   - Person(User), Person(Admin), System(BlogAPI), SystemExt(Cloudflare R2), BiRel arrows matching [architecture/architecture.md](../architecture/architecture.md) L1 description.
 - **Intermediate — L2 C4 Container + L3 C4 Component with legend, external system shading.**
-  - `Container(BlogAPI, "Go Gin server", "HTTP + SSE streams")`, `ContainerDb(Postgres, "Cloud SQL Postgres 15", "source of truth")`, `ContainerQueue(Redis, "Redis Cluster", "cache + SSE fanout bus")`; explicit relationships with protocol labels `HTTPS/2`, `mTLS IAM DB auth`, `pub/sub Redis` matching cloudsqlconn stack in [backend/database.md L62-L457](../backend/database.md#L62-L457).
+  - `Container(BlogAPI, "Go Gin server", "HTTP + SSE streams")`, `ContainerDb(Postgres, "Cloud SQL Postgres 18", "source of truth")`, `ContainerQueue(Redis, "Redis Cluster", "cache + SSE fanout bus")`; explicit relationships with protocol labels `HTTPS/2`, `mTLS IAM DB auth`, `pub/sub Redis` matching cloudsqlconn stack in [backend/database.md L62-L457](../backend/database.md#L62-L457).
   - _Use case_: L2 container architecture diagram referenced from deployment.md showing Cloud Run service ↔ Cloud SQL private IP ↔ VPC connector ↔ Redis Memorystore ↔ Cloudflare R2 ↔ SES ↔ WAF.
 - **Advanced — L4 C4 Code + multi-region failover architecture with live data-plane annotations.**
   - `C4Component(myContainer, "SSE Hub", "pkg/sse/hub.go")` with per-component SLO labels; use `%% @metric sse_hub_connected_streams 342` live-metric comment annotations parsed for Grafana annotation panels.
@@ -227,7 +227,7 @@ flowchart LR
   User([End user]) --> CF[Cloudflare WAF / CDN]
   Admin([Admin editor]) --> CF
   CF --> CR[Cloud Run service\n(Gin + SSE hub)]
-  CR -->|mTLS IAM DB auth\nPrivate Service Connect| CS[(Cloud SQL\nPostgres 15+)]
+  CR -->|mTLS IAM DB auth\nPrivate Service Connect| CS[(Cloud SQL\nPostgres 18)]
   CR -->|Redis pub/sub + cache| RM[(Redis Memorystore\nprivate IP)]
   CR -->|PUT/GET signed URL| R2[(Cloudflare R2\nobject storage)]
   CR -->|Transactional outbox| WM[Watermill workers]
@@ -405,7 +405,7 @@ flowchart LR
 
 ```
 flowchart TB
-  DB[(Cloud SQL\nPostgres 15)]
+  DB[(Cloud SQL\nPostgres 18)]
   tooltip DB "Private Service Connect private IP only. IAM Database Authentication, mTLS cert auto-rotation 1h. See backend/database.md §Private IP.";
   DR[cloudsqlconn Dialer]
   tooltip DR "cloud.google.com/go/cloudsqlconn. WithPrivateIP()+WithIAMAuthN(). ConnMaxLifetime 1800s.";

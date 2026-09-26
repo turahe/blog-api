@@ -15,7 +15,7 @@
 
 - local environment orchestration: Docker Compose
 - local object storage for media testing: MinIO or another S3-compatible service
-- local messaging brokers (Compose profile `messaging`): Kafka and RabbitMQ; Google Cloud Pub/Sub is exercised against a real GCP project / ADC, not a Compose emulator
+- local messaging brokers (started by Compose with the rest of the stack): Kafka and RabbitMQ; Google Cloud Pub/Sub is exercised against a real GCP project / ADC, not a Compose emulator
 
 ## Authentication and Security
 
@@ -30,7 +30,7 @@
 - Supported dialect (local split `DB_*` settings or Cloud SQL); MySQL and SQL Server are not supported:
   | `DB_DRIVER` | Engine | GORM driver | Notes |
   |-------------|--------|-------------|-------|
-  | `postgres` (default) | PostgreSQL 15+ | `gorm.io/driver/postgres` + `jackc/pgx/v5` | Source-of-truth schema and Goose migrations |
+  | `postgres` (default) | PostgreSQL 18 | `gorm.io/driver/postgres` + `jackc/pgx/v5` | Source-of-truth schema and Goose migrations |
 - Google Cloud SQL is the managed relational data plane in production deployments
   - managed connectivity via **`cloud.google.com/go/cloudsqlconn`** for **PostgreSQL**
   - IAM Database Authentication, ephemeral mTLS certificate auto-rotation, Private Service Connect private IP (`DB_PRIVATE_IP_ENABLED=true`)

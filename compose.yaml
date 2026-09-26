@@ -9,7 +9,8 @@ services:
       REDIS_HOST: redis
       S3_ENDPOINT: http://rustfs:9000
       S3_PUBLIC_BASE_URL: http://127.0.0.1:9000/blog-media
-      # Brokers are optional (profile messaging); disable bus unless that profile is up.
+      # Kafka and RabbitMQ run in the stack, but nothing here runs `app worker`, so the
+      # API keeps the bus off and delivers inline.
       MESSAGE_BROKER: ""
       APP_JWT_PRIVATE_KEY_PATH: /configs/dev/jwt-es256-private.pem
       APP_JWT_PUBLIC_KEY_PATH: /configs/dev/jwt-es256-public.pem
@@ -48,15 +49,17 @@ services:
         condition: service_healthy
 
   postgres:
-    image: postgres:16-alpine
+    image: postgres:18-alpine
     environment:
       POSTGRES_DB: ${DB_NAME}
       POSTGRES_USER: ${DB_USER}
       POSTGRES_PASSWORD: ${DB_PASSWORD}
     ports:
       - "5432:5432"
+    # The 18+ image keeps PGDATA in /var/lib/postgresql/18/docker and refuses to start with a
+    # mount at /var/lib/postgresql/data. ./.data/postgres holds the old 16 cluster.
     volumes:
-      - ./.data/postgres:/var/lib/postgresql/data
+      - ./.data/postgres:/var/lib/postgresql
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U blog -d blog"]
       interval: 5s
@@ -109,10 +112,9 @@ services:
       retries: 20
       start_period: 15s
 
-  # Media transforms (profile imgproxy). Set IMGPROXY_KEY / IMGPROXY_SALT in .env, and
+  # Media transforms. Set IMGPROXY_KEY / IMGPROXY_SALT in .env, and
   # IMGPROXY_URL=http://127.0.0.1:8081 for the API. Reads originals from the private bucket.
   imgproxy:
-    profiles: ["imgproxy"]
     image: ghcr.io/imgproxy/imgproxy:latest
     depends_on:
       rustfs:
@@ -152,7 +154,6 @@ services:
       retries: 20
 
   kafka:
-    profiles: ["messaging"]
     image: apache/kafka:3.9.0
     ports:
       - "9092:9092"
@@ -175,7 +176,6 @@ services:
       retries: 10
 
   rabbitmq:
-    profiles: ["messaging"]
     image: rabbitmq:4-management-alpine
     ports:
       - "5672:5672"

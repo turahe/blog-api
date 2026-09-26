@@ -1,5 +1,31 @@
 # Changelog
 
+## 2026-09-27 — One-command local stack
+
+### Changed
+
+- Compose no longer uses profiles: `docker compose up` (and `make docker-up`) starts every
+  service, including imgproxy, Kafka, and RabbitMQ. `make infra-up` starts everything except
+  `migrate` and `api`. The Compose api still runs with `MESSAGE_BROKER` empty, because no
+  worker runs in the stack.
+
+### Removed
+
+- `make infra-up-messaging` and `make infra-down-messaging`; `make infra-up` and
+  `make infra-down` cover the brokers now.
+
+## 2026-09-27 — PostgreSQL 18
+
+### Changed
+
+- **Breaking (local):** Compose and CI run `postgres:18-alpine` instead of `postgres:16-alpine`.
+  The 18 image keeps its data under `/var/lib/postgresql/18/docker`, so Compose now mounts
+  `./.data/postgres18` at `/var/lib/postgresql`. The old 16 cluster in `./.data/postgres` is
+  left alone and is not readable by 18; see
+  [Upgrading local data from PostgreSQL 16](docs/deployment/local.md#upgrading-local-data-from-postgresql-16)
+  to copy it across. No migrations change.
+- Docs now name PostgreSQL 18 as the supported version.
+
 ## 2026-09-27 — HTML account emails
 
 ### Added

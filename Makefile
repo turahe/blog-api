@@ -1,4 +1,4 @@
-.PHONY: test test-race test-integration test-brokers asyncapi-validate coverage lint routes-check swagger dev-keys infra-up infra-down infra-up-messaging infra-down-messaging docker-up docker-down docker-build docker-logs docker-seed docker-migrate trivy
+.PHONY: test test-race test-integration test-brokers asyncapi-validate coverage lint routes-check swagger dev-keys infra-up infra-down docker-up docker-down docker-build docker-logs docker-seed docker-migrate trivy
 
 MODULE := github.com/turahe/blog-api
 TEST_PKGS := ./cmd/... ./internal/... ./docs/...
@@ -46,7 +46,7 @@ test-integration:
 		$(GO_IMAGE) go test -count=1 ./internal/adapters/outbound/persistence/...
 
 # Broker round-trip and dead-letter tests against the Compose Kafka and RabbitMQ (run
-# `make infra-up-messaging` first). Each run uses its own topics and deletes them afterwards.
+# `make infra-up` first). Each run uses its own topics and deletes them afterwards.
 RABBIT_ENV = docker compose exec -T rabbitmq printenv
 
 test-brokers:
@@ -94,9 +94,9 @@ dev-keys:
 		fi && chmod 644 jwt-es256-private.pem jwt-es256-public.pem && \
 		chown $(HOST_UID_GID) jwt-es256-private.pem jwt-es256-public.pem'
 
-# Full local stack: postgres, redis, rustfs, migrate, api (http://localhost:8080).
+# Full local stack: every Compose service, including migrate and api (http://localhost:8080).
 docker-up: dev-keys
-	docker compose up -d --build api
+	docker compose up -d --build
 
 docker-down:
 	docker compose down
@@ -121,16 +121,9 @@ docker-migrate: dev-keys
 docker-seed: dev-keys
 	docker compose run --rm --no-deps api seed
 
-# Infra only: postgres, redis, rustfs (for running the API from an IDE or debugger).
+# Every service except migrate and api (for running the API from an IDE or debugger).
 infra-up:
-	docker compose up -d postgres redis rustfs mailpit
+	docker compose up -d postgres redis rustfs mailpit imgproxy kafka rabbitmq
 
 infra-down:
 	docker compose down
-
-infra-up-messaging:
-	docker compose --profile messaging up -d kafka rabbitmq
-
-infra-down-messaging:
-	docker compose stop kafka rabbitmq
-	docker compose rm -f kafka rabbitmq

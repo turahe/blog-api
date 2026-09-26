@@ -81,8 +81,8 @@ URLs.
 
 **Operations.** Run imgproxy with `IMGPROXY_USE_S3=true`, the storage credentials,
 `IMGPROXY_ALLOWED_SOURCES=s3://`, and decode limits (`IMGPROXY_MAX_SRC_RESOLUTION`,
-`IMGPROXY_MAX_SRC_FILE_SIZE`). Locally: `docker compose --profile imgproxy up -d imgproxy`
-and `IMGPROXY_URL=http://127.0.0.1:8081`.
+`IMGPROXY_MAX_SRC_FILE_SIZE`). Locally, `make docker-up` or `make infra-up` starts imgproxy; set
+`IMGPROXY_URL=http://127.0.0.1:8081`.
 
 **Quality and default format.** Every transform URL carries `q:<media.default_transform_quality>`
 (site setting, default 80). A request without `format` uses `media.default_transform_format`

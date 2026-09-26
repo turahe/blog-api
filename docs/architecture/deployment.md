@@ -17,7 +17,7 @@ Local Compose should be able to run:
 - API service
 - PostgreSQL
 - Redis
-- optional Kafka (`apache/kafka:3.9.0`) and RabbitMQ via Compose profile `messaging` (see [local deployment](../deployment/local.md#messaging-optional))
+- Kafka (`apache/kafka:3.9.0`) and RabbitMQ, started with the rest of the Compose stack (see [local deployment](../deployment/local.md#messaging))
 - local S3-compatible object storage such as MinIO for media workflows
 - optional worker service for async consumers
 

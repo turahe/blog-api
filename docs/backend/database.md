@@ -84,7 +84,7 @@ migrations use identity columns, `gen_random_uuid()`, and partial indexes.
 
 | Dialect (`DB_DRIVER`) | Driver | GORM driver package | Cloud SQL connector integration |
 |-----------------------|--------|---------------------|---------------------------------|
-| `postgres` — PostgreSQL 15+ (source of truth) | `github.com/jackc/pgx/v5/stdlib` | `gorm.io/driver/postgres` | `cloud.google.com/go/cloudsqlconn/postgres/pgxv5` — `RegisterDriver("cloudsql-postgres", WithIAMAuthN(), WithPrivateIP())` then `sql.Open` + GORM `Conn`. |
+| `postgres` — PostgreSQL 18 (source of truth) | `github.com/jackc/pgx/v5/stdlib` | `gorm.io/driver/postgres` | `cloud.google.com/go/cloudsqlconn/postgres/pgxv5` — `RegisterDriver("cloudsql-postgres", WithIAMAuthN(), WithPrivateIP())` then `sql.Open` + GORM `Conn`. |
 
 Local / non-Cloud-SQL: set split `DB_*` fields (`DB_DRIVER`, `DB_HOST`, `DB_PORT`, `DB_USER`,
 `DB_PASSWORD`, `DB_NAME`, and for PostgreSQL `DB_SSLMODE`). Cloud SQL: set

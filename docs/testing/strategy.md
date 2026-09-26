@@ -49,7 +49,7 @@ its topics, queues, exchanges, and group afterwards. CI runs both brokers as ser
 containers.
 
 ```bash
-make infra-up-messaging
+make infra-up
 make test-brokers
 ```
 
@@ -95,7 +95,7 @@ The notification stream is tested at three levels, none of which needs a broker:
   in-memory `gochannel`, including a malformed message that must not stop delivery.
 
 Broker-specific broadcast (every API process receives every event) is not in the default
-suite; verify it against the compose brokers (`docker compose --profile messaging up`) by
+suite; verify it against the compose brokers (`make infra-up`) by
 opening two `messaging.OpenBroadcast` buses with different instance names and checking both
 receive one published message.
 

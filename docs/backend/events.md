@@ -20,8 +20,8 @@ Transports are selected at runtime with `MESSAGE_BROKER` (see [architecture/tech
 
 | `MESSAGE_BROKER` | Broker | Local | Notes |
 |------------------|--------|-------|-------|
-| `kafka` | Apache Kafka | Compose profile `messaging` | `KAFKA_BROKERS`, `KAFKA_CONSUMER_GROUP` |
-| `rabbitmq` | RabbitMQ | Compose profile `messaging` | `RABBITMQ_URL` |
+| `kafka` | Apache Kafka | Compose service `kafka` | `KAFKA_BROKERS`, `KAFKA_CONSUMER_GROUP` |
+| `rabbitmq` | RabbitMQ | Compose service `rabbitmq` | `RABBITMQ_URL` |
 | `googlepubsub` | Google Cloud Pub/Sub | GCP project + ADC / Workload Identity | `GOOGLE_PUBSUB_PROJECT_ID` |
 
 Platform factory: `internal/platform/messaging`. Core domain code must not import Watermill or broker clients.

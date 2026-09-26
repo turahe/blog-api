@@ -11,7 +11,7 @@ authentication, RBAC, media, analytics, impersonation, and audit tooling.**
 ![AsyncAPI 2.6](https://img.shields.io/badge/AsyncAPI-2.6-4D5E7A?logo=data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAyNCAyNCIgc3R5bGU9ImZpbGw6d2hpdGUiPjxwYXRoIGQ9Ik0xMiAyIDIgMTBIMnYxNGgyMFYxMFoiLz48L3N2Zz4=)
 ![Go 1.27+](https://img.shields.io/badge/Go-1.27%2B-00ADD8?logo=go&logoColor=white)
 ![Node 20.19+](https://img.shields.io/badge/Node-20.19%2B-339933?logo=nodedotjs&logoColor=white)
-![PostgreSQL 15+](https://img.shields.io/badge/PostgreSQL-15%2B-336791?logo=postgresql&logoColor=white)
+![PostgreSQL 18](https://img.shields.io/badge/PostgreSQL-18-336791?logo=postgresql&logoColor=white)
 ![Redis 7+](https://img.shields.io/badge/Redis-7%2B-FF4438?logo=redis&logoColor=white)
 [![codecov](https://codecov.io/gh/turahe/blog-api/graph/badge.svg?token=Ix8cLCnU5Z)](https://codecov.io/gh/turahe/blog-api)
 ![License](https://img.shields.io/badge/License-MIT-blue.svg)

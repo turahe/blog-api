@@ -13,7 +13,7 @@ cp .env.example .env
 # JWT ES256: .env.example already points at configs/dev/*.pem
 
 make dev-keys          # generate configs/dev/*.pem if missing; chmod 644 (containers run as nonroot)
-make docker-up         # build + postgres/redis/rustfs + migrate + api
+make docker-up         # build + every service (see Services below) + migrate + api
 make docker-seed       # roles + admin@example.com / ChangeMeNow!123
 # API: http://localhost:8080  (Swagger UI: /swagger/index.html when local)
 # Mailpit: http://localhost:8025  (SMTP catcher for password and email-change mail)
@@ -38,7 +38,7 @@ For IDE debugging; requires Go on the host.
 cp .env.example .env
 # edit secrets as above
 
-make infra-up          # postgres, redis, rustfs
+make infra-up          # every service except migrate and api
 go run . migrate up
 go run . seed          # roles + admin@example.com / ChangeMeNow!123
 go run . serve         # http://localhost:8080
@@ -70,9 +70,13 @@ make lint              # golangci-lint (in golangci-lint container)
 | --- | --- | --- |
 | api | 8080 | HTTP API (built from [Dockerfile](../../Dockerfile)) |
 | migrate | — | one-shot `migrate up` before api starts |
-| postgres | 5432 | primary DB (`blog`/`blog`/`blog`) |
+| postgres | 5432 | primary DB, PostgreSQL 18 (`blog`/`blog`/`blog`) |
 | redis | 6379 | cache / ephemeral |
 | rustfs | 9000 / 9001 | S3-compatible media + console |
+| imgproxy | 8081 (loopback) | image transforms from the private bucket |
+| mailpit | 1025 / 8025 | SMTP catcher + web UI |
+| kafka | 9092 | message broker (KRaft single-node) |
+| rabbitmq | 5672 / 15672 | message broker + management UI |
 
 Compose file: [compose.yaml](../../compose.yaml). Data dirs under `./.data/` (gitignored).
 
@@ -91,14 +95,33 @@ make docker-down   # or: make infra-down
 
 Volumes under `./.data/` persist until removed manually.
 
-## Messaging (optional)
+## Upgrading local data from PostgreSQL 16
+
+Compose runs `postgres:18-alpine` with its data in `./.data/postgres18`. A PostgreSQL 16
+cluster from before the upgrade stays in `./.data/postgres`; the 18 server cannot read it, so
+the stack starts with an empty database. Either run `make docker-migrate` and
+`make docker-seed` for a fresh start, or copy the old data across:
 
 ```bash
-make infra-up-messaging   # kafka :9092, rabbitmq :5672 / management :15672
-make infra-down-messaging # stop/remove kafka and rabbitmq only
+make docker-down
+docker run -d --rm --name pg16 -v "$PWD/.data/postgres:/var/lib/postgresql/data" postgres:16-alpine
+until docker exec pg16 pg_isready -q; do sleep 1; done
+docker exec pg16 pg_dump -U blog -d blog > blog-pg16.sql
+docker stop pg16
+
+docker compose up -d --wait postgres
+docker compose exec -T postgres psql -U blog -d blog -v ON_ERROR_STOP=1 < blog-pg16.sql
+make docker-up
 ```
 
-Compose profile `messaging` starts Kafka (`apache/kafka:3.9.0`, KRaft single-node) and RabbitMQ (`rabbitmq:3.13-management-alpine`). Default `make docker-up` / `make infra-up` does not start brokers; the api service clears `MESSAGE_BROKER` so serve works without them.
+Once the new stack looks right, delete `blog-pg16.sql` and `./.data/postgres` (owned by the
+container user, so `sudo rm -rf .data/postgres`).
+
+## Messaging
+
+`make docker-up` and `make infra-up` start Kafka (`apache/kafka:3.9.0`) and RabbitMQ
+(`rabbitmq:4-management-alpine`) along with everything else. The Compose api service still
+clears `MESSAGE_BROKER`, because no worker runs in the stack, so it delivers inline.
 
 To run the worker against Compose brokers (host or a custom compose service), set in `.env`:
 
