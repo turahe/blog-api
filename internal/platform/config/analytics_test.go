@@ -35,6 +35,10 @@ func TestLoadRejectsBadAnalyticsExportDurations(t *testing.T) {
 	for name, tc := range cases {
 		t.Run(name, func(t *testing.T) {
 			setJWTKeys(t)
+			// Export durations are validated alongside media storage, which only runs when S3 is configured.
+			t.Setenv("S3_BUCKET", "blog-media")
+			t.Setenv("S3_ACCESS_KEY", "minioadmin")
+			t.Setenv("S3_SECRET_KEY", "minioadmin")
 			t.Setenv(tc[0], tc[1])
 
 			if _, err := Load(); err == nil || !strings.Contains(err.Error(), tc[0]) {
