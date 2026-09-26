@@ -5,9 +5,9 @@ TEST_PKGS := ./cmd/... ./internal/... ./docs/...
 
 # Every target runs in Docker; only Docker (with Compose) is required on the host.
 # Go module and build caches live in named volumes so repeat runs stay fast.
-GO_IMAGE ?= golang:1.26.5-alpine
+GO_IMAGE ?= golang:1.27.1-alpine
 # -race needs cgo and a C toolchain; the Debian image ships gcc, alpine does not.
-GO_RACE_IMAGE ?= golang:1.26.5
+GO_RACE_IMAGE ?= golang:1.27.1
 GOLANGCI_LINT_IMAGE ?= golangci/golangci-lint:v2.14.0
 SWAG_VERSION ?= v1.16.6
 ASYNCAPI_CLI_VERSION ?= 6.2.0

@@ -81,8 +81,11 @@ Triggers (implemented by `notification/service.Inbox`, called from the comment a
 | A post is published by someone other than its author (or by no user) | Post author | `publication.published` | The author published it |
 | A post is published again | Registered users with an approved comment on it | `publication.republished` | The user is the author or the publisher |
 
-Delivery is best effort: a failed insert is logged and never fails the comment or post
-request. Every notice has a per-user dedupe key (for example `comment.reply:<reply id>`), so
+Delivery never fails the comment or post request. With `MESSAGE_BROKER` set, the request only
+records a `notification.requested` command and the `notification-dispatch` consumer in
+`app worker` stores the notices, retrying failures (see
+[events.md](../backend/events.md#notification-dispatch)). Without a broker the notices are
+stored in the request and a failed insert is only logged. Every notice has a per-user dedupe key (for example `comment.reply:<reply id>`), so
 re-approving a reply or retrying a publish does not notify twice. Bulk moderation sends reply
 notices but never `comment.moderated`, because it has no `notify_author` flag.
 

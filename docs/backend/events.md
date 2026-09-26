@@ -233,17 +233,55 @@ without running the handler; a failed attempt rolls the claim back. Claims are p
 
 | Consumer | Topic | Does |
 | --- | --- | --- |
-| `email-dispatch` | `notification.email.requested` | Decrypts the command and sends it over SMTP |
+| `email-dispatch` | `notification.email.requested` | Decrypts the command and sends it through the mail driver |
+| `notification-dispatch` | `notification.requested` | Renders and stores in-app notifications, then announces them on `notifications.created` |
+| `audit-writer` | `audit.entries.recorded` | Decrypts an audit batch and inserts it into `audit_logs` |
+
+With a broker configured, emails, in-app notifications, and audit entries are all queued for
+`app worker` instead of being handled inside API requests. Each queue falls back to the old
+in-process path when it cannot hand its work over, so a broker outage slows these features
+down but does not lose their data. In production `MESSAGE_BROKER` requires
+`APP_ENCRYPTION_KEY`, because the email and audit queues are encrypted with it.
 
 ### Email dispatch
 
 With `MESSAGE_BROKER` and `APP_ENCRYPTION_KEY` set, the API renders each email and records a
-`notification.email.requested` command in the outbox instead of calling SMTP. The payload is
-`{"ciphertext": "..."}`: recipient, subject, and body sealed with AES-GCM under the
+`notification.email.requested` command in the outbox instead of calling the mail driver. The
+payload is `{"ciphertext": "..."}`: recipient, subject, and body sealed with AES-GCM under the
 `APP_ENCRYPTION_KEY`-derived key, because reset and verification emails contain raw tokens.
 The broker, the outbox, and dead letters only hold ciphertext. The worker needs the same key
-and `SMTP_*` settings; an undecryptable command is dead-lettered without retries. When the
-key is unset, or the command cannot be stored, the API sends inline.
+and mail settings (`MAIL_DRIVER` and its credentials); an undecryptable command is
+dead-lettered without retries. When the key is unset (outside production), or the command
+cannot be stored, the API sends inline.
+
+### Notification dispatch
+
+With `MESSAGE_BROKER` set, a comment reply, a moderation decision, or a publication records one
+`notification.requested` command in the outbox, after the change itself has committed. The
+command carries only what the templates render from (ids, the reply's author name and text,
+the moderation outcome and reason, the post title and slug), never emails, IP hashes, or user
+agents. The worker looks up the recipients, renders the web and SSE copy, and stores one
+notification per recipient; publishing a post with many commenters therefore costs the API one
+insert instead of one per commenter. Each stored notification keeps its dedupe key, so a
+redelivered or retried command never notifies anyone twice, and a failed recipient makes the
+whole command retry without repeating the ones already stored. New notifications are
+announced on `notifications.created`, which every API replica relays to its SSE streams. When
+the command cannot be stored, the API delivers inline.
+
+### Audit writer
+
+With `MESSAGE_BROKER` and `APP_ENCRYPTION_KEY` set, the API's non-blocking audit recorder
+still batches entries in memory (`AUDIT_QUEUE_SIZE`), but each batch is published straight to
+`audit.entries.recorded` instead of being inserted. Audit entries carry client IPs and user
+agents, so the payload is `{"ciphertext": "..."}` under the same key as emails. When the
+publish fails the API inserts the batch itself; only a batch lost on both paths counts as
+dropped. The worker inserts batches with `ON CONFLICT (uuid) DO NOTHING`, so redeliveries are
+harmless and the consumer keeps no dedupe record.
+
+Audit batches skip the outbox, so they rely on the broker to keep them until the worker reads
+them. Kafka keeps them regardless. With RabbitMQ and Google Pub/Sub, the worker's durable
+queue or subscription must already exist, so start `app worker` once before API replicas get
+`MESSAGE_BROKER`; until then published batches are discarded.
 
 ## Streaming Channels and SSE Fan-Out
 

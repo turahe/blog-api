@@ -1,4 +1,5 @@
-// Package mail sends plain-text email over SMTP. Mailpit is the local receiver.
+// Package mail sends plain-text email over SMTP or the Resend API. Mailpit is the local
+// SMTP receiver.
 package mail
 
 import (
@@ -91,22 +92,32 @@ func (s *SMTP) SendRaw(ctx context.Context, recipient string, body []byte) error
 
 // compose validates the headers and renders the message.
 func (s *SMTP) compose(msg ports.Message) (recipient string, body []byte, err error) {
-	parsed, err := mail.ParseAddress(strings.TrimSpace(msg.To))
+	recipient, subject, err := checkMessage(msg)
 	if err != nil {
-		return "", nil, fmt.Errorf("recipient: %w", err)
-	}
-
-	subject := strings.TrimSpace(msg.Subject)
-	if subject == "" || strings.ContainsAny(subject, "\r\n") || strings.ContainsAny(parsed.Address, "\r\n") {
-		return "", nil, errors.New("refusing email header with line breaks or an empty subject")
+		return "", nil, err
 	}
 
 	body = []byte(fmt.Sprintf(
 		"From: %s\r\nTo: %s\r\nSubject: %s\r\nMIME-Version: 1.0\r\nContent-Type: text/plain; charset=UTF-8\r\n\r\n%s",
-		s.from, parsed.Address, subject, msg.Text,
+		s.from, recipient, subject, msg.Text,
 	))
 
-	return parsed.Address, body, nil
+	return recipient, body, nil
+}
+
+// checkMessage returns the bare recipient address and trimmed subject of msg.
+func checkMessage(msg ports.Message) (recipient, subject string, err error) {
+	parsed, err := mail.ParseAddress(strings.TrimSpace(msg.To))
+	if err != nil {
+		return "", "", fmt.Errorf("recipient: %w", err)
+	}
+
+	subject = strings.TrimSpace(msg.Subject)
+	if subject == "" || strings.ContainsAny(subject, "\r\n") || strings.ContainsAny(parsed.Address, "\r\n") {
+		return "", "", errors.New("refusing email header with line breaks or an empty subject")
+	}
+
+	return parsed.Address, subject, nil
 }
 
 func (s *SMTP) deliver(client *smtp.Client, recipient string, body []byte) error {

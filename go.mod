@@ -1,6 +1,6 @@
 module github.com/turahe/blog-api
 
-go 1.26.5
+go 1.27.1
 
 require (
 	cloud.google.com/go/cloudsqlconn v1.25.2
@@ -29,6 +29,7 @@ require (
 	github.com/prometheus/client_golang v1.24.1
 	github.com/rabbitmq/amqp091-go v1.15.0
 	github.com/redis/go-redis/v9 v9.22.0
+	github.com/resend/resend-go/v3 v3.17.0
 	github.com/sony/gobreaker v1.0.0
 	github.com/spf13/cobra v1.10.2
 	github.com/stretchr/testify v1.12.1

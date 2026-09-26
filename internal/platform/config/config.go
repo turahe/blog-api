@@ -155,7 +155,9 @@ type Config struct {
 	SMTPPort                      int
 	SMTPUsername                  string
 	SMTPPassword                  string
-	SMTPFrom                      string
+	MailDriver                    string
+	MailFrom                      string
+	ResendAPIKey                  string
 	AppPublicURL                  string
 	MetricsAddr                   string
 }
@@ -525,6 +527,12 @@ func (c Config) ValidateMessaging() error {
 		return nil
 	}
 
+	// Queued emails and audit batches are sealed with this key; without it both quietly stay
+	// in the API process, which a production deployment with a broker should not do by accident.
+	if c.Environment == envProduction && c.EncryptionKey == "" {
+		return errors.New("APP_ENCRYPTION_KEY is required with MESSAGE_BROKER in production: queued emails and audit entries are encrypted with it")
+	}
+
 	switch broker {
 	case "kafka":
 		return c.validateKafka()
@@ -641,7 +649,6 @@ func load(withJWTKeys bool) (Config, error) {
 		SMTPPort:                      integer("SMTP_PORT", 1025),
 		SMTPUsername:                  env("SMTP_USERNAME", ""),
 		SMTPPassword:                  env("SMTP_PASSWORD", ""),
-		SMTPFrom:                      env("SMTP_FROM", "Blog <blog@localhost>"),
 		AppPublicURL:                  env("APP_PUBLIC_URL", "http://127.0.0.1:8080"),
 		MetricsAddr:                   env("METRICS_ADDR", ""),
 		HTTPMaxInFlight:               integer("HTTP_MAX_INFLIGHT", 0),
@@ -651,6 +658,7 @@ func load(withJWTKeys bool) (Config, error) {
 	cfg.loadCache()
 	cfg.loadMedia()
 	cfg.loadWorker()
+	cfg.loadMail()
 	cfg.loadNewsletter()
 	cfg.loadAnalytics()
 	cfg.loadKafkaSecurity()
@@ -756,7 +764,7 @@ func (c *Config) validate() error {
 		return fmt.Errorf("invalid database pool limits: idle=%d open=%d", c.DBMaxIdle, c.DBMaxOpen)
 	}
 
-	for _, check := range []func() error{c.ValidateRedis, c.ValidateMessaging, c.ValidateMedia, c.ValidateSentry, c.ValidateCache, c.ValidateOAuth, c.ValidateAudit, c.ValidateSearch, c.ValidateImpersonation, c.ValidateNewsletter, c.ValidateAnalytics} {
+	for _, check := range []func() error{c.ValidateRedis, c.ValidateMessaging, c.ValidateMedia, c.ValidateSentry, c.ValidateCache, c.ValidateOAuth, c.ValidateAudit, c.ValidateSearch, c.ValidateImpersonation, c.ValidateMail, c.ValidateNewsletter, c.ValidateAnalytics} {
 		if err := check(); err != nil {
 			return err
 		}

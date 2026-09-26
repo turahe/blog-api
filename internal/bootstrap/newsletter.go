@@ -22,8 +22,8 @@ import (
 )
 
 // NewNewsletterService wires newsletter subscriptions, issues, and dispatch. settings may be
-// nil (app worker and scheduler); links then read the stored settings directly. Missing SMTP
-// disables confirmation emails and, with the smtp provider, dispatch.
+// nil (app worker and scheduler); links then read the stored settings directly. A missing
+// mailer disables confirmation emails, and a provider without credentials disables dispatch.
 func NewNewsletterService(
 	cfg config.Config, db *database.Database, events event.Unit, settings newslettermail.SettingsReader, logger *slog.Logger,
 ) *newsletterservice.Service {
@@ -49,8 +49,15 @@ func NewNewsletterService(
 	case config.NewsletterProviderCustomHTTP:
 		gateway := newsletterprovider.NewHTTP(cfg.NewsletterHTTPEndpoint, cfg.NewsletterHTTPSecret, nil)
 		deps.Sender, deps.Contacts = gateway, gateway
+	case config.NewsletterProviderResend:
+		client, err := newResendMailer(cfg)
+		if err != nil {
+			logger.Error("newsletter: resend sender disabled", "error", err)
+		} else {
+			deps.Sender = newsletterprovider.NewResend(client)
+		}
 	default:
-		if smtp, err := NewMailer(cfg); err == nil && smtp != nil {
+		if smtp, err := newSMTPMailer(cfg); err == nil && smtp != nil {
 			deps.Sender = newsletterprovider.NewSMTP(smtp)
 		}
 	}

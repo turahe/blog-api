@@ -33,7 +33,7 @@ type RecorderOptions struct {
 // goroutine. Record never blocks: when the queue is full the entry is dropped,
 // logged, and counted, so auditing cannot slow down or fail a request.
 type Recorder struct {
-	repo   ports.Repository
+	repo   ports.Inserter
 	logger *slog.Logger
 	opts   RecorderOptions
 	queue  chan domain.Entry
@@ -44,8 +44,9 @@ type Recorder struct {
 
 var _ ports.Writer = (*Recorder)(nil)
 
-// NewRecorder starts the background writer. Call Close to flush and stop it.
-func NewRecorder(repo ports.Repository, logger *slog.Logger, opts RecorderOptions) *Recorder {
+// NewRecorder starts the background writer over repo, which is the database or a queue in
+// front of it. Call Close to flush and stop it.
+func NewRecorder(repo ports.Inserter, logger *slog.Logger, opts RecorderOptions) *Recorder {
 	if opts.QueueSize <= 0 {
 		opts.QueueSize = defaultQueueSize
 	}

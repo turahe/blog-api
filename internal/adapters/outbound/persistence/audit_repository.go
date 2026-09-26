@@ -10,6 +10,7 @@ import (
 	"github.com/google/uuid"
 	auditdomain "github.com/turahe/blog-api/internal/core/audit/domain"
 	"gorm.io/gorm"
+	"gorm.io/gorm/clause"
 )
 
 // pruneBatchSize bounds each DELETE so pruning never holds long locks.
@@ -82,7 +83,10 @@ func (r *AuditRepository) Insert(ctx context.Context, entries []auditdomain.Entr
 		models = append(models, model)
 	}
 
-	if err := db.Omit("ID", "ActorUUID", "ImpersonatorUUID").Create(&models).Error; err != nil {
+	err = db.Omit("ID", "ActorUUID", "ImpersonatorUUID").
+		Clauses(clause.OnConflict{Columns: []clause.Column{{Name: "uuid"}}, DoNothing: true}).
+		Create(&models).Error
+	if err != nil {
 		return fmt.Errorf("insert audit logs: %w", err)
 	}
 

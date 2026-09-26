@@ -15,7 +15,9 @@ import (
 	"github.com/spf13/cobra"
 	"github.com/turahe/blog-api/internal/adapters/inbound/consumer"
 	"github.com/turahe/blog-api/internal/adapters/inbound/probe"
+	"github.com/turahe/blog-api/internal/adapters/outbound/auditqueue"
 	"github.com/turahe/blog-api/internal/adapters/outbound/mailqueue"
+	"github.com/turahe/blog-api/internal/adapters/outbound/notificationqueue"
 	"github.com/turahe/blog-api/internal/adapters/outbound/outbox"
 	"github.com/turahe/blog-api/internal/adapters/outbound/persistence"
 	"github.com/turahe/blog-api/internal/bootstrap"
@@ -30,6 +32,8 @@ import (
 // Consumer handler names; each is also the dedupe key of its consumer.
 const (
 	emailConsumer              = "email-dispatch"
+	auditConsumer              = "audit-writer"
+	notificationConsumer       = "notification-dispatch"
 	newsletterDispatchConsumer = "newsletter-dispatch"
 	newsletterSyncConsumer     = "newsletter-provider-sync"
 )
@@ -82,7 +86,7 @@ func newWorkerCmd() *cobra.Command {
 
 			dedupe := persistence.NewProcessedMessageRepository(db.GORM)
 
-			consumers, err := addConsumers(router, bus, cfg, dedupe, logger)
+			consumers, err := addConsumers(router, bus, cfg, db, dedupe, logger)
 			if err != nil {
 				return err
 			}
@@ -164,7 +168,8 @@ func startRouter(ctx context.Context, router *message.Router, hasConsumers bool)
 
 // addConsumers registers the worker's message handlers and returns their names.
 func addConsumers(
-	router *message.Router, bus *messaging.Bus, cfg config.Config, dedupe messaging.Deduper, logger *slog.Logger,
+	router *message.Router, bus *messaging.Bus, cfg config.Config, db *database.Database, dedupe messaging.Deduper,
+	logger *slog.Logger,
 ) ([]string, error) {
 	var names []string
 
@@ -184,10 +189,24 @@ func addConsumers(
 
 		names = append(names, emailConsumer)
 	} else {
-		logger.Warn("email dispatch disabled: needs APP_ENCRYPTION_KEY and SMTP_HOST; queued emails wait in the broker")
+		logger.Warn("email dispatch disabled: needs APP_ENCRYPTION_KEY and SMTP_HOST or MAIL_DRIVER=resend; queued emails wait in the broker")
 	}
 
-	return names, nil
+	if box != nil {
+		// Inserts skip entries whose UUID is stored, so redeliveries need no dedupe record.
+		addConsumer(router, bus, cfg, auditConsumer, bus.Topic(event.AuditEntriesRecorded),
+			auditqueue.Handler(box, persistence.NewAuditRepository(db.GORM), logger), logger)
+
+		names = append(names, auditConsumer)
+	} else {
+		logger.Warn("audit writer disabled: needs APP_ENCRYPTION_KEY; API replicas write audit entries directly")
+	}
+
+	inbox := bootstrap.NewNotificationInbox(cfg, db, bus, logger)
+	addConsumer(router, bus, cfg, notificationConsumer, bus.Topic(event.NotificationRequested),
+		messaging.Idempotent(dedupe, notificationConsumer, notificationqueue.Handler(inbox)), logger)
+
+	return append(names, notificationConsumer), nil
 }
 
 // addNewsletterConsumers registers issue dispatch when a delivery provider is configured, and
@@ -198,7 +217,7 @@ func addNewsletterConsumers(
 ) []string {
 	nl := bootstrap.NewNewsletterService(cfg, db, bootstrap.NewEvents(cfg, db), nil, logger)
 	if !nl.SendingEnabled() {
-		logger.Warn("newsletter dispatch disabled: needs SMTP_HOST or NEWSLETTER_PROVIDER=custom_http; queued issues wait in the broker")
+		logger.Warn("newsletter dispatch disabled: needs SMTP_HOST, or NEWSLETTER_PROVIDER=resend or custom_http; queued issues wait in the broker")
 		return nil
 	}
 

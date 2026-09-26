@@ -50,6 +50,23 @@ func TestAuditRepositoryRoundTripsEntry(t *testing.T) {
 	require.Nil(t, got.ImpersonatorID)
 }
 
+func TestAuditRepositoryIgnoresRedeliveredEntries(t *testing.T) {
+	t.Parallel()
+
+	tx := integrationTx(t)
+	repo := NewAuditRepository(tx)
+	user := insertUser(t, tx)
+	first := auditAt("me.profile.update", "profile_update", &user, "", nil, time.Now().UTC())
+	second := auditAt("me.password.change", "password_change", &user, "", nil, time.Now().UTC())
+
+	require.NoError(t, repo.Insert(t.Context(), []auditdomain.Entry{first}))
+	require.NoError(t, repo.Insert(t.Context(), []auditdomain.Entry{first, second}))
+
+	page, err := repo.Activity(t.Context(), auditdomain.ActivityFilter{UserID: user, Page: 1, PerPage: 10})
+	require.NoError(t, err)
+	require.Equal(t, int64(2), page.Total)
+}
+
 func TestAuditRepositoryStoresImpersonator(t *testing.T) {
 	t.Parallel()
 

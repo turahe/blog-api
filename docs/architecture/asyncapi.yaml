@@ -165,6 +165,26 @@ channels:
       operationId: publishNotificationEmailRequested
       message:
         $ref: '#/components/messages/NotificationEmailRequested'
+  notification.requested:
+    description: Command to deliver in-app notifications for a comment reply, a moderation decision, or a publication. The API records it in the outbox when a broker is configured; the worker's notification-dispatch consumer renders and stores the notifications (deduplicated per recipient) and announces each new one on notifications.created.
+    subscribe:
+      operationId: onNotificationRequested
+      message:
+        $ref: '#/components/messages/NotificationRequested'
+    publish:
+      operationId: publishNotificationRequested
+      message:
+        $ref: '#/components/messages/NotificationRequested'
+  audit.entries.recorded:
+    description: A batch of audit entries. API replicas publish it directly (not through the outbox) when a broker and APP_ENCRYPTION_KEY are configured, and insert the batch themselves when the publish fails; the worker's audit-writer consumer inserts it into audit_logs, skipping entries already stored.
+    subscribe:
+      operationId: onAuditEntriesRecorded
+      message:
+        $ref: '#/components/messages/AuditEntriesRecorded'
+    publish:
+      operationId: publishAuditEntriesRecorded
+      message:
+        $ref: '#/components/messages/AuditEntriesRecorded'
   blog.dead_letter:
     description: Messages a worker consumer could not handle after its retries. The original payload and headers are kept, plus the Watermill poison-queue headers.
     subscribe:
@@ -881,6 +901,15 @@ components:
       - $ref: '#/components/messageTraits/EventEnvelope'
       payload:
         $ref: '#/components/schemas/NotificationEmailRequestedPayload'
+    NotificationRequested:
+      traits:
+      - $ref: '#/components/messageTraits/EventEnvelope'
+      payload:
+        $ref: '#/components/schemas/NotificationRequestedPayload'
+    AuditEntriesRecorded:
+      description: Published without the outbox envelope headers; the message UUID is random.
+      payload:
+        $ref: '#/components/schemas/AuditEntriesRecordedPayload'
     DeadLetter:
       headers:
         type: object
@@ -1639,6 +1668,102 @@ components:
         ciphertext:
           type: string
           description: Base64 AES-GCM ciphertext of {"to", "subject", "text"} under the APP_ENCRYPTION_KEY-derived key. Emails can carry raw reset tokens, so they are never stored in plaintext.
+    NotificationRequestedPayload:
+      type: object
+      description: Only the fields the notification templates render from; no email addresses, IP hashes, or user agents. Which object is set depends on kind.
+      required:
+      - kind
+      properties:
+        kind:
+          type: string
+          enum:
+          - comment_replied
+          - comment_moderated
+          - post_published
+        reply:
+          $ref: '#/components/schemas/NotificationComment'
+        parent:
+          $ref: '#/components/schemas/NotificationComment'
+        moderation:
+          type: object
+          required:
+          - entry_id
+          - comment_id
+          - post_id
+          - status
+          properties:
+            entry_id:
+              type: string
+              format: uuid
+            comment_id:
+              type: string
+              format: uuid
+            post_id:
+              type: string
+              format: uuid
+            author_id:
+              type: string
+              format: uuid
+            moderator_id:
+              type: string
+              format: uuid
+            status:
+              type: string
+            reason:
+              type: string
+        post:
+          type: object
+          required:
+          - id
+          - author_id
+          - title
+          - slug
+          properties:
+            id:
+              type: string
+              format: uuid
+            author_id:
+              type: string
+              format: uuid
+            title:
+              type: string
+            slug:
+              type: string
+            published_at:
+              type: string
+              format: date-time
+        actor_id:
+          type: string
+          format: uuid
+          description: Who published the post (post_published only); absent when no user did.
+    NotificationComment:
+      type: object
+      required:
+      - id
+      - post_id
+      properties:
+        id:
+          type: string
+          format: uuid
+        post_id:
+          type: string
+          format: uuid
+        author_id:
+          type: string
+          format: uuid
+          description: Absent for guest comments.
+        author_name:
+          type: string
+        content:
+          type: string
+    AuditEntriesRecordedPayload:
+      type: object
+      required:
+      - ciphertext
+      properties:
+        ciphertext:
+          type: string
+          description: Base64 AES-GCM ciphertext of a JSON array of audit entries (uuid, action, category, actor_id, impersonator_id, resource_type, resource_id, result, status, changes, metadata, ip, user_agent, request_id, occurred_at) under the APP_ENCRYPTION_KEY-derived key. Entries carry client IPs and user agents, so they are never published in plaintext.
     MediaEventPayload:
       type: object
       required:

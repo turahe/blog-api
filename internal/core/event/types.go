@@ -27,6 +27,8 @@ const (
 	MediaUploaded              = "blog.media.uploaded"
 	MediaDeleted               = "blog.media.deleted"
 	NotificationEmailRequested = "notification.email.requested"
+	NotificationRequested      = "notification.requested"
+	AuditEntriesRecorded       = "audit.entries.recorded"
 
 	SettingsUpdated = "blog.settings.updated"
 

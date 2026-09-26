@@ -2,6 +2,8 @@ package service
 
 import (
 	"context"
+	"errors"
+	"fmt"
 	"log/slog"
 	"strconv"
 	"strings"
@@ -30,7 +32,8 @@ type Clock interface {
 }
 
 // Inbox stores in-app notifications and serves a user's inbox. It implements the comment
-// and post notifiers; delivery failures are logged and never fail the caller.
+// and post notifiers, whose delivery failures are logged and never fail the caller; the
+// Deliver methods return them for callers that retry, such as the queue worker.
 type Inbox struct {
 	repo      ports.Repository
 	dir       ports.Directory
@@ -104,29 +107,44 @@ func (i *Inbox) MarkRead(ctx context.Context, userID, id uuid.UUID) (notificatio
 	return i.repo.MarkRead(ctx, userID, id, i.clock.Now())
 }
 
-// CommentReplied tells the parent's registered author about a visible reply by someone else.
+// CommentReplied delivers like DeliverCommentReplied, logging failures instead of returning them.
 func (i *Inbox) CommentReplied(ctx context.Context, reply, parent commentdomain.Comment) {
-	if parent.AuthorUUID == nil || sameUser(reply.AuthorUUID, *parent.AuthorUUID) {
-		return
-	}
-
 	ctx = context.WithoutCancel(ctx)
+	i.logFailure(ctx, template.TypeCommentReply, i.DeliverCommentReplied(ctx, reply, parent))
+}
+
+// CommentModerated delivers like DeliverCommentModerated, logging failures instead of returning them.
+func (i *Inbox) CommentModerated(ctx context.Context, change commentdomain.Moderation) {
+	ctx = context.WithoutCancel(ctx)
+	i.logFailure(ctx, template.TypeCommentModerated, i.DeliverCommentModerated(ctx, change))
+}
+
+// PostPublished delivers like DeliverPostPublished, logging failures instead of returning them.
+func (i *Inbox) PostPublished(ctx context.Context, post postdomain.Post, actorID *uuid.UUID) {
+	ctx = context.WithoutCancel(ctx)
+	i.logFailure(ctx, template.TypePublicationPublished, i.DeliverPostPublished(ctx, post, actorID))
+}
+
+// DeliverCommentReplied tells the parent's registered author about a visible reply by someone
+// else. Repeating it never stores a second notification.
+func (i *Inbox) DeliverCommentReplied(ctx context.Context, reply, parent commentdomain.Comment) error {
+	if parent.AuthorUUID == nil || sameUser(reply.AuthorUUID, *parent.AuthorUUID) {
+		return nil
+	}
 
 	post, err := i.dir.PostSummary(ctx, reply.PostUUID)
 	if err != nil {
-		i.logFailure(ctx, template.TypeCommentReply, err)
-		return
+		return fmt.Errorf("post summary: %w", err)
 	}
 
 	actorName := reply.AuthorName
 	if reply.AuthorUUID != nil {
 		if actorName, err = i.dir.DisplayName(ctx, *reply.AuthorUUID); err != nil {
-			i.logFailure(ctx, template.TypeCommentReply, err)
-			return
+			return fmt.Errorf("display name: %w", err)
 		}
 	}
 
-	i.deliver(ctx, notice{
+	return i.deliver(ctx, notice{
 		userID: *parent.AuthorUUID,
 		typ:    template.TypeCommentReply,
 		data: template.Data{
@@ -142,22 +160,20 @@ func (i *Inbox) CommentReplied(ctx context.Context, reply, parent commentdomain.
 	})
 }
 
-// CommentModerated tells a registered author the outcome of a moderator's decision.
-func (i *Inbox) CommentModerated(ctx context.Context, change commentdomain.Moderation) {
+// DeliverCommentModerated tells a registered author the outcome of a moderator's decision.
+// Repeating it never stores a second notification.
+func (i *Inbox) DeliverCommentModerated(ctx context.Context, change commentdomain.Moderation) error {
 	author := change.Comment.AuthorUUID
 	if author == nil || sameUser(change.Entry.ModeratorUUID, *author) {
-		return
+		return nil
 	}
-
-	ctx = context.WithoutCancel(ctx)
 
 	post, err := i.dir.PostSummary(ctx, change.Comment.PostUUID)
 	if err != nil {
-		i.logFailure(ctx, template.TypeCommentModerated, err)
-		return
+		return fmt.Errorf("post summary: %w", err)
 	}
 
-	i.deliver(ctx, notice{
+	return i.deliver(ctx, notice{
 		userID: *author,
 		typ:    template.TypeCommentModerated,
 		data: template.Data{
@@ -173,10 +189,10 @@ func (i *Inbox) CommentModerated(ctx context.Context, change commentdomain.Moder
 	})
 }
 
-// PostPublished tells the author when someone else published their post, and tells the
-// registered commenters that the post they discussed is public again.
-func (i *Inbox) PostPublished(ctx context.Context, post postdomain.Post, actorID *uuid.UUID) {
-	ctx = context.WithoutCancel(ctx)
+// DeliverPostPublished tells the author when someone else published their post, and tells the
+// registered commenters that the post they discussed is public again. A failed recipient does
+// not stop the others; repeating it never stores a second notification for anyone.
+func (i *Inbox) DeliverPostPublished(ctx context.Context, post postdomain.Post, actorID *uuid.UUID) error {
 	summary := ports.PostSummary{UUID: post.UUID, AuthorUUID: post.AuthorUUID, Title: post.Title, Slug: post.Slug}
 	payload := map[string]string{"post_id": post.UUID.String(), "url": i.postURL(summary)}
 
@@ -187,17 +203,18 @@ func (i *Inbox) PostPublished(ctx context.Context, post postdomain.Post, actorID
 
 	data := template.Data{PostTitle: post.Title, PostURL: i.postURL(summary)}
 
+	var errs []error
+
 	if !sameUser(actorID, post.AuthorUUID) {
-		i.deliver(ctx, notice{
+		errs = append(errs, i.deliver(ctx, notice{
 			userID: post.AuthorUUID, typ: template.TypePublicationPublished, data: data,
 			payload: payload, actorID: actorID, dedupe: template.TypePublicationPublished + ":" + edition,
-		})
+		}))
 	}
 
 	commenters, err := i.dir.PostCommenters(ctx, post.UUID)
 	if err != nil {
-		i.logFailure(ctx, template.TypePublicationRepublished, err)
-		return
+		return errors.Join(append(errs, fmt.Errorf("post commenters: %w", err))...)
 	}
 
 	for _, userID := range commenters {
@@ -205,11 +222,13 @@ func (i *Inbox) PostPublished(ctx context.Context, post postdomain.Post, actorID
 			continue
 		}
 
-		i.deliver(ctx, notice{
+		errs = append(errs, i.deliver(ctx, notice{
 			userID: userID, typ: template.TypePublicationRepublished, data: data,
 			payload: payload, actorID: actorID, dedupe: template.TypePublicationRepublished + ":" + edition,
-		})
+		}))
 	}
+
+	return errors.Join(errs...)
 }
 
 type notice struct {
@@ -221,17 +240,15 @@ type notice struct {
 	dedupe  string
 }
 
-func (i *Inbox) deliver(ctx context.Context, n notice) {
+func (i *Inbox) deliver(ctx context.Context, n notice) error {
 	web, err := i.renderer.Render(ctx, template.ChannelWeb, n.typ, n.data)
 	if err != nil {
-		i.logFailure(ctx, n.typ, err)
-		return
+		return fmt.Errorf("render %s: %w", n.typ, err)
 	}
 
 	sse, err := i.renderer.Render(ctx, template.ChannelSSE, n.typ, n.data)
 	if err != nil {
-		i.logFailure(ctx, n.typ, err)
-		return
+		return fmt.Errorf("render %s: %w", n.typ, err)
 	}
 
 	stored, created, err := i.repo.Insert(ctx, notificationdomain.Notification{
@@ -246,20 +263,25 @@ func (i *Inbox) deliver(ctx context.Context, n notice) {
 		CreatedAt: i.clock.Now(),
 	})
 	if err != nil {
-		i.logFailure(ctx, n.typ, err)
-		return
+		return fmt.Errorf("store %s: %w", n.typ, err)
 	}
 
 	if !created {
-		return
+		return nil
 	}
 
 	for _, listener := range i.listeners {
 		listener(ctx, stored)
 	}
+
+	return nil
 }
 
 func (i *Inbox) logFailure(ctx context.Context, typ string, err error) {
+	if err == nil {
+		return
+	}
+
 	i.logger.WarnContext(ctx, "notify: in-app notification not stored", "type", typ, "error", err)
 }
 

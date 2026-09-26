@@ -1,5 +1,6 @@
-// Package newsletterprovider delivers newsletter issues through the built-in SMTP mailer or a
-// custom HTTP gateway signed with HMAC, and verifies that gateway's bounce webhooks.
+// Package newsletterprovider delivers newsletter issues through the built-in SMTP mailer, the
+// Resend API, or a custom HTTP gateway signed with HMAC, and verifies that gateway's bounce
+// webhooks.
 package newsletterprovider
 
 import (
@@ -121,12 +122,18 @@ func (s *SMTP) compose(email ports.Email, recipient string) ([]byte, error) {
 	return buf.Bytes(), nil
 }
 
-// from builds the From header: the configured name and address, falling back to the mailer's
-// address. The envelope sender stays the mailer's address so SPF keeps passing.
+// from builds the From header. The envelope sender stays the mailer's address so SPF keeps
+// passing.
 func (s *SMTP) from(email ports.Email) (string, error) {
-	fallback, err := mail.ParseAddress(s.raw.From())
+	return fromHeader(s.raw.From(), email)
+}
+
+// fromHeader returns the issue's configured sender name and address, each falling back to the
+// transport's sender.
+func fromHeader(transportFrom string, email ports.Email) (string, error) {
+	fallback, err := mail.ParseAddress(transportFrom)
 	if err != nil {
-		return "", fmt.Errorf("smtp from address: %w", err)
+		return "", fmt.Errorf("mailer from address: %w", err)
 	}
 
 	addr := mail.Address{Name: fallback.Name, Address: fallback.Address}

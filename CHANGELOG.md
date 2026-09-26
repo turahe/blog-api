@@ -1,5 +1,45 @@
 # Changelog
 
+## 2026-09-26 — Queued notifications and audit log
+
+### Added
+
+- With `MESSAGE_BROKER` set, comment replies, moderation decisions, and publications record one
+  `notification.requested` command in the outbox. The new `notification-dispatch` consumer in
+  `app worker` renders and stores the in-app notifications, retries failures without notifying
+  anyone twice, and announces new notices on `notifications.created` for SSE. When the
+  command cannot be stored, the API delivers inline as before.
+- With `MESSAGE_BROKER` and `APP_ENCRYPTION_KEY` set, the audit recorder publishes each batch,
+  encrypted, to `audit.entries.recorded`, and the new `audit-writer` consumer inserts it. When
+  the publish fails the API inserts the batch itself. With RabbitMQ or Google Pub/Sub, start
+  `app worker` once before enabling the broker on the API, so the worker's queue or
+  subscription exists before batches are published.
+
+### Changed
+
+- **Breaking:** in production, `MESSAGE_BROKER` without `APP_ENCRYPTION_KEY` fails startup.
+  The email and audit queues are encrypted with the key, so without it they quietly stayed in
+  the API process.
+- Audit inserts skip entries whose UUID is already stored, so a redelivered batch is harmless.
+
+## 2026-09-26 — Resend mail driver
+
+### Added
+
+- `MAIL_DRIVER=resend` sends account, notification, and newsletter confirmation email through
+  the Resend API ([resend-go](https://github.com/resend/resend-go) v3) with `RESEND_API_KEY`.
+  `MAIL_DRIVER=smtp` stays the default.
+- `NEWSLETTER_PROVIDER=resend` sends issues through Resend with their HTML and text bodies,
+  reply-to, and `List-Unsubscribe` headers. The delivery id is the idempotency key, so a
+  retried delivery is not sent twice. A 4xx other than 408, 409, or 429 fails the delivery
+  permanently; other failures are retried.
+- `MAIL_FROM` sets the sender for both drivers.
+
+### Changed
+
+- An unset `NEWSLETTER_PROVIDER` follows `MAIL_DRIVER` instead of always meaning `smtp`.
+- `SMTP_FROM` is read only when `MAIL_FROM` is unset.
+
 ## 2026-09-25 — Clearer validation errors
 
 ### Changed

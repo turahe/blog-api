@@ -9,7 +9,7 @@ authentication, RBAC, media, analytics, impersonation, and audit tooling.**
 
 ![OpenAPI 3.1](https://img.shields.io/badge/OpenAPI-3.1-6BA539?logo=openapiinitiative&logoColor=white)
 ![AsyncAPI 2.6](https://img.shields.io/badge/AsyncAPI-2.6-4D5E7A?logo=data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAyNCAyNCIgc3R5bGU9ImZpbGw6d2hpdGUiPjxwYXRoIGQ9Ik0xMiAyIDIgMTBIMnYxNGgyMFYxMFoiLz48L3N2Zz4=)
-![Go 1.22+](https://img.shields.io/badge/Go-1.22%2B-00ADD8?logo=go&logoColor=white)
+![Go 1.27+](https://img.shields.io/badge/Go-1.27%2B-00ADD8?logo=go&logoColor=white)
 ![Node 20.19+](https://img.shields.io/badge/Node-20.19%2B-339933?logo=nodedotjs&logoColor=white)
 ![PostgreSQL 15+](https://img.shields.io/badge/PostgreSQL-15%2B-336791?logo=postgresql&logoColor=white)
 ![Redis 7+](https://img.shields.io/badge/Redis-7%2B-FF4438?logo=redis&logoColor=white)
@@ -198,7 +198,7 @@ in `go.sum` and container images.
 
 | Component  | Version       | Where it's used                                                   |
 | ---------- | ------------- | ----------------------------------------------------------------- |
-| Go         | 1.26+         | Main API, workers, scheduler, migrations. See [go.mod](./go.mod). |
+| Go         | 1.27+         | Main API, workers, scheduler, migrations. See [go.mod](./go.mod). |
 | Gin        | 1.10.x        | HTTP router + middleware stack.                                   |
 | GORM       | 1.25+ / 1.30+ | ORM; PostgreSQL dialect in prod, SQLite dialect in unit tests.    |
 | `log/slog` | stdlib        | Structured logger; replaceable handler for OTel sinks.            |
@@ -293,7 +293,7 @@ Install the following on your host machine:
 
 | Tool           | Min version               | Install check            |
 | -------------- | ------------------------- | ------------------------ |
-| Go             | 1.26                      | `go version`             |
+| Go             | 1.27                      | `go version`             |
 | Docker         | 24                        | `docker version`         |
 | Docker Compose | v2                        | `docker compose version` |
 
@@ -634,7 +634,7 @@ best-practice recommendations; plug your cloud of choice into the steps.
 
 ```dockerfile
 # syntax=docker/dockerfile:1.6
-FROM golang:1.22-alpine AS build
+FROM golang:1.27-alpine AS build
 WORKDIR /src
 COPY go.mod go.sum ./
 RUN go mod download
@@ -699,7 +699,7 @@ jobs:
     steps:
       - uses: actions/checkout@v7
       - uses: actions/setup-go@v7
-        with: { go-version: "1.26.5" }
+        with: { go-version: "1.27.1" }
       - run: go mod tidy && go test -count=1 ./...
   build-and-push:
     needs: [contract-lint, go-test]

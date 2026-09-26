@@ -77,20 +77,20 @@ Do not use `0.0.0.0/0`, `*`, or arbitrary client-controlled addresses in
 | `AUTH_LOGIN_MAX_FAILURES` | `5` | No | Failed logins per email (known or unknown) before a lockout; `0` disables lockout. |
 | `AUTH_LOGIN_LOCKOUT` | `15m` | No | Lockout length, and the window in which failures are counted. |
 | `RBAC_POLICY_RELOAD_INTERVAL` | `30s` | No | How often each instance reloads the Casbin policy from `casbin_rules`; `0` disables the timer. Role writes also publish on Redis channel `rbac:policy:reload`, so other instances reload at once. |
-| `APP_ENCRYPTION_KEY` | empty | For 2FA | Base64 32-byte key (`openssl rand -base64 32`). Encrypts TOTP secrets (AES-256-GCM) and keys the HMAC of backup codes and of stored client-IP hashes (comments, guest flags, newsletter consent). Empty disables 2FA enrollment and leaves IP hashes as reversible plain SHA-256; startup logs a warning. Keep it stable: losing or rotating it locks enrolled accounts out (their logins answer `503 auth.2fa.unavailable`), and new IP hashes stop matching old ones, so a guest can flag a comment again. |
+| `APP_ENCRYPTION_KEY` | empty | For 2FA | Base64 32-byte key (`openssl rand -base64 32`). Encrypts TOTP secrets (AES-256-GCM) and keys the HMAC of backup codes and of stored client-IP hashes (comments, guest flags, newsletter consent). Empty disables 2FA enrollment and leaves IP hashes as reversible plain SHA-256; startup logs a warning. Also encrypts queued emails and audit batches; required in production when `MESSAGE_BROKER` is set. Keep it stable: losing or rotating it locks enrolled accounts out (their logins answer `503 auth.2fa.unavailable`), and new IP hashes stop matching old ones, so a guest can flag a comment again. |
 | `AUTH_2FA_ISSUER` | `Blog` | No | Issuer label in the `otpauth://` URL shown by authenticator apps. |
 | `OAUTH_GOOGLE_CLIENT_ID` / `OAUTH_GOOGLE_CLIENT_SECRET` | empty | For Google sign-in | Google OAuth client. Set both or neither; empty disables the provider (`404 auth.oauth.provider_unknown`). |
 | `OAUTH_GITHUB_CLIENT_ID` / `OAUTH_GITHUB_CLIENT_SECRET` | empty | For GitHub sign-in | GitHub OAuth app. Set both or neither. |
 | `OAUTH_REDIRECT_URIS` | empty | For OAuth | Comma-separated allowlist of client callback URLs, matched exactly. Each must be an absolute `http(s)` URL without a fragment, and `https` in production. Register the same URLs with the provider. |
 | `AUDIT_RETENTION_DAYS` | `395` | No | Days audit rows are kept; `app audit prune` and the hourly `audit-prune` job in `app scheduler` delete older rows. Must be positive. |
-| `AUDIT_QUEUE_SIZE` | `1024` | No | Entries buffered for the background audit writer. When full, new entries are dropped and counted in `blog_audit_entries_dropped_total`. Must be positive. |
+| `AUDIT_QUEUE_SIZE` | `1024` | No | Entries buffered for the background audit writer, which inserts them or, with a broker and `APP_ENCRYPTION_KEY`, publishes them for `app worker`. When full, new entries are dropped and counted in `blog_audit_entries_dropped_total`. Must be positive. |
 | `ANALYTICS_INGEST_PER_MINUTE` | `300` | No | Requests per minute per client IP across the five `/analytics/ingest/*` routes; `0` disables the limit. See [analytics.md](../backend/analytics.md). |
 | `ANALYTICS_QUEUE_SIZE` | `10000` | No | Events buffered for the background analytics writer. When full, new events are dropped and counted in `blog_analytics_events_dropped_total`. Must be positive. |
 | `ANALYTICS_EXPORT_RETENTION` | `72h` | No | How long an admin analytics export archive stays in `S3_BUCKET` (under `analytics-exports/`, which must not be publicly readable) before `app scheduler` deletes it. Must be positive. See [analytics.md](../backend/analytics.md#export). |
 | `ANALYTICS_EXPORT_URL_TTL` | `15m` | No | Lifetime of each presigned analytics export download link; a new link is issued on every `GET /admin/analytics/exports/{id}`. 1s–168h. |
 | `ANALYTICS_COUNTRY_HEADER` | empty | No | Header carrying the visitor's ISO country code from the edge proxy (for example `CF-IPCountry`). Read only from peers in `APP_TRUSTED_PROXIES`, which must be set. Empty stores no country. |
 | `IMPERSONATION_TTL` | `1h` | No | Lifetime of an impersonation session and its token; never renewed. `5m`–`2h`. See [impersonation.md](../backend/impersonation.md). |
-| `NEWSLETTER_PROVIDER` | `smtp` | No | Newsletter issue sender: `smtp` (the SMTP settings, from `app worker`) or `custom_http` (signed JSON gateway). See [newsletter.md](../backend/newsletter.md). |
+| `NEWSLETTER_PROVIDER` | `MAIL_DRIVER` | No | Newsletter issue sender, run by `app worker`: `smtp` (the SMTP settings), `resend` (`RESEND_API_KEY`), or `custom_http` (signed JSON gateway). Empty follows `MAIL_DRIVER`. See [newsletter.md](../backend/newsletter.md). |
 | `NEWSLETTER_HTTP_ENDPOINT` | — | With `custom_http` | Gateway URL for deliveries and contact syncs; must be `https` in production. Credentials and query are never shown by the admin API. |
 | `NEWSLETTER_HTTP_SECRET` | — | With `custom_http` | HMAC-SHA256 secret, at least 32 bytes, for gateway requests and the bounce/complaint webhook. Set with `smtp` it enables only the webhook. |
 | `NEWSLETTER_SEND_BATCH` | `50` | No | Recipients claimed per dispatch step, `1`–`500`. |
@@ -106,14 +106,17 @@ private key invalidates existing access tokens; rotating `APP_SESSION_KEY` inval
 refresh/reset tokens. Additional handling rules are in
 [secrets-and-headers.md](../security/secrets-and-headers.md).
 
-## Email (SMTP)
+## Email
 
 | Variable | Default | Required | Purpose |
 | --- | --- | --- | --- |
-| `SMTP_HOST` | empty | No | SMTP host. Empty keeps account notices in the log. Compose sets this to `mailpit`. |
+| `MAIL_DRIVER` | `smtp` | No | Transport for account, notification, and newsletter confirmation email: `smtp` or `resend`. |
+| `MAIL_FROM` | `SMTP_FROM`, else `Blog <blog@localhost>` | No | From address on outbound mail. With `resend` it must be on a domain verified in Resend. |
+| `RESEND_API_KEY` | — | With `resend` | Resend API key (`re_…`), sent only to the Resend API. Required when `MAIL_DRIVER` or `NEWSLETTER_PROVIDER` is `resend`. |
+| `SMTP_HOST` | empty | No | SMTP host for the `smtp` driver. Empty keeps account notices in the log. Compose sets this to `mailpit`. |
 | `SMTP_PORT` | `1025` | No | SMTP port. Mailpit listens on 1025. |
 | `SMTP_USERNAME` / `SMTP_PASSWORD` | empty | No | Optional SMTP auth. Mailpit accepts mail without it. |
-| `SMTP_FROM` | `Blog <blog@localhost>` | No | From address on outbound mail. |
+| `SMTP_FROM` | `Blog <blog@localhost>` | No | Older name for `MAIL_FROM`, read when `MAIL_FROM` is unset. |
 | `APP_PUBLIC_URL` | `http://127.0.0.1:8080` | No | Origin printed in password-reset and email-change messages. |
 
 Local Mailpit UI is [http://127.0.0.1:8025](http://127.0.0.1:8025). Messages cover password reset, password change, and email change. The raw token is only in the message body.
@@ -393,14 +396,23 @@ least one worker running while a broker is configured, or the backlog grows; wat
 | `CONSUMER_BREAKER_TIMEOUT` | `30s` | No | How long an open breaker refuses messages before one trial message is let through. |
 
 While a breaker is open the consumer nacks messages after a short pause (at most 5s) instead
-of running them, so a down SMTP server or database pauses delivery rather than dead-lettering
+of running them, so a down mail provider or database pauses delivery rather than dead-lettering
 every message. See the [runbook](./runbook.md#consumer-circuit-breaker-open).
 
-With `MESSAGE_BROKER` and `APP_ENCRYPTION_KEY` both set, the API does not talk to SMTP:
-each email is encrypted and stored as a `notification.email.requested` command, and the
-worker sends it. The worker then needs the same `APP_ENCRYPTION_KEY` and `SMTP_*`
-settings as the API. Without the key, or when the command cannot be stored, the API sends
-inline as before.
+A broker moves three kinds of request-side work to the worker, each with an in-process
+fallback (details in [events.md](../backend/events.md#email-dispatch)):
+
+| Queue | Needs | Worker consumer | Fallback |
+| --- | --- | --- | --- |
+| Email | `MESSAGE_BROKER`, `APP_ENCRYPTION_KEY` | `email-dispatch`, with the same key and mail settings (`MAIL_*`, `SMTP_*`, `RESEND_API_KEY`) | The API sends inline when the command cannot be stored |
+| In-app notifications | `MESSAGE_BROKER` | `notification-dispatch` | The API delivers inline when the command cannot be stored |
+| Audit log | `MESSAGE_BROKER`, `APP_ENCRYPTION_KEY` | `audit-writer`, with the same key | The API inserts the batch when the publish fails |
+
+In production, `MESSAGE_BROKER` without `APP_ENCRYPTION_KEY` is a startup error. Elsewhere the
+email and audit queues stay off without the key and the API does that work itself. Audit
+batches are published directly rather than through the outbox, so with RabbitMQ or Google
+Pub/Sub start `app worker` once before the API gets `MESSAGE_BROKER`, or batches published
+before the worker's queue or subscription exists are discarded.
 
 ## Error tracking (Sentry)
 

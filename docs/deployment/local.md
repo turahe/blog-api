@@ -3,7 +3,7 @@
 ## Prerequisites
 
 - Docker + Compose — every `make` target (tests, lint, swagger, dev keys, stack) runs in containers
-- Go `1.26.5` (optional; only for running the API directly on the host with `go run` — see [go.mod](../../go.mod))
+- Go `1.27.1` (optional; only for running the API directly on the host with `go run` — see [go.mod](../../go.mod))
 
 ## Boot sequence (Docker — recommended)
 

@@ -2,8 +2,8 @@
 
 Visitors and signed-in users subscribe to admin-defined lists with double opt-in, manage their
 preferences and unsubscribe through opaque single-purpose tokens, and receive issues that
-editors write in Markdown. Issues are sent by `app worker` through the SMTP mailer or a signed
-`custom_http` gateway; a signed webhook feeds bounces and complaints back.
+editors write in Markdown. Issues are sent by `app worker` through the SMTP mailer, the Resend
+API, or a signed `custom_http` gateway; a signed webhook feeds bounces and complaints back.
 
 Product spec: [newsletter-subscriptions.md](../features/newsletter-subscriptions.md).
 
@@ -15,7 +15,7 @@ Product spec: [newsletter-subscriptions.md](../features/newsletter-subscriptions
 | Ports | `internal/core/newsletter/ports` | `Repository`, `Mailer` (confirm and welcome), `Sender`, `ContactSync`, `WebhookVerifier`, `Captcha`, `Links`, `Markdown`, `Accounts` |
 | Service | `internal/core/newsletter/service` | subscribe, confirm, preferences, unsubscribe, `/me`, admin, `ReleaseDue`, `Dispatch`, `SyncSubscriber`, `ProviderWebhook`, `PruneTokens` |
 | Persistence | `persistence.NewsletterRepository`, `NewsletterIssueRepository` | migration 00030 |
-| Sending | `newsletterprovider.SMTP`, `newsletterprovider.HTTP` | one MIME message per recipient, or a signed JSON POST per recipient |
+| Sending | `newsletterprovider.SMTP`, `newsletterprovider.Resend`, `newsletterprovider.HTTP` | one MIME message, Resend API call, or signed JSON POST per recipient |
 | Transactional mail | `newslettermail` | `newsletter.confirm` and `newsletter.welcome` through the notification templates and mail queue |
 | Consumers | `consumer.NewsletterDispatch`, `consumer.NewsletterSync` | worker handlers for the two newsletter events |
 | Wiring | `bootstrap.NewNewsletterService` | picks the sender from `NEWSLETTER_PROVIDER` |
@@ -122,6 +122,13 @@ broker and `sendingEnabled` in the provider config is false.
 `NEWSLETTER_PROVIDER=smtp` (default) sends through the transactional SMTP settings, one message
 per recipient with a `multipart/alternative` body (or plain text for plaintext subscribers).
 
+`NEWSLETTER_PROVIDER=resend` (the default when `MAIL_DRIVER=resend`) makes one Resend API call
+per recipient with `RESEND_API_KEY`, carrying the HTML and text bodies, reply-to, and the
+`List-Unsubscribe` headers. The delivery id is the `Idempotency-Key`, so Resend drops a retried
+delivery it already accepted within 24 hours. A 4xx answer other than 408, 409, or 429 is a
+permanent failure; everything else is retried. A sender identity overriding `MAIL_FROM` must
+be on a domain verified in Resend.
+
 `NEWSLETTER_PROVIDER=custom_http` POSTs every delivery and every subscriber change as JSON to
 `NEWSLETTER_HTTP_ENDPOINT` with these headers:
 
@@ -208,11 +215,12 @@ Payloads carry ids and state only; consumers read the current row. See
 
 | Variable | Default | Meaning |
 | --- | --- | --- |
-| `NEWSLETTER_PROVIDER` | `smtp` | `smtp` or `custom_http` |
+| `NEWSLETTER_PROVIDER` | `MAIL_DRIVER` (`smtp` or `resend`) | `smtp`, `resend`, or `custom_http` |
 | `NEWSLETTER_HTTP_ENDPOINT` | | gateway URL for `custom_http`; https in production |
-| `NEWSLETTER_HTTP_SECRET` | | HMAC secret, at least 32 bytes; required for `custom_http`, enables the webhook with either provider |
+| `NEWSLETTER_HTTP_SECRET` | | HMAC secret, at least 32 bytes; required for `custom_http`, enables the webhook with any provider |
 | `NEWSLETTER_SEND_BATCH` | `50` | recipients claimed per dispatch step, 1–500 |
 
-Confirmation and welcome emails need SMTP (`SMTP_HOST`); without it they are only logged. The
+Confirmation and welcome emails need a mailer (`SMTP_HOST`, or `MAIL_DRIVER=resend`); without
+one they are only logged. The
 public links use `APP_PUBLIC_URL` for the one-click API URL and the `site.public_url` setting (falling back to `APP_PUBLIC_URL`) for the
 site pages (`/newsletter/confirm`, `/newsletter/unsubscribe`, `/newsletter/preferences`).

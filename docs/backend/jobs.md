@@ -14,7 +14,9 @@ Jobs handle asynchronous and retryable work that should not block request-respon
 
 - publish outbox events
 - invalidate or warm caches
-- send notification emails
+- send notification emails, store in-app notifications, and write audit batches
+  (`email-dispatch`, `notification-dispatch`, `audit-writer`; see
+  [events.md](events.md#email-dispatch))
 - process moderation side effects
 - run periodic cleanup for expired session or recovery state
 - clean orphaned media metadata and storage objects (`media-orphans`)

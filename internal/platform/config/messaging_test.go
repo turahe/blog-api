@@ -1,6 +1,7 @@
 package config
 
 import (
+	"strings"
 	"testing"
 )
 
@@ -10,6 +11,25 @@ func TestValidateMessagingEmptyOK(t *testing.T) {
 	cfg := Config{}
 	if err := cfg.ValidateMessaging(); err != nil {
 		t.Fatalf("empty broker should be ok: %v", err)
+	}
+}
+
+func TestValidateMessagingRequiresEncryptionKeyInProduction(t *testing.T) {
+	t.Parallel()
+
+	cfg := Config{Environment: envProduction, MessageBroker: "rabbitmq", RabbitMQURL: "amqps://mq.example.com"}
+	if err := cfg.ValidateMessaging(); err == nil || !strings.Contains(err.Error(), "APP_ENCRYPTION_KEY") {
+		t.Fatalf("want APP_ENCRYPTION_KEY error, got %v", err)
+	}
+
+	cfg.EncryptionKey = "configured"
+	if err := cfg.ValidateMessaging(); err != nil {
+		t.Fatal(err)
+	}
+
+	cfg.Environment, cfg.EncryptionKey = "development", ""
+	if err := cfg.ValidateMessaging(); err != nil {
+		t.Fatalf("outside production the queues fall back inline: %v", err)
 	}
 }
 

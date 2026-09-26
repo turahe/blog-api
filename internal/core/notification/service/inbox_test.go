@@ -270,6 +270,41 @@ func TestInboxStoreFailureIsSwallowed(t *testing.T) {
 	require.Empty(t, f.repo.rows)
 }
 
+func TestInboxDeliverReturnsFailuresForRetry(t *testing.T) {
+	t.Parallel()
+
+	f := newInboxFixture()
+	f.repo.insertErr = errors.New("db down")
+	parent := commentdomain.Comment{UUID: uuid.New(), PostUUID: f.post.UUID, AuthorUUID: &f.author}
+	reply := commentdomain.Comment{UUID: uuid.New(), PostUUID: f.post.UUID, AuthorUUID: &f.replier, Content: "hi"}
+
+	require.ErrorIs(t, f.inbox.DeliverCommentReplied(t.Context(), reply, parent), f.repo.insertErr)
+
+	missing := reply
+	missing.PostUUID = uuid.New()
+	require.ErrorIs(t, f.inbox.DeliverCommentReplied(t.Context(), missing, parent), notificationdomain.ErrNotFound)
+
+	f.repo.insertErr = nil
+	require.NoError(t, f.inbox.DeliverCommentReplied(t.Context(), reply, parent))
+	require.NoError(t, f.inbox.DeliverCommentReplied(t.Context(), reply, parent), "a redelivery is a no-op")
+	require.Len(t, f.repo.forUser(f.author), 1)
+}
+
+func TestInboxDeliverPostPublishedReachesEveryRecipientDespiteFailures(t *testing.T) {
+	t.Parallel()
+
+	f := newInboxFixture()
+	f.repo.insertErr = errors.New("db down")
+	f.dir.commenters = []uuid.UUID{f.replier}
+	f.inbox.dir = f.dir
+	post := postdomain.Post{UUID: f.post.UUID, AuthorUUID: f.author, Title: f.post.Title, Slug: f.post.Slug}
+
+	err := f.inbox.DeliverPostPublished(t.Context(), post, nil)
+	require.ErrorIs(t, err, f.repo.insertErr)
+	require.Contains(t, err.Error(), template.TypePublicationPublished)
+	require.Contains(t, err.Error(), template.TypePublicationRepublished)
+}
+
 func TestInboxListAndMarkRead(t *testing.T) {
 	t.Parallel()
 

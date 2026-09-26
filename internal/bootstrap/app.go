@@ -16,6 +16,7 @@ import (
 	"github.com/turahe/blog-api/internal/adapters/inbound/http/handlers"
 	"github.com/turahe/blog-api/internal/adapters/inbound/http/middleware"
 	"github.com/turahe/blog-api/internal/adapters/inbound/realtime"
+	"github.com/turahe/blog-api/internal/adapters/outbound/auditqueue"
 	"github.com/turahe/blog-api/internal/adapters/outbound/cache"
 	"github.com/turahe/blog-api/internal/adapters/outbound/captcha"
 	"github.com/turahe/blog-api/internal/adapters/outbound/challenge"
@@ -25,6 +26,7 @@ import (
 	"github.com/turahe/blog-api/internal/adapters/outbound/markdown"
 	"github.com/turahe/blog-api/internal/adapters/outbound/mediapolicy"
 	"github.com/turahe/blog-api/internal/adapters/outbound/notificationbus"
+	"github.com/turahe/blog-api/internal/adapters/outbound/notificationqueue"
 	"github.com/turahe/blog-api/internal/adapters/outbound/notify"
 	"github.com/turahe/blog-api/internal/adapters/outbound/oauth"
 	"github.com/turahe/blog-api/internal/adapters/outbound/persistence"
@@ -33,6 +35,7 @@ import (
 	outboundrbac "github.com/turahe/blog-api/internal/adapters/outbound/rbac"
 	"github.com/turahe/blog-api/internal/adapters/outbound/storage"
 	analyticsservice "github.com/turahe/blog-api/internal/core/analytics/service"
+	auditports "github.com/turahe/blog-api/internal/core/audit/ports"
 	auditservice "github.com/turahe/blog-api/internal/core/audit/service"
 	authports "github.com/turahe/blog-api/internal/core/auth/ports"
 	authservice "github.com/turahe/blog-api/internal/core/auth/service"
@@ -47,6 +50,7 @@ import (
 	mediaservice "github.com/turahe/blog-api/internal/core/media/service"
 	notificationports "github.com/turahe/blog-api/internal/core/notification/ports"
 	notificationservice "github.com/turahe/blog-api/internal/core/notification/service"
+	postports "github.com/turahe/blog-api/internal/core/post/ports"
 	postservice "github.com/turahe/blog-api/internal/core/post/service"
 	rbacservice "github.com/turahe/blog-api/internal/core/rbac/service"
 	"github.com/turahe/blog-api/internal/core/readcache"
@@ -152,16 +156,16 @@ func NewRuntime(ctx context.Context, cfg config.Config, logger *slog.Logger, ver
 	events := NewEvents(cfg, db)
 	auth.WithEvents(events)
 
-	inbox := newInbox(cfg, db, clock, logger)
+	inbox, notifier := newNotifications(cfg, db, clock, events, logger)
 	settings := newSettingsService(db, ids, clock, events, cacheOrNil)
-	posts := newPostService(cfg, db, postsRepo, ids, clock, cacheOrNil, inbox, events, settings)
+	posts := newPostService(cfg, db, postsRepo, ids, clock, cacheOrNil, notifier, events, settings)
 	userSvc := userservice.New(users)
 
 	categories := newCategoryService(ctx, categoriesRepo, ids, clock, cacheOrNil, logger)
 	tags := tagservice.New(tagsRepo, ids, clock).WithCache(cacheOrNil)
 	posts.WithTags(tags).WithSearch(newPostSearch(ctx, cfg, db, logger))
 
-	comments := newCommentService(cfg, db, ids, clock, inbox, events)
+	comments := newCommentService(cfg, db, ids, clock, notifier, events)
 	broadcast := newBroadcast(ctx, cfg, logger)
 	hub := newNotificationStream(ctx, cfg, broadcast, inbox, logger)
 
@@ -182,7 +186,7 @@ func NewRuntime(ctx context.Context, cfg config.Config, logger *slog.Logger, ver
 	auth.WithRoles(roleStore).WithAccessCheck(enforcer)
 
 	metricsServer, recorder, drops := newMetrics(cfg, db, version)
-	auditRecorder, activity := newAudit(cfg, db, drops.audit, logger)
+	auditRecorder, activity := newAudit(cfg, db, broadcast, drops.audit, logger)
 	analyticsIngest, analyticsWriter := newAnalytics(cfg, db, drops.analytics, logger)
 	live, liveStreams := newAnalyticsLive(ctx, cfg, broadcast, analyticsIngest, logger)
 	newsletter := NewNewsletterService(cfg, db, events, settings, logger)
@@ -372,11 +376,11 @@ func newPostService(
 	ids system.UUIDGenerator,
 	clock system.Clock,
 	readCache readcache.Cache,
-	inbox *notificationservice.Inbox,
+	notifier postports.PublishNotifier,
 	events event.Unit,
 	settings *settingsservice.Service,
 ) *postservice.PostService {
-	return postservice.New(repo, ids, clock).WithCache(readCache).WithNotifier(inbox).WithEvents(events).
+	return postservice.New(repo, ids, clock).WithCache(readCache).WithNotifier(notifier).WithEvents(events).
 		WithRevisions(persistence.NewPostRevisionRepository(db.GORM)).
 		WithSEO(persistence.NewPostSEORepository(db.GORM), postseo.NewDefaults(settings), newSEOImageURLs(cfg, db))
 }
@@ -488,14 +492,57 @@ func newMetrics(cfg config.Config, db *database.Database, version string) (*neth
 }
 
 // newAudit starts the background audit writer and the activity query service.
-func newAudit(cfg config.Config, db *database.Database, onDrop func(int), logger *slog.Logger) (*auditservice.Recorder, *auditservice.Activity) {
+func newAudit(
+	cfg config.Config, db *database.Database, bus *messaging.Bus, onDrop func(int), logger *slog.Logger,
+) (*auditservice.Recorder, *auditservice.Activity) {
 	repo := persistence.NewAuditRepository(db.GORM)
-	recorder := auditservice.NewRecorder(repo, logger, auditservice.RecorderOptions{
+	recorder := auditservice.NewRecorder(newAuditSink(cfg, repo, bus, logger), logger, auditservice.RecorderOptions{
 		QueueSize: cfg.AuditQueueSize,
 		OnDrop:    onDrop,
 	})
 
 	return recorder, auditservice.NewActivity(repo)
+}
+
+// newAuditSink sends audit batches through the broker to app worker when a broker and
+// APP_ENCRYPTION_KEY are configured, and straight to the database otherwise. Config
+// validation rejects a malformed key.
+func newAuditSink(cfg config.Config, repo *persistence.AuditRepository, bus *messaging.Bus, logger *slog.Logger) auditports.Inserter {
+	if bus == nil {
+		return repo
+	}
+
+	box, err := NewSecretBox(cfg)
+	if err != nil || box == nil {
+		logger.Warn("APP_ENCRYPTION_KEY is not set; audit entries are written by the API instead of app worker")
+		return repo
+	}
+
+	logger.Info("audit entries queued for app worker")
+
+	return auditqueue.New(bus.Publisher, bus.Topic(event.AuditEntriesRecorded), box, repo, logger)
+}
+
+// newNotifications returns the inbox and the notifier the comment and post services call: with
+// a broker it queues notices for app worker, otherwise the inbox delivers them in the request.
+func newNotifications(
+	cfg config.Config, db *database.Database, clock system.Clock, events event.Unit, logger *slog.Logger,
+) (*notificationservice.Inbox, notificationqueue.Inline) {
+	inbox := newInbox(cfg, db, clock, logger)
+	if !cfg.MessagingEnabled() {
+		return inbox, inbox
+	}
+
+	logger.Info("in-app notifications queued for app worker")
+
+	return inbox, notificationqueue.New(events.Recorder, inbox, logger)
+}
+
+// NewNotificationInbox returns the inbox app worker delivers queued notices with. Each new
+// notification is announced on bus, so API replicas push it to their SSE streams.
+func NewNotificationInbox(cfg config.Config, db *database.Database, bus *messaging.Bus, logger *slog.Logger) *notificationservice.Inbox {
+	return newInbox(cfg, db, system.Clock{}, logger).
+		OnCreated(notificationbus.NewPublisher(bus.Publisher, bus.Topic(notificationbus.Topic), logger).Publish)
 }
 
 // newAuthService builds the auth service with lockout, email change, and two-factor wired.
@@ -644,49 +691,85 @@ func newNotifier(cfg config.Config, db *database.Database, box authports.SecretB
 
 	switch {
 	case cfg.MessagingEnabled() && box != nil:
-		logger.Info("email notifications queued for app worker", "host", cfg.SMTPHost, "port", cfg.SMTPPort)
+		logger.Info("email notifications queued for app worker", mailLogAttrs(cfg)...)
 	case cfg.MessagingEnabled():
 		logger.Warn("APP_ENCRYPTION_KEY is not set; emails are sent inline instead of by app worker")
 	default:
-		logger.Info("email notifications via smtp", "host", cfg.SMTPHost, "port", cfg.SMTPPort)
+		logger.Info("email notifications sent inline", mailLogAttrs(cfg)...)
 	}
 
 	return notificationservice.New(mailer, logger, cfg.AppPublicURL).
 		WithTemplates(persistence.NewNotificationTemplateRepository(db.GORM))
 }
 
-// NewTransactionalMailer returns the SMTP mailer for account and confirmation emails, wrapped
-// to queue encrypted commands through the outbox when a broker and box are available. It
-// returns nil when SMTP_HOST is unset or invalid.
+// NewTransactionalMailer returns the MAIL_DRIVER mailer for account and confirmation emails,
+// wrapped to queue encrypted commands through the outbox when a broker and box are available.
+// It returns nil when no mailer is configured or its settings are invalid.
 func NewTransactionalMailer(cfg config.Config, db *database.Database, box mailqueue.Box, logger *slog.Logger) notificationports.Mailer {
-	smtp, err := NewMailer(cfg)
+	mailer, err := NewMailer(cfg)
 	if err != nil {
-		logger.Error("smtp mailer disabled", "error", err)
+		logger.Error("mailer disabled", "driver", cfg.MailDriver, "error", err)
 	}
 
-	if smtp == nil {
+	if mailer == nil {
 		return nil
 	}
 
 	if cfg.MessagingEnabled() && box != nil {
-		return mailqueue.New(persistence.NewOutboxRepository(db.GORM), box, smtp, logger)
+		return mailqueue.New(persistence.NewOutboxRepository(db.GORM), box, mailer, logger)
 	}
 
-	return smtp
+	return mailer
 }
 
-// NewMailer returns the SMTP mailer, or nil when SMTP_HOST is unset.
-func NewMailer(cfg config.Config) (*mail.SMTP, error) {
+// NewMailer returns the MAIL_DRIVER mailer, or nil when the smtp driver has no SMTP_HOST.
+func NewMailer(cfg config.Config) (notificationports.Mailer, error) {
+	if cfg.MailDriver == config.MailDriverResend {
+		resend, err := newResendMailer(cfg)
+		if err != nil {
+			return nil, err
+		}
+
+		return resend, nil
+	}
+
+	smtp, err := newSMTPMailer(cfg)
+	if err != nil || smtp == nil {
+		return nil, err
+	}
+
+	return smtp, nil
+}
+
+// newSMTPMailer returns the SMTP mailer, or nil when SMTP_HOST is unset.
+func newSMTPMailer(cfg config.Config) (*mail.SMTP, error) {
 	if strings.TrimSpace(cfg.SMTPHost) == "" {
 		return nil, nil
 	}
 
-	mailer, err := mail.NewSMTP(cfg.SMTPHost, cfg.SMTPPort, cfg.SMTPUsername, cfg.SMTPPassword, cfg.SMTPFrom)
+	mailer, err := mail.NewSMTP(cfg.SMTPHost, cfg.SMTPPort, cfg.SMTPUsername, cfg.SMTPPassword, cfg.MailFrom)
 	if err != nil {
 		return nil, fmt.Errorf("create smtp mailer: %w", err)
 	}
 
 	return mailer, nil
+}
+
+func newResendMailer(cfg config.Config) (*mail.Resend, error) {
+	mailer, err := mail.NewResend(cfg.ResendAPIKey, cfg.MailFrom, nil)
+	if err != nil {
+		return nil, fmt.Errorf("create resend mailer: %w", err)
+	}
+
+	return mailer, nil
+}
+
+func mailLogAttrs(cfg config.Config) []any {
+	if cfg.MailDriver == config.MailDriverResend {
+		return []any{"driver", cfg.MailDriver}
+	}
+
+	return []any{"driver", cfg.MailDriver, "host", cfg.SMTPHost, "port", cfg.SMTPPort}
 }
 
 // WorkerHealthCheckers probes what the worker cannot run without: the database and the broker.
