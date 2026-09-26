@@ -1,14 +1,18 @@
-// Package mail sends plain-text email over SMTP or the Resend API. Mailpit is the local
-// SMTP receiver.
+// Package mail sends email, plain text with an optional HTML alternative, over SMTP or the
+// Resend API. Mailpit is the local SMTP receiver.
 package mail
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"fmt"
+	"mime/multipart"
+	"mime/quotedprintable"
 	"net"
 	"net/mail"
 	"net/smtp"
+	"net/textproto"
 	"strconv"
 	"strings"
 	"time"
@@ -53,7 +57,7 @@ func NewSMTP(host string, port int, username, password, from string) (*SMTP, err
 	}, nil
 }
 
-// Send delivers one plain-text message. It returns when the server accepts the data.
+// Send delivers one message. It returns when the server accepts the data.
 func (s *SMTP) Send(ctx context.Context, msg ports.Message) error {
 	recipient, body, err := s.compose(msg)
 	if err != nil {
@@ -90,19 +94,54 @@ func (s *SMTP) SendRaw(ctx context.Context, recipient string, body []byte) error
 	return s.deliver(client, recipient, body)
 }
 
-// compose validates the headers and renders the message.
+// compose validates the headers and renders the message: plain text alone, or
+// multipart/alternative when msg carries HTML.
 func (s *SMTP) compose(msg ports.Message) (recipient string, body []byte, err error) {
 	recipient, subject, err := checkMessage(msg)
 	if err != nil {
 		return "", nil, err
 	}
 
-	body = []byte(fmt.Sprintf(
-		"From: %s\r\nTo: %s\r\nSubject: %s\r\nMIME-Version: 1.0\r\nContent-Type: text/plain; charset=UTF-8\r\n\r\n%s",
-		s.from, recipient, subject, msg.Text,
-	))
+	headers := fmt.Sprintf("From: %s\r\nTo: %s\r\nSubject: %s\r\nMIME-Version: 1.0\r\n", s.from, recipient, subject)
 
-	return recipient, body, nil
+	if msg.HTML == "" {
+		return recipient, []byte(headers + "Content-Type: text/plain; charset=UTF-8\r\n\r\n" + msg.Text), nil
+	}
+
+	var buf bytes.Buffer
+
+	writer := multipart.NewWriter(&buf)
+	buf.WriteString(headers + `Content-Type: multipart/alternative; boundary="` + writer.Boundary() + "\"\r\n\r\n")
+
+	for _, part := range []struct{ kind, body string }{{"text/plain", msg.Text}, {"text/html", msg.HTML}} {
+		if err := writePart(writer, part.kind, part.body); err != nil {
+			return "", nil, err
+		}
+	}
+
+	if err := writer.Close(); err != nil {
+		return "", nil, fmt.Errorf("smtp mime: %w", err)
+	}
+
+	return recipient, buf.Bytes(), nil
+}
+
+// writePart adds one quoted-printable UTF-8 part of the given media type.
+func writePart(writer *multipart.Writer, kind, body string) error {
+	part, err := writer.CreatePart(textproto.MIMEHeader{
+		"Content-Type":              {kind + "; charset=UTF-8"},
+		"Content-Transfer-Encoding": {"quoted-printable"},
+	})
+	if err != nil {
+		return fmt.Errorf("smtp mime: %w", err)
+	}
+
+	qp := quotedprintable.NewWriter(part)
+	if _, err := qp.Write([]byte(body)); err != nil {
+		return fmt.Errorf("smtp mime: %w", err)
+	}
+
+	return qp.Close()
 }
 
 // checkMessage returns the bare recipient address and trimmed subject of msg.

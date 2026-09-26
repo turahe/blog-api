@@ -45,7 +45,7 @@ func NewResend(apiKey, from string, httpClient *http.Client) (*Resend, error) {
 	return &Resend{client: resend.NewCustomClient(&withStatus, apiKey), from: from}, nil
 }
 
-// Send delivers one plain-text message.
+// Send delivers one message, with its HTML alternative when present.
 func (r *Resend) Send(ctx context.Context, msg ports.Message) error {
 	recipient, subject, err := checkMessage(msg)
 	if err != nil {
@@ -53,7 +53,7 @@ func (r *Resend) Send(ctx context.Context, msg ports.Message) error {
 	}
 
 	return r.SendEmail(ctx, &resend.SendEmailRequest{
-		From: r.from, To: []string{recipient}, Subject: subject, Text: msg.Text,
+		From: r.from, To: []string{recipient}, Subject: subject, Text: msg.Text, Html: msg.HTML,
 	}, "")
 }
 

@@ -3,7 +3,12 @@ package mail_test
 import (
 	"bufio"
 	"context"
+	"errors"
+	"io"
+	"mime"
+	"mime/multipart"
 	"net"
+	netmail "net/mail"
 	"strconv"
 	"strings"
 	"testing"
@@ -40,6 +45,59 @@ func TestSend(t *testing.T) {
 	require.Contains(t, body, "Subject: Reset your password")
 	require.Contains(t, body, "To: ada@example.com")
 	require.Contains(t, body, "token stays in the body")
+}
+
+func TestSendMultipartWhenHTMLIsSet(t *testing.T) {
+	t.Parallel()
+
+	ln, err := (&net.ListenConfig{}).Listen(t.Context(), "tcp", "127.0.0.1:0")
+	require.NoError(t, err)
+	t.Cleanup(func() { _ = ln.Close() })
+
+	got := make(chan string, 1)
+	go serveSMTP(ln, got)
+
+	host, portText, err := net.SplitHostPort(ln.Addr().String())
+	require.NoError(t, err)
+	port, err := strconv.Atoi(portText)
+	require.NoError(t, err)
+
+	sender, err := mail.NewSMTP(host, port, "", "", "Blog <blog@localhost>")
+	require.NoError(t, err)
+
+	err = sender.Send(context.Background(), ports.Message{
+		To: "ada@example.com", Subject: "Reset your password",
+		Text: "plain token", HTML: `<p style="margin:0">html token</p>`,
+	})
+	require.NoError(t, err)
+
+	msg, err := netmail.ReadMessage(strings.NewReader(<-got))
+	require.NoError(t, err)
+
+	mediaType, params, err := mime.ParseMediaType(msg.Header.Get("Content-Type"))
+	require.NoError(t, err)
+	require.Equal(t, "multipart/alternative", mediaType)
+
+	reader := multipart.NewReader(msg.Body, params["boundary"])
+
+	var parts []string
+	for {
+		part, err := reader.NextPart()
+		if errors.Is(err, io.EOF) {
+			break
+		}
+		require.NoError(t, err)
+
+		body, err := io.ReadAll(part)
+		require.NoError(t, err)
+
+		parts = append(parts, part.Header.Get("Content-Type")+"|"+string(body))
+	}
+
+	require.Equal(t, []string{
+		"text/plain; charset=UTF-8|plain token",
+		`text/html; charset=UTF-8|<p style="margin:0">html token</p>`,
+	}, parts)
 }
 
 func TestRejectsHeaderInjection(t *testing.T) {

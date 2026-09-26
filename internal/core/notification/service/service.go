@@ -112,15 +112,15 @@ func (s *Service) sendTemplate(ctx context.Context, to, typ string, data templat
 		return
 	}
 
-	s.send(ctx, to, msg.Subject, msg.Body)
+	s.send(ctx, ports.Message{To: to, Subject: msg.Subject, Text: msg.Body, HTML: msg.HTML})
 }
 
-func (s *Service) send(ctx context.Context, to, subject, text string) {
-	err := s.mailer.Send(ctx, ports.Message{To: to, Subject: subject, Text: text})
+func (s *Service) send(ctx context.Context, msg ports.Message) {
+	err := s.mailer.Send(ctx, msg)
 	if err != nil {
 		s.logger.ErrorContext(ctx, "notify: email delivery failed",
-			"to", maskEmail(to),
-			"subject", subject,
+			"to", maskEmail(msg.To),
+			"subject", msg.Subject,
 			"error", err,
 		)
 
@@ -128,8 +128,8 @@ func (s *Service) send(ctx context.Context, to, subject, text string) {
 	}
 
 	s.logger.InfoContext(ctx, "notify: email sent",
-		"to", maskEmail(to),
-		"subject", subject,
+		"to", maskEmail(msg.To),
+		"subject", msg.Subject,
 	)
 }
 

@@ -10,11 +10,13 @@ import (
 	notificationdomain "github.com/turahe/blog-api/internal/core/notification/domain"
 )
 
-// Message is one plain-text email. Callers must not put secrets in Subject.
+// Message is one email with a plain-text body and an optional HTML alternative. Callers must
+// not put secrets in Subject.
 type Message struct {
 	To      string
 	Subject string
 	Text    string
+	HTML    string
 }
 
 // Mailer delivers a single message. Implementations own retries and transport errors.

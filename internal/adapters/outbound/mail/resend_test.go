@@ -74,6 +74,19 @@ func TestResendSend(t *testing.T) {
 	require.NotContains(t, call.body, "html")
 }
 
+func TestResendSendIncludesHTML(t *testing.T) {
+	t.Parallel()
+
+	sender, call, _ := newResend(t, http.StatusOK, `{"id":"email-1"}`)
+
+	err := sender.Send(t.Context(), ports.Message{
+		To: "ada@example.com", Subject: "Hi", Text: "plain body", HTML: "<p>html body</p>",
+	})
+	require.NoError(t, err)
+	require.Equal(t, "plain body", call.body["text"])
+	require.Equal(t, "<p>html body</p>", call.body["html"])
+}
+
 func TestResendSendEmailSetsIdempotencyKey(t *testing.T) {
 	t.Parallel()
 

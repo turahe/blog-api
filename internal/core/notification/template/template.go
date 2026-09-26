@@ -80,6 +80,8 @@ type Message struct {
 	Subject string
 	Title   string
 	Body    string
+	// HTML is the email body wrapped in the HTML layout; empty for other channels.
+	HTML    string
 	Preview string
 	Event   string
 }
@@ -194,7 +196,7 @@ func RenderTemplate(tpl Template, data Data) (Message, error) {
 		return Message{}, err
 	}
 
-	return Message{
+	msg := Message{
 		Channel: tpl.Channel,
 		Type:    tpl.Type,
 		Subject: oneLine(subject),
@@ -202,7 +204,16 @@ func RenderTemplate(tpl Template, data Data) (Message, error) {
 		Body:    body,
 		Preview: oneLine(preview),
 		Event:   tpl.Event,
-	}, nil
+	}
+
+	if tpl.Channel == ChannelEmail {
+		msg.HTML, err = emailHTML(msg.Subject, body, safe.Token, safe.SiteName)
+		if err != nil {
+			return Message{}, err
+		}
+	}
+
+	return msg, nil
 }
 
 // Validate checks a template before it is saved.

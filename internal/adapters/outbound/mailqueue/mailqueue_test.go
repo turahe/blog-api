@@ -46,7 +46,10 @@ func TestMailerQueuesEncryptedCommandThatHandlerSends(t *testing.T) {
 	box := newBox(t)
 	recorder := &eventtest.Recorder{}
 	fallback := &recordingMailer{}
-	email := ports.Message{To: "reader@example.com", Subject: "Reset your password", Text: "token raw-reset-token"}
+	email := ports.Message{
+		To: "reader@example.com", Subject: "Reset your password", Text: "token raw-reset-token",
+		HTML: "<p>token <code>raw-reset-token</code></p>",
+	}
 
 	require.NoError(t, New(recorder, box, fallback, nil).Send(t.Context(), email))
 	require.Empty(t, fallback.sent)
@@ -75,6 +78,19 @@ func TestMailerSendsInlineWhenCommandCannotBeStored(t *testing.T) {
 	mailer := New(&eventtest.Recorder{Err: errors.New("db down")}, newBox(t), fallback, nil)
 	require.NoError(t, mailer.Send(t.Context(), email))
 	require.Equal(t, []ports.Message{email}, fallback.sent)
+}
+
+func TestHandlerSendsCommandsQueuedWithoutHTML(t *testing.T) {
+	t.Parallel()
+
+	box := newBox(t)
+	sealedEmail, err := box.Encrypt([]byte(`{"to":"a@example.com","subject":"s","text":"t"}`))
+	require.NoError(t, err)
+
+	sender := &recordingMailer{}
+	require.NoError(t, Handler(box, sender, slog.New(slog.DiscardHandler))(
+		message.NewMessage("m", []byte(`{"ciphertext":"`+sealedEmail+`"}`))))
+	require.Equal(t, []ports.Message{{To: "a@example.com", Subject: "s", Text: "t"}}, sender.sent)
 }
 
 func TestHandlerRejectsMalformedCommandsPermanently(t *testing.T) {

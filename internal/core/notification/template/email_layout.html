@@ -1,0 +1,24 @@
+{{define "layout" -}}
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>{{.Subject}}</title></head>
+<body style="margin:0;padding:0;background:#f5f5f5;">
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#f5f5f5;"><tr><td align="center" style="padding:16px;">
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:600px;background:#ffffff;border-radius:6px;">
+{{- if .SiteName}}
+<tr><td style="padding:20px 24px 0;font-family:Arial,Helvetica,sans-serif;font-size:14px;font-weight:bold;color:#666666;">{{.SiteName}}</td></tr>
+{{- end}}
+<tr><td style="padding:24px;font-family:Arial,Helvetica,sans-serif;font-size:16px;line-height:1.5;color:#222222;">
+{{- range .Paragraphs}}
+<p style="margin:0 0 16px;">{{template "lines" .}}</p>
+{{- end}}
+</td></tr></table></td></tr></table></body></html>
+{{end}}
+
+{{define "lines"}}{{range $i, $line := .}}{{if $i}}<br>{{end}}{{range $line}}{{template "segment" .}}{{end}}{{end}}{{end}}
+
+{{define "segment"}}
+{{- if .Href}}<a href="{{.Href}}" style="color:#1a73e8;word-break:break-all;">{{.Text}}</a>
+{{- else if .Code}}<code style="display:inline-block;padding:4px 8px;background:#f0f0f0;border-radius:4px;font-family:Menlo,Consolas,monospace;font-size:15px;word-break:break-all;">{{.Text}}</code>
+{{- else}}{{.Text}}{{end}}
+{{- end}}

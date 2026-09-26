@@ -1,5 +1,18 @@
 # Changelog
 
+## 2026-09-27 — HTML account emails
+
+### Added
+
+- Account, notification, and newsletter confirmation emails now include an HTML part alongside
+  the plain text. The rendered body is wrapped in an embedded `html/template` layout
+  (`internal/core/notification/template/email_layout.html`): blank lines become paragraphs,
+  `http(s)` URLs become links, and the token is set apart as code. Stored templates are still
+  plain text and need no changes; all their values are escaped in the HTML.
+- SMTP sends these emails as `multipart/alternative`, and the Resend driver sets `html`.
+  Queued email commands carry the HTML inside the encrypted payload; commands queued before
+  this change still send as plain text.
+
 ## 2026-09-26 — Queued notifications and audit log
 
 ### Added

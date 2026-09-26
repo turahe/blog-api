@@ -60,7 +60,7 @@ func (m *Mailer) send(ctx context.Context, typ, to string, data notificationtemp
 		return fmt.Errorf("render %s: %w", typ, err)
 	}
 
-	return m.mailer.Send(ctx, notificationports.Message{To: to, Subject: msg.Subject, Text: msg.Body})
+	return m.mailer.Send(ctx, notificationports.Message{To: to, Subject: msg.Subject, Text: msg.Body, HTML: msg.HTML})
 }
 
 // SettingsReader reads the current site settings.

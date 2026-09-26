@@ -33,6 +33,7 @@ type sealed struct {
 	To      string `json:"to"`
 	Subject string `json:"subject"`
 	Text    string `json:"text"`
+	HTML    string `json:"html,omitempty"`
 }
 
 // Mailer implements ports.Mailer by recording an email command. When the command cannot be
