@@ -53,6 +53,13 @@ func (d *Defaults) SEODefaults(ctx context.Context) (postdomain.SEODefaults, err
 		ShareImageURL: values.String("seo.default_share_image_url"),
 		TwitterCard:   postdomain.TwitterCard(values.String("seo.default_twitter_card")),
 		AllowedHosts:  values.Strings("seo.canonical_allowed_hosts"),
+		Tagline:       values.String("site.tagline"),
+		Home: postdomain.HomeSEO{
+			Title:         values.String("seo.home_title"),
+			Description:   values.String("seo.home_description"),
+			Keywords:      values.Strings("seo.home_keywords"),
+			ShareImageURL: values.String("seo.home_share_image_url"),
+		},
 	}, nil
 }
 

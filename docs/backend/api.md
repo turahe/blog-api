@@ -708,9 +708,11 @@ Implemented; details in [impersonation.md](./impersonation.md).
 - `GET /api/v1/posts`
 - `GET /api/v1/posts/:slug`
 - `GET /api/v1/posts/:slug/seo-meta` (public structured SEO meta tags payload for SSR; published posts only, cached)
+- `GET /api/v1/home/seo-meta` (the same payload for the homepage, from the `seo.home_*` settings with site-wide fallbacks; see [post-seo.md](./post-seo.md#implementation))
 - `GET /api/v1/categories` (ordered by `lft`; `data.items[]` includes `lft`, `rgt`, `depth`, `sortOrder`, `imageId`)
 - `GET /api/v1/categories/:slug` (single category with nest metadata and `image_id`)
 - `GET /api/v1/tags`
+- `GET /api/v1/settings` (`public_safe` settings as a key-to-value map; optional `category`; see [settings.md](./settings.md#behaviour))
 - `POST /api/v1/posts/:id/comments`
 - `GET /api/v1/media/:id` (ready raster assets carry `variants`: preset name to signed imgproxy URL, from the `media.variants` setting)
 - `GET /api/v1/media/:id/transform?w=800&format=webp` (`302` to a signed imgproxy URL; `w` from `MEDIA_TRANSFORM_WIDTHS`)

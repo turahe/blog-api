@@ -20,6 +20,7 @@ type postSEOAPI interface {
 	UpdateSEO(ctx context.Context, postID, actorID uuid.UUID, unrestricted, slugAllowed bool, patch postdomain.SEOPatch) (postservice.SEOView, error)
 	PreviewSEO(ctx context.Context, postID, viewerID uuid.UUID, unrestricted bool, draft postservice.SEODraft) (postdomain.SEOPreview, error)
 	SEOMeta(ctx context.Context, slug string) (postdomain.SEOMeta, error)
+	HomeSEOMeta(ctx context.Context) (postdomain.SEOMeta, error)
 }
 
 // seoAccess resolves, per request, whether the caller may edit any post and change slugs.
@@ -164,6 +165,25 @@ func publicPostSEOMetaHandler(posts postSEOAPI) gin.HandlerFunc {
 
 		if meta.Robots != "" && meta.Robots != "index,follow" {
 			c.Header("X-Robots-Tag", meta.Robots)
+		}
+
+		responses.SuccessFor(c, nethttp.StatusOK, responses.ServicePosts, responses.CaseSuccess, responses.SEOMeta(meta))
+	}
+}
+
+// publicHomeSEOMetaHandler godoc
+//
+//	@Summary		Get homepage SEO meta
+//	@Description	Rendered meta for the homepage, in the same shape as the post SEO meta: the seo.home_* settings first, then the site name, tagline, and seo.default_* settings.
+//	@Tags			public
+//	@Produce		json
+//	@Success		200	{object}	responses.Envelope
+//	@Router			/api/v1/home/seo-meta [get]
+func publicHomeSEOMetaHandler(posts postSEOAPI) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		meta, err := posts.HomeSEOMeta(c.Request.Context())
+		if mapSEOError(c, err) {
+			return
 		}
 
 		responses.SuccessFor(c, nethttp.StatusOK, responses.ServicePosts, responses.CaseSuccess, responses.SEOMeta(meta))

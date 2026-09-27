@@ -54,6 +54,23 @@ func TestDefaultsPreferCanonicalBase(t *testing.T) {
 	assert.Equal(t, "https://example.com", got.CanonicalBase)
 }
 
+func TestDefaultsReadHomeSettings(t *testing.T) {
+	t.Parallel()
+
+	settings := fakeSettings{
+		"site.tagline": "Notes on Go", "seo.home_title": "Welcome", "seo.home_description": "Home description",
+		"seo.home_keywords": []string{"go", "web"}, "seo.home_share_image_url": "https://cdn.example.com/home.png",
+	}
+
+	got, err := NewDefaults(settings).SEODefaults(t.Context())
+	require.NoError(t, err)
+	assert.Equal(t, "Notes on Go", got.Tagline)
+	assert.Equal(t, postdomain.HomeSEO{
+		Title: "Welcome", Description: "Home description", Keywords: []string{"go", "web"},
+		ShareImageURL: "https://cdn.example.com/home.png",
+	}, got.Home)
+}
+
 func TestImageURLs(t *testing.T) {
 	t.Parallel()
 

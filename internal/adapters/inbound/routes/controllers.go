@@ -95,8 +95,9 @@ type AnalyticsExports struct {
 	Get    gin.HandlerFunc
 }
 
-// Settings holds admin settings handlers.
+// Settings holds the public and admin settings handlers.
 type Settings struct {
+	Public  gin.HandlerFunc
 	Get     gin.HandlerFunc
 	Put     gin.HandlerFunc
 	History gin.HandlerFunc
@@ -199,6 +200,7 @@ type Posts struct {
 	SEOUpdate         gin.HandlerFunc
 	SEOPreview        gin.HandlerFunc
 	PublicSEOMeta     gin.HandlerFunc
+	PublicHomeSEOMeta gin.HandlerFunc
 }
 
 // Categories public and admin handlers.

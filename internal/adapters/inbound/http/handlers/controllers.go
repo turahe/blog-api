@@ -276,10 +276,11 @@ func postControllers(deps Deps) routes.Posts {
 		SEOUpdate:         write(permPostSEOEdit, authorRoles, adminUpdatePostSEOHandler(p, seo)),
 		SEOPreview:        gate(deps, permPostSEOView, authorRoles, adminPreviewPostSEOHandler(p, seo)),
 		PublicSEOMeta:     publicPostSEOMetaHandler(p),
+		PublicHomeSEOMeta: publicHomeSEOMetaHandler(p),
 	}
 }
 
-// settingsControllers wires the admin settings handlers when the service is present.
+// settingsControllers wires the public and admin settings handlers when the service is present.
 func settingsControllers(deps Deps) routes.Settings {
 	s := deps.Settings
 	if s == nil {
@@ -290,6 +291,7 @@ func settingsControllers(deps Deps) routes.Settings {
 	putLimit := middleware.RateLimit(deps.RateLimiter, deps.Logger, "settings.update", settingsPutPerMinute, time.Minute)
 
 	return routes.Settings{
+		Public:  publicGetSettingsHandler(s),
 		Get:     gate(deps, permSettingsRead, adminRoles, adminGetSettingsHandler(s, canUpdate)),
 		Put:     gate(deps, permSettingsUpdate, adminRoles, chain(putLimit, adminUpdateSettingsHandler(s))),
 		History: gate(deps, permSettingsHistory, adminRoles, adminSettingsHistoryHandler(s)),

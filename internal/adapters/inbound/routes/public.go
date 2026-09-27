@@ -12,9 +12,11 @@ func registerPublic(router gin.IRoutes, c Controllers) {
 	get(router, "/posts", "public.posts.list", g, n, c, c.Posts.PublicList)
 	get(router, "/posts/:param1", "public.posts.get", g, n, c, c.Posts.PublicGet)
 	get(router, "/posts/:param1/seo-meta", "public.posts.seo_meta", g, n, c, c.Posts.PublicSEOMeta)
+	get(router, "/home/seo-meta", "public.home.seo_meta", g, n, c, c.Posts.PublicHomeSEOMeta)
 	get(router, "/categories", "public.categories.list", g, n, c, c.Cats.PublicList)
 	get(router, "/categories/:param1", "public.categories.get", g, n, c, c.Cats.PublicGet)
 	get(router, "/tags", "public.tags.list", g, n, c, c.Tags.PublicList)
 	get(router, "/media/:param1", "public.media.get", g, n, c, c.Media.PublicGet)
 	get(router, "/media/:param1/transform", "public.media.transform", g, n, c, c.Media.PublicTransform)
+	get(router, "/settings", "public.settings.get", g, n, c, c.Settings.Public)
 }

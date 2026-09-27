@@ -52,6 +52,10 @@ coded default.
 | `seo.default_share_image_url` | http(s) URL or empty | public_safe | `""` |
 | `seo.default_twitter_card` | `summary` or `summary_large_image` | public_safe | `summary_large_image` |
 | `seo.canonical_allowed_hosts` | list of host names (≤ 20, each ≤ 253) | public_safe | `[]` |
+| `seo.home_title` | string (≤ 200, no `<` `>`) — empty: title template on the tagline, else the site name | public_safe | `""` |
+| `seo.home_description` | string (≤ 300, no `<` `>`) — empty: `seo.default_description`, then the tagline | public_safe | `""` |
+| `seo.home_keywords` | list of strings (≤ 20, each ≤ 60, unique) | public_safe | `[]` |
+| `seo.home_share_image_url` | http(s) URL or empty — empty: `seo.default_share_image_url` | public_safe | `""` |
 
 Keys that would enforce behaviour (comment switches, moderation mode, password policy,
 session lifetime) are added together with the code that enforces them, so an admin never
@@ -60,6 +64,19 @@ credentials and provider switches stay in environment variables, per the feature
 "secrets stay in env vars" rule.
 
 ### Behaviour
+
+- `GET /api/v1/settings` (`public.settings.get`) is anonymous. It returns the effective value
+  of every `public_safe` key as `data.settings`, a map from key to value (the coded default
+  while a key has no valid stored value), for site clients such as the frontend's name,
+  locale, SEO defaults, and whether to show sign-up or the analytics consent banner.
+  `category` filters as on the admin route; an unknown category is `400`. `admin_only` and
+  `server_only` keys are never returned, and no metadata (version, default, updatedBy) is
+  exposed. It reads through the same `settings` read cache, so an admin change shows up as
+  soon as it commits.
+
+  ```json
+  { "data": { "settings": { "site.name": "Blog", "site.default_locale": "en", "security.registration_enabled": false } } }
+  ```
 
 - `GET /api/v1/admin/settings` needs `settings.read`. `category` filters; an unknown category
   is `400`. `includeSensitiveAdmin=true` adds `admin_only` keys only when the caller also

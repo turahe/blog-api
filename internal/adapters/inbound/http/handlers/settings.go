@@ -22,6 +22,35 @@ type settingsAPI interface {
 	History(ctx context.Context, filter settingsdomain.HistoryFilter) (settingsdomain.HistoryPage, error)
 }
 
+// publicGetSettingsHandler godoc
+//
+//	@Summary		Get public settings
+//	@Description	Returns the effective value of every public_safe setting as a key-to-value map, for site clients. admin_only and server_only keys are never returned.
+//	@Tags			public
+//	@Produce		json
+//	@Param			category	query		string	false	"site, content, media, analytics, notifications, seo, or security"
+//	@Success		200			{object}	responses.Envelope
+//	@Failure		400			{object}	responses.Envelope
+//	@Router			/api/v1/settings [get]
+func publicGetSettingsHandler(settings settingsAPI) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		filter := settingsservice.ListFilter{Category: settingsdomain.Category(c.Query("category"))}
+
+		items, err := settings.List(c.Request.Context(), filter)
+		if mapSettingsError(c, err) {
+			return
+		}
+
+		values := make(gin.H, len(items))
+		for _, item := range items {
+			values[item.Key] = item.Value
+		}
+
+		responses.SuccessFor(c, nethttp.StatusOK, responses.ServiceSettings, responses.CaseSuccess,
+			gin.H{"settings": values})
+	}
+}
+
 // adminGetSettingsHandler godoc
 //
 //	@Summary		Get settings

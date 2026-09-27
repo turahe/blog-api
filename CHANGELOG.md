@@ -1,5 +1,40 @@
 # Changelog
 
+## 2026-09-27 — Sentry crons, query spans, and logs
+
+### Added
+
+- `app scheduler` jobs report Sentry cron check-ins to a monitor per job (named after the
+  job), so a job that stops running or runs past its timeout alerts. Only the replica that
+  runs a job checks in; job error events carry a `job` tag.
+- GORM statements inside a sampled Sentry transaction are recorded as `db.sql.query` spans
+  with the parameterised SQL.
+- `SENTRY_LOGS_LEVEL` (default `info`, `off` to disable) sends log records at that level and
+  above to Sentry Logs, redacted like the JSON logs and linked to the trace.
+
+## 2026-09-27 — Homepage SEO meta
+
+### Added
+
+- Settings `seo.home_title`, `seo.home_description`, `seo.home_keywords`, and
+  `seo.home_share_image_url` (public_safe, empty by default). Run `app seed` to store their
+  defaults; until then they resolve to the coded defaults.
+- `GET /api/v1/home/seo-meta` (`public.home.seo_meta`, anonymous) returns the homepage meta
+  in the same shape as `GET /api/v1/posts/{slug}/seo-meta`. Empty home settings fall back to
+  the title template applied to the tagline (or the site name), `seo.default_description`
+  (then the tagline), and `seo.default_share_image_url`. The canonical URL is the canonical
+  base with a trailing `/`, `og:type` is `website`, and robots is `index,follow`.
+
+## 2026-09-27 — Public settings endpoint
+
+### Added
+
+- `GET /api/v1/settings` (`public.settings.get`, anonymous) returns every `public_safe`
+  setting as a key-to-value map in `data.settings`, with an optional `category` filter.
+  `admin_only` and `server_only` keys are never included. Site clients can read the site
+  name, locale, SEO defaults, and the registration and analytics switches without an admin
+  token.
+
 ## 2026-09-27 — One-command local stack
 
 ### Changed

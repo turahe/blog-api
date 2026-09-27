@@ -11,6 +11,7 @@ import (
 	// database/sql driver registered for the raw *sql.DB pool (migrations, health).
 	_ "github.com/jackc/pgx/v5/stdlib"
 	"github.com/turahe/blog-api/internal/platform/config"
+	sentryplatform "github.com/turahe/blog-api/internal/platform/sentry"
 	"gorm.io/driver/postgres"
 	"gorm.io/gorm"
 	"gorm.io/gorm/logger"
@@ -84,6 +85,12 @@ func Open(ctx context.Context, cfg config.Config) (*Database, error) {
 		closeAll()
 
 		return nil, fmt.Errorf("open gorm (%s): %w", driver, err)
+	}
+
+	if err := gdb.Use(sentryplatform.GORMTracing{}); err != nil {
+		closeAll()
+
+		return nil, fmt.Errorf("register gorm tracing: %w", err)
 	}
 
 	return &Database{Driver: driver, GORM: gdb, SQL: sqlDB, cleanup: cleanup}, nil

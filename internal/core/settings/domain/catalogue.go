@@ -173,6 +173,21 @@ func DefaultCatalogue() Catalogue {
 			Description: "Extra hosts a post's canonical_url or og_url may point at; the canonical base URL's host is always allowed",
 			Default:     []string{}, MaxItems: 20, MaxLength: 253, Pattern: hostPattern,
 		},
+		Definition{
+			Key: "seo.home_title", Category: CategorySEO, Type: TypeString, Sensitivity: PublicSafe,
+			Description: "Homepage title; empty applies seo.title_template to the tagline, or uses the site name without a tagline",
+			Default:     "", MaxLength: 200, Pattern: noMarkup,
+		},
+		Definition{
+			Key: "seo.home_description", Category: CategorySEO, Type: TypeString, Sensitivity: PublicSafe,
+			Description: "Homepage meta description; empty uses seo.default_description, then the tagline",
+			Default:     "", MaxLength: 300, Pattern: noMarkup,
+		},
+		Definition{
+			Key: "seo.home_keywords", Category: CategorySEO, Type: TypeStringList, Sensitivity: PublicSafe,
+			Description: "Homepage meta keywords", Default: []string{}, MaxItems: 20, MaxLength: 60, Pattern: noMarkup,
+		},
+		link(CategorySEO, "seo.home_share_image_url", "Homepage social share image; empty uses seo.default_share_image_url"),
 	)
 }
 

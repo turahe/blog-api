@@ -350,6 +350,17 @@ func (s *PostService) SEOMeta(ctx context.Context, slug string) (postdomain.SEOM
 	})
 }
 
+// HomeSEOMeta returns the rendered homepage meta. It depends only on site settings, which
+// have their own cache, so it is not cached with the post reads that post writes invalidate.
+func (s *PostService) HomeSEOMeta(ctx context.Context) (postdomain.SEOMeta, error) {
+	defaults, err := s.defaults(ctx)
+	if err != nil {
+		return postdomain.SEOMeta{}, err
+	}
+
+	return postdomain.RenderHomeSEO(defaults), nil
+}
+
 func (s *PostService) render(
 	ctx context.Context, post postdomain.Post, seo postdomain.SEO, defaults postdomain.SEODefaults,
 ) (postdomain.SEOMeta, error) {

@@ -418,9 +418,10 @@ before the worker's queue or subscription exists are discarded.
 
 | Variable | Default | Required | Purpose |
 | --- | --- | --- | --- |
-| `SENTRY_DSN` | empty | No | Enables Sentry for `serve`, `worker`, and `doctor`. Empty disables it entirely. |
+| `SENTRY_DSN` | empty | No | Enables Sentry for `serve`, `worker`, `scheduler`, and `doctor`. Empty disables it entirely. |
 | `SENTRY_ENVIRONMENT` | `APP_ENV` | No | Environment tag on events and transactions. |
 | `SENTRY_TRACES_SAMPLE_RATE` | `0.1` | No | Fraction (`0`–`1`) of requests and consumed messages recorded as performance transactions. |
+| `SENTRY_LOGS_LEVEL` | `info` | No | Minimum level (`debug`, `info`, `warn`, `error`) of log records sent to Sentry Logs; `off` sends none. Independent of the stdout log level. |
 
 Every Error-level log record becomes a Sentry event: recovered panics, 5xx responses, and
 worker handler failures. Attributes go through the same redaction as the JSON logs, and a
@@ -428,6 +429,20 @@ panic is reported once (not again by the resulting 500 access log). HTTP transac
 named after the route template (e.g. `GET /api/v1/posts/:slug`), never the raw path. The
 release is the build version. Default PII collection is off, and the query string,
 cookies, request body, and credential-bearing headers are stripped before sending.
+
+Records at `SENTRY_LOGS_LEVEL` and above are also sent to Sentry Logs, with the same
+redacted attributes and linked to the request or message trace. The default `info` includes
+one access-log record per request; set `warn` to cut volume on busy deployments.
+
+Inside a sampled transaction, each GORM statement becomes a `db.sql.query` span whose
+description is the SQL with placeholders (bound values are never sent). Statements outside
+a transaction (startup, migrations, scheduler jobs) are not traced.
+
+Each `app scheduler` job reports Sentry cron check-ins to a monitor named after the job
+(e.g. `audit-prune`), created on the first check-in with an interval schedule matching the
+job, a 2-minute margin, and a timeout of twice the interval (at least 30 minutes). Only the
+replica that runs a job checks in, so a missed or timed-out monitor means no replica ran
+it. An issue opens after two failed runs in a row, and job error events carry a `job` tag.
 
 ## Production validation
 
@@ -455,7 +470,8 @@ cookies, request body, and credential-bearing headers are stripped before sendin
 - `IMGPROXY_URL` is set without hex `IMGPROXY_KEY` / `IMGPROXY_SALT` (in production at least
   32 and 16 bytes), `MEDIA_TRANSFORM_WIDTHS` has an entry outside 1–8192, or
   `MEDIA_TRANSFORM_URL_TTL` is not positive;
-- `SENTRY_TRACES_SAMPLE_RATE` is outside `0`–`1`.
+- `SENTRY_TRACES_SAMPLE_RATE` is outside `0`–`1`, or `SENTRY_LOGS_LEVEL` is not `off`,
+  `debug`, `info`, `warn`, or `error`.
 
 Before deploying:
 

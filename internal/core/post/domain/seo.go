@@ -213,6 +213,16 @@ type SEODefaults struct {
 	TwitterCard   TwitterCard
 	// AllowedHosts are extra hosts canonical_url and og_url may use.
 	AllowedHosts []string
+	Tagline      string
+	Home         HomeSEO
+}
+
+// HomeSEO is the homepage's own SEO; empty fields fall back to the site-wide defaults.
+type HomeSEO struct {
+	Title         string
+	Description   string
+	Keywords      []string
+	ShareImageURL string
 }
 
 // Validate returns seo's hard violations under defaults' host rules.
@@ -391,6 +401,49 @@ func RenderSEO(in SEOInput) SEOMeta {
 		MetaKeywords:    strings.Join(in.SEO.Keywords, ", "),
 		Canonical:       canonical,
 		Robots:          robots(in.SEO),
+		OpenGraph:       og,
+		Twitter:         twitter,
+	}
+}
+
+// RenderHomeSEO renders the homepage meta from the site settings: the home values first,
+// then the site-wide defaults. Without a home title the tagline goes through the title
+// template; without a tagline either, the title is the site name.
+func RenderHomeSEO(d SEODefaults) SEOMeta {
+	title := d.Home.Title
+	if title == "" {
+		title = d.SiteName
+		if d.Tagline != "" {
+			title = applyTemplate(d.TitleTemplate, d.Tagline, d.SiteName)
+		}
+	}
+
+	description := firstNonEmpty(d.Home.Description, d.Description, d.Tagline)
+	image := firstNonEmpty(d.Home.ShareImageURL, d.ShareImageURL)
+
+	canonical := ""
+	if d.CanonicalBase != "" {
+		canonical = strings.TrimRight(d.CanonicalBase, "/") + "/"
+	}
+
+	og := map[string]any{"og:type": "website"}
+	setAny(og, "og:title", title)
+	setAny(og, "og:description", description)
+	setAny(og, "og:image", image)
+	setAny(og, "og:url", canonical)
+	setAny(og, "og:site_name", d.SiteName)
+
+	twitter := map[string]string{"twitter:card": firstNonEmpty(string(d.TwitterCard), string(TwitterSummaryLarge))}
+	setString(twitter, "twitter:title", title)
+	setString(twitter, "twitter:description", description)
+	setString(twitter, "twitter:image", image)
+
+	return SEOMeta{
+		Title:           title,
+		MetaDescription: description,
+		MetaKeywords:    strings.Join(d.Home.Keywords, ", "),
+		Canonical:       canonical,
+		Robots:          robots(SEO{}),
 		OpenGraph:       og,
 		Twitter:         twitter,
 	}

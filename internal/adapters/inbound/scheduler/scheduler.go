@@ -94,8 +94,9 @@ func (s *Scheduler) loop(ctx context.Context, job Job) {
 
 func (s *Scheduler) run(ctx context.Context, job Job, every time.Duration) (bool, error) {
 	started := s.now()
+	ctx = withJobHub(ctx, job.Name)
 
-	ran, err := s.store.TryRun(ctx, job.Name, every, started, job.Run)
+	ran, err := s.store.TryRun(ctx, job.Name, every, started, monitored(job, s.tick))
 
 	switch {
 	case err != nil && ctx.Err() == nil:

@@ -284,6 +284,17 @@ What shipped, where it differs from the design above:
   - Derived values have Markdown and HTML stripped.
   - `X-Robots-Tag` is sent when the post is `noindex` or `nofollow`.
   - Responses are cached in the posts read-cache family, which every post write invalidates.
+- **Homepage.** `GET /api/v1/home/seo-meta` (`public.home.seo_meta`, anonymous) returns the
+  homepage meta in the same shape, built from settings only (`RenderHomeSEO`):
+  - Title: `seo.home_title`, else `seo.title_template` applied to `site.tagline`, else `site.name`.
+  - Description: `seo.home_description`, else `seo.default_description`, else `site.tagline`.
+  - Keywords: `seo.home_keywords`, joined with `, `.
+  - Canonical URL and `og:url`: `{canonical base}/`, omitted when no base URL is set.
+  - `og:type` is `website`; `og:image` and `twitter:image` are `seo.home_share_image_url`, else
+    `seo.default_share_image_url`; `twitter:card` is `seo.default_twitter_card`.
+  - Robots is always `index,follow`.
+  - The response is not cached with post reads; it reads the cached settings, so a settings
+    change shows up as soon as it commits.
 - **Image URLs.** Signed storage URLs expire and would break cached social cards, so images use a stable URL:
   - with imgproxy configured: `{APP_PUBLIC_URL}/api/v1/media/{id}/transform?w=W&format=jpeg`, where W is the largest `MEDIA_TRANSFORM_WIDTHS` entry up to 1200;
   - otherwise: `S3_PUBLIC_BASE_URL/{storage_key}`;

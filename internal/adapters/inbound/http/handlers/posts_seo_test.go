@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"context"
+	"errors"
 	nethttp "net/http"
 	"testing"
 
@@ -45,6 +46,10 @@ func (f *fakeSEO) PreviewSEO(_ context.Context, _, _ uuid.UUID, _ bool, draft po
 
 func (f *fakeSEO) SEOMeta(_ context.Context, slug string) (postdomain.SEOMeta, error) {
 	f.slug = slug
+	return f.meta, f.err
+}
+
+func (f *fakeSEO) HomeSEOMeta(context.Context) (postdomain.SEOMeta, error) {
 	return f.meta, f.err
 }
 
@@ -206,4 +211,28 @@ func TestPublicSEOMetaSetsRobotsHeader(t *testing.T) {
 	svc.err = postdomain.ErrNotFound
 	w, _ = runProfile(t, publicPostSEOMetaHandler(svc), profileRequest{method: nethttp.MethodGet, target: "/", param: "gone"})
 	assert.Equal(t, nethttp.StatusNotFound, w.Code)
+}
+
+func TestPublicHomeSEOMeta(t *testing.T) {
+	t.Parallel()
+
+	svc := &fakeSEO{meta: postdomain.SEOMeta{
+		Title: "Welcome", Canonical: "https://blog.example.com/", Robots: "index,follow",
+		OpenGraph: map[string]any{"og:type": "website"}, Twitter: map[string]string{"twitter:card": "summary"},
+	}}
+
+	w, body := runProfile(t, publicHomeSEOMetaHandler(svc), profileRequest{method: nethttp.MethodGet, target: "/"})
+	require.Equal(t, nethttp.StatusOK, w.Code, w.Body.String())
+
+	data := dataOf(body)
+	assert.Equal(t, "Welcome", data["title"])
+	assert.Equal(t, "https://blog.example.com/", data["canonical"])
+	assert.Equal(t, map[string]any{"og:type": "website"}, data["openGraph"])
+	assert.Empty(t, w.Header().Get("X-Robots-Tag"))
+
+	svc.err = errors.New("settings down")
+	w, body = runProfile(t, publicHomeSEOMetaHandler(svc), profileRequest{method: nethttp.MethodGet, target: "/"})
+	assert.Equal(t, nethttp.StatusInternalServerError, w.Code)
+	assert.Equal(t, responses.ErrorCodeInternal, errorCode(body))
+	assert.NotContains(t, w.Body.String(), "settings down")
 }

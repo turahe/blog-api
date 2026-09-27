@@ -81,7 +81,7 @@ func TestCommentRoutesUseDeclaredAuthModes(t *testing.T) {
 		},
 		Posts: routes.Posts{
 			AdminPublish: handler, AdminUnpublish: handler, AdminArchive: handler,
-			AdminDelete: handler, AdminRestore: handler,
+			AdminDelete: handler, AdminRestore: handler, PublicHomeSEOMeta: handler,
 		},
 		Users: routes.Users{
 			MeProfilePatch: handler, MeAvatarUpload: handler, MeAvatarDelete: handler,
@@ -93,6 +93,7 @@ func TestCommentRoutesUseDeclaredAuthModes(t *testing.T) {
 			MeTwoFactorConfirm: handler, MeTwoFactorDisable: handler, MeTwoFactorBackupCodes: handler,
 			OAuthStart: handler, OAuthCallback: handler,
 		},
+		Settings: routes.Settings{Public: handler},
 	}, routes.AuthMiddleware{
 		Optional: gin.HandlersChain{record("optional")},
 		Required: gin.HandlersChain{record("required")},
@@ -127,6 +128,8 @@ func TestCommentRoutesUseDeclaredAuthModes(t *testing.T) {
 		{nethttp.MethodPost, "/api/v1/me/email/request-change", []string{"required", "me.email.request_change"}},
 		{nethttp.MethodPost, "/api/v1/me/email/confirm-change", []string{"required", "me.email.confirm_change"}},
 		{nethttp.MethodGet, "/api/v1/users/ada", []string{"optional", "public.users.profile"}},
+		{nethttp.MethodGet, "/api/v1/settings", []string{"public.settings.get"}},
+		{nethttp.MethodGet, "/api/v1/home/seo-meta", []string{"public.home.seo_meta"}},
 		{nethttp.MethodGet, "/api/v1/admin/users/u/profile", []string{"required", "admin.users.profile.get"}},
 		{nethttp.MethodPatch, "/api/v1/admin/users/u/profile", []string{"required", "admin.users.profile.patch"}},
 		{nethttp.MethodPost, "/api/v1/auth/2fa/challenge", []string{"auth.2fa.challenge"}},

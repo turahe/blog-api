@@ -4979,6 +4979,21 @@ paths:
       summary: Toggle my upvote on a comment
       tags:
       - self-service
+  /api/v1/home/seo-meta:
+    get:
+      description: 'Rendered meta for the homepage, in the same shape as the post
+        SEO meta: the seo.home_* settings first, then the site name, tagline, and
+        seo.default_* settings.'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/responses.Envelope'
+      summary: Get homepage SEO meta
+      tags:
+      - public
   /api/v1/me:
     get:
       produces:
@@ -6338,6 +6353,29 @@ paths:
           schema:
             $ref: '#/definitions/responses.Envelope'
       summary: Get post SEO meta
+      tags:
+      - public
+  /api/v1/settings:
+    get:
+      description: Returns the effective value of every public_safe setting as a key-to-value
+        map, for site clients. admin_only and server_only keys are never returned.
+      parameters:
+      - description: site, content, media, analytics, notifications, seo, or security
+        in: query
+        name: category
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/responses.Envelope'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/responses.Envelope'
+      summary: Get public settings
       tags:
       - public
   /api/v1/tags:

@@ -39,22 +39,43 @@ func (f *fakeTransport) Events() []*sentrygo.Event {
 	return append([]*sentrygo.Event(nil), f.events...)
 }
 
+func (f *fakeTransport) OfType(kind string) []*sentrygo.Event {
+	var out []*sentrygo.Event
+
+	for _, e := range f.Events() {
+		if e.Type == kind {
+			out = append(out, e)
+		}
+	}
+
+	return out
+}
+
 // enable binds a global Sentry client backed by a fake transport for one test.
 func enable(t *testing.T) *fakeTransport {
 	t.Helper()
 
+	transport, _ := enableWith(t, config.Config{SentryLogsLevel: "off"})
+
+	return transport
+}
+
+// enableWith is enable with extra settings; it also returns the flush func.
+func enableWith(t *testing.T, cfg config.Config) (*fakeTransport, func()) {
+	t.Helper()
+
+	cfg.SentryDSN = "https://public@example.com/1"
+	cfg.SentryEnvironment = "test"
+
 	transport := &fakeTransport{}
-	flush, err := initWithTransport(config.Config{
-		SentryDSN:         "https://public@example.com/1",
-		SentryEnvironment: "test",
-	}, "v1.2.3", transport)
+	flush, err := initWithTransport(cfg, "v1.2.3", transport)
 	require.NoError(t, err)
 	t.Cleanup(func() {
 		flush()
 		sentrygo.CurrentHub().BindClient(nil)
 	})
 
-	return transport
+	return transport, flush
 }
 
 //nolint:paralleltest // binds the global Sentry hub
@@ -103,6 +124,48 @@ func TestHandlerSkipsReportedContext(t *testing.T) {
 
 	logger.ErrorContext(logging.MarkReported(context.Background()), "already reported")
 	require.Empty(t, transport.Events())
+}
+
+//nolint:paralleltest // binds the global Sentry hub
+func TestHandlerWithLogsSendsRecordsAtLevel(t *testing.T) {
+	transport, flush := enableWith(t, config.Config{SentryLogsLevel: "info"})
+	logger := logging.NewTo(io.Discard, "local", NewHandler().WithLogs(slog.LevelInfo))
+
+	logger.Debug("cache miss")
+	logger.With("component", "http").Info("request ok",
+		"status", 200, "cached", true, "access_token", "raw")
+	logger.ErrorContext(logging.MarkReported(context.Background()), "panic recovered")
+	flush()
+
+	var logs []sentrygo.Log
+	for _, e := range transport.OfType("log") {
+		logs = append(logs, e.Logs...)
+	}
+
+	require.Len(t, logs, 2, "debug is below the logs level")
+
+	info := logs[0]
+	require.Equal(t, "request ok", info.Body)
+	require.Equal(t, sentrygo.LogLevelInfo, info.Level)
+	require.Equal(t, "http", info.Attributes["component"].AsString())
+	require.Equal(t, int64(200), info.Attributes["status"].AsInt64())
+	require.True(t, info.Attributes["cached"].AsBool())
+	require.Equal(t, "[REDACTED]", info.Attributes["access_token"].AsString())
+	require.Equal(t, "v1.2.3", info.Attributes["sentry.release"].AsString())
+
+	require.Equal(t, sentrygo.LogLevelError, logs[1].Level)
+	require.Empty(t, transport.OfType(""), "a reported record is still logged but not captured again")
+}
+
+//nolint:paralleltest // binds the global Sentry hub
+func TestHandlerWithoutLogsSendsNoLogs(t *testing.T) {
+	transport, flush := enableWith(t, config.Config{SentryLogsLevel: "off"})
+	logger := logging.NewTo(io.Discard, "production", NewHandler())
+
+	logger.Info("request ok")
+	flush()
+
+	require.Empty(t, transport.OfType("log"))
 }
 
 func TestScrubRemovesSensitiveRequestData(t *testing.T) {

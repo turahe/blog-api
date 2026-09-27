@@ -177,6 +177,64 @@ func TestRenderSEOPrefersExplicitValues(t *testing.T) {
 	assert.Equal(t, "https://img/og.jpg", meta.Twitter["twitter:image"])
 }
 
+func TestRenderHomeSEOFallsBackToSiteDefaults(t *testing.T) {
+	t.Parallel()
+
+	defaults := seoDefaults()
+	defaults.Tagline = "Notes on Go"
+
+	meta := RenderHomeSEO(defaults)
+
+	assert.Equal(t, "Notes on Go | Blog", meta.Title)
+	assert.Equal(t, "Site description", meta.MetaDescription)
+	assert.Empty(t, meta.MetaKeywords)
+	assert.Equal(t, "https://blog.example.com/", meta.Canonical)
+	assert.Equal(t, "index,follow", meta.Robots)
+	assert.Equal(t, map[string]any{
+		"og:type": "website", "og:title": "Notes on Go | Blog", "og:description": "Site description",
+		"og:image": "https://cdn.example.com/share.png", "og:url": "https://blog.example.com/", "og:site_name": "Blog",
+	}, meta.OpenGraph)
+	assert.Equal(t, map[string]string{
+		"twitter:card": "summary_large_image", "twitter:title": "Notes on Go | Blog",
+		"twitter:description": "Site description", "twitter:image": "https://cdn.example.com/share.png",
+	}, meta.Twitter)
+
+	defaults.Description = ""
+	assert.Equal(t, "Notes on Go", RenderHomeSEO(defaults).MetaDescription, "the tagline is the last description fallback")
+
+	defaults.Tagline = ""
+	meta = RenderHomeSEO(defaults)
+	assert.Equal(t, "Blog", meta.Title, "without a tagline the title is the site name")
+	assert.Empty(t, meta.MetaDescription)
+	assert.NotContains(t, meta.OpenGraph, "og:description")
+}
+
+func TestRenderHomeSEOPrefersHomeSettings(t *testing.T) {
+	t.Parallel()
+
+	defaults := seoDefaults()
+	defaults.Tagline = "Notes on Go"
+	defaults.Home = HomeSEO{
+		Title: "Welcome", Description: "Home description", Keywords: []string{"go", "web"},
+		ShareImageURL: "https://cdn.example.com/home.png",
+	}
+
+	meta := RenderHomeSEO(defaults)
+
+	assert.Equal(t, "Welcome", meta.Title)
+	assert.Equal(t, "Home description", meta.MetaDescription)
+	assert.Equal(t, "go, web", meta.MetaKeywords)
+	assert.Equal(t, "Welcome", meta.OpenGraph["og:title"])
+	assert.Equal(t, "https://cdn.example.com/home.png", meta.OpenGraph["og:image"])
+	assert.Equal(t, "https://cdn.example.com/home.png", meta.Twitter["twitter:image"])
+
+	defaults.CanonicalBase, defaults.TwitterCard = "", ""
+	meta = RenderHomeSEO(defaults)
+	assert.Empty(t, meta.Canonical)
+	assert.NotContains(t, meta.OpenGraph, "og:url")
+	assert.Equal(t, "summary_large_image", meta.Twitter["twitter:card"])
+}
+
 func TestSummaryTruncatesLongContent(t *testing.T) {
 	t.Parallel()
 

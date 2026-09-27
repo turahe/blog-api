@@ -258,6 +258,22 @@ func TestSEOMetaServesPublishedPostsOnly(t *testing.T) {
 	assert.Equal(t, "noindex,follow", meta.Robots)
 }
 
+func TestHomeSEOMetaRendersSiteDefaults(t *testing.T) {
+	t.Parallel()
+
+	f := newSEOFixture(t)
+
+	meta, err := f.svc.HomeSEOMeta(t.Context())
+	require.NoError(t, err)
+	assert.Equal(t, "Blog", meta.Title)
+	assert.Equal(t, "https://blog.example.com/", meta.Canonical)
+	assert.Equal(t, "website", meta.OpenGraph["og:type"])
+
+	meta, err = New(nil, nil, nil).HomeSEOMeta(t.Context())
+	require.NoError(t, err, "without SEO settings the home meta still renders")
+	assert.Equal(t, "index,follow", meta.Robots)
+}
+
 func TestPreviewSEOWritesNothing(t *testing.T) {
 	t.Parallel()
 

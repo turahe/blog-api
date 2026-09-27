@@ -5,6 +5,7 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
+	"log/slog"
 	"net"
 	"net/url"
 	"os"
@@ -151,6 +152,7 @@ type Config struct {
 	SentryDSN                     string
 	SentryEnvironment             string
 	SentryTracesSampleRate        float64
+	SentryLogsLevel               string
 	SMTPHost                      string
 	SMTPPort                      int
 	SMTPUsername                  string
@@ -167,13 +169,38 @@ func (c Config) SentryEnabled() bool {
 	return strings.TrimSpace(c.SentryDSN) != ""
 }
 
-// ValidateSentry checks the traces sample rate is a fraction.
+// SentryLogs returns the minimum level sent to Sentry Logs; ok is false when
+// Sentry is disabled or SENTRY_LOGS_LEVEL is "off".
+func (c Config) SentryLogs() (slog.Level, bool) {
+	level, on, err := parseSentryLogsLevel(c.SentryLogsLevel)
+
+	return level, on && err == nil && c.SentryEnabled()
+}
+
+// ValidateSentry checks the traces sample rate is a fraction and the logs level is known.
 func (c Config) ValidateSentry() error {
 	if c.SentryTracesSampleRate < 0 || c.SentryTracesSampleRate > 1 {
 		return fmt.Errorf("SENTRY_TRACES_SAMPLE_RATE must be between 0 and 1, got %v", c.SentryTracesSampleRate)
 	}
 
+	if _, _, err := parseSentryLogsLevel(c.SentryLogsLevel); err != nil {
+		return fmt.Errorf("SENTRY_LOGS_LEVEL must be off, debug, info, warn or error, got %q", c.SentryLogsLevel)
+	}
+
 	return nil
+}
+
+func parseSentryLogsLevel(raw string) (level slog.Level, on bool, err error) {
+	raw = strings.TrimSpace(raw)
+	if strings.EqualFold(raw, "off") {
+		return 0, false, nil
+	}
+
+	if err := level.UnmarshalText([]byte(raw)); err != nil {
+		return 0, false, err
+	}
+
+	return level, true, nil
 }
 
 // UsesCloudSQL reports whether Cloud SQL connector settings are active.
@@ -645,6 +672,7 @@ func load(withJWTKeys bool) (Config, error) {
 		AvatarMaxBytes:                int64(integer("AVATAR_MAX_BYTES", 5<<20)),
 		SentryDSN:                     env("SENTRY_DSN", ""),
 		SentryTracesSampleRate:        float("SENTRY_TRACES_SAMPLE_RATE", 0.1),
+		SentryLogsLevel:               env("SENTRY_LOGS_LEVEL", "info"),
 		SMTPHost:                      env("SMTP_HOST", ""),
 		SMTPPort:                      integer("SMTP_PORT", 1025),
 		SMTPUsername:                  env("SMTP_USERNAME", ""),

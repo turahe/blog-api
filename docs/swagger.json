@@ -5743,6 +5743,26 @@
                 }
             }
         },
+        "/api/v1/home/seo-meta": {
+            "get": {
+                "description": "Rendered meta for the homepage, in the same shape as the post SEO meta: the seo.home_* settings first, then the site name, tagline, and seo.default_* settings.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "public"
+                ],
+                "summary": "Get homepage SEO meta",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/responses.Envelope"
+                        }
+                    }
+                }
+            }
+        },
         "/api/v1/me": {
             "get": {
                 "security": [
@@ -7748,6 +7768,40 @@
                     },
                     "404": {
                         "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/responses.Envelope"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/settings": {
+            "get": {
+                "description": "Returns the effective value of every public_safe setting as a key-to-value map, for site clients. admin_only and server_only keys are never returned.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "public"
+                ],
+                "summary": "Get public settings",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "site, content, media, analytics, notifications, seo, or security",
+                        "name": "category",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/responses.Envelope"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
                         "schema": {
                             "$ref": "#/definitions/responses.Envelope"
                         }

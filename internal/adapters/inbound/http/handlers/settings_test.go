@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	nethttp "net/http"
 	"testing"
 	"time"
@@ -22,11 +23,16 @@ type fakeSettings struct {
 	actor         settingsservice.Actor
 	updates       []settingsservice.Update
 	historyFilter settingsdomain.HistoryFilter
+	listErr       error
 	updateErr     error
 }
 
 func (f *fakeSettings) List(_ context.Context, filter settingsservice.ListFilter) ([]settingsdomain.Setting, error) {
 	f.listFilter = filter
+	if f.listErr != nil {
+		return nil, f.listErr
+	}
+
 	updatedAt := time.Date(2026, 9, 25, 10, 0, 0, 0, time.UTC)
 
 	return []settingsdomain.Setting{
@@ -130,6 +136,45 @@ func TestGetSettingsListsAndFilters(t *testing.T) {
 	assert.Equal(t, "string", first["valueType"])
 	assert.InDelta(t, 2, first["version"], 0)
 	assert.Equal(t, testUserID.String(), first["updatedBy"])
+}
+
+func TestPublicSettingsReturnsPublicValuesAnonymously(t *testing.T) {
+	t.Parallel()
+
+	svc := &fakeSettings{listFilter: settingsservice.ListFilter{IncludeAdminOnly: true}}
+	public := NewControllers(Deps{Settings: svc}).Settings.Public
+
+	w, body := runProfile(t, public, profileRequest{method: nethttp.MethodGet, target: "/?category=site&includeSensitiveAdmin=true"})
+	require.Equal(t, nethttp.StatusOK, w.Code, w.Body.String())
+	assert.Equal(t, settingsservice.ListFilter{Category: settingsdomain.CategorySite}, svc.listFilter)
+	assert.Equal(t, map[string]any{"site.name": "Mine", "media.quality": float64(80)}, dataOf(body)["settings"])
+}
+
+func TestPublicSettingsErrors(t *testing.T) {
+	t.Parallel()
+
+	cases := []struct {
+		name   string
+		err    error
+		status int
+		code   string
+	}{
+		{name: "unknown category", err: fmt.Errorf("%w: unknown category", settingsservice.ErrValidation), status: nethttp.StatusBadRequest, code: responses.ErrorCodeValidation},
+		{name: "store failure", err: errors.New("db down"), status: nethttp.StatusInternalServerError, code: responses.ErrorCodeInternal},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
+			public := NewControllers(Deps{Settings: &fakeSettings{listErr: tc.err}}).Settings.Public
+
+			w, body := runProfile(t, public, profileRequest{method: nethttp.MethodGet, target: "/?category=nope"})
+			require.Equal(t, tc.status, w.Code, w.Body.String())
+			assert.Equal(t, tc.code, errorCode(body))
+			assert.NotContains(t, w.Body.String(), "db down")
+		})
+	}
 }
 
 func TestGetSettingsAdminOnlyNeedsUpdatePermission(t *testing.T) {
