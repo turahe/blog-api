@@ -8,62 +8,83 @@ import (
 	"strings"
 	"sync"
 	"testing"
+	"testing/synctest"
 	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
+// handlerTransport serves requests in-process so the run stays inside a synctest bubble:
+// a real socket would let wall-clock load decide how many events are skipped.
+type handlerTransport struct{ handler http.Handler }
+
+func (h handlerTransport) RoundTrip(r *http.Request) (*http.Response, error) {
+	defer func() { _ = r.Body.Close() }()
+
+	rec := httptest.NewRecorder()
+	h.handler.ServeHTTP(rec, r)
+
+	return rec.Result(), nil
+}
+
 func TestRunPacesEventsAcrossTheIngestRoutes(t *testing.T) {
 	t.Parallel()
 
-	var (
-		mu        sync.Mutex
-		routes    = map[string]int{}
-		forwarded = map[string]bool{}
-		agents    = map[string]bool{}
-	)
+	synctest.Test(t, func(t *testing.T) {
+		var (
+			mu        sync.Mutex
+			routes    = map[string]int{}
+			forwarded = map[string]bool{}
+			agents    = map[string]bool{}
+		)
 
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		var body map[string]any
-		if err := json.NewDecoder(r.Body).Decode(&body); err != nil || body["session_id"] == nil {
-			w.WriteHeader(http.StatusBadRequest)
-			return
-		}
+		handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			var body map[string]any
+			if err := json.NewDecoder(r.Body).Decode(&body); err != nil || body["session_id"] == nil {
+				w.WriteHeader(http.StatusBadRequest)
+				return
+			}
+
+			mu.Lock()
+			routes[strings.TrimPrefix(r.URL.Path, "/api/v1/analytics/ingest/")]++
+			forwarded[r.Header.Get("X-Forwarded-For")] = true
+			agents[r.Header.Get("User-Agent")] = true
+			mu.Unlock()
+
+			w.WriteHeader(http.StatusAccepted)
+		})
+
+		result, err := Run(t.Context(), Config{
+			BaseURL: "http://ingest.test/", Rate: 400, Duration: time.Second, Spread: 3, Sessions: 5,
+			Client: &http.Client{Transport: handlerTransport{handler: handler}},
+		})
+		require.NoError(t, err)
+
+		assert.Equal(t, int64(400), result.Planned)
+		assert.Equal(t, int64(400), result.Sent)
+		assert.Equal(t, result.Sent, result.Accepted)
+		assert.Zero(t, result.Skipped)
+		assert.Zero(t, result.Errors)
+		assert.Equal(t, time.Second, result.Elapsed)
+		require.NoError(t, result.Check(400, 1, 0))
+		assert.Len(t, result.Sessions, 5)
+		assert.True(t, strings.HasPrefix(result.PathPrefix, "/loadtest/"))
+		assert.LessOrEqual(t, result.P50, result.P99)
 
 		mu.Lock()
-		routes[strings.TrimPrefix(r.URL.Path, "/api/v1/analytics/ingest/")]++
-		forwarded[r.Header.Get("X-Forwarded-For")] = true
-		agents[r.Header.Get("User-Agent")] = true
-		mu.Unlock()
+		defer mu.Unlock()
 
-		w.WriteHeader(http.StatusAccepted)
-	}))
-	t.Cleanup(server.Close)
+		for route, n := range routes {
+			assert.Equal(t, int64(n), result.Routes[route], route)
+		}
 
-	result, err := Run(t.Context(), Config{BaseURL: server.URL + "/", Rate: 400, Duration: time.Second, Spread: 3, Sessions: 5})
-	require.NoError(t, err)
-
-	assert.Equal(t, int64(400), result.Planned)
-	assert.Equal(t, result.Sent, result.Accepted)
-	assert.Zero(t, result.Errors)
-	require.NoError(t, result.Check(400, 0.9, time.Second))
-	assert.Len(t, result.Sessions, 5)
-	assert.True(t, strings.HasPrefix(result.PathPrefix, "/loadtest/"))
-	assert.LessOrEqual(t, result.P50, result.P99)
-
-	mu.Lock()
-	defer mu.Unlock()
-
-	for route, n := range routes {
-		assert.Equal(t, int64(n), result.Routes[route], route)
-	}
-
-	assert.ElementsMatch(t, []string{"page-view", "time-spent", "navigation", "search", "search-click"}, keysOf(routes))
-	assert.Greater(t, routes["page-view"], routes["search-click"])
-	assert.Len(t, forwarded, 3)
-	assert.Len(t, agents, 1)
-	assert.NotContains(t, agents, "")
+		assert.ElementsMatch(t, []string{"page-view", "time-spent", "navigation", "search", "search-click"}, keysOf(routes))
+		assert.Greater(t, routes["page-view"], routes["search-click"])
+		assert.Len(t, forwarded, 3)
+		assert.Len(t, agents, 1)
+		assert.NotContains(t, agents, "")
+	})
 }
 
 func TestCheckReportsEveryMiss(t *testing.T) {

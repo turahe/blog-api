@@ -15,15 +15,19 @@ type post struct {
 	Slug string
 }
 
-func dryRunDB(t *testing.T) *gorm.DB {
-	t.Helper()
+// dryRunDB builds statements for PostgreSQL without a connection.
+func dryRunDB(tb testing.TB, plugins ...gorm.Plugin) *gorm.DB {
+	tb.Helper()
 
 	db, err := gorm.Open(postgres.New(postgres.Config{DSN: "host=127.0.0.1 port=1 dbname=none"}), &gorm.Config{
 		DryRun:               true,
 		DisableAutomaticPing: true,
 	})
-	require.NoError(t, err)
-	require.NoError(t, db.Use(GORMTracing{}))
+	require.NoError(tb, err)
+
+	for _, p := range plugins {
+		require.NoError(tb, db.Use(p))
+	}
 
 	return db
 }
@@ -31,7 +35,7 @@ func dryRunDB(t *testing.T) *gorm.DB {
 //nolint:paralleltest // binds the global Sentry hub
 func TestGORMTracingRecordsStatementsAsChildSpans(t *testing.T) {
 	transport, flush := enableWith(t, config.Config{SentryLogsLevel: "off", SentryTracesSampleRate: 1})
-	db := dryRunDB(t)
+	db := dryRunDB(t, GORMTracing{})
 
 	tx := sentrygo.StartTransaction(t.Context(), "GET /posts/:slug")
 
@@ -56,7 +60,7 @@ func TestGORMTracingRecordsStatementsAsChildSpans(t *testing.T) {
 //nolint:paralleltest // binds the global Sentry hub
 func TestGORMTracingIgnoresStatementsOutsideASpan(t *testing.T) {
 	transport, flush := enableWith(t, config.Config{SentryLogsLevel: "off", SentryTracesSampleRate: 1})
-	db := dryRunDB(t)
+	db := dryRunDB(t, GORMTracing{})
 
 	var rows []post
 	require.NoError(t, db.WithContext(t.Context()).Find(&rows).Error)

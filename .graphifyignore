@@ -4,6 +4,7 @@ CLAUDE.md
 .cursor/
 .trae/
 .github/
+agent
 
 # Graphify output (also auto-skipped; listed for clarity)
 graphify-out/

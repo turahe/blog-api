@@ -42,14 +42,24 @@ func (GORMTracing) Initialize(db *gorm.DB) error {
 	)
 }
 
-func startGORMSpan(db *gorm.DB) {
+// sampledParent returns the sampled span on the statement's context, or nil.
+func sampledParent(db *gorm.DB) *sentrygo.Span {
 	ctx := db.Statement.Context
 	if ctx == nil {
-		return
+		return nil
 	}
 
 	parent := sentrygo.SpanFromContext(ctx)
 	if parent == nil || !parent.Sampled.Bool() {
+		return nil
+	}
+
+	return parent
+}
+
+func startGORMSpan(db *gorm.DB) {
+	parent := sampledParent(db)
+	if parent == nil {
 		return
 	}
 
@@ -57,6 +67,11 @@ func startGORMSpan(db *gorm.DB) {
 }
 
 func finishGORMSpan(db *gorm.DB) {
+	// InstanceGet formats a key per call; skip it when start could not have set one.
+	if sampledParent(db) == nil {
+		return
+	}
+
 	value, ok := db.InstanceGet(gormSpanKey)
 	if !ok {
 		return
