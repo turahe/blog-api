@@ -37,7 +37,10 @@ graphify-out/
 data/
 dist/
 /app
+tmp/
+*.out
 compose.yaml
+compose.*.yaml
 Dockerfile
 .dockerignore
 .graphifyignore

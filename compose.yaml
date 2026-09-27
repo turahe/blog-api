@@ -3,6 +3,7 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
+      target: production
     env_file: [.env]
     environment: &app-env
       DB_HOST: postgres
@@ -28,6 +29,7 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
+      target: production
     env_file: [.env]
     environment:
       <<: *app-env

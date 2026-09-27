@@ -1,0 +1,18 @@
+# Live-reload API on top of compose.yaml:
+#   docker compose -f compose.yaml -f compose.dev.yaml up -d --build   (or: make docker-dev)
+# The source is bind-mounted and air rebuilds on every .go change; migrate still runs the production image.
+services:
+  api:
+    build:
+      target: dev
+    volumes:
+      - .:/src
+      # air's build output stays in the volume, so no root-owned ./tmp appears on the host.
+      - api-dev-tmp:/src/tmp
+      - go-mod-cache:/go/pkg/mod
+      - go-build-cache:/root/.cache/go-build
+
+volumes:
+  api-dev-tmp:
+  go-mod-cache:
+  go-build-cache:

@@ -20,14 +20,25 @@ jobs:
       - name: Build image
         run: docker build -t blog-api:ci .
 
-      - name: Run Trivy
+      # With format: sarif the action ignores `severity` and gates on every finding, so the gate
+      # and the report are separate runs.
+      - name: Run Trivy (gate)
+        uses: aquasecurity/trivy-action@v0.36.0
+        with:
+          image-ref: blog-api:ci
+          format: table
+          severity: CRITICAL,HIGH
+          exit-code: "1"
+
+      - name: Run Trivy (report)
+        if: always()
         uses: aquasecurity/trivy-action@v0.36.0
         with:
           image-ref: blog-api:ci
           format: sarif
           output: trivy-results.sarif
-          severity: CRITICAL,HIGH
-          exit-code: "1"
+          exit-code: "0"
+          skip-setup-trivy: true
 
       - name: Upload Trivy results
         if: always()

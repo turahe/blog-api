@@ -1,4 +1,4 @@
-.PHONY: test test-race test-integration test-brokers asyncapi-validate coverage lint routes-check swagger dev-keys infra-up infra-down docker-up docker-down docker-build docker-logs docker-seed docker-migrate trivy
+.PHONY: test test-race test-integration test-brokers asyncapi-validate coverage lint routes-check swagger dev-keys infra-up infra-down docker-up docker-dev docker-down docker-build docker-logs docker-seed docker-migrate trivy
 
 MODULE := github.com/turahe/blog-api
 TEST_PKGS := ./cmd/... ./internal/... ./docs/...
@@ -97,6 +97,10 @@ dev-keys:
 # Full local stack: every Compose service, including migrate and api (http://localhost:8080).
 docker-up: dev-keys
 	docker compose up -d --build
+
+# Same stack, but api runs the Dockerfile dev target: source bind-mounted, rebuilt by air on change.
+docker-dev: dev-keys
+	docker compose -f compose.yaml -f compose.dev.yaml up -d --build
 
 docker-down:
 	docker compose down
