@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"context"
+	"errors"
 	nethttp "net/http"
 	"testing"
 
@@ -73,6 +74,68 @@ func (f *fakeRoles) RevokeUserRole(_ context.Context, actor, userID uuid.UUID, n
 	return []string{}, f.err
 }
 
+func TestAdminRolesListHandler(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name   string
+		err    error
+		status int
+		code   string
+	}{
+		{name: "lists roles", status: nethttp.StatusOK},
+		{name: "records unexpected failure", err: errors.New("db down"), status: nethttp.StatusInternalServerError, code: "internal_error"},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
+			w, body := runProfile(t, adminRolesListHandler(&fakeRoles{err: tc.err}), profileRequest{method: nethttp.MethodGet, target: "/"})
+			require.Equal(t, tc.status, w.Code, w.Body.String())
+
+			if tc.code != "" {
+				require.Equal(t, tc.code, errorCode(body))
+				return
+			}
+
+			list := as[[]any](t, body["data"])
+			require.Len(t, list, 2)
+			require.Equal(t, "admin", as[map[string]any](t, list[0])["name"])
+		})
+	}
+}
+
+func TestAdminRoleGetHandler(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name   string
+		err    error
+		status int
+		code   string
+	}{
+		{name: "returns trimmed role", status: nethttp.StatusOK},
+		{name: "maps not found", err: rbacdomain.ErrRoleNotFound, status: nethttp.StatusNotFound, code: "rbac.role.not_found"},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
+			roles := &fakeRoles{err: tc.err}
+			w, body := runProfile(t, adminRoleGetHandler(roles), profileRequest{method: nethttp.MethodGet, target: "/", param: " editor "})
+			require.Equal(t, tc.status, w.Code, w.Body.String())
+			require.Equal(t, "editor", roles.name)
+
+			if tc.code != "" {
+				require.Equal(t, tc.code, errorCode(body))
+				return
+			}
+
+			require.Equal(t, "editor", dataOf(body)["name"])
+		})
+	}
+}
+
 func TestAdminRoleCreate(t *testing.T) {
 	t.Parallel()
 
@@ -93,6 +156,49 @@ func TestAdminRoleCreate(t *testing.T) {
 	})
 	require.Equal(t, nethttp.StatusConflict, w.Code, w.Body.String())
 	require.Equal(t, "rbac.role.exists", errorCode(body))
+
+	roles = &fakeRoles{}
+	w, body = runProfile(t, adminRoleCreateHandler(roles), profileRequest{
+		method: nethttp.MethodPost, target: "/api/v1/admin/roles", contentType: "application/json", body: `{`,
+	})
+	require.Equal(t, nethttp.StatusBadRequest, w.Code, w.Body.String())
+	require.Equal(t, "validation_error", errorCode(body))
+	require.Empty(t, roles.created.Name, "service not called")
+}
+
+func TestAdminRoleUpdateHandler(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name   string
+		body   string
+		err    error
+		status int
+		code   string
+	}{
+		{name: "updates description", body: `{"description":"Edits posts"}`, status: nethttp.StatusOK},
+		{name: "rejects malformed body", body: `{`, status: nethttp.StatusBadRequest, code: "validation_error"},
+		{name: "maps not found", body: `{"description":"x"}`, err: rbacdomain.ErrRoleNotFound, status: nethttp.StatusNotFound, code: "rbac.role.not_found"},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
+			roles := &fakeRoles{err: tc.err}
+			w, body := runProfile(t, adminRoleUpdateHandler(roles), profileRequest{
+				method: nethttp.MethodPatch, target: "/", param: "editor", contentType: jsonContent, body: tc.body,
+			})
+			require.Equal(t, tc.status, w.Code, w.Body.String())
+
+			if tc.code != "" {
+				require.Equal(t, tc.code, errorCode(body))
+				return
+			}
+
+			require.Equal(t, "editor", roles.name)
+			require.Equal(t, "editor", dataOf(body)["name"])
+		})
+	}
 }
 
 func TestAdminRolePermissionsSet(t *testing.T) {
@@ -119,6 +225,72 @@ func TestAdminRolePermissionsSet(t *testing.T) {
 	})
 	require.Equal(t, nethttp.StatusForbidden, w.Code, w.Body.String())
 	require.Equal(t, "rbac.role.protected", errorCode(body))
+}
+
+func TestAdminPermissionsListHandler(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name   string
+		err    error
+		status int
+		code   string
+	}{
+		{name: "lists permissions", status: nethttp.StatusOK},
+		{name: "maps failure", err: errors.New("db down"), status: nethttp.StatusInternalServerError, code: "internal_error"},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
+			w, body := runProfile(t, adminPermissionsListHandler(&fakeRoles{err: tc.err}), profileRequest{method: nethttp.MethodGet, target: "/"})
+			require.Equal(t, tc.status, w.Code, w.Body.String())
+
+			if tc.code != "" {
+				require.Equal(t, tc.code, errorCode(body))
+				return
+			}
+
+			list := as[[]any](t, body["data"])
+			require.Len(t, list, 1)
+			require.Equal(t, "post.read", as[map[string]any](t, list[0])["key"])
+		})
+	}
+}
+
+func TestAdminUserRolesListHandler(t *testing.T) {
+	t.Parallel()
+
+	target := uuid.New()
+	tests := []struct {
+		name   string
+		param  string
+		err    error
+		status int
+		code   string
+	}{
+		{name: "rejects invalid user id", param: "nope", status: nethttp.StatusBadRequest, code: "validation_error"},
+		{name: "maps missing user", param: target.String(), err: rbacdomain.ErrUserNotFound, status: nethttp.StatusNotFound, code: "user.not_found"},
+		{name: "lists roles", param: target.String(), status: nethttp.StatusOK},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
+			roles := &fakeRoles{err: tc.err, userRoles: []string{"editor"}}
+			w, body := runProfile(t, adminUserRolesListHandler(roles), profileRequest{method: nethttp.MethodGet, target: "/", param: tc.param})
+			require.Equal(t, tc.status, w.Code, w.Body.String())
+
+			if tc.code != "" {
+				require.Equal(t, tc.code, errorCode(body))
+				return
+			}
+
+			require.Equal(t, target, roles.target)
+			require.Equal(t, target.String(), dataOf(body)["userId"])
+			require.Equal(t, []any{"editor"}, dataOf(body)["roles"])
+		})
+	}
 }
 
 func TestAdminRoleDelete(t *testing.T) {
@@ -161,6 +333,34 @@ func TestAdminUserRoleRevokePassesActor(t *testing.T) {
 	require.Equal(t, "rbac.role.self_revoke", errorCode(body))
 }
 
+func TestAdminUserRoleRevokeRejectsBeforeCallingService(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name   string
+		param  string
+		user   *uuid.UUID
+		status int
+		code   string
+	}{
+		{name: "invalid user id", param: "nope", user: &testUserID, status: nethttp.StatusBadRequest, code: "validation_error"},
+		{name: "anonymous actor", param: uuid.NewString(), status: nethttp.StatusUnauthorized, code: "unauthorized"},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
+			roles := &fakeRoles{}
+			w, body := runProfile(t, adminUserRoleRevokeHandler(roles), profileRequest{
+				method: nethttp.MethodDelete, target: "/", param: tc.param, param2: "editor", user: tc.user,
+			})
+			require.Equal(t, tc.status, w.Code, w.Body.String())
+			require.Equal(t, tc.code, errorCode(body))
+			require.Empty(t, roles.name, "service must not be called")
+		})
+	}
+}
+
 func TestAdminUserRolesAssign(t *testing.T) {
 	t.Parallel()
 
@@ -180,4 +380,18 @@ func TestAdminUserRolesAssign(t *testing.T) {
 		contentType: "application/json", body: `{"roles":[]}`,
 	})
 	require.Equal(t, nethttp.StatusBadRequest, w.Code)
+
+	w, body = runProfile(t, adminUserRolesAssignHandler(roles), profileRequest{
+		method: nethttp.MethodPost, target: "/api/v1/admin/users/x/roles", param: "nope",
+		contentType: "application/json", body: `{"roles":["editor"]}`,
+	})
+	require.Equal(t, nethttp.StatusBadRequest, w.Code)
+	require.Equal(t, "Invalid user id", errorMessage(body))
+
+	w, body = runProfile(t, adminUserRolesAssignHandler(&fakeRoles{err: rbacdomain.ErrRoleNotFound}), profileRequest{
+		method: nethttp.MethodPost, target: "/api/v1/admin/users/x/roles", param: target.String(),
+		contentType: "application/json", body: `{"roles":["ghost"]}`,
+	})
+	require.Equal(t, nethttp.StatusNotFound, w.Code)
+	require.Equal(t, "rbac.role.not_found", errorCode(body))
 }

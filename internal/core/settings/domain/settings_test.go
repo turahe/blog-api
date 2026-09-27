@@ -38,6 +38,8 @@ func TestDecodeByType(t *testing.T) {
 		{name: "list repeat", def: domain.Definition{Type: domain.TypeStringList}, raw: `["a","a"]`, reason: domain.ReasonNotAllowed},
 		{name: "list too long", def: domain.Definition{Type: domain.TypeStringList, MaxItems: 1}, raw: `["a","b"]`, reason: domain.ReasonTooMany},
 		{name: "list of numbers", def: domain.Definition{Type: domain.TypeStringList}, raw: `[1]`, reason: domain.ReasonTypeMismatch},
+		{name: "lone minus is not integer", def: domain.Definition{Type: domain.TypeInteger, Max: 10}, raw: `-`, reason: domain.ReasonTypeMismatch},
+		{name: "unknown type", def: domain.Definition{Type: "object"}, raw: `{}`, reason: domain.ReasonTypeMismatch},
 	}
 
 	for _, tc := range cases {
@@ -94,6 +96,8 @@ func TestDefaultCatalogueChecks(t *testing.T) {
 		{"media.variants", `["thumb:320:webp","hero:1280"]`, true},
 		{"media.variants", `[]`, true},
 		{"media.variants", `["thumb:8"]`, false},
+		{"media.variants", `["thumb:12"]`, false},
+		{"media.variants", `["thumb:5000"]`, false},
 		{"media.variants", `["thumb:320:tiff"]`, false},
 		{"media.variants", `["thumb:320","thumb:640"]`, false},
 		{"media.default_transform_format", `"avif"`, true},
@@ -137,6 +141,55 @@ func TestNewCataloguePanicsOnProgrammingErrors(t *testing.T) {
 	bad.Default = int64(50)
 
 	assert.Panics(t, func() { domain.NewCatalogue(bad) }, "default out of range")
+
+	unencodable := def
+	unencodable.Default = func() {}
+
+	assert.Panics(t, func() { domain.NewCatalogue(unencodable) }, "default cannot be encoded")
+}
+
+func TestDecodeTypeMismatchNamesTheType(t *testing.T) {
+	t.Parallel()
+
+	cases := []struct {
+		name string
+		typ  domain.ValueType
+		want string
+	}{
+		{name: "string", typ: domain.TypeString, want: "value must be a string"},
+		{name: "integer", typ: domain.TypeInteger, want: "value must be an integer"},
+		{name: "boolean", typ: domain.TypeBoolean, want: "value must be a boolean"},
+		{name: "list", typ: domain.TypeStringList, want: "value must be an array of strings"},
+		{name: "unknown", typ: "object", want: "value must be a object"},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
+			_, v := domain.Definition{Key: "k", Type: tc.typ}.Decode(json.RawMessage(`null`))
+			require.NotNil(t, v)
+			assert.Equal(t, tc.want, v.Message)
+		})
+	}
+}
+
+func TestValidationErrorCountsViolations(t *testing.T) {
+	t.Parallel()
+
+	var err error = &domain.ValidationError{Violations: []domain.Violation{{Key: "a"}, {Key: "b"}}}
+
+	var ve *domain.ValidationError
+	require.ErrorAs(t, err, &ve)
+	assert.Equal(t, "settings validation failed: 2 violation(s)", err.Error())
+}
+
+func TestEqual(t *testing.T) {
+	t.Parallel()
+
+	assert.True(t, domain.Equal([]string{"a"}, []string{"a"}))
+	assert.False(t, domain.Equal([]string{"a"}, []string{"b"}))
+	assert.False(t, domain.Equal(int64(1), 1))
 }
 
 func TestValuesAccessors(t *testing.T) {

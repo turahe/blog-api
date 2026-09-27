@@ -79,6 +79,40 @@ func TestURLAddsCappedQuality(t *testing.T) {
 	require.NotContains(t, got, "/q:")
 }
 
+func TestURLRejectsInvalidWidth(t *testing.T) {
+	t.Parallel()
+
+	s := newSigner(t, time.Unix(1_800_000_000, 0))
+
+	for _, width := range []int{0, -1} {
+		got, err := s.URL(mediadomain.MediaAsset{StorageKey: "k.png"}, mediadomain.Transform{Width: width})
+		require.ErrorContains(t, err, "invalid width")
+		require.Empty(t, got)
+	}
+}
+
+func TestExtension(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name   string
+		format string
+		want   string
+	}{
+		{name: "source format", format: "", want: ""},
+		{name: "jpeg", format: mediadomain.FormatJPEG, want: ".jpg"},
+		{name: "other", format: "webp", want: ".webp"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			require.Equal(t, tt.want, extension(tt.format))
+		})
+	}
+}
+
 func TestNewRejectsBadConfig(t *testing.T) {
 	t.Parallel()
 

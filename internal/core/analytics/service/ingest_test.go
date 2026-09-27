@@ -64,6 +64,19 @@ func newTestIngest(t *testing.T) (*Ingest, *memSink, *fixedClock, uuid.UUID) {
 	return NewIngest(sink, prefixHasher{}, seqIDs{id: generated}, clock), sink, clock, generated
 }
 
+func TestNewIngestWithoutHasherUsesAProcessKey(t *testing.T) {
+	t.Parallel()
+
+	sink := &memSink{}
+	clock := &fixedClock{now: time.Date(2026, 9, 25, 10, 0, 0, 0, time.UTC)}
+	ingest := NewIngest(sink, nil, seqIDs{id: uuid.New()}, clock)
+
+	hash := anonymousHash(t, ingest, sink)
+	assert.Len(t, hash, 64)
+	assert.NotContains(t, hash, "203.0.113.9", "the address is keyed, never stored")
+	assert.Equal(t, hash, anonymousHash(t, ingest, sink))
+}
+
 func TestPageViewNormalisesAndQueues(t *testing.T) {
 	t.Parallel()
 
@@ -150,6 +163,8 @@ func TestIngestValidation(t *testing.T) {
 	_, errs["no session"] = ingest.PageView(ctx, meta, PageViewInput{Path: "/"})
 	_, errs["bad path"] = ingest.PageView(ctx, meta, PageViewInput{SessionID: session, Path: "x"})
 	_, errs["no view id"] = ingest.TimeSpent(ctx, meta, TimeSpentInput{SessionID: session, Path: "/"})
+	_, errs["time spent bad path"] = ingest.TimeSpent(ctx, meta, TimeSpentInput{SessionID: session, ViewID: uuid.New(), Path: "x"})
+	_, errs["bad to"] = ingest.Navigation(ctx, meta, NavigationInput{SessionID: session, To: "x", Transition: "internal"})
 	_, errs["bad transition"] = ingest.Navigation(ctx, meta, NavigationInput{SessionID: session, To: "/", Transition: "warp"})
 	_, errs["bad from"] = ingest.Navigation(ctx, meta, NavigationInput{SessionID: session, From: "x", To: "/", Transition: "internal"})
 	_, errs["empty query"] = ingest.Search(ctx, meta, SearchInput{SessionID: session, Query: " "})

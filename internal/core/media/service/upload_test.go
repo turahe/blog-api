@@ -188,3 +188,16 @@ func TestUploadImageStorageFailure(t *testing.T) {
 	require.ErrorIs(t, err, ErrStorage)
 	require.Empty(t, repo.assets)
 }
+
+func TestUploadImageRecordFailure(t *testing.T) {
+	t.Parallel()
+
+	failure := errors.New("database down")
+	svc, repo, _ := newTestService()
+	repo.createErr = failure
+
+	_, err := svc.UploadImage(t.Context(), mediadomain.ImageUpload{Filename: "a.png", Data: encodePNG(t, 1, 1)})
+
+	require.ErrorIs(t, err, failure)
+	require.Empty(t, repo.assets)
+}

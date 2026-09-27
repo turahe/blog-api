@@ -1,14 +1,17 @@
 package cache
 
 import (
+	"bytes"
 	"context"
 	"errors"
+	"log/slog"
 	"strings"
 	"testing"
 	"time"
 
 	"github.com/alicebob/miniredis/v2"
 	goredis "github.com/redis/go-redis/v9"
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"github.com/turahe/blog-api/internal/core/readcache"
 )
@@ -177,4 +180,216 @@ func TestRedisDoesNotCacheLoadErrors(t *testing.T) {
 	}
 
 	require.NoError(t, cache.Probe(context.Background()))
+}
+
+// cmdable overrides selected commands of an embedded client.
+type cmdable struct {
+	goredis.Cmdable
+
+	get   func(ctx context.Context, key string) *goredis.StringCmd
+	setNX func(ctx context.Context, key string, value any, ttl time.Duration) *goredis.BoolCmd
+}
+
+func (c cmdable) Get(ctx context.Context, key string) *goredis.StringCmd {
+	if c.get != nil {
+		return c.get(ctx, key)
+	}
+
+	return c.Cmdable.Get(ctx, key)
+}
+
+func (c cmdable) SetNX(ctx context.Context, key string, value any, ttl time.Duration) *goredis.BoolCmd {
+	if c.setNX != nil {
+		return c.setNX(ctx, key, value, ttl)
+	}
+
+	return c.Cmdable.SetNX(ctx, key, value, ttl)
+}
+
+func newLoggedCache(t *testing.T, wrap func(goredis.Cmdable) goredis.Cmdable) (*Redis, *miniredis.Miniredis, *bytes.Buffer) {
+	t.Helper()
+
+	server := miniredis.RunT(t)
+	client := goredis.NewClient(&goredis.Options{Addr: server.Addr(), MaxRetries: -1})
+	t.Cleanup(func() { _ = client.Close() })
+
+	var cmd goredis.Cmdable = client
+	if wrap != nil {
+		cmd = wrap(client)
+	}
+
+	logs := &bytes.Buffer{}
+	cache := NewRedis(cmd, map[readcache.Family]time.Duration{readcache.Posts: time.Minute}, slog.New(slog.NewTextHandler(logs, nil)))
+
+	return cache, server, logs
+}
+
+func entryKeyFor(t *testing.T, server *miniredis.Miniredis, suffix string) string {
+	t.Helper()
+
+	for _, key := range server.Keys() {
+		if strings.HasSuffix(key, suffix) {
+			return key
+		}
+	}
+
+	require.FailNow(t, "no key with suffix", suffix)
+
+	return ""
+}
+
+func TestRedisGetFailures(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name     string
+		corrupt  func(t *testing.T, server *miniredis.Miniredis, key string)
+		wantFill bool
+		wantLog  string
+	}{
+		{
+			name: "undecodable entry is refilled",
+			corrupt: func(t *testing.T, server *miniredis.Miniredis, key string) {
+				t.Helper()
+				require.NoError(t, server.Set(key, "{not json"))
+			},
+			wantFill: true,
+			wantLog:  "cache entry decode failed",
+		},
+		{
+			name: "lookup error is not refilled",
+			corrupt: func(t *testing.T, server *miniredis.Miniredis, key string) {
+				t.Helper()
+				server.Del(key)
+				_, err := server.Lpush(key, "wrong type")
+				require.NoError(t, err)
+			},
+			wantLog: "cache lookup failed",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			cache, server, logs := newLoggedCache(t, nil)
+			ctx := t.Context()
+
+			var dst item
+
+			hit, fill := cache.Get(ctx, readcache.Posts, "k", &dst)
+			require.False(t, hit)
+			require.NotNil(t, fill)
+			fill(item{Name: "a"})
+
+			tt.corrupt(t, server, entryKeyFor(t, server, ":k"))
+
+			hit, fill = cache.Get(ctx, readcache.Posts, "k", &dst)
+			assert.False(t, hit)
+			assert.Equal(t, tt.wantFill, fill != nil)
+			assert.Contains(t, logs.String(), tt.wantLog)
+		})
+	}
+}
+
+func TestRedisGetSeedFailureSkipsCache(t *testing.T) {
+	t.Parallel()
+
+	boom := errors.New("boom")
+	cache, server, logs := newLoggedCache(t, func(c goredis.Cmdable) goredis.Cmdable {
+		return cmdable{Cmdable: c, setNX: func(context.Context, string, any, time.Duration) *goredis.BoolCmd {
+			return goredis.NewBoolResult(false, boom)
+		}}
+	})
+
+	var dst item
+
+	hit, fill := cache.Get(t.Context(), readcache.Posts, "k", &dst)
+	assert.False(t, hit)
+	assert.Nil(t, fill)
+	assert.Contains(t, logs.String(), "cache generation lookup failed")
+	assert.Empty(t, server.Keys())
+}
+
+func TestRedisFillFailures(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name    string
+		value   any
+		down    bool
+		wantLog string
+	}{
+		{name: "unencodable value", value: func() {}, wantLog: "cache entry encode failed"},
+		{name: "redis down", value: item{Name: "a"}, down: true, wantLog: "cache fill failed"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			cache, server, logs := newLoggedCache(t, nil)
+
+			var dst item
+
+			_, fill := cache.Get(t.Context(), readcache.Posts, "k", &dst)
+			require.NotNil(t, fill)
+
+			if tt.down {
+				server.Close()
+			}
+
+			fill(tt.value)
+			assert.Contains(t, logs.String(), tt.wantLog)
+
+			if !tt.down {
+				for _, key := range server.Keys() {
+					assert.NotContains(t, key, ":k")
+				}
+			}
+		})
+	}
+}
+
+func TestRedisInvalidateWithoutFamiliesIsNoop(t *testing.T) {
+	t.Parallel()
+
+	cache, server, logs := newLoggedCache(t, nil)
+	server.Close()
+
+	cache.Invalidate(t.Context())
+
+	assert.Empty(t, logs.String())
+}
+
+func TestRedisProbeReadFailures(t *testing.T) {
+	t.Parallel()
+
+	boom := errors.New("boom")
+
+	tests := []struct {
+		name    string
+		reply   *goredis.StringCmd
+		wantErr string
+	}{
+		{name: "read error", reply: goredis.NewStringResult("", boom), wantErr: "cache probe read"},
+		{name: "wrong value", reply: goredis.NewStringResult("nope", nil), wantErr: `cache probe read back "nope"`},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			cache, _, _ := newLoggedCache(t, func(c goredis.Cmdable) goredis.Cmdable {
+				return cmdable{Cmdable: c, get: func(context.Context, string) *goredis.StringCmd { return tt.reply }}
+			})
+
+			err := cache.Probe(t.Context())
+			require.ErrorContains(t, err, tt.wantErr)
+
+			if tt.reply.Err() != nil {
+				assert.ErrorIs(t, err, boom)
+			}
+		})
+	}
 }

@@ -80,6 +80,39 @@ func TestTracingReportsPanicOnceWithRouteTransaction(t *testing.T) {
 	require.Equal(t, txs[0].Contexts["trace"]["trace_id"], errs[0].Contexts["trace"]["trace_id"])
 }
 
+//nolint:paralleltest // binds the global Sentry hub
+func TestTracingUnmatchedRouteGetsHubWithoutTransaction(t *testing.T) {
+	transport := &captureTransport{}
+	require.NoError(t, sentry.Init(sentry.ClientOptions{
+		Dsn:              "https://public@example.com/1",
+		EnableTracing:    true,
+		TracesSampleRate: 1,
+		Transport:        transport,
+	}))
+	t.Cleanup(func() { sentry.CurrentHub().BindClient(nil) })
+
+	gin.SetMode(gin.TestMode)
+
+	var hub *sentry.Hub
+
+	router := gin.New()
+	router.Use(Tracing())
+	router.NoRoute(func(c *gin.Context) {
+		hub = sentry.GetHubFromContext(c.Request.Context())
+		c.Status(nethttp.StatusNotFound)
+	})
+
+	rec := httptest.NewRecorder()
+	router.ServeHTTP(rec, httptest.NewRequestWithContext(t.Context(), nethttp.MethodGet, "/missing", nil))
+	require.Equal(t, nethttp.StatusNotFound, rec.Code)
+
+	require.NotNil(t, hub, "unmatched requests still get a request-scoped hub")
+	require.NotSame(t, sentry.CurrentHub(), hub)
+
+	_, txs := transport.split()
+	require.Empty(t, txs, "no transaction for an unmatched route")
+}
+
 func TestTracingNoopWithoutSentry(t *testing.T) {
 	t.Parallel()
 

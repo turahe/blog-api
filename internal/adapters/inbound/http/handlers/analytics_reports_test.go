@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	nethttp "net/http"
 	"testing"
@@ -203,6 +204,17 @@ func TestAdminAnalyticsReportsRejectBadQueries(t *testing.T) {
 	w, body := runProfile(t, adminAnalyticsPagesHandler(reports), profileRequest{method: nethttp.MethodGet, target: "/"})
 	require.Equal(t, nethttp.StatusBadRequest, w.Code)
 	require.Equal(t, "validation_error", errorCode(body))
+}
+
+func TestAdminAnalyticsReportsHideStoreFailures(t *testing.T) {
+	t.Parallel()
+
+	reports := &fakeAnalyticsReports{err: errors.New("clickhouse down")}
+
+	w, body := runProfile(t, adminAnalyticsPagesHandler(reports), profileRequest{method: nethttp.MethodGet, target: "/"})
+	require.Equal(t, nethttp.StatusInternalServerError, w.Code, w.Body.String())
+	require.Equal(t, "internal_error", errorCode(body))
+	require.Empty(t, w.Header().Get("Cache-Control"))
 }
 
 func analyticsReportOps() map[string]gatedOp {

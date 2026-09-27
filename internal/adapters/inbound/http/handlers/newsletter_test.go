@@ -32,6 +32,9 @@ type fakeNewsletter struct {
 	created     *nlservice.IssueInput
 	patched     *nlservice.IssuePatch
 	config      nlservice.ProviderConfig
+	issues      []nldomain.Issue
+	// failPage makes ListSubscribers fail for that page only.
+	failPage int
 }
 
 func (f *fakeNewsletter) Subscribe(_ context.Context, in nlservice.SubscribeInput) error {
@@ -79,6 +82,10 @@ func (f *fakeNewsletter) MyUnsubscribe(context.Context, uuid.UUID, []string, str
 }
 
 func (f *fakeNewsletter) ListSubscribers(_ context.Context, filter nldomain.SubscriberFilter) (nldomain.SubscriberPage, error) {
+	if f.failPage != 0 && filter.Page == f.failPage {
+		return nldomain.SubscriberPage{}, errors.New("db down")
+	}
+
 	start := min((filter.Page-1)*filter.PerPage, len(f.subscribers))
 	end := min(start+filter.PerPage, len(f.subscribers))
 
@@ -109,8 +116,8 @@ func (f *fakeNewsletter) Issue(_ context.Context, id uuid.UUID) (nldomain.Issue,
 	return nldomain.Issue{UUID: id, BodyMarkdown: "Body"}, f.err
 }
 
-func (f *fakeNewsletter) ListIssues(context.Context, nldomain.IssueFilter) (nldomain.IssuePage, error) {
-	return nldomain.IssuePage{}, f.err
+func (f *fakeNewsletter) ListIssues(_ context.Context, filter nldomain.IssueFilter) (nldomain.IssuePage, error) {
+	return nldomain.IssuePage{Items: f.issues, Page: filter.Page, PerPage: filter.PerPage, Total: int64(len(f.issues))}, f.err
 }
 
 func (f *fakeNewsletter) Preview(context.Context, nldomain.Issue) (string, string, error) {
@@ -416,4 +423,148 @@ func TestMyNewsletterWithoutSubscription(t *testing.T) {
 	data := dataOf(envelopeOf(t, w))
 	assert.Equal(t, false, data["subscribed"])
 	assert.Len(t, data["availableLists"], 1)
+}
+
+func TestNewsletterPublicHandlers(t *testing.T) {
+	t.Parallel()
+
+	sub := nldomain.Subscriber{UUID: uuid.New(), Email: "reader@example.test", Status: nldomain.StatusActive}
+	tests := []struct {
+		name    string
+		handler func(newsletterPublicAPI) gin.HandlerFunc
+		req     nlRequest
+		err     error
+		status  int
+		code    string
+	}{
+		{
+			name: "subscribe maps captcha failure", handler: newsletterSubscribeHandler, err: nldomain.ErrCaptcha,
+			req:    nlRequest{method: nethttp.MethodPost, target: "/", body: `{"email":"reader@example.test"}`},
+			status: nethttp.StatusBadRequest, code: "newsletter.captcha_failed",
+		},
+		{
+			name: "confirm needs a token", handler: newsletterConfirmHandler,
+			req:    nlRequest{method: nethttp.MethodPost, target: "/", body: `{}`},
+			status: nethttp.StatusBadRequest, code: "validation_error",
+		},
+		{
+			name: "confirm activates", handler: newsletterConfirmHandler,
+			req:    nlRequest{method: nethttp.MethodPost, target: "/", body: `{"token":"raw"}`},
+			status: nethttp.StatusOK,
+		},
+		{
+			name: "resend needs an email", handler: newsletterResendHandler,
+			req:    nlRequest{method: nethttp.MethodPost, target: "/", body: `{}`},
+			status: nethttp.StatusBadRequest, code: "validation_error",
+		},
+		{
+			name: "resend maps failures", handler: newsletterResendHandler, err: errors.New("mailer down"),
+			req:    nlRequest{method: nethttp.MethodPost, target: "/", body: `{"email":"reader@example.test"}`},
+			status: nethttp.StatusInternalServerError, code: "internal_error",
+		},
+		{
+			name: "resend accepts", handler: newsletterResendHandler,
+			req:    nlRequest{method: nethttp.MethodPost, target: "/", body: `{"email":"reader@example.test"}`},
+			status: nethttp.StatusAccepted,
+		},
+		{
+			name: "unsubscribe rejects a bad reason", handler: newsletterUnsubscribeHandler,
+			req:    nlRequest{method: nethttp.MethodPost, target: "/", body: `{"token":"t","reasonCode":"bored"}`},
+			status: nethttp.StatusBadRequest, code: "validation_error",
+		},
+		{
+			name: "unsubscribe maps expired token", handler: newsletterUnsubscribeHandler, err: nldomain.ErrTokenExpired,
+			req:    nlRequest{method: nethttp.MethodPost, target: "/", body: `{"token":"t"}`},
+			status: nethttp.StatusGone, code: "newsletter.token_expired",
+		},
+		{
+			name: "preferences maps invalid token", handler: newsletterPreferencesHandler, err: nldomain.ErrTokenInvalid,
+			req:    nlRequest{method: nethttp.MethodGet, target: "/", param: "tok"},
+			status: nethttp.StatusNotFound, code: "newsletter.token_invalid",
+		},
+		{
+			name: "update preferences rejects a bad format", handler: newsletterUpdatePreferencesHandler,
+			req:    nlRequest{method: nethttp.MethodPatch, target: "/", param: "tok", body: `{"format":"pdf"}`},
+			status: nethttp.StatusBadRequest, code: "validation_error",
+		},
+		{
+			name: "update preferences maps used token", handler: newsletterUpdatePreferencesHandler, err: nldomain.ErrTokenUsed,
+			req:    nlRequest{method: nethttp.MethodPatch, target: "/", param: "tok", body: `{"unsubscribeAll":true}`},
+			status: nethttp.StatusConflict, code: "newsletter.token_used",
+		},
+		{
+			name: "update preferences saves", handler: newsletterUpdatePreferencesHandler,
+			req:    nlRequest{method: nethttp.MethodPatch, target: "/", param: "tok", body: `{"format":"plaintext","lists":["weekly"]}`},
+			status: nethttp.StatusOK,
+		},
+		{
+			name: "webhook rejects oversized bodies", handler: newsletterWebhookHandler,
+			req:    nlRequest{method: nethttp.MethodPost, target: "/", body: strings.Repeat("a", newsletterWebhookMaxBytes+1)},
+			status: nethttp.StatusRequestEntityTooLarge, code: "validation_error",
+		},
+		{
+			name: "my subscription needs sign-in", handler: meNewsletterHandler,
+			req:    nlRequest{method: nethttp.MethodGet, target: "/"},
+			status: nethttp.StatusUnauthorized, code: "unauthorized",
+		},
+		{
+			name: "my subscription maps failures", handler: meNewsletterHandler, err: errors.New("db down"),
+			req:    nlRequest{method: nethttp.MethodGet, target: "/", signedIn: true},
+			status: nethttp.StatusInternalServerError, code: "internal_error",
+		},
+		{
+			name: "me subscribe needs sign-in", handler: meNewsletterSubscribeHandler,
+			req:    nlRequest{method: nethttp.MethodPost, target: "/", body: `{}`},
+			status: nethttp.StatusUnauthorized, code: "unauthorized",
+		},
+		{
+			name: "me subscribe rejects a bad format", handler: meNewsletterSubscribeHandler,
+			req:    nlRequest{method: nethttp.MethodPost, target: "/", body: `{"format":"pdf"}`, signedIn: true},
+			status: nethttp.StatusBadRequest, code: "validation_error",
+		},
+		{
+			name: "me subscribe maps not configured", handler: meNewsletterSubscribeHandler, err: nldomain.ErrNotConfigured,
+			req:    nlRequest{method: nethttp.MethodPost, target: "/", body: `{}`, signedIn: true},
+			status: nethttp.StatusUnprocessableEntity, code: "newsletter.not_configured",
+		},
+		{
+			name: "me subscribe joins", handler: meNewsletterSubscribeHandler,
+			req:    nlRequest{method: nethttp.MethodPost, target: "/", body: `{"lists":["weekly"]}`, signedIn: true},
+			status: nethttp.StatusOK,
+		},
+		{
+			name: "me unsubscribe needs sign-in", handler: meNewsletterUnsubscribeHandler,
+			req:    nlRequest{method: nethttp.MethodPost, target: "/", body: `{}`},
+			status: nethttp.StatusUnauthorized, code: "unauthorized",
+		},
+		{
+			name: "me unsubscribe rejects a bad reason", handler: meNewsletterUnsubscribeHandler,
+			req:    nlRequest{method: nethttp.MethodPost, target: "/", body: `{"reasonCode":"bored"}`, signedIn: true},
+			status: nethttp.StatusBadRequest, code: "validation_error",
+		},
+		{
+			name: "me unsubscribe maps not subscribed", handler: meNewsletterUnsubscribeHandler, err: nldomain.ErrNotFound,
+			req:    nlRequest{method: nethttp.MethodPost, target: "/", body: `{}`, signedIn: true},
+			status: nethttp.StatusNotFound, code: "not_found",
+		},
+		{
+			name: "me unsubscribe leaves", handler: meNewsletterUnsubscribeHandler,
+			req:    nlRequest{method: nethttp.MethodPost, target: "/", body: `{"lists":["weekly"]}`, signedIn: true},
+			status: nethttp.StatusOK,
+		},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
+			fake := &fakeNewsletter{err: tc.err, prefs: nlservice.Preferences{Subscriber: sub}}
+			w := runNewsletter(t, tc.handler(fake), tc.req)
+			require.Equal(t, tc.status, w.Code, w.Body.String())
+			require.Equal(t, tc.code, errorCodeOf(t, w))
+
+			if tc.status == nethttp.StatusOK {
+				require.NotEmpty(t, dataOf(envelopeOf(t, w)))
+			}
+		})
+	}
 }

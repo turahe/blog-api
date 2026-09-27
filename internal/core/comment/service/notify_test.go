@@ -2,6 +2,7 @@ package service
 
 import (
 	"context"
+	"errors"
 	"testing"
 
 	"github.com/google/uuid"
@@ -138,4 +139,34 @@ func TestBulkModerateNotifiesApprovedReplies(t *testing.T) {
 		{reply: second.UUID, parent: parent.UUID},
 	}, notifier.replies)
 	require.Empty(t, notifier.moderated)
+}
+
+func TestModerateWithoutNotifierStillSucceeds(t *testing.T) {
+	t.Parallel()
+
+	f := newFixture(Config{})
+	c := f.seed(commentdomain.Comment{AuthorUUID: &f.user, Status: commentdomain.StatusPending, Content: "hi"})
+
+	got, err := f.svc.Moderate(t.Context(), ModerateInput{
+		ModeratorUUID: uuid.New(), CommentUUID: c.UUID, Action: commentdomain.ActionApprove, NotifyAuthor: true,
+	})
+	require.NoError(t, err)
+	require.Equal(t, commentdomain.StatusApproved, got.Status)
+}
+
+func TestModerateSkipsReplyNoticeWhenParentsCannotBeLoaded(t *testing.T) {
+	t.Parallel()
+
+	notifier := &fakeNotifier{}
+	f := newFixture(Config{Notifier: notifier})
+	parent := f.seed(commentdomain.Comment{AuthorUUID: new(uuid.New()), Content: "parent"})
+	reply := f.seed(commentdomain.Comment{ParentUUID: &parent.UUID, AuthorUUID: &f.user, Status: commentdomain.StatusPending, Content: "reply"})
+	f.repo.getByIDsErr = errors.New("boom")
+
+	got, err := f.svc.Moderate(t.Context(), ModerateInput{
+		ModeratorUUID: uuid.New(), CommentUUID: reply.UUID, Action: commentdomain.ActionApprove,
+	})
+	require.NoError(t, err, "notices are best effort")
+	require.Equal(t, commentdomain.StatusApproved, got.Status)
+	require.Empty(t, notifier.replies)
 }

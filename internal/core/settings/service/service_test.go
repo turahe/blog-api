@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"slices"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -36,6 +37,8 @@ type memoryRepo struct {
 	rows      map[string]domain.Stored
 	writes    []domain.Write
 	listCalls int
+
+	listErr, lockErr, historyErr error
 }
 
 func newRepo() *memoryRepo {
@@ -48,6 +51,10 @@ func (r *memoryRepo) List(context.Context) ([]domain.Stored, error) {
 
 	r.listCalls++
 
+	if r.listErr != nil {
+		return nil, r.listErr
+	}
+
 	out := make([]domain.Stored, 0, len(r.rows))
 	for _, row := range r.rows {
 		out = append(out, row)
@@ -59,6 +66,10 @@ func (r *memoryRepo) List(context.Context) ([]domain.Stored, error) {
 func (r *memoryRepo) Lock(_ context.Context, keys []string) ([]domain.Stored, error) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
+
+	if r.lockErr != nil {
+		return nil, r.lockErr
+	}
 
 	var out []domain.Stored
 
@@ -88,6 +99,10 @@ func (r *memoryRepo) Save(_ context.Context, w domain.Write) error {
 func (r *memoryRepo) History(_ context.Context, f domain.HistoryFilter) (domain.HistoryPage, error) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
+
+	if r.historyErr != nil {
+		return domain.HistoryPage{}, r.historyErr
+	}
 
 	page := domain.HistoryPage{Page: f.Page, PerPage: f.PerPage}
 	for _, w := range slices.Backward(r.writes) {
@@ -161,6 +176,42 @@ func TestListFiltersBySensitivityAndCategory(t *testing.T) {
 
 	_, err = svc.List(t.Context(), service.ListFilter{Category: "storage"})
 	require.ErrorIs(t, err, service.ErrValidation)
+}
+
+func TestReadsPassThroughStoreFailures(t *testing.T) {
+	t.Parallel()
+
+	boom := errors.New("boom")
+
+	tests := []struct {
+		name string
+		read func(*service.Service) error
+	}{
+		{name: "list", read: func(svc *service.Service) error {
+			_, err := svc.List(t.Context(), service.ListFilter{})
+			return err
+		}},
+		{name: "values", read: func(svc *service.Service) error {
+			_, err := svc.Values(t.Context())
+			return err
+		}},
+		{name: "history", read: func(svc *service.Service) error {
+			_, err := svc.History(t.Context(), domain.HistoryFilter{})
+			return err
+		}},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			repo := newRepo()
+			repo.listErr, repo.historyErr = boom, boom
+			svc, _, _ := newService(repo)
+
+			require.ErrorIs(t, tt.read(svc), boom)
+		})
+	}
 }
 
 func TestListFallsBackToDefaultForInvalidStoredValue(t *testing.T) {
@@ -285,6 +336,20 @@ func TestUpdateRejectsWholeRequestWithAllViolations(t *testing.T) {
 	assert.Empty(t, recorder.Events())
 }
 
+func TestUpdateTruncatesLongUnknownKeys(t *testing.T) {
+	t.Parallel()
+
+	svc, _, _ := newService(newRepo())
+
+	_, err := svc.Update(t.Context(), service.Actor{}, []service.Update{{Key: "site." + strings.Repeat("x", 300), Value: json.RawMessage(`1`)}})
+
+	var invalid *domain.ValidationError
+	require.ErrorAs(t, err, &invalid)
+	require.Len(t, invalid.Violations, 1)
+	assert.Equal(t, domain.ReasonUnknownKey, invalid.Violations[0].Reason)
+	assert.Len(t, invalid.Violations[0].Key, 128)
+}
+
 func TestUpdateRejectsEmptyAndOversizedBatches(t *testing.T) {
 	t.Parallel()
 
@@ -345,6 +410,21 @@ func TestUpdateSurfacesStoreConflicts(t *testing.T) {
 	assert.Empty(t, recorder.Events())
 }
 
+func TestUpdateFailsWhenKeysCannotBeLocked(t *testing.T) {
+	t.Parallel()
+
+	boom := errors.New("boom")
+	repo := newRepo()
+	repo.lockErr = boom
+	svc, recorder, cache := newService(repo)
+
+	_, err := svc.Update(t.Context(), service.Actor{}, []service.Update{{Key: "site.name", Value: json.RawMessage(`"x"`)}})
+	require.ErrorIs(t, err, boom)
+	assert.Empty(t, repo.writes)
+	assert.Empty(t, recorder.Events())
+	assert.Zero(t, cache.Invalidations(readcache.Settings))
+}
+
 func TestUpdateFailsWhenEventCannotBeRecorded(t *testing.T) {
 	t.Parallel()
 
@@ -379,6 +459,13 @@ func TestHistoryPaginatesAndRedactsUnknownKeys(t *testing.T) {
 	assert.True(t, page.Items[1].Redacted)
 	assert.Nil(t, page.Items[1].Previous)
 	assert.Nil(t, page.Items[1].New)
+
+	page, err = svc.History(t.Context(), domain.HistoryFilter{Key: " site.name ", Page: 2})
+	require.NoError(t, err)
+	assert.Equal(t, 2, page.Page)
+	assert.Equal(t, 20, page.PerPage, "per_page defaults")
+	require.Len(t, page.Items, 1)
+	assert.Equal(t, "site.name", page.Items[0].Key)
 
 	_, err = svc.History(t.Context(), domain.HistoryFilter{Key: string(make([]byte, 200))})
 	require.ErrorIs(t, err, service.ErrValidation)

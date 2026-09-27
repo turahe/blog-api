@@ -6,9 +6,12 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	authdomain "github.com/turahe/blog-api/internal/core/auth/domain"
+	"github.com/turahe/blog-api/internal/core/auth/ports"
 	authservice "github.com/turahe/blog-api/internal/core/auth/service"
+	"github.com/turahe/blog-api/internal/core/event/eventtest"
 	rbacdomain "github.com/turahe/blog-api/internal/core/rbac/domain"
 	userdomain "github.com/turahe/blog-api/internal/core/user/domain"
 )
@@ -16,6 +19,7 @@ import (
 type memRoles struct {
 	known    map[string]bool
 	assigned map[uuid.UUID][]string
+	fail     faults
 }
 
 func newMemRoles(names ...string) *memRoles {
@@ -38,6 +42,10 @@ func (r *memRoles) CheckRoles(_ context.Context, names []string) error {
 }
 
 func (r *memRoles) AssignRoles(_ context.Context, userID uuid.UUID, names []string) error {
+	if err := r.fail["AssignRoles"]; err != nil {
+		return err
+	}
+
 	r.assigned[userID] = append(r.assigned[userID], names...)
 	return nil
 }
@@ -128,6 +136,65 @@ func TestAdminCreateUserRejectsUnknownRoleBeforeCreating(t *testing.T) {
 	require.Equal(t, 422, status)
 }
 
+func TestAdminCreateUserFailures(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name        string
+		noRoles     bool
+		hasher      ports.PasswordHasher
+		userFaults  faults
+		roleFaults  faults
+		recordErr   error
+		wantErr     error
+		afterCreate bool
+	}{
+		{name: "roles requested without role assignment", noRoles: true, wantErr: authdomain.ErrValidation},
+		{name: "email lookup", userFaults: faults{"FindByEmail": errBoom}, wantErr: errBoom},
+		{name: "username lookup", userFaults: faults{"FindByUsernameOrEmail": errBoom}, wantErr: errBoom},
+		{name: "hash password", hasher: failingHasher{}, wantErr: errBoom},
+		{name: "create user", userFaults: faults{"Create": errBoom}, wantErr: errBoom},
+		{name: "record event", recordErr: errBoom, wantErr: errBoom, afterCreate: true},
+		{name: "assign roles", roleFaults: faults{"AssignRoles": errBoom}, wantErr: errBoom, afterCreate: true},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			users, sessions, resets := newMemStores()
+			users.fail = tt.userFaults
+
+			hasher := tt.hasher
+			if hasher == nil {
+				hasher = fakeHasher{}
+			}
+
+			svc := newServiceAt(users, sessions, resets, hasher, fakeTokens{}, nil).
+				WithEvents((&eventtest.Recorder{Err: tt.recordErr}).Unit())
+
+			roles := newMemRoles("editor")
+			roles.fail = tt.roleFaults
+
+			if !tt.noRoles {
+				svc.WithRoles(roles)
+			}
+
+			in := validNewUser()
+			in.Roles = []string{"editor"}
+
+			user, err := svc.AdminCreateUser(t.Context(), in)
+			require.ErrorIs(t, err, tt.wantErr)
+			assert.Equal(t, userdomain.User{}, user)
+			assert.Empty(t, roles.assigned)
+
+			if !tt.afterCreate {
+				assert.Empty(t, users.byID, "nothing is created")
+			}
+		})
+	}
+}
+
 func TestAdminResetPasswordIssuesLinkAndRevokesSessions(t *testing.T) {
 	t.Parallel()
 
@@ -180,4 +247,32 @@ func TestAdminResetPasswordRequiresActiveUser(t *testing.T) {
 
 	_, err = svc.AdminResetPassword(context.Background(), uuid.New(), true)
 	require.ErrorIs(t, err, userdomain.ErrNotFound)
+}
+
+func TestAdminResetPasswordFailures(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name          string
+		tokenFaults   faults
+		sessionFaults faults
+	}{
+		{name: "issue reset link", tokenFaults: faults{"IssueResetToken": errBoom}},
+		{name: "revoke sessions", sessionFaults: faults{"RevokeAllForUser": errBoom}},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			user := activeTestUser()
+			users, sessions, resets := newMemStores(user)
+			sessions.fail = tt.sessionFaults
+
+			result, err := newServiceAt(users, sessions, resets, fakeHasher{}, failingTokens{fail: tt.tokenFaults}, &capturingSink{}).
+				AdminResetPassword(t.Context(), user.UUID, true)
+			require.ErrorIs(t, err, errBoom)
+			assert.Equal(t, authdomain.AdminReset{}, result)
+		})
+	}
 }

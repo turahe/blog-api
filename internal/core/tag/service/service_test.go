@@ -2,6 +2,8 @@ package service
 
 import (
 	"context"
+	"errors"
+	"strings"
 	"testing"
 	"time"
 
@@ -32,6 +34,11 @@ type fakeRepo struct {
 	counts  map[uuid.UUID]int64
 	merged  [][2]uuid.UUID
 	deleted []uuid.UUID
+
+	slugErr      error
+	getBySlugErr error
+	createErr    error
+	countErr     error
 }
 
 func newFakeRepo(tags ...tagdomain.Tag) *fakeRepo {
@@ -69,6 +76,10 @@ func (f *fakeRepo) GetByID(_ context.Context, id uuid.UUID) (tagdomain.Tag, erro
 }
 
 func (f *fakeRepo) GetBySlug(_ context.Context, slug string) (tagdomain.Tag, error) {
+	if f.getBySlugErr != nil {
+		return tagdomain.Tag{}, f.getBySlugErr
+	}
+
 	tag, ok := f.bySlug[slug]
 	if !ok {
 		return tagdomain.Tag{}, tagdomain.ErrNotFound
@@ -78,6 +89,10 @@ func (f *fakeRepo) GetBySlug(_ context.Context, slug string) (tagdomain.Tag, err
 }
 
 func (f *fakeRepo) Create(_ context.Context, tag tagdomain.Tag) (tagdomain.Tag, error) {
+	if f.createErr != nil {
+		return tagdomain.Tag{}, f.createErr
+	}
+
 	f.byID[tag.UUID] = tag
 	f.bySlug[tag.Slug] = tag
 
@@ -97,6 +112,10 @@ func (f *fakeRepo) Update(_ context.Context, tag tagdomain.Tag) (tagdomain.Tag, 
 }
 
 func (f *fakeRepo) SlugTaken(_ context.Context, slug string, excludeID uuid.UUID) (bool, error) {
+	if f.slugErr != nil {
+		return false, f.slugErr
+	}
+
 	tag, ok := f.bySlug[slug]
 	if !ok {
 		return false, nil
@@ -106,7 +125,7 @@ func (f *fakeRepo) SlugTaken(_ context.Context, slug string, excludeID uuid.UUID
 }
 
 func (f *fakeRepo) CountPosts(_ context.Context, tagID uuid.UUID) (int64, error) {
-	return f.counts[tagID], nil
+	return f.counts[tagID], f.countErr
 }
 
 func (f *fakeRepo) MergeInto(_ context.Context, sourceID, targetID uuid.UUID) error {
@@ -171,6 +190,110 @@ func TestCreateRejectsInvalidExplicitSlug(t *testing.T) {
 	require.ErrorIs(t, err, ErrValidation)
 }
 
+func TestCreateFailures(t *testing.T) {
+	t.Parallel()
+
+	boom := errors.New("boom")
+
+	tests := []struct {
+		name    string
+		tagName string
+		slug    string
+		breakIt func(*fakeRepo)
+		wantErr error
+	}{
+		{name: "name too long", tagName: strings.Repeat("n", 65), breakIt: func(*fakeRepo) {}, wantErr: ErrValidation},
+		{name: "name without slug characters", tagName: "!!!", breakIt: func(*fakeRepo) {}, wantErr: ErrValidation},
+		{name: "slug check fails", tagName: "Go", breakIt: func(r *fakeRepo) { r.slugErr = boom }, wantErr: boom},
+		{name: "insert fails", tagName: "Go", breakIt: func(r *fakeRepo) { r.createErr = boom }, wantErr: boom},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			repo := newFakeRepo()
+			tt.breakIt(repo)
+			svc := New(repo, fixedIDs{next: uuid.New()}, fixedClock{now: time.Now()})
+
+			_, err := svc.Create(t.Context(), tt.tagName, tt.slug)
+			require.ErrorIs(t, err, tt.wantErr)
+			require.Empty(t, repo.byID)
+		})
+	}
+}
+
+func TestUpdate(t *testing.T) {
+	t.Parallel()
+
+	tagID := uuid.New()
+
+	tests := []struct {
+		name     string
+		tagName  *string
+		slug     *string
+		wantName string
+		wantSlug string
+	}{
+		{name: "rename", tagName: new("  Golang "), wantName: "Golang", wantSlug: "go"},
+		{name: "unchanged slug", slug: new(" GO "), wantName: "Go", wantSlug: "go"},
+		{name: "free slug", slug: new("golang"), wantName: "Go", wantSlug: "golang"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			repo := newFakeRepo(tagdomain.Tag{UUID: tagID, Name: "Go", Slug: "go"})
+			svc := New(repo, fixedIDs{next: uuid.New()}, fixedClock{now: time.Now()})
+
+			got, err := svc.Update(t.Context(), tagID, tt.tagName, tt.slug)
+			require.NoError(t, err)
+			require.Equal(t, tt.wantName, got.Name)
+			require.Equal(t, tt.wantSlug, got.Slug)
+			require.Equal(t, got, repo.byID[tagID])
+		})
+	}
+}
+
+func TestUpdateFailures(t *testing.T) {
+	t.Parallel()
+
+	boom := errors.New("boom")
+	tagID := uuid.New()
+
+	tests := []struct {
+		name    string
+		id      uuid.UUID
+		tagName *string
+		slug    *string
+		breakIt func(*fakeRepo)
+		wantErr error
+	}{
+		{name: "nothing to change", id: tagID, breakIt: func(*fakeRepo) {}, wantErr: ErrValidation},
+		{name: "unknown tag", id: uuid.New(), tagName: new("x"), breakIt: func(*fakeRepo) {}, wantErr: tagdomain.ErrNotFound},
+		{name: "blank name", id: tagID, tagName: new("  "), breakIt: func(*fakeRepo) {}, wantErr: ErrValidation},
+		{name: "name too long", id: tagID, tagName: new(strings.Repeat("n", 65)), breakIt: func(*fakeRepo) {}, wantErr: ErrValidation},
+		{name: "blank slug", id: tagID, slug: new(" "), breakIt: func(*fakeRepo) {}, wantErr: ErrValidation},
+		{name: "slug check fails", id: tagID, slug: new("golang"), breakIt: func(r *fakeRepo) { r.slugErr = boom }, wantErr: boom},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			original := tagdomain.Tag{UUID: tagID, Name: "Go", Slug: "go"}
+			repo := newFakeRepo(original)
+			tt.breakIt(repo)
+			svc := New(repo, fixedIDs{next: uuid.New()}, fixedClock{now: time.Now()})
+
+			_, err := svc.Update(t.Context(), tt.id, tt.tagName, tt.slug)
+			require.ErrorIs(t, err, tt.wantErr)
+			require.Equal(t, original, repo.byID[tagID])
+		})
+	}
+}
+
 func TestUpdateRejectsInvalidExplicitSlug(t *testing.T) {
 	t.Parallel()
 
@@ -227,6 +350,19 @@ func TestDeleteReturnsInUseWhenPostsAttached(t *testing.T) {
 	require.Empty(t, repo.deleted)
 }
 
+func TestDeletePassesThroughCountFailure(t *testing.T) {
+	t.Parallel()
+
+	boom := errors.New("boom")
+	tagID := uuid.New()
+	repo := newFakeRepo(tagdomain.Tag{UUID: tagID, Name: "Tag", Slug: "tag"})
+	repo.countErr = boom
+	svc := New(repo, fixedIDs{next: uuid.New()}, fixedClock{now: time.Now()})
+
+	require.ErrorIs(t, svc.Delete(t.Context(), tagID), boom)
+	require.Empty(t, repo.deleted)
+}
+
 func TestDeleteCallsRepoWhenNoPostsAttached(t *testing.T) {
 	t.Parallel()
 
@@ -249,6 +385,32 @@ func TestMergeSameIDReturnsValidationError(t *testing.T) {
 	err := svc.Merge(context.Background(), tagID, tagID)
 	require.ErrorIs(t, err, ErrValidation)
 	require.Empty(t, repo.merged)
+}
+
+func TestMergeRequiresBothTags(t *testing.T) {
+	t.Parallel()
+
+	tagID := uuid.New()
+
+	tests := []struct {
+		name         string
+		source, into uuid.UUID
+	}{
+		{name: "unknown source", source: uuid.New(), into: tagID},
+		{name: "unknown target", source: tagID, into: uuid.New()},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			repo := newFakeRepo(tagdomain.Tag{UUID: tagID, Name: "Tag", Slug: "tag"})
+			svc := New(repo, fixedIDs{next: uuid.New()}, fixedClock{now: time.Now()})
+
+			require.ErrorIs(t, svc.Merge(t.Context(), tt.source, tt.into), tagdomain.ErrNotFound)
+			require.Empty(t, repo.merged)
+		})
+	}
 }
 
 func TestMergeSuccessCallsMergeInto(t *testing.T) {
@@ -295,6 +457,50 @@ func TestResolveOrCreateDedupesCreatesMissingReturnsExisting(t *testing.T) {
 	require.Equal(t, "rust-lang", got[1].Slug)
 }
 
+func TestResolveOrCreateSkipsBlankNames(t *testing.T) {
+	t.Parallel()
+
+	repo := newFakeRepo()
+	svc := New(repo, fixedIDs{next: uuid.New()}, fixedClock{now: time.Now()})
+
+	got, err := svc.ResolveOrCreate(t.Context(), []string{"", "   "})
+	require.NoError(t, err)
+	require.Empty(t, got)
+	require.Empty(t, repo.byID)
+}
+
+func TestResolveOrCreateFailures(t *testing.T) {
+	t.Parallel()
+
+	boom := errors.New("boom")
+
+	tests := []struct {
+		name    string
+		names   []string
+		breakIt func(*fakeRepo)
+		wantErr error
+	}{
+		{name: "name too long", names: []string{strings.Repeat("n", 65)}, breakIt: func(*fakeRepo) {}, wantErr: ErrValidation},
+		{name: "name without slug characters", names: []string{"???"}, breakIt: func(*fakeRepo) {}, wantErr: ErrValidation},
+		{name: "lookup fails", names: []string{"Go"}, breakIt: func(r *fakeRepo) { r.getBySlugErr = boom }, wantErr: boom},
+		{name: "create fails", names: []string{"Go"}, breakIt: func(r *fakeRepo) { r.createErr = boom }, wantErr: boom},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			repo := newFakeRepo()
+			tt.breakIt(repo)
+			svc := New(repo, fixedIDs{next: uuid.New()}, fixedClock{now: time.Now()})
+
+			got, err := svc.ResolveOrCreate(t.Context(), tt.names)
+			require.ErrorIs(t, err, tt.wantErr)
+			require.Nil(t, got)
+		})
+	}
+}
+
 func TestReplacePostTagsDelegatesToRepo(t *testing.T) {
 	t.Parallel()
 
@@ -317,4 +523,27 @@ func TestListByPostIDDelegatesToRepo(t *testing.T) {
 	got, err := svc.ListByPostID(context.Background(), postID)
 	require.NoError(t, err)
 	require.Nil(t, got)
+}
+
+func TestSlugify(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name string
+		in   string
+		want string
+	}{
+		{name: "spaces", in: "Hello World", want: "hello-world"},
+		{name: "punctuation dropped", in: "C++ & Go!", want: "c-go"},
+		{name: "separators collapse", in: " a -_ b ", want: "a-b"},
+		{name: "nothing usable", in: "***", want: ""},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			require.Equal(t, tt.want, slugify(tt.in))
+		})
+	}
 }

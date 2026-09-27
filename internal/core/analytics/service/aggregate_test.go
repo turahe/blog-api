@@ -9,6 +9,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"github.com/turahe/blog-api/internal/core/analytics/domain"
+	"github.com/turahe/blog-api/internal/core/analytics/ports"
 )
 
 type fakeRollups struct {
@@ -21,14 +22,19 @@ type fakeRollups struct {
 	periods     []string
 	cohorts     []string
 	failPeriod  error
+	earliestErr error
+	timezoneErr error
+	deleteErr   error
+	refreshErr  error
+	cohortErr   error
 }
 
 func (f *fakeRollups) EarliestEvent(context.Context) (time.Time, bool, error) {
-	return f.earliest, f.hasEvents, nil
+	return f.earliest, f.hasEvents, f.earliestErr
 }
 
 func (f *fakeRollups) Timezone(context.Context) (string, bool, error) {
-	return f.timezone, f.hasTimezone, nil
+	return f.timezone, f.hasTimezone, f.timezoneErr
 }
 
 func (f *fakeRollups) SetTimezone(_ context.Context, timezone string, _ time.Time) error {
@@ -40,13 +46,13 @@ func (f *fakeRollups) SetTimezone(_ context.Context, timezone string, _ time.Tim
 func (f *fakeRollups) DeleteFrom(_ context.Context, day string) error {
 	f.deletedFrom = append(f.deletedFrom, day)
 
-	return nil
+	return f.deleteErr
 }
 
 func (f *fakeRollups) RefreshFirstSeen(_ context.Context, from, to time.Time) error {
 	f.firstSeen = append(f.firstSeen, [2]time.Time{from, to})
 
-	return nil
+	return f.refreshErr
 }
 
 func (f *fakeRollups) RecomputePeriod(_ context.Context, period domain.Period, _ int, _ time.Time) error {
@@ -58,12 +64,16 @@ func (f *fakeRollups) RecomputePeriod(_ context.Context, period domain.Period, _
 func (f *fakeRollups) RecomputeCohort(_ context.Context, cohort domain.Cohort, _ time.Time) error {
 	f.cohorts = append(f.cohorts, cohort.Day.Day())
 
-	return nil
+	return f.cohortErr
 }
 
 type staticZone string
 
 func (z staticZone) Timezone(context.Context) (string, error) { return string(z), nil }
+
+type failingZone struct{ err error }
+
+func (z failingZone) Timezone(context.Context) (string, error) { return "", z.err }
 
 // Friday 2026-09-25, noon UTC.
 var aggregateNow = time.Date(2026, 9, 25, 12, 0, 0, 0, time.UTC)
@@ -150,6 +160,59 @@ func TestAggregatorRebuildsAfterATimezoneChange(t *testing.T) {
 	assert.Equal(t, "Asia/Jakarta", repo.timezone)
 }
 
+func TestAggregatorFirstRunWithOnlyFutureEventsBuildsNothing(t *testing.T) {
+	t.Parallel()
+
+	repo := &fakeRollups{hasEvents: true, earliest: aggregateNow.Add(48 * time.Hour)}
+
+	result, err := newTestAggregator(repo, "UTC").Run(t.Context())
+	require.NoError(t, err)
+	assert.True(t, result.Rebuilt)
+	assert.Empty(t, repo.firstSeen)
+	assert.Empty(t, repo.periods)
+	assert.Equal(t, "UTC", repo.timezone)
+}
+
+func TestAggregatorBackfillRebuildsOnTheFirstRun(t *testing.T) {
+	t.Parallel()
+
+	repo := &fakeRollups{hasEvents: true, earliest: time.Date(2026, 9, 24, 8, 0, 0, 0, time.UTC)}
+
+	result, err := newTestAggregator(repo, "UTC").Backfill(t.Context(),
+		time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC), time.Date(2026, 1, 2, 0, 0, 0, 0, time.UTC))
+	require.NoError(t, err)
+	assert.True(t, result.Rebuilt, "the rebuild covers every stored event instead")
+	assert.Contains(t, repo.periods, "day 2026-09-24")
+	assert.NotContains(t, repo.periods, "day 2026-01-01")
+}
+
+func TestAggregatorBackfillSkipsWhenNothingIsStored(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name string
+		repo *fakeRollups
+	}{
+		{name: "no raw events", repo: &fakeRollups{timezone: "UTC", hasTimezone: true}},
+		{
+			name: "range before the oldest event",
+			repo: &fakeRollups{timezone: "UTC", hasTimezone: true, hasEvents: true, earliest: time.Date(2026, 9, 20, 8, 0, 0, 0, time.UTC)},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			result, err := newTestAggregator(tt.repo, "UTC").Backfill(t.Context(),
+				time.Date(2026, 9, 1, 0, 0, 0, 0, time.UTC), time.Date(2026, 9, 10, 0, 0, 0, 0, time.UTC))
+			require.NoError(t, err)
+			assert.Equal(t, AggregateResult{}, result)
+			assert.Empty(t, tt.repo.periods)
+		})
+	}
+}
+
 func TestAggregatorBackfillClipsToStoredEvents(t *testing.T) {
 	t.Parallel()
 
@@ -198,4 +261,56 @@ func TestAggregatorRejectsAnUnknownZone(t *testing.T) {
 
 	_, err := newTestAggregator(&fakeRollups{}, "Mars/Olympus").Run(t.Context())
 	require.Error(t, err)
+}
+
+func TestAggregatorFailures(t *testing.T) {
+	t.Parallel()
+
+	boom := errors.New("boom")
+	withEvents := func(f *fakeRollups) *fakeRollups {
+		f.hasEvents, f.earliest = true, aggregateNow.AddDate(0, 0, -2)
+
+		return f
+	}
+
+	tests := []struct {
+		name     string
+		repo     *fakeRollups
+		zone     ports.TimezoneSource
+		backfill bool
+	}{
+		{name: "site zone unavailable", repo: &fakeRollups{}, zone: failingZone{err: boom}},
+		{name: "stored zone unreadable", repo: &fakeRollups{timezoneErr: boom}, zone: staticZone("UTC")},
+		{name: "oldest event unreadable on rebuild", repo: &fakeRollups{earliestErr: boom}, zone: staticZone("UTC")},
+		{
+			name: "old rollups cannot be deleted",
+			repo: withEvents(&fakeRollups{timezone: "UTC", hasTimezone: true, deleteErr: boom}),
+			zone: staticZone("Asia/Jakarta"),
+		},
+		{name: "rebuild cannot refresh first-seen", repo: withEvents(&fakeRollups{refreshErr: boom}), zone: staticZone("UTC")},
+		{name: "cohort recompute fails", repo: &fakeRollups{timezone: "UTC", hasTimezone: true, cohortErr: boom}, zone: staticZone("UTC")},
+		{
+			name:     "backfill cannot read the oldest event",
+			repo:     &fakeRollups{timezone: "UTC", hasTimezone: true, earliestErr: boom},
+			zone:     staticZone("UTC"),
+			backfill: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			agg := NewAggregator(tt.repo, tt.zone, &fixedClock{now: aggregateNow})
+
+			var err error
+			if tt.backfill {
+				_, err = agg.Backfill(t.Context(), aggregateNow.AddDate(0, 0, -7), aggregateNow)
+			} else {
+				_, err = agg.Run(t.Context())
+			}
+
+			require.ErrorIs(t, err, boom)
+		})
+	}
 }

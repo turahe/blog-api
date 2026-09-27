@@ -29,11 +29,30 @@ func (uuids) New() uuid.UUID { return uuid.New() }
 type memRepo struct {
 	mu       sync.Mutex
 	requests []domain.Request
+
+	createErr   error
+	latestErr   error
+	archivesErr error
+	clearErr    error
+	// raceCreate makes Create lose to a concurrent request that is queued first.
+	raceCreate bool
 }
 
 func (r *memRepo) Create(_ context.Context, request domain.Request) error {
 	r.mu.Lock()
 	defer r.mu.Unlock()
+
+	if r.createErr != nil {
+		return r.createErr
+	}
+
+	if r.raceCreate {
+		r.requests = append(r.requests, domain.Request{
+			UUID: uuid.New(), UserUUID: request.UserUUID, Kind: request.Kind, Status: domain.StatusPending,
+		})
+
+		return domain.ErrAlreadyOpen
+	}
 
 	for _, existing := range r.requests {
 		if existing.UserUUID == request.UserUUID && existing.Kind == request.Kind && existing.Open() {
@@ -49,6 +68,10 @@ func (r *memRepo) Create(_ context.Context, request domain.Request) error {
 func (r *memRepo) Latest(_ context.Context, userID uuid.UUID, kind domain.Kind) (domain.Request, error) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
+
+	if r.latestErr != nil {
+		return domain.Request{}, r.latestErr
+	}
 
 	for _, request := range slices.Backward(r.requests) {
 		if request.UserUUID == userID && request.Kind == kind {
@@ -110,6 +133,10 @@ func (r *memRepo) Archives(_ context.Context, userID *uuid.UUID, before time.Tim
 	r.mu.Lock()
 	defer r.mu.Unlock()
 
+	if r.archivesErr != nil {
+		return nil, r.archivesErr
+	}
+
 	var out []domain.Request
 
 	for _, request := range r.requests {
@@ -128,12 +155,18 @@ func (r *memRepo) Archives(_ context.Context, userID *uuid.UUID, before time.Tim
 }
 
 func (r *memRepo) ClearArchive(_ context.Context, id uuid.UUID) error {
+	if r.clearErr != nil {
+		return r.clearErr
+	}
+
 	return r.update(id, func(request *domain.Request) { request.StorageKey = nil })
 }
 
 type memArchives struct {
-	objects map[string][]byte
-	putErr  error
+	objects    map[string][]byte
+	putErr     error
+	presignErr error
+	deleteErr  error
 }
 
 func (a *memArchives) PutObject(_ context.Context, key, _ string, body []byte) error {
@@ -147,10 +180,18 @@ func (a *memArchives) PutObject(_ context.Context, key, _ string, body []byte) e
 }
 
 func (a *memArchives) PresignGet(_ context.Context, key string, ttl time.Duration) (string, error) {
+	if a.presignErr != nil {
+		return "", a.presignErr
+	}
+
 	return "https://s3.test/" + key + "?ttl=" + ttl.String(), nil
 }
 
 func (a *memArchives) DeleteObject(_ context.Context, key string) error {
+	if a.deleteErr != nil {
+		return a.deleteErr
+	}
+
 	delete(a.objects, key)
 	return nil
 }
@@ -182,10 +223,10 @@ func (e *fakeEraser) EraseUser(_ context.Context, userID uuid.UUID, _ time.Time)
 	return nil
 }
 
-type fakeVerifier struct{}
+type fakeVerifier struct{ err error }
 
-func (fakeVerifier) VerifyPassword(_ context.Context, _ uuid.UUID, password string) (bool, error) {
-	return password == "correct horse", nil
+func (v fakeVerifier) VerifyPassword(_ context.Context, _ uuid.UUID, password string) (bool, error) {
+	return password == "correct horse", v.err
 }
 
 type fixture struct {
@@ -292,6 +333,164 @@ func TestExportUnavailableWithoutStorage(t *testing.T) {
 
 	_, _, err := f.svc.RequestExport(t.Context(), uuid.New())
 	require.ErrorIs(t, err, domain.ErrExportUnavailable)
+
+	purged, err := f.svc.PurgeExpired(t.Context())
+	require.NoError(t, err)
+	require.Zero(t, purged)
+}
+
+func TestRequestExportFailures(t *testing.T) {
+	t.Parallel()
+
+	boom := errors.New("boom")
+
+	tests := []struct {
+		name    string
+		breakIt func(fixture)
+	}{
+		{name: "latest request unreadable", breakIt: func(f fixture) { f.repo.latestErr = boom }},
+		{name: "request cannot be stored", breakIt: func(f fixture) { f.repo.createErr = boom }},
+		{name: "event cannot be recorded", breakIt: func(f fixture) { f.events.Err = boom }},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			f := newFixture(fakeData{})
+			tt.breakIt(f)
+
+			export, created, err := f.svc.RequestExport(t.Context(), uuid.New())
+			require.ErrorIs(t, err, boom)
+			require.False(t, created)
+			require.Equal(t, Export{}, export)
+		})
+	}
+}
+
+func TestRequestExportReturnsTheRequestThatWonARace(t *testing.T) {
+	t.Parallel()
+
+	f := newFixture(fakeData{})
+	f.repo.raceCreate = true
+	user := uuid.New()
+
+	export, created, err := f.svc.RequestExport(t.Context(), user)
+	require.NoError(t, err)
+	require.False(t, created)
+	require.Len(t, f.repo.requests, 1)
+	require.Equal(t, f.repo.requests[0].UUID, export.Request.UUID)
+}
+
+func TestRequestExportFailsWhenTheLinkCannotBeSigned(t *testing.T) {
+	t.Parallel()
+
+	boom := errors.New("boom")
+	f := newFixture(fakeData{})
+	ctx, user := t.Context(), uuid.New()
+
+	_, _, err := f.svc.RequestExport(ctx, user)
+	require.NoError(t, err)
+	_, err = f.svc.ProcessPending(ctx, 1)
+	require.NoError(t, err)
+
+	f.archives.presignErr = boom
+
+	_, _, err = f.svc.RequestExport(ctx, user)
+	require.ErrorIs(t, err, boom)
+	require.ErrorContains(t, err, "presign export archive")
+}
+
+func TestProcessPendingFailures(t *testing.T) {
+	t.Parallel()
+
+	boom := errors.New("boom")
+
+	tests := []struct {
+		name    string
+		kind    domain.Kind
+		breakIt func(fixture)
+		wantErr error
+		wantMsg string
+	}{
+		{name: "unknown kind", kind: "rectify", breakIt: func(fixture) {}, wantMsg: `unknown privacy request kind "rectify"`},
+		{name: "export storage removed", kind: domain.KindExport, breakIt: func(f fixture) { f.svc.archives = nil }, wantErr: domain.ErrExportUnavailable},
+		{name: "archive upload fails", kind: domain.KindExport, breakIt: func(f fixture) { f.archives.putErr = boom }, wantErr: boom},
+		{name: "erase cannot list archives", kind: domain.KindErase, breakIt: func(f fixture) { f.repo.archivesErr = boom }, wantErr: boom},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			f := newFixture(fakeData{})
+			request := domain.Request{UUID: uuid.New(), UserUUID: uuid.New(), Kind: tt.kind, Status: domain.StatusPending}
+			f.repo.requests = append(f.repo.requests, request)
+			tt.breakIt(f)
+
+			done, err := f.svc.ProcessPending(t.Context(), 1)
+			if tt.wantErr != nil {
+				require.ErrorIs(t, err, tt.wantErr)
+			} else {
+				require.ErrorContains(t, err, tt.wantMsg)
+			}
+
+			require.Zero(t, done)
+			require.Empty(t, f.eraser.erased)
+			require.Equal(t, domain.StatusPending, f.repo.requests[0].Status, "the request is retried")
+			require.NotNil(t, f.repo.requests[0].LastError)
+		})
+	}
+}
+
+func TestProcessPendingTruncatesLongErrors(t *testing.T) {
+	t.Parallel()
+
+	f := newFixture(fakeData{err: errors.New(strings.Repeat("e", 2*maxErrorLen))})
+
+	_, _, err := f.svc.RequestExport(t.Context(), uuid.New())
+	require.NoError(t, err)
+
+	_, err = f.svc.ProcessPending(t.Context(), 1)
+	require.Error(t, err)
+	require.Len(t, *f.repo.requests[0].LastError, maxErrorLen)
+}
+
+func TestPurgeExpiredFailures(t *testing.T) {
+	t.Parallel()
+
+	boom := errors.New("boom")
+
+	tests := []struct {
+		name    string
+		breakIt func(fixture)
+		wantMsg string
+	}{
+		{name: "archives unreadable", breakIt: func(f fixture) { f.repo.archivesErr = boom }},
+		{name: "object delete fails", breakIt: func(f fixture) { f.archives.deleteErr = boom }, wantMsg: "delete export archive"},
+		{name: "archive clear fails", breakIt: func(f fixture) { f.repo.clearErr = boom }},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			f := newFixture(fakeData{})
+			key := "privacy-exports/x.json"
+			expired := f.clock.now.Add(-time.Minute)
+			f.repo.requests = append(f.repo.requests, domain.Request{
+				UUID: uuid.New(), UserUUID: uuid.New(), Kind: domain.KindExport, Status: domain.StatusCompleted,
+				StorageKey: &key, ExpiresAt: &expired,
+			})
+			f.archives.objects[key] = []byte("{}")
+			tt.breakIt(f)
+
+			purged, err := f.svc.PurgeExpired(t.Context())
+			require.ErrorIs(t, err, boom)
+			require.ErrorContains(t, err, tt.wantMsg)
+			require.Zero(t, purged)
+		})
+	}
 }
 
 func TestEraseRequiresPasswordAndPurgesArchives(t *testing.T) {
@@ -333,6 +532,45 @@ func TestEraseRequiresPasswordAndPurgesArchives(t *testing.T) {
 	latest, err := f.repo.Latest(ctx, user, domain.KindErase)
 	require.NoError(t, err)
 	require.Equal(t, domain.StatusCompleted, latest.Status)
+}
+
+func TestRequestEraseFailures(t *testing.T) {
+	t.Parallel()
+
+	boom := errors.New("boom")
+
+	t.Run("verifier fails", func(t *testing.T) {
+		t.Parallel()
+
+		f := newFixture(fakeData{})
+		f.svc.verifier = fakeVerifier{err: boom}
+
+		_, created, err := f.svc.RequestErase(t.Context(), uuid.New(), "correct horse")
+		require.ErrorIs(t, err, boom)
+		require.False(t, created)
+		require.Empty(t, f.repo.requests)
+	})
+
+	t.Run("no verifier", func(t *testing.T) {
+		t.Parallel()
+
+		f := newFixture(fakeData{})
+		f.svc.verifier = nil
+
+		_, _, err := f.svc.RequestErase(t.Context(), uuid.New(), "correct horse")
+		require.ErrorIs(t, err, domain.ErrReauth)
+	})
+
+	t.Run("latest request unreadable", func(t *testing.T) {
+		t.Parallel()
+
+		f := newFixture(fakeData{})
+		f.repo.latestErr = boom
+
+		_, created, err := f.svc.RequestErase(t.Context(), uuid.New(), "correct horse")
+		require.ErrorIs(t, err, boom)
+		require.False(t, created)
+	})
 }
 
 func TestEraseRunsModuleErasersBeforeTheAccount(t *testing.T) {

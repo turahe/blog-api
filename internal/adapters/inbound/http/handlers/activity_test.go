@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"context"
+	"errors"
 	nethttp "net/http"
 	"testing"
 	"time"
@@ -145,6 +146,40 @@ func TestAdminUserActivityRejectsBadUserID(t *testing.T) {
 	})
 
 	require.Equal(t, nethttp.StatusBadRequest, w.Code)
+}
+
+func TestAdminUserActivityFilterAndFailures(t *testing.T) {
+	t.Parallel()
+
+	target := uuid.New()
+	tests := []struct {
+		name   string
+		query  string
+		err    error
+		status int
+		code   string
+	}{
+		{name: "rejects bad from", query: "from=yesterday", status: nethttp.StatusBadRequest, code: "validation_error"},
+		{name: "accepts RFC 3339 bounds", query: "from=2026-09-01T08:00:00Z&to=2026-09-02T09:00:00Z", status: nethttp.StatusOK},
+		{name: "records unexpected failure", err: errors.New("db down"), status: nethttp.StatusInternalServerError, code: "internal_error"},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
+			activity := &fakeActivity{err: tc.err}
+			w, body := runProfile(t, adminUserActivityHandler(activity), profileRequest{
+				method: nethttp.MethodGet, target: "/?" + tc.query, param: target.String(), user: &testUserID,
+			})
+			require.Equal(t, tc.status, w.Code, w.Body.String())
+			require.Equal(t, tc.code, errorCode(body))
+
+			if tc.status == nethttp.StatusOK {
+				require.Equal(t, time.Date(2026, 9, 1, 8, 0, 0, 0, time.UTC), *activity.filter.From)
+				require.Equal(t, time.Date(2026, 9, 2, 9, 0, 0, 0, time.UTC), *activity.filter.To, "a timestamp is used as-is")
+			}
+		})
+	}
 }
 
 func TestMeActivityRequiresUser(t *testing.T) {

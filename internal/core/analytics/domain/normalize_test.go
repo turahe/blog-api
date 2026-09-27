@@ -26,7 +26,7 @@ func TestNormalizePath(t *testing.T) {
 		assert.Equal(t, want, got, raw)
 	}
 
-	for _, raw := range []string{"", "posts", "https://example.com/", "/a b", "/a\x00b", "/" + strings.Repeat("a", MaxPathLength)} {
+	for _, raw := range []string{"", "posts", "https://example.com/", "/a b", "/a\x00b", "/%zz", "/" + strings.Repeat("a", MaxPathLength)} {
 		_, err := NormalizePath(raw)
 		require.ErrorIs(t, err, ErrValidation, raw)
 	}
@@ -49,6 +49,9 @@ func TestNormalizeReferrer(t *testing.T) {
 
 	long := "https://example.com/" + strings.Repeat("p", MaxReferrerLength)
 	assert.Equal(t, "https://example.com", NormalizeReferrer(long), "an overlong path is dropped")
+
+	longHost := "https://" + strings.Repeat("h", MaxReferrerLength) + ".example/"
+	assert.Empty(t, NormalizeReferrer(longHost), "an overlong origin is dropped entirely")
 }
 
 func TestNormalizeQuery(t *testing.T) {

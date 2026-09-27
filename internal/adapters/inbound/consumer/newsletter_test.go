@@ -78,3 +78,38 @@ func TestNewsletterSyncPassesSubscriberID(t *testing.T) {
 	require.NoError(t, consumer.NewsletterSync(nl)(msg))
 	require.Equal(t, id, nl.got)
 }
+
+func TestNewsletterSyncErrors(t *testing.T) {
+	t.Parallel()
+
+	payload := fmt.Appendf(nil, `{"subscriber_id":%q}`, uuid.New())
+
+	tests := []struct {
+		name      string
+		payload   []byte
+		err       error
+		permanent bool
+	}{
+		{name: "bad json", payload: []byte(`not json`), permanent: true},
+		{name: "missing id", payload: []byte(`{"issue_id":"` + uuid.NewString() + `"}`), permanent: true},
+		{name: "validation", payload: payload, err: fmt.Errorf("sync: %w", nldomain.ErrValidation), permanent: true},
+		{name: "transient", payload: payload, err: errors.New("provider down")},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			nl := &fakeNewsletter{err: tt.err}
+			err := consumer.NewsletterSync(nl)(message.NewMessage(uuid.NewString(), tt.payload))
+			require.Error(t, err)
+			require.Equal(t, tt.permanent, errors.Is(err, messaging.ErrPermanent))
+
+			if tt.err != nil {
+				require.ErrorIs(t, err, tt.err)
+			} else {
+				require.Equal(t, uuid.Nil, nl.got, "an invalid payload never reaches the service")
+			}
+		})
+	}
+}

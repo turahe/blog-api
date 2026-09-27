@@ -3,6 +3,8 @@ package config
 import (
 	"strings"
 	"testing"
+
+	"github.com/stretchr/testify/require"
 )
 
 func TestValidateMessagingEmptyOK(t *testing.T) {
@@ -170,5 +172,50 @@ func TestValidateKafkaSecurity(t *testing.T) {
 		if err := cfg.ValidateMessaging(); (err != nil) != tc.wantErr {
 			t.Errorf("%s: err=%v, wantErr=%v", name, err, tc.wantErr)
 		}
+	}
+}
+
+func TestValidateKafka(t *testing.T) {
+	t.Parallel()
+
+	base := Config{KafkaBrokers: []string{"k:9093"}, KafkaConsumerGroup: "blog-api"}
+
+	tests := []struct {
+		name    string
+		mutate  func(*Config)
+		wantErr string
+	}{
+		{name: "blank consumer group", mutate: func(c *Config) { c.KafkaConsumerGroup = " " }, wantErr: "KAFKA_CONSUMER_GROUP"},
+		{
+			name: "sasl without tls in production",
+			mutate: func(c *Config) {
+				c.Environment, c.KafkaSASLMechanism, c.KafkaSASLUsername, c.KafkaSASLPassword = envProduction, KafkaSASLSCRAMSHA256, "u", "p"
+			},
+			wantErr: "KAFKA_TLS=true is required",
+		},
+		{
+			name: "sasl with tls in production",
+			mutate: func(c *Config) {
+				c.Environment, c.KafkaSASLMechanism, c.KafkaSASLUsername, c.KafkaSASLPassword, c.KafkaTLS = envProduction, KafkaSASLPlain, "u", "p", true
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			cfg := base
+			tt.mutate(&cfg)
+
+			err := cfg.validateKafka()
+			if tt.wantErr == "" {
+				require.NoError(t, err)
+
+				return
+			}
+
+			require.ErrorContains(t, err, tt.wantErr)
+		})
 	}
 }

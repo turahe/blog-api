@@ -1,6 +1,7 @@
 package persistence
 
 import (
+	"context"
 	"testing"
 	"time"
 
@@ -50,6 +51,194 @@ func ids(assets []mediadomain.MediaAsset) []uuid.UUID {
 	}
 
 	return out
+}
+
+func newMediaAsset(mutate func(*mediadomain.MediaAsset)) mediadomain.MediaAsset {
+	asset := mediadomain.MediaAsset{
+		UUID: uuid.New(), StorageKey: uniqueSlug("media/create"), OriginalFilename: "photo.png",
+		ContentType: "image/png", Disk: "minio", Status: mediadomain.StatusPending,
+	}
+	if mutate != nil {
+		mutate(&asset)
+	}
+
+	return asset
+}
+
+func TestMediaRepositoryCreate(t *testing.T) {
+	t.Parallel()
+
+	tx := integrationTx(t)
+	repo := NewMediaRepository(tx)
+	ctx := t.Context()
+	uploader := insertUser(t, tx)
+	width, height, checksum := 640, 480, "abc123"
+	created := time.Now().UTC().Add(-time.Hour).Truncate(time.Microsecond)
+	trashed := created.Add(time.Minute)
+	unknown := uuid.New()
+
+	tests := []struct {
+		name    string
+		mutate  func(*mediadomain.MediaAsset)
+		check   func(t *testing.T, got mediadomain.MediaAsset)
+		wantErr error
+	}{
+		{
+			name: "all fields",
+			mutate: func(a *mediadomain.MediaAsset) {
+				a.UploadedByUUID, a.Width, a.Height, a.ChecksumSHA256 = &uploader, &width, &height, &checksum
+				a.Tags, a.SizeBytes, a.CreatedAt = []string{"avatar"}, 42, created
+			},
+			check: func(t *testing.T, got mediadomain.MediaAsset) {
+				require.Equal(t, &uploader, got.UploadedByUUID)
+				require.Equal(t, &width, got.Width)
+				require.Equal(t, &checksum, got.ChecksumSHA256)
+				require.Equal(t, []string{"avatar"}, got.Tags)
+				require.WithinDuration(t, created, got.CreatedAt, 0)
+				require.WithinDuration(t, created, got.UpdatedAt, 0, "updated_at defaults to created_at")
+			},
+		},
+		{
+			name: "defaults timestamps",
+			check: func(t *testing.T, got mediadomain.MediaAsset) {
+				require.Nil(t, got.UploadedByUUID)
+				require.Empty(t, got.Tags)
+				require.WithinDuration(t, time.Now(), got.CreatedAt, time.Minute)
+				require.Equal(t, got.CreatedAt, got.UpdatedAt)
+			},
+		},
+		{
+			name:   "soft-deleted",
+			mutate: func(a *mediadomain.MediaAsset) { a.DeletedAt = &trashed },
+			check: func(t *testing.T, got mediadomain.MediaAsset) {
+				require.NotNil(t, got.DeletedAt)
+				require.WithinDuration(t, trashed, *got.DeletedAt, 0)
+			},
+		},
+		{name: "unknown uploader", mutate: func(a *mediadomain.MediaAsset) { a.UploadedByUUID = &unknown }, wantErr: errUnknownReference},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, err := repo.Create(ctx, newMediaAsset(tt.mutate))
+			if tt.wantErr != nil {
+				require.ErrorIs(t, err, tt.wantErr)
+				return
+			}
+
+			require.NoError(t, err)
+			require.NotZero(t, got.ID)
+			tt.check(t, got)
+		})
+	}
+
+	inSavepoint(t, tx, func() {
+		_, err := repo.Create(ctx, newMediaAsset(func(a *mediadomain.MediaAsset) { a.Status = "bogus" }))
+		require.Error(t, err)
+	})
+}
+
+func TestMediaRepositoryUpdate(t *testing.T) {
+	t.Parallel()
+
+	tx := integrationTx(t)
+	repo := NewMediaRepository(tx)
+	ctx := t.Context()
+	uploader := insertUser(t, tx)
+	unknown := uuid.New()
+
+	asset, err := repo.Create(ctx, newMediaAsset(nil))
+	require.NoError(t, err)
+
+	checksum := "def456"
+	asset.Status, asset.SizeBytes, asset.ChecksumSHA256 = mediadomain.StatusReady, 2048, &checksum
+	asset.Tags, asset.UploadedByUUID, asset.UpdatedAt = []string{"cover", "hero"}, &uploader, time.Time{}
+
+	updated, err := repo.Update(ctx, asset)
+	require.NoError(t, err)
+	require.Equal(t, mediadomain.StatusReady, updated.Status)
+	require.Equal(t, int64(2048), updated.SizeBytes)
+	require.Equal(t, &checksum, updated.ChecksumSHA256)
+	require.Equal(t, []string{"cover", "hero"}, updated.Tags)
+	require.Equal(t, &uploader, updated.UploadedByUUID)
+	require.WithinDuration(t, time.Now(), updated.UpdatedAt, time.Minute)
+
+	_, err = repo.Update(ctx, newMediaAsset(nil))
+	require.ErrorIs(t, err, mediadomain.ErrNotFound, "updating a missing asset reports it missing")
+
+	asset.UploadedByUUID = &unknown
+	_, err = repo.Update(ctx, asset)
+	require.ErrorIs(t, err, errUnknownReference)
+
+	inSavepoint(t, tx, func() {
+		asset.UploadedByUUID, asset.Status = nil, "bogus"
+		_, err := repo.Update(ctx, asset)
+		require.Error(t, err)
+	})
+
+	_, err = repo.GetByID(canceledContext(t), asset.UUID)
+	require.ErrorIs(t, err, context.Canceled)
+}
+
+func TestMediaRepositorySoftDelete(t *testing.T) {
+	t.Parallel()
+
+	tx := integrationTx(t)
+	repo := NewMediaRepository(tx)
+	ctx := t.Context()
+	asset := insertReadyMedia(t, tx)
+	deletedAt := time.Now().UTC().Truncate(time.Microsecond)
+
+	require.NoError(t, repo.SoftDelete(ctx, asset, deletedAt))
+
+	_, err := repo.GetByID(ctx, asset)
+	require.ErrorIs(t, err, mediadomain.ErrNotFound)
+
+	trashed, err := repo.Trashed(ctx, deletedAt.Add(time.Second), 1000)
+	require.NoError(t, err)
+	require.Contains(t, ids(trashed), asset)
+
+	require.ErrorIs(t, repo.SoftDelete(ctx, asset, deletedAt), mediadomain.ErrNotFound, "already deleted")
+	require.ErrorIs(t, repo.SoftDelete(canceledContext(t), asset, deletedAt), context.Canceled)
+}
+
+func TestMediaRepositoryClearEntityReferences(t *testing.T) {
+	t.Parallel()
+
+	tx := integrationTx(t)
+	repo := NewMediaRepository(tx)
+	ctx := t.Context()
+	asset, other := insertReadyMedia(t, tx), insertReadyMedia(t, tx)
+	user, category := insertUser(t, tx), insertCategory(t, tx)
+	post := createPost(t, NewPostRepository(tx), postFixture{author: user, createdAt: time.Now().UTC()}).UUID
+
+	mediaID := "(SELECT id FROM media_assets WHERE uuid = ?)"
+	require.NoError(t, tx.Exec("UPDATE users SET avatar_id = "+mediaID+" WHERE uuid = ?", asset, user).Error)
+	require.NoError(t, tx.Exec("UPDATE categories SET image_id = "+mediaID+" WHERE uuid = ?", asset, category).Error)
+	require.NoError(t, tx.Exec("UPDATE posts SET cover_image_media_id = "+mediaID+" WHERE uuid = ?", asset, post).Error)
+	require.NoError(t, NewPostMediaRepository(tx).ReplaceAll(ctx, post, []mediadomain.PostMediaItem{
+		{MediaAssetUUID: asset, Kind: mediadomain.KindInlineImage},
+		{MediaAssetUUID: other, Kind: mediadomain.KindAttachment},
+	}))
+
+	require.NoError(t, repo.ClearEntityReferences(ctx, asset))
+
+	var references int64
+	require.NoError(t, tx.Raw(`SELECT
+		(SELECT count(*) FROM users WHERE avatar_id = `+mediaID+`) +
+		(SELECT count(*) FROM categories WHERE image_id = `+mediaID+`) +
+		(SELECT count(*) FROM posts WHERE cover_image_media_id = `+mediaID+`) +
+		(SELECT count(*) FROM post_media WHERE media_asset_id = `+mediaID+`)`,
+		asset, asset, asset, asset).Row().Scan(&references))
+	require.Zero(t, references)
+
+	items, err := NewPostMediaRepository(tx).ListByPostID(ctx, post)
+	require.NoError(t, err)
+	require.Equal(t, []mediadomain.PostMediaItem{{MediaAssetUUID: other, Kind: mediadomain.KindAttachment}}, items,
+		"other assets keep their attachments")
+
+	require.NoError(t, repo.ClearEntityReferences(ctx, uuid.New()), "an unknown asset has nothing to clear")
+	require.ErrorIs(t, repo.ClearEntityReferences(canceledContext(t), asset), context.Canceled)
 }
 
 func TestMediaRepositoryOrphansPurgeAndUsage(t *testing.T) {

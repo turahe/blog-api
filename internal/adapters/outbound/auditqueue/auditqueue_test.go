@@ -117,6 +117,56 @@ func TestSinkSkipsEmptyBatch(t *testing.T) {
 	require.Empty(t, pub.sent)
 }
 
+type failingBox struct{ err error }
+
+func (b failingBox) Encrypt([]byte) (string, error) { return "", b.err }
+func (b failingBox) Decrypt(string) ([]byte, error) { return nil, b.err }
+
+func TestSinkInsertsDirectlyWhenBatchCannotBeSealed(t *testing.T) {
+	t.Parallel()
+
+	pub := &publisher{}
+	fallback := &inserter{}
+	entries := sampleEntries()
+
+	sink := New(pub, "t", failingBox{err: errors.New("no key")}, fallback, slog.New(slog.DiscardHandler))
+	require.NoError(t, sink.Insert(t.Context(), entries))
+	require.Empty(t, pub.sent)
+	require.Equal(t, [][]domain.Entry{entries}, fallback.batches)
+}
+
+func TestEncodeFailures(t *testing.T) {
+	t.Parallel()
+
+	boom := errors.New("no key")
+	unencodable := []domain.Entry{{UUID: uuid.New(), Action: "a", Metadata: map[string]any{"ch": make(chan int)}}}
+
+	tests := []struct {
+		name    string
+		box     Box
+		entries []domain.Entry
+		wantErr string
+		wantIs  error
+	}{
+		{name: "unencodable metadata", box: newBox(t), entries: unencodable, wantErr: "encode audit batch"},
+		{name: "encryption failure", box: failingBox{err: boom}, entries: sampleEntries(), wantErr: "encrypt audit batch", wantIs: boom},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			payload, err := Encode(tt.box, tt.entries)
+			require.ErrorContains(t, err, tt.wantErr)
+			require.Nil(t, payload)
+
+			if tt.wantIs != nil {
+				require.ErrorIs(t, err, tt.wantIs)
+			}
+		})
+	}
+}
+
 func TestHandlerRejectsMalformedBatchesPermanently(t *testing.T) {
 	t.Parallel()
 
@@ -130,11 +180,15 @@ func TestHandlerRejectsMalformedBatchesPermanently(t *testing.T) {
 	noUUID, err := box.Encrypt([]byte(`[{"action":"auth.login"}]`))
 	require.NoError(t, err)
 
+	notArray, err := box.Encrypt([]byte(`{"action":"auth.login"}`))
+	require.NoError(t, err)
+
 	for name, payload := range map[string]string{
 		"not json":      `nope`,
 		"no ciphertext": `{}`,
 		"wrong key":     string(foreign),
 		"no uuid":       `{"ciphertext":"` + noUUID + `"}`,
+		"not a batch":   `{"ciphertext":"` + notArray + `"}`,
 	} {
 		err := Handler(box, &inserter{}, nil)(message.NewMessage("m", []byte(payload)))
 		require.ErrorIs(t, err, messaging.ErrPermanent, name)

@@ -61,3 +61,18 @@ func TestEmptyScopeKeepsEntry(t *testing.T) {
 	require.Nil(t, entry.Metadata)
 	require.Nil(t, scope.Actor())
 }
+
+func TestScopeApplyCreatesMetadataWhenEntryHasNone(t *testing.T) {
+	t.Parallel()
+
+	ctx, scope := audit.WithScope(context.Background())
+	audit.AddMetadata(ctx, "provider", "github")
+	audit.AddChange(ctx, "email", "a@example.com", "b@example.com")
+	audit.AddChange(ctx, "name", "a", "b")
+
+	var entry domain.Entry
+	scope.Apply(&entry)
+
+	require.Equal(t, map[string]any{"provider": "github"}, entry.Metadata)
+	require.Len(t, entry.Changes, 2)
+}

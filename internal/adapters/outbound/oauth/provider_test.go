@@ -172,3 +172,112 @@ func TestExchangeTransportFailureIsNotBlamedOnUser(t *testing.T) {
 	require.Error(t, err)
 	require.NotErrorIs(t, err, authdomain.ErrOAuthExchange)
 }
+
+func TestExchangeRejectsInvalidTokenEndpoint(t *testing.T) {
+	t.Parallel()
+
+	_, err := oauth.NewGoogle(creds, oauth.Endpoints{Token: "://bad"}).Exchange(t.Context(), "good", "verifier", "https://app.test/cb")
+	require.Error(t, err)
+	require.NotErrorIs(t, err, authdomain.ErrOAuthExchange)
+}
+
+func TestExchangeIdentityFailures(t *testing.T) {
+	t.Parallel()
+
+	closed := httptest.NewServer(nethttp.NotFoundHandler())
+	closed.Close()
+
+	tests := []struct {
+		name      string
+		provider  func(oauth.Credentials, oauth.Endpoints) *oauth.Provider
+		resources map[string]any
+		endpoints func(oauth.Endpoints) oauth.Endpoints
+		exchange  bool // whether the failure is attributed to the OAuth exchange
+	}{
+		{name: "google userinfo missing", provider: oauth.NewGoogle, exchange: true},
+		{
+			name: "google userinfo without sub", provider: oauth.NewGoogle, exchange: true,
+			resources: map[string]any{"/user": map[string]any{"email": "ada@example.com"}},
+		},
+		{name: "github user missing", provider: oauth.NewGitHub, exchange: true},
+		{
+			name: "github user without id", provider: oauth.NewGitHub, exchange: true,
+			resources: map[string]any{"/user": map[string]any{"login": "ada"}},
+		},
+		{
+			name: "github emails missing", provider: oauth.NewGitHub, exchange: true,
+			resources: map[string]any{"/user": map[string]any{"id": 1}},
+		},
+		{
+			name: "invalid userinfo endpoint", provider: oauth.NewGoogle,
+			endpoints: func(e oauth.Endpoints) oauth.Endpoints { e.UserInfo = "://bad"; return e },
+		},
+		{
+			name: "userinfo unreachable", provider: oauth.NewGoogle,
+			endpoints: func(e oauth.Endpoints) oauth.Endpoints { e.UserInfo = closed.URL + "/user"; return e },
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			_, endpoints := fakeServer(t, nethttp.StatusOK, tt.resources)
+			if tt.endpoints != nil {
+				endpoints = tt.endpoints(endpoints)
+			}
+
+			_, err := tt.provider(creds, endpoints).Exchange(t.Context(), "good", "verifier", "https://app.test/cb")
+			require.Error(t, err)
+
+			if tt.exchange {
+				require.ErrorIs(t, err, authdomain.ErrOAuthExchange)
+			} else {
+				require.NotErrorIs(t, err, authdomain.ErrOAuthExchange)
+			}
+		})
+	}
+}
+
+func TestExchangeResponseFailures(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name     string
+		handler  nethttp.HandlerFunc
+		exchange bool
+	}{
+		{
+			name: "truncated body",
+			handler: func(w nethttp.ResponseWriter, _ *nethttp.Request) {
+				w.Header().Set("Content-Length", "100")
+				_, _ = w.Write([]byte(`{"ac`))
+			},
+		},
+		{
+			name: "malformed json",
+			handler: func(w nethttp.ResponseWriter, _ *nethttp.Request) {
+				_, _ = w.Write([]byte(`not json`))
+			},
+			exchange: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			srv := httptest.NewServer(tt.handler)
+			t.Cleanup(srv.Close)
+
+			_, err := oauth.NewGoogle(creds, oauth.Endpoints{Token: srv.URL}).Exchange(t.Context(), "good", "verifier", "https://app.test/cb")
+			require.ErrorContains(t, err, "google response")
+
+			if tt.exchange {
+				require.ErrorIs(t, err, authdomain.ErrOAuthExchange)
+			} else {
+				require.NotErrorIs(t, err, authdomain.ErrOAuthExchange)
+			}
+		})
+	}
+}

@@ -55,3 +55,39 @@ func TestOAuthStatesExpire(t *testing.T) {
 	_, err := store.Consume(ctx, "state-1")
 	require.ErrorIs(t, err, authdomain.ErrOAuthStateInvalid)
 }
+
+func TestOAuthStatesConsumeFailures(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name    string
+		arrange func(server *miniredis.Miniredis)
+		wantErr string
+	}{
+		{
+			name:    "redis error",
+			arrange: func(server *miniredis.Miniredis) { server.SetError("ERR injected") },
+			wantErr: "injected",
+		},
+		{
+			name: "corrupt record",
+			arrange: func(server *miniredis.Miniredis) {
+				_ = server.Set(oauthKey("state-1"), "{nope")
+			},
+			wantErr: "decode oauth state",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			store, server := newTestOAuthStates(t)
+			tt.arrange(server)
+
+			_, err := store.Consume(t.Context(), "state-1")
+			require.ErrorContains(t, err, tt.wantErr)
+			require.NotErrorIs(t, err, authdomain.ErrOAuthStateInvalid)
+		})
+	}
+}

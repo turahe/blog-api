@@ -152,12 +152,54 @@ func TestPostPublishedRoundTrip(t *testing.T) {
 func TestNotifierDeliversInlineWhenCommandCannotBeStored(t *testing.T) {
 	t.Parallel()
 
-	inline := &recorder{}
+	reply := commentdomain.Comment{UUID: uuid.New(), PostUUID: uuid.New(), Content: "hi"}
+	parent := commentdomain.Comment{UUID: uuid.New(), PostUUID: reply.PostUUID}
+	change := commentdomain.Moderation{
+		Comment: parent,
+		Entry:   commentdomain.ModerationEntry{UUID: uuid.New(), ToStatus: commentdomain.StatusSpam},
+	}
 	post := postdomain.Post{UUID: uuid.New(), AuthorUUID: uuid.New(), Title: "Hello", Slug: "hello"}
 
-	New(&eventtest.Recorder{Err: errors.New("db down")}, inline, slog.New(slog.DiscardHandler)).
-		PostPublished(t.Context(), post, nil)
-	require.Equal(t, []postdomain.Post{post}, inline.posts)
+	tests := []struct {
+		name   string
+		notify func(ctx context.Context, n *Notifier)
+		check  func(t *testing.T, inline *recorder)
+	}{
+		{
+			name:   "comment replied",
+			notify: func(ctx context.Context, n *Notifier) { n.CommentReplied(ctx, reply, parent) },
+			check: func(t *testing.T, inline *recorder) {
+				t.Helper()
+				require.Equal(t, [][2]commentdomain.Comment{{reply, parent}}, inline.replies)
+			},
+		},
+		{
+			name:   "comment moderated",
+			notify: func(ctx context.Context, n *Notifier) { n.CommentModerated(ctx, change) },
+			check: func(t *testing.T, inline *recorder) {
+				t.Helper()
+				require.Equal(t, []commentdomain.Moderation{change}, inline.moderations)
+			},
+		},
+		{
+			name:   "post published",
+			notify: func(ctx context.Context, n *Notifier) { n.PostPublished(ctx, post, nil) },
+			check: func(t *testing.T, inline *recorder) {
+				t.Helper()
+				require.Equal(t, []postdomain.Post{post}, inline.posts)
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			inline := &recorder{}
+			tt.notify(t.Context(), New(&eventtest.Recorder{Err: errors.New("db down")}, inline, slog.New(slog.DiscardHandler)))
+			tt.check(t, inline)
+		})
+	}
 }
 
 func TestHandlerRejectsMalformedCommandsPermanently(t *testing.T) {

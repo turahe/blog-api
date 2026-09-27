@@ -91,3 +91,16 @@ func TestResendRejectsBadInputWithoutCalling(t *testing.T) {
 		require.Nil(t, client.req, name)
 	}
 }
+
+type badFromResendClient struct{ resendClient }
+
+func (*badFromResendClient) From() string { return "not an address" }
+
+func TestResendRejectsInvalidMailerFrom(t *testing.T) {
+	t.Parallel()
+
+	client := &badFromResendClient{}
+	err := newsletterprovider.NewResend(client).Send(t.Context(), email())
+	require.ErrorContains(t, err, "mailer from address")
+	require.Nil(t, client.req)
+}

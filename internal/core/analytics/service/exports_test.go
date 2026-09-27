@@ -8,6 +8,7 @@ import (
 	"encoding/json"
 	"errors"
 	"io"
+	"strings"
 	"testing"
 	"time"
 
@@ -19,9 +20,13 @@ import (
 )
 
 type fakeExportRepo struct {
-	exports   map[uuid.UUID]domain.Export
-	createErr error
-	failed    []bool
+	exports     map[uuid.UUID]domain.Export
+	createErr   error
+	openErr     error
+	listErr     error
+	archivesErr error
+	clearErr    error
+	failed      []bool
 }
 
 func newFakeExportRepo() *fakeExportRepo {
@@ -48,6 +53,10 @@ func (f *fakeExportRepo) Get(_ context.Context, id, userID uuid.UUID) (domain.Ex
 }
 
 func (f *fakeExportRepo) Open(_ context.Context, userID uuid.UUID) (domain.Export, error) {
+	if f.openErr != nil {
+		return domain.Export{}, f.openErr
+	}
+
 	for _, export := range f.exports {
 		if export.RequestedBy == userID && export.Open() {
 			return export, nil
@@ -58,6 +67,10 @@ func (f *fakeExportRepo) Open(_ context.Context, userID uuid.UUID) (domain.Expor
 }
 
 func (f *fakeExportRepo) List(_ context.Context, userID uuid.UUID, _ int) ([]domain.Export, error) {
+	if f.listErr != nil {
+		return nil, f.listErr
+	}
+
 	var out []domain.Export
 
 	for _, export := range f.exports {
@@ -108,6 +121,10 @@ func (f *fakeExportRepo) Fail(_ context.Context, id uuid.UUID, message string, f
 }
 
 func (f *fakeExportRepo) Archives(_ context.Context, before time.Time, limit int) ([]domain.Export, error) {
+	if f.archivesErr != nil {
+		return nil, f.archivesErr
+	}
+
 	var out []domain.Export
 
 	for _, export := range f.exports {
@@ -120,6 +137,10 @@ func (f *fakeExportRepo) Archives(_ context.Context, before time.Time, limit int
 }
 
 func (f *fakeExportRepo) ClearArchive(_ context.Context, id uuid.UUID) error {
+	if f.clearErr != nil {
+		return f.clearErr
+	}
+
 	export := f.exports[id]
 	export.StorageKey = nil
 	f.exports[id] = export
@@ -128,11 +149,18 @@ func (f *fakeExportRepo) ClearArchive(_ context.Context, id uuid.UUID) error {
 }
 
 type fakeArchives struct {
-	objects map[string][]byte
-	ttls    []time.Duration
+	objects    map[string][]byte
+	ttls       []time.Duration
+	putErr     error
+	presignErr error
+	deleteErr  error
 }
 
 func (f *fakeArchives) PutObject(_ context.Context, key, contentType string, body []byte) error {
+	if f.putErr != nil {
+		return f.putErr
+	}
+
 	if contentType != exportMediaType {
 		return errors.New("wrong content type " + contentType)
 	}
@@ -143,12 +171,20 @@ func (f *fakeArchives) PutObject(_ context.Context, key, contentType string, bod
 }
 
 func (f *fakeArchives) PresignGet(_ context.Context, key string, ttl time.Duration) (string, error) {
+	if f.presignErr != nil {
+		return "", f.presignErr
+	}
+
 	f.ttls = append(f.ttls, ttl)
 
 	return "https://storage.example/" + key, nil
 }
 
 func (f *fakeArchives) DeleteObject(_ context.Context, key string) error {
+	if f.deleteErr != nil {
+		return f.deleteErr
+	}
+
 	delete(f.objects, key)
 
 	return nil
@@ -158,12 +194,17 @@ type fakeExporter struct {
 	sel         domain.Selection
 	first, last string
 	err         error
+	rowFirst    bool
 }
 
 func (f *fakeExporter) ExportRollups(_ context.Context, sel domain.Selection, first, last string, w ports.TableWriter) error {
 	f.sel, f.first, f.last = sel, first, last
 	if f.err != nil {
 		return f.err
+	}
+
+	if f.rowFirst {
+		return w.Row([]string{"orphan"})
 	}
 
 	if err := w.Table("pages", []string{"period_start", "path", "views"}); err != nil {
@@ -183,13 +224,14 @@ func (f *fakeExporter) ExportRollups(_ context.Context, sel domain.Selection, fi
 
 type fakeStepUp struct {
 	ok    bool
+	err   error
 	calls int
 }
 
 func (f *fakeStepUp) VerifyStepUp(context.Context, uuid.UUID, string, string) (bool, error) {
 	f.calls++
 
-	return f.ok, nil
+	return f.ok, f.err
 }
 
 type exportFixture struct {
@@ -292,6 +334,42 @@ func TestExportRequestRefusals(t *testing.T) {
 		require.ErrorIs(t, err, domain.ErrStepUpRequired)
 	})
 
+	t.Run("step-up verifier errors", func(t *testing.T) {
+		t.Parallel()
+
+		f := newExportFixture(t)
+		boom := errors.New("boom")
+		f.stepUp.err = boom
+
+		_, err := f.svc.Request(t.Context(), f.actor, exportQuery("2026-08-01", "2026-08-31", ""))
+		require.ErrorIs(t, err, boom)
+		assert.Empty(t, f.repo.exports)
+	})
+
+	t.Run("create fails", func(t *testing.T) {
+		t.Parallel()
+
+		f := newExportFixture(t)
+		boom := errors.New("boom")
+		f.repo.createErr = boom
+
+		_, err := f.svc.Request(t.Context(), f.actor, exportQuery("2026-08-01", "2026-08-31", ""))
+		require.ErrorIs(t, err, boom)
+	})
+
+	t.Run("open export cannot be loaded", func(t *testing.T) {
+		t.Parallel()
+
+		f := newExportFixture(t)
+		boom := errors.New("boom")
+		f.repo.createErr, f.repo.openErr = domain.ErrExportOpen, boom
+
+		view, err := f.svc.Request(t.Context(), f.actor, exportQuery("2026-08-01", "2026-08-31", ""))
+		require.ErrorIs(t, err, domain.ErrExportOpen)
+		require.ErrorIs(t, err, boom)
+		assert.Equal(t, ExportView{}, view)
+	})
+
 	t.Run("already open returns the open export", func(t *testing.T) {
 		t.Parallel()
 
@@ -367,6 +445,85 @@ func TestExportProcessRetriesThenFails(t *testing.T) {
 	assert.Equal(t, domain.ExportFailed, f.repo.exports[view.UUID].Status)
 }
 
+func pendingExport(actor uuid.UUID) domain.Export {
+	return domain.Export{
+		UUID: uuid.New(), RequestedBy: actor, Grain: domain.GrainDay, Timezone: "Asia/Jakarta",
+		FirstDay: "2026-08-01", LastDay: "2026-08-31", Status: domain.ExportPending,
+	}
+}
+
+func TestExportProcessFailures(t *testing.T) {
+	t.Parallel()
+
+	boom := errors.New("boom")
+
+	tests := []struct {
+		name    string
+		setup   func(*exportFixture, *domain.Export)
+		wantErr error
+		wantMsg string
+	}{
+		{
+			name:    "storage removed",
+			setup:   func(f *exportFixture, _ *domain.Export) { f.svc.archives = nil },
+			wantErr: domain.ErrExportUnavailable,
+		},
+		{
+			name:    "unreadable window",
+			setup:   func(_ *exportFixture, e *domain.Export) { e.FirstDay = "garbage" },
+			wantMsg: "garbage",
+		},
+		{
+			name:    "row before table",
+			setup:   func(f *exportFixture, _ *domain.Export) { f.exporter.rowFirst = true },
+			wantMsg: "row before table",
+		},
+		{
+			name:    "upload fails",
+			setup:   func(f *exportFixture, _ *domain.Export) { f.archives.putErr = boom },
+			wantErr: boom,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			f := newExportFixture(t)
+			export := pendingExport(f.actor)
+			tt.setup(&f, &export)
+			f.repo.exports[export.UUID] = export
+
+			done, err := f.svc.ProcessPending(t.Context(), 1)
+			if tt.wantErr != nil {
+				require.ErrorIs(t, err, tt.wantErr)
+			} else {
+				require.ErrorContains(t, err, tt.wantMsg)
+			}
+
+			assert.Zero(t, done)
+			assert.Equal(t, []bool{false}, f.repo.failed)
+			assert.Nil(t, f.repo.exports[export.UUID].StorageKey)
+		})
+	}
+}
+
+func TestExportProcessTruncatesLongErrors(t *testing.T) {
+	t.Parallel()
+
+	f := newExportFixture(t)
+	f.exporter.err = errors.New(strings.Repeat("x", 2*maxErrorLength))
+	export := pendingExport(f.actor)
+	f.repo.exports[export.UUID] = export
+
+	_, err := f.svc.ProcessPending(t.Context(), 1)
+	require.ErrorIs(t, err, f.exporter.err)
+
+	stored := f.repo.exports[export.UUID].LastError
+	require.NotNil(t, stored)
+	assert.Len(t, *stored, maxErrorLength)
+}
+
 func TestExportGetSignsForTheRequesterOnly(t *testing.T) {
 	t.Parallel()
 
@@ -414,6 +571,83 @@ func TestExportPurgeExpiredDeletesArchives(t *testing.T) {
 	assert.NotContains(t, f.archives.objects, oldKey)
 	assert.Contains(t, f.archives.objects, newKey)
 	assert.Nil(t, f.repo.exports[old.UUID].StorageKey)
+}
+
+func TestExportGetAndListFailures(t *testing.T) {
+	t.Parallel()
+
+	boom := errors.New("boom")
+
+	t.Run("list fails", func(t *testing.T) {
+		t.Parallel()
+
+		f := newExportFixture(t)
+		f.repo.listErr = boom
+
+		_, err := f.svc.List(t.Context(), f.actor)
+		require.ErrorIs(t, err, boom)
+	})
+
+	t.Run("signing fails", func(t *testing.T) {
+		t.Parallel()
+
+		f := newExportFixture(t)
+		key := "analytics-exports/a.zip"
+		expires := f.clock.now.Add(time.Hour)
+		export := domain.Export{UUID: uuid.New(), RequestedBy: f.actor, Status: domain.ExportCompleted, StorageKey: &key, ExpiresAt: &expires}
+		f.repo.exports[export.UUID] = export
+		f.archives.presignErr = boom
+
+		_, err := f.svc.Get(t.Context(), f.actor, export.UUID)
+		require.ErrorIs(t, err, boom)
+
+		_, err = f.svc.List(t.Context(), f.actor)
+		require.ErrorIs(t, err, boom)
+	})
+}
+
+func TestExportPurgeExpiredFailures(t *testing.T) {
+	t.Parallel()
+
+	boom := errors.New("boom")
+
+	tests := []struct {
+		name  string
+		setup func(*exportFixture)
+	}{
+		{name: "archive listing fails", setup: func(f *exportFixture) { f.repo.archivesErr = boom }},
+		{name: "object delete fails", setup: func(f *exportFixture) { f.archives.deleteErr = boom }},
+		{name: "archive clear fails", setup: func(f *exportFixture) { f.repo.clearErr = boom }},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			f := newExportFixture(t)
+			key := "analytics-exports/old.zip"
+			past := f.clock.now.Add(-time.Minute)
+			old := domain.Export{UUID: uuid.New(), Status: domain.ExportCompleted, StorageKey: &key, ExpiresAt: &past}
+			f.repo.exports[old.UUID] = old
+			f.archives.objects[key] = []byte("x")
+			tt.setup(&f)
+
+			purged, err := f.svc.PurgeExpired(t.Context())
+			require.ErrorIs(t, err, boom)
+			assert.Zero(t, purged)
+		})
+	}
+}
+
+func TestExportPurgeExpiredWithoutStorageDoesNothing(t *testing.T) {
+	t.Parallel()
+
+	f := newExportFixture(t)
+	f.svc.archives = nil
+
+	purged, err := f.svc.PurgeExpired(t.Context())
+	require.NoError(t, err)
+	assert.Zero(t, purged)
 }
 
 func TestCSVSafe(t *testing.T) {

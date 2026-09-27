@@ -3,6 +3,8 @@ package handlers
 import (
 	"bufio"
 	"context"
+	"encoding/json"
+	"errors"
 	nethttp "net/http"
 	"net/http/httptest"
 	"strings"
@@ -212,4 +214,121 @@ func TestNotificationStreamUnavailableWithoutHub(t *testing.T) {
 
 	require.Equal(t, nethttp.StatusServiceUnavailable, w.Code)
 	require.Equal(t, codeStreamUnavailable, errorCode(body))
+}
+
+func TestNotificationStreamRejectsBeforeStreaming(t *testing.T) {
+	t.Parallel()
+
+	stopped := realtime.NewHub(1, 1)
+	stopped.Shutdown()
+
+	tests := []struct {
+		name   string
+		hub    notificationStreamHub
+		user   *uuid.UUID
+		status int
+		code   string
+	}{
+		{name: "needs sign-in", hub: realtime.NewHub(1, 1), status: nethttp.StatusUnauthorized, code: "unauthorized"},
+		{name: "hub shut down", hub: stopped, user: &testUserID, status: nethttp.StatusServiceUnavailable, code: codeStreamUnavailable},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
+			w, body := runProfile(t, meNotificationsStreamHandler(tc.hub, 0, nil), profileRequest{
+				method: nethttp.MethodGet, target: "/", user: tc.user,
+			})
+			require.Equal(t, tc.status, w.Code)
+			require.Equal(t, tc.code, errorCode(body))
+		})
+	}
+}
+
+// failingWriter fails the failAt-th write (1-based) and every write after it.
+type failingWriter struct {
+	gin.ResponseWriter
+
+	failAt int
+	writes int
+}
+
+var errWriteFailed = errors.New("client went away")
+
+func (w *failingWriter) Write(p []byte) (int, error) {
+	w.writes++
+	if w.writes >= w.failAt {
+		return 0, errWriteFailed
+	}
+
+	return w.ResponseWriter.Write(p)
+}
+
+func (w *failingWriter) WriteString(s string) (int, error) { return w.Write([]byte(s)) }
+
+// streamContext returns a context for a signed-in client whose writes fail from failAt on.
+func streamContext(t *testing.T, failAt int) (*gin.Context, *failingWriter) {
+	t.Helper()
+	gin.SetMode(gin.TestMode)
+
+	c, _ := gin.CreateTestContext(httptest.NewRecorder())
+	c.Request = httptest.NewRequestWithContext(t.Context(), nethttp.MethodGet, "/", nil)
+	c.Set(middleware.ContextUserIDKey, testUserID)
+
+	w := &failingWriter{ResponseWriter: c.Writer, failAt: failAt}
+	c.Writer = w
+
+	return c, w
+}
+
+func TestStreamNotificationsStopsOnWriteFailure(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name   string
+		failAt int
+	}{
+		{name: "retry hint", failAt: 1},
+		{name: "opened frame", failAt: 2},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
+			hub := realtime.NewHub(1, 1)
+			conn, err := hub.Register(testUserID)
+			require.NoError(t, err)
+
+			c, w := streamContext(t, tc.failAt)
+			streamNotifications(c, conn, testUserID, time.Hour, nil)
+			require.Equal(t, tc.failAt, w.writes, "no write after the failure")
+		})
+	}
+}
+
+func TestWriteDroppedReportsOverflow(t *testing.T) {
+	t.Parallel()
+
+	hub := realtime.NewHub(1, 1)
+	conn, err := hub.Register(testUserID)
+	require.NoError(t, err)
+
+	for range 3 {
+		hub.Deliver(notificationdomain.Notification{UUID: uuid.New(), UserUUID: testUserID})
+	}
+
+	var out strings.Builder
+	require.NoError(t, writeDropped(&out, conn))
+	require.Contains(t, out.String(), "event: error\n")
+	require.Contains(t, out.String(), `"code":"fanout.buffer_full","droppedCount":2`)
+}
+
+func TestWriteFrameRejectsUnencodableData(t *testing.T) {
+	t.Parallel()
+
+	var out strings.Builder
+
+	var unsupported *json.UnsupportedTypeError
+	require.ErrorAs(t, writeFrame(&out, "ping", "", make(chan int)), &unsupported)
+	require.Empty(t, out.String())
 }

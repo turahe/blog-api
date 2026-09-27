@@ -2,6 +2,7 @@ package postseo
 
 import (
 	"context"
+	"errors"
 	"testing"
 
 	"github.com/google/uuid"
@@ -19,13 +20,24 @@ func (f fakeSettings) Values(context.Context) (settingsdomain.Values, error) {
 	return settingsdomain.NewValues(f), nil
 }
 
+type failingSettings struct{ err error }
+
+func (f failingSettings) Values(context.Context) (settingsdomain.Values, error) {
+	return settingsdomain.Values{}, f.err
+}
+
 type fakeMedia struct {
 	mediaports.Repository
 
 	assets map[uuid.UUID]mediadomain.MediaAsset
+	err    error
 }
 
 func (f fakeMedia) GetByID(_ context.Context, id uuid.UUID) (mediadomain.MediaAsset, error) {
+	if f.err != nil {
+		return mediadomain.MediaAsset{}, f.err
+	}
+
 	asset, ok := f.assets[id]
 	if !ok {
 		return mediadomain.MediaAsset{}, mediadomain.ErrNotFound
@@ -52,6 +64,16 @@ func TestDefaultsPreferCanonicalBase(t *testing.T) {
 	got, err = NewDefaults(settings).SEODefaults(t.Context())
 	require.NoError(t, err)
 	assert.Equal(t, "https://example.com", got.CanonicalBase)
+}
+
+func TestDefaultsSurfaceSettingsErrors(t *testing.T) {
+	t.Parallel()
+
+	boom := errors.New("settings down")
+
+	got, err := NewDefaults(failingSettings{err: boom}).SEODefaults(t.Context())
+	require.ErrorIs(t, err, boom)
+	assert.Equal(t, postdomain.SEODefaults{}, got)
 }
 
 func TestDefaultsReadHomeSettings(t *testing.T) {
@@ -107,5 +129,16 @@ func TestImageURLs(t *testing.T) {
 
 	got, err = none.ImageURL(t.Context(), png)
 	require.NoError(t, err)
+	assert.Empty(t, got)
+}
+
+func TestImageURLsSurfaceRepositoryErrors(t *testing.T) {
+	t.Parallel()
+
+	boom := errors.New("db down")
+	urls := NewImageURLs(fakeMedia{err: boom}, "https://api.example.com", []int{256}, "https://cdn.example.com")
+
+	got, err := urls.ImageURL(t.Context(), uuid.New())
+	require.ErrorIs(t, err, boom)
 	assert.Empty(t, got)
 }

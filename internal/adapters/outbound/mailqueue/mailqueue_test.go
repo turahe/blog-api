@@ -80,6 +80,24 @@ func TestMailerSendsInlineWhenCommandCannotBeStored(t *testing.T) {
 	require.Equal(t, []ports.Message{email}, fallback.sent)
 }
 
+type failingBox struct{ err error }
+
+func (b failingBox) Encrypt([]byte) (string, error) { return "", b.err }
+func (b failingBox) Decrypt(string) ([]byte, error) { return nil, b.err }
+
+func TestMailerSendsInlineWhenEncryptionFails(t *testing.T) {
+	t.Parallel()
+
+	recorder := &eventtest.Recorder{}
+	fallback := &recordingMailer{}
+	email := ports.Message{To: "reader@example.com", Subject: "Hi", Text: "body"}
+
+	mailer := New(recorder, failingBox{err: errors.New("no key")}, fallback, slog.New(slog.DiscardHandler))
+	require.NoError(t, mailer.Send(t.Context(), email))
+	require.Equal(t, []ports.Message{email}, fallback.sent)
+	require.Empty(t, recorder.Events())
+}
+
 func TestHandlerSendsCommandsQueuedWithoutHTML(t *testing.T) {
 	t.Parallel()
 
@@ -130,4 +148,16 @@ func TestHandlerReturnsRetryableSendError(t *testing.T) {
 	require.ErrorIs(t, err, ErrSendFailed)
 	require.NotErrorIs(t, err, messaging.ErrPermanent)
 	require.NotContains(t, err.Error(), "a@example.com", "recipient must not reach dead-letter headers")
+}
+
+func TestHandlerDefaultsLogger(t *testing.T) {
+	t.Parallel()
+
+	box := newBox(t)
+	sealedEmail, err := box.Encrypt([]byte(`{"to":"a@example.com","subject":"s","text":"t"}`))
+	require.NoError(t, err)
+
+	sender := &recordingMailer{}
+	require.NoError(t, Handler(box, sender, nil)(message.NewMessage("m", []byte(`{"ciphertext":"`+sealedEmail+`"}`))))
+	require.Len(t, sender.sent, 1)
 }

@@ -3,7 +3,36 @@ package seed
 import (
 	"slices"
 	"testing"
+
+	"github.com/stretchr/testify/require"
 )
+
+func TestOptionsWithDefaults(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name string
+		opts Options
+		want Options
+	}{
+		{
+			name: "empty uses development defaults",
+			want: Options{AdminEmail: "admin@example.com", AdminUsername: "admin", AdminPassword: "ChangeMeNow!123", AdminName: "Administrator"},
+		},
+		{
+			name: "set fields are kept",
+			opts: Options{AdminEmail: "root@example.test", AdminUsername: "root", AdminPassword: "secret", AdminName: "Root"},
+			want: Options{AdminEmail: "root@example.test", AdminUsername: "root", AdminPassword: "secret", AdminName: "Root"},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			require.Equal(t, tt.want, tt.opts.withDefaults())
+		})
+	}
+}
 
 // The handlers fall back to these role sets when no RBAC enforcer is wired, so the seeded
 // grants must hand each permission to exactly the same roles.

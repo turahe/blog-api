@@ -1,6 +1,7 @@
 package challenge
 
 import (
+	"context"
 	"testing"
 	"time"
 
@@ -68,4 +69,67 @@ func TestStoreExpiresAndAttemptDoesNotResurrect(t *testing.T) {
 	_, err = store.Attempt(ctx, "h2")
 	require.ErrorIs(t, err, authdomain.ErrChallengeInvalid)
 	require.False(t, server.Exists(keyPrefix+"h2"), "an attempt must not recreate an expired challenge")
+}
+
+func TestStoreGetRejectsCorruptRecords(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name    string
+		payload string
+		wantErr string
+	}{
+		{name: "invalid json", payload: "{nope", wantErr: "decode challenge:"},
+		{name: "invalid user uuid", payload: `{"user_uuid":"not-a-uuid"}`, wantErr: "decode challenge user"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			store, server := newTestStore(t)
+			server.HSet(keyPrefix+"h", fieldLogin, tt.payload)
+
+			_, err := store.Get(t.Context(), "h")
+			require.ErrorContains(t, err, tt.wantErr)
+			require.NotErrorIs(t, err, authdomain.ErrChallengeInvalid)
+		})
+	}
+}
+
+func TestStoreSurfacesRedisErrors(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name string
+		call func(ctx context.Context, store *Store) error
+	}{
+		{name: "get", call: func(ctx context.Context, store *Store) error {
+			_, err := store.Get(ctx, "h")
+			return err
+		}},
+		{name: "attempt", call: func(ctx context.Context, store *Store) error {
+			_, err := store.Attempt(ctx, "h")
+			return err
+		}},
+		{name: "consume", call: func(ctx context.Context, store *Store) error {
+			consumed, err := store.Consume(ctx, "h")
+			require.False(t, consumed)
+
+			return err
+		}},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			store, server := newTestStore(t)
+			server.SetError("ERR injected")
+
+			err := tt.call(t.Context(), store)
+			require.ErrorContains(t, err, "injected")
+			require.NotErrorIs(t, err, authdomain.ErrChallengeInvalid)
+		})
+	}
 }

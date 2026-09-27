@@ -1,6 +1,7 @@
 package persistence
 
 import (
+	"context"
 	"database/sql"
 	"os"
 	"strings"
@@ -58,6 +59,17 @@ func integrationTx(t *testing.T) *gorm.DB {
 	t.Cleanup(func() { tx.Rollback() })
 
 	return tx
+}
+
+// canceledContext returns a context that is already canceled. database/sql rejects it before
+// touching the connection, so it fails a repository call without aborting the test transaction.
+func canceledContext(t *testing.T) context.Context {
+	t.Helper()
+
+	ctx, cancel := context.WithCancel(t.Context())
+	cancel()
+
+	return ctx
 }
 
 // uniqueSlug returns a slug unlikely to collide with rows committed by other runs.

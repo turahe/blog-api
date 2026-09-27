@@ -1,6 +1,7 @@
 package messaging
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"log/slog"
@@ -17,6 +18,47 @@ func countingHandler(calls *atomic.Int32, errs func(call int32) error) message.H
 	return func(*message.Message) ([]*message.Message, error) {
 		return nil, errs(calls.Add(1))
 	}
+}
+
+func TestCircuitBreakerDisabled(t *testing.T) {
+	t.Parallel()
+
+	var calls atomic.Int32
+
+	transient := errors.New("smtp unavailable")
+	handler := CircuitBreaker("email", BreakerConfig{Failures: 0}, slog.New(slog.DiscardHandler))(
+		countingHandler(&calls, func(int32) error { return transient }))
+
+	for range 5 {
+		_, err := handler(message.NewMessage(watermill.NewUUID(), nil))
+		require.ErrorIs(t, err, transient)
+	}
+
+	require.Equal(t, int32(5), calls.Load(), "a disabled breaker never short-circuits")
+}
+
+func TestCircuitBreakerOpenReleasesOnCancelledMessage(t *testing.T) {
+	t.Parallel()
+
+	var calls atomic.Int32
+
+	transient := errors.New("smtp unavailable")
+	handler := CircuitBreaker("email", BreakerConfig{Failures: 1}, slog.New(slog.DiscardHandler))(
+		countingHandler(&calls, func(int32) error { return transient }))
+
+	_, err := handler(message.NewMessage(watermill.NewUUID(), nil))
+	require.ErrorIs(t, err, transient)
+
+	ctx, cancel := context.WithCancel(t.Context())
+	cancel()
+
+	msg := message.NewMessage(watermill.NewUUID(), nil)
+	msg.SetContext(ctx)
+
+	produced, err := handler(msg)
+	require.ErrorIs(t, err, ErrCircuitOpen, "default OpenFor keeps the breaker open")
+	require.Nil(t, produced)
+	require.Equal(t, int32(1), calls.Load())
 }
 
 func TestCircuitBreakerOpensAndRecovers(t *testing.T) {

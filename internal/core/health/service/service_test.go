@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/require"
 )
@@ -17,6 +18,19 @@ type fakeChecker struct {
 func (c fakeChecker) Name() string                { return c.name }
 func (c fakeChecker) Check(context.Context) error { return c.err }
 func (c fakeChecker) Optional() bool              { return c.optional }
+
+func TestLiveSkipsDependencies(t *testing.T) {
+	t.Parallel()
+
+	before := time.Now().UTC()
+	status := New("v1", fakeChecker{name: "database", err: errors.New("down")}).Live()
+
+	require.Equal(t, "ok", status.Status)
+	require.Equal(t, "v1", status.Version)
+	require.Empty(t, status.Dependencies)
+	require.Equal(t, time.UTC, status.Time.Location())
+	require.False(t, status.Time.Before(before))
+}
 
 func TestReadyIgnoresOptionalFailures(t *testing.T) {
 	t.Parallel()

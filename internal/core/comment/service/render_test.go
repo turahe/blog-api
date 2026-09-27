@@ -13,6 +13,28 @@ type upperRenderer struct{}
 
 func (upperRenderer) Render(source string) string { return "<p>" + source + "!</p>" }
 
+func TestEscapeRenderer(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name   string
+		source string
+		want   string
+	}{
+		{name: "empty", source: "", want: ""},
+		{name: "blank paragraphs are skipped", source: "a\n\n\n\n  \n\nb", want: "<p>a</p>\n<p>b</p>\n"},
+		{name: "windows line endings", source: "a\r\n\r\nb", want: "<p>a</p>\n<p>b</p>\n"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			require.Equal(t, tt.want, escapeRenderer{}.Render(tt.source))
+		})
+	}
+}
+
 func TestCreateAndUpdateStoreRenderedHTML(t *testing.T) {
 	t.Parallel()
 

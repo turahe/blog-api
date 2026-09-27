@@ -67,3 +67,26 @@ func TestPostWriteFailsWhenEventCannotBeRecorded(t *testing.T) {
 	_, err := svc.Publish(t.Context(), post.UUID)
 	require.ErrorIs(t, err, failure)
 }
+
+func TestTransitionEventNamesTheEnteredStatus(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		status postdomain.Status
+		want   string
+	}{
+		{status: postdomain.StatusPublished, want: event.PostPublished},
+		{status: postdomain.StatusArchived, want: event.PostArchived},
+		{status: postdomain.StatusDraft, want: event.PostUpdated},
+		{status: postdomain.StatusScheduled, want: event.PostUpdated},
+		{status: postdomain.Status("unknown"), want: event.PostUpdated},
+	}
+
+	for _, tc := range tests {
+		t.Run(string(tc.status), func(t *testing.T) {
+			t.Parallel()
+
+			require.Equal(t, tc.want, transitionEvent(tc.status))
+		})
+	}
+}

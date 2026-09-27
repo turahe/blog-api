@@ -72,3 +72,26 @@ func TestExportStateAndWindow(t *testing.T) {
 	_, err = Export{Grain: GrainDay, FirstDay: "2026-08-01", LastDay: "2026-08-02", Timezone: "Nowhere/City"}.Window()
 	require.Error(t, err)
 }
+
+func TestExportWindowRejectsMalformedDays(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name        string
+		first, last string
+	}{
+		{name: "first day", first: "2026-13-01", last: "2026-08-02"},
+		{name: "last day", first: "2026-08-01", last: "yesterday"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			_, err := Export{Grain: GrainDay, FirstDay: tt.first, LastDay: tt.last, Timezone: "UTC"}.Window()
+
+			var parseErr *time.ParseError
+			require.ErrorAs(t, err, &parseErr)
+		})
+	}
+}

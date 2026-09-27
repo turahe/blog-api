@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	nethttp "net/http"
 	"net/http/httptest"
 	"testing"
@@ -76,6 +77,16 @@ func TestListTagsHandlerReturnsItems(t *testing.T) {
 	require.Len(t, items, 2)
 }
 
+func TestListTagsHandlerFailure(t *testing.T) {
+	t.Parallel()
+
+	svc := &fakeTagService{listFn: func(context.Context) ([]tagdomain.Tag, error) { return nil, errors.New("db down") }}
+	w, body := runProfile(t, listTagsHandler(svc), profileRequest{method: nethttp.MethodGet, target: "/api/v1/tags"})
+	require.Equal(t, nethttp.StatusInternalServerError, w.Code)
+	require.Equal(t, "internal_error", errorCode(body))
+	require.Equal(t, "Failed to list tags", errorMessage(body))
+}
+
 func TestAdminCreateTagHandlerCreatesTag(t *testing.T) {
 	t.Parallel()
 	gin.SetMode(gin.TestMode)
@@ -107,6 +118,76 @@ func TestAdminCreateTagHandlerCreatesTag(t *testing.T) {
 	require.True(t, ok)
 	require.Equal(t, tagID.String(), data["id"])
 	require.Equal(t, "go", data["slug"])
+}
+
+func TestAdminCreateTagHandlerFailures(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name   string
+		body   string
+		err    error
+		status int
+		code   string
+	}{
+		{name: "missing name", body: `{"slug":"go"}`, status: nethttp.StatusBadRequest, code: "validation_error"},
+		{name: "slug taken", body: `{"name":"Go"}`, err: tagdomain.ErrConflict, status: nethttp.StatusConflict, code: "conflict"},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
+			svc := &fakeTagService{createFn: func(context.Context, string, string) (tagdomain.Tag, error) { return tagdomain.Tag{}, tc.err }}
+			w, body := runProfile(t, adminCreateTagHandler(svc), profileRequest{
+				method: nethttp.MethodPost, target: "/api/v1/admin/tags", contentType: jsonContent, body: tc.body,
+			})
+			require.Equal(t, tc.status, w.Code, w.Body.String())
+			require.Equal(t, tc.code, errorCode(body))
+		})
+	}
+}
+
+func TestAdminUpdateTagHandler(t *testing.T) {
+	t.Parallel()
+
+	tagID := uuid.New()
+	tests := []struct {
+		name   string
+		param  string
+		body   string
+		err    error
+		status int
+		code   string
+	}{
+		{name: "invalid id", param: "nope", body: `{}`, status: nethttp.StatusBadRequest, code: "validation_error"},
+		{name: "malformed body", param: tagID.String(), body: `{`, status: nethttp.StatusBadRequest, code: "validation_error"},
+		{name: "not found", param: tagID.String(), body: `{"name":"Go"}`, err: tagdomain.ErrNotFound, status: nethttp.StatusNotFound, code: "not_found"},
+		{name: "updates", param: " " + tagID.String() + " ", body: `{"name":"Go","slug":"golang"}`, status: nethttp.StatusOK},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
+			var gotID uuid.UUID
+			var gotName, gotSlug *string
+			svc := &fakeTagService{updateFn: func(_ context.Context, id uuid.UUID, name, slug *string) (tagdomain.Tag, error) {
+				gotID, gotName, gotSlug = id, name, slug
+				return tagdomain.Tag{UUID: id, Name: "Go", Slug: "golang"}, tc.err
+			}}
+			w, body := runProfile(t, adminUpdateTagHandler(svc), profileRequest{
+				method: nethttp.MethodPatch, target: "/", param: tc.param, contentType: jsonContent, body: tc.body,
+			})
+			require.Equal(t, tc.status, w.Code, w.Body.String())
+			require.Equal(t, tc.code, errorCode(body))
+
+			if tc.status == nethttp.StatusOK {
+				require.Equal(t, tagID, gotID)
+				require.Equal(t, "Go", *gotName)
+				require.Equal(t, "golang", *gotSlug)
+				require.Equal(t, "golang", dataOf(body)["slug"])
+			}
+		})
+	}
 }
 
 func TestAdminDeleteTagHandlerMapsInUse(t *testing.T) {
@@ -165,6 +246,73 @@ func TestAdminMergeTagHandlerReturnsTargetTag(t *testing.T) {
 	data, ok := envelope.Data.(map[string]any)
 	require.True(t, ok)
 	require.Equal(t, intoID.String(), data["id"])
+}
+
+func TestAdminMergeTagHandlerFailures(t *testing.T) {
+	t.Parallel()
+
+	sourceID, intoID := uuid.New(), uuid.New()
+	into := `{"intoId":"` + intoID.String() + `"}`
+	tests := []struct {
+		name     string
+		param    string
+		body     string
+		mergeErr error
+		listErr  error
+		list     []tagdomain.Tag
+		status   int
+		code     string
+		message  string
+	}{
+		{name: "invalid source id", param: "nope", body: into, status: nethttp.StatusBadRequest, code: "validation_error", message: "Invalid tag id"},
+		{name: "invalid into id", param: sourceID.String(), body: `{"intoId":"nope"}`, status: nethttp.StatusBadRequest, code: "validation_error", message: "The given data was invalid."},
+		{name: "merge fails", param: sourceID.String(), body: into, mergeErr: tagdomain.ErrNotFound, status: nethttp.StatusNotFound, code: "not_found", message: "Tag not found"},
+		{name: "reload fails", param: sourceID.String(), body: into, listErr: errors.New("db down"), status: nethttp.StatusInternalServerError, code: "internal_error", message: "Failed to load merged tag"},
+		{
+			name: "target missing after merge", param: sourceID.String(), body: into, list: []tagdomain.Tag{{UUID: sourceID}},
+			status: nethttp.StatusInternalServerError, code: "internal_error", message: "Failed to load merged tag",
+		},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
+			svc := &fakeTagService{
+				mergeFn: func(context.Context, uuid.UUID, uuid.UUID) error { return tc.mergeErr },
+				listFn:  func(context.Context) ([]tagdomain.Tag, error) { return tc.list, tc.listErr },
+			}
+			w, body := runProfile(t, adminMergeTagHandler(svc), profileRequest{
+				method: nethttp.MethodPost, target: "/", param: tc.param, contentType: jsonContent, body: tc.body,
+			})
+			require.Equal(t, tc.status, w.Code, w.Body.String())
+			require.Equal(t, tc.code, errorCode(body))
+			require.Equal(t, tc.message, errorMessage(body))
+		})
+	}
+}
+
+func TestAdminDeleteTagHandler(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name   string
+		param  string
+		status int
+		code   string
+	}{
+		{name: "invalid id", param: "nope", status: nethttp.StatusBadRequest, code: "validation_error"},
+		{name: "deletes", param: uuid.NewString(), status: nethttp.StatusOK},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
+			svc := &fakeTagService{deleteFn: func(context.Context, uuid.UUID) error { return nil }}
+			w, body := runProfile(t, adminDeleteTagHandler(svc), profileRequest{method: nethttp.MethodDelete, target: "/", param: tc.param})
+			require.Equal(t, tc.status, w.Code, w.Body.String())
+			require.Equal(t, tc.code, errorCode(body))
+		})
+	}
 }
 
 func TestMapTagErrorValidation(t *testing.T) {

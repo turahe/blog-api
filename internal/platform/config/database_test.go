@@ -1,6 +1,10 @@
 package config
 
-import "testing"
+import (
+	"testing"
+
+	"github.com/stretchr/testify/require"
+)
 
 func TestDatabaseDSNPostgres(t *testing.T) {
 	t.Parallel()
@@ -24,6 +28,14 @@ func TestDatabaseDSNPostgres(t *testing.T) {
 	if got != want {
 		t.Fatalf("DatabaseDSN()=%q want %q", got, want)
 	}
+}
+
+func TestDatabaseDSNDefaultsPortAndSSLMode(t *testing.T) {
+	t.Parallel()
+
+	got, err := Config{DBHost: "db", DBUser: "blog", DBPassword: "pw", DBName: "blog"}.DatabaseDSN()
+	require.NoError(t, err)
+	require.Equal(t, "postgres://blog:pw@db:5432/blog?sslmode=disable", got)
 }
 
 func TestDatabaseRejectsNonPostgresDrivers(t *testing.T) {
@@ -96,5 +108,42 @@ func TestValidateDatabaseSkippedForCloudSQL(t *testing.T) {
 	}
 	if err := cfg.ValidateDatabase(); err != nil {
 		t.Fatal(err)
+	}
+}
+
+func TestValidateDatabase(t *testing.T) {
+	t.Parallel()
+
+	valid := Config{DBDriver: "pg", DBHost: "db", DBUser: "blog", DBName: "blog"}
+
+	tests := []struct {
+		name    string
+		mutate  func(*Config)
+		wantErr string
+	}{
+		{name: "defaults port and ssl mode outside production", mutate: func(*Config) {}},
+		{name: "port too large", mutate: func(c *Config) { c.DBPort = 70000 }, wantErr: "DB_PORT must be between 1 and 65535 (got 70000)"},
+		{name: "negative port", mutate: func(c *Config) { c.DBPort = -1 }, wantErr: "DB_PORT"},
+		{name: "blank user", mutate: func(c *Config) { c.DBUser = " " }, wantErr: "DB_USER"},
+		{name: "blank name", mutate: func(c *Config) { c.DBName = "" }, wantErr: "DB_NAME"},
+		{name: "default ssl mode in production", mutate: func(c *Config) { c.Environment = envProduction }, wantErr: "DB_SSLMODE"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			cfg := valid
+			tt.mutate(&cfg)
+
+			err := cfg.ValidateDatabase()
+			if tt.wantErr == "" {
+				require.NoError(t, err)
+
+				return
+			}
+
+			require.ErrorContains(t, err, tt.wantErr)
+		})
 	}
 }

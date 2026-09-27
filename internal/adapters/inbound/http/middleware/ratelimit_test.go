@@ -1,8 +1,11 @@
 package middleware
 
 import (
+	"bytes"
 	"context"
+	"encoding/json"
 	"errors"
+	"log/slog"
 	nethttp "net/http"
 	"net/http/httptest"
 	"testing"
@@ -10,6 +13,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
@@ -43,6 +47,62 @@ func rateLimitedRouter(limiter Limiter, user *uuid.UUID) *gin.Engine {
 	})
 
 	return router
+}
+
+func TestRateLimitDisabled(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name    string
+		limiter Limiter
+		limit   int
+	}{
+		{name: "no limiter", limiter: nil, limit: 1},
+		{name: "zero limit", limiter: &countingLimiter{hits: map[string]int{}}, limit: 0},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			gin.SetMode(gin.TestMode)
+
+			router := gin.New()
+			router.POST("/x", RateLimit(tt.limiter, nil, "b", tt.limit, time.Minute), func(c *gin.Context) {
+				c.Status(nethttp.StatusNoContent)
+			})
+
+			for range 3 {
+				w := httptest.NewRecorder()
+				router.ServeHTTP(w, httptest.NewRequestWithContext(t.Context(), nethttp.MethodPost, "/x", nil))
+				require.Equal(t, nethttp.StatusNoContent, w.Code)
+			}
+
+			if l, ok := tt.limiter.(*countingLimiter); ok {
+				assert.Empty(t, l.hits, "a disabled limit never consults the limiter")
+			}
+		})
+	}
+}
+
+func TestRateLimitRetryAfterIsAtLeastOneSecond(t *testing.T) {
+	t.Parallel()
+	gin.SetMode(gin.TestMode)
+
+	router := gin.New()
+	router.POST("/x", RateLimit(fixedLimiter{retryAfter: 100 * time.Millisecond}, nil, "b", 1, time.Minute),
+		func(c *gin.Context) { c.Status(nethttp.StatusNoContent) })
+
+	w := httptest.NewRecorder()
+	router.ServeHTTP(w, httptest.NewRequestWithContext(t.Context(), nethttp.MethodPost, "/x", nil))
+
+	require.Equal(t, nethttp.StatusTooManyRequests, w.Code)
+	assert.Equal(t, "1", w.Header().Get("Retry-After"))
+}
+
+type fixedLimiter struct{ retryAfter time.Duration }
+
+func (l fixedLimiter) Allow(context.Context, string, int, time.Duration) (bool, time.Duration, error) {
+	return false, l.retryAfter, nil
 }
 
 func TestRateLimitRejectsOverLimitWithRetryAfter(t *testing.T) {
@@ -86,4 +146,28 @@ func TestRateLimitFailsOpen(t *testing.T) {
 	router.ServeHTTP(recorder, httptest.NewRequestWithContext(t.Context(), nethttp.MethodPost, "/x", nil))
 
 	require.Equal(t, nethttp.StatusNoContent, recorder.Code)
+}
+
+func TestRateLimitFailsOpenAndLogs(t *testing.T) {
+	t.Parallel()
+	gin.SetMode(gin.TestMode)
+
+	var logs bytes.Buffer
+
+	router := gin.New()
+	router.POST("/x", RateLimit(&countingLimiter{err: errors.New("redis down")},
+		slog.New(slog.NewJSONHandler(&logs, nil)), "comments.create", 1, time.Minute),
+		func(c *gin.Context) { c.Status(nethttp.StatusNoContent) })
+
+	recorder := httptest.NewRecorder()
+	router.ServeHTTP(recorder, httptest.NewRequestWithContext(t.Context(), nethttp.MethodPost, "/x", nil))
+
+	require.Equal(t, nethttp.StatusNoContent, recorder.Code)
+
+	var entry map[string]any
+	require.NoError(t, json.Unmarshal(logs.Bytes(), &entry))
+	assert.Equal(t, "WARN", entry["level"])
+	assert.Equal(t, "rate limiter unavailable", entry["msg"])
+	assert.Equal(t, "comments.create", entry["bucket"])
+	assert.Equal(t, "redis down", entry["error"])
 }

@@ -2,6 +2,7 @@ package service
 
 import (
 	"context"
+	"errors"
 	"testing"
 	"time"
 
@@ -16,12 +17,13 @@ import (
 
 type fakeVerifier struct {
 	password string
+	err      error
 	calls    int
 }
 
 func (v *fakeVerifier) VerifyPassword(_ context.Context, _ uuid.UUID, password string) (bool, error) {
 	v.calls++
-	return password == v.password, nil
+	return password == v.password, v.err
 }
 
 func TestVisibilityNarrows(t *testing.T) {
@@ -110,5 +112,38 @@ func TestUpdatePrivacy(t *testing.T) {
 
 		_, err = svc.UpdatePrivacy(t.Context(), uuid.New(), userdomain.PrivacyPatch{ShowEmail: new(true)}, "")
 		require.ErrorIs(t, err, userdomain.ErrNotFound)
+	})
+
+	t.Run("verifier failure", func(t *testing.T) {
+		t.Parallel()
+
+		svc, repo, verifier, _, _, id := setup(t)
+		boom := errors.New("boom")
+		verifier.err = boom
+
+		_, err := svc.UpdatePrivacy(t.Context(), id, userdomain.PrivacyPatch{Visibility: new(userdomain.VisibilityPrivate)}, "correct horse")
+		require.ErrorIs(t, err, boom)
+		require.Zero(t, repo.saved)
+	})
+
+	t.Run("write failures", func(t *testing.T) {
+		t.Parallel()
+
+		boom := errors.New("boom")
+
+		svc, repo, _, events, cache, id := setup(t)
+		repo.saveErr = boom
+
+		_, err := svc.UpdatePrivacy(t.Context(), id, userdomain.PrivacyPatch{ShowEmail: new(true)}, "")
+		require.ErrorIs(t, err, boom)
+		require.Empty(t, events.Types())
+		require.Zero(t, cache.Invalidations(readcache.Users))
+
+		svc, _, _, events, cache, id = setup(t)
+		events.Err = boom
+
+		_, err = svc.UpdatePrivacy(t.Context(), id, userdomain.PrivacyPatch{ShowEmail: new(true)}, "")
+		require.ErrorIs(t, err, boom)
+		require.Zero(t, cache.Invalidations(readcache.Users))
 	})
 }

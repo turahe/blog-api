@@ -3,6 +3,7 @@ package handlers
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	nethttp "net/http"
 	"net/http/httptest"
@@ -276,4 +277,47 @@ func TestIngestControllersStayStubsWithoutAService(t *testing.T) {
 	assert.Nil(t, a.PageView)
 	assert.Nil(t, a.IngestLimits)
 	assert.NotNil(t, a.IngestGate)
+}
+
+func TestIngestHandlersRejectMalformedBodiesAndMapFailures(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name    string
+		handler func(analyticsIngestAPI, ingestMeta) gin.HandlerFunc
+		body    string
+		err     error
+		status  int
+		code    string
+	}{
+		{name: "time spent malformed", handler: ingestTimeSpentHandler, body: `{`, status: nethttp.StatusBadRequest, code: "validation_error"},
+		{name: "search malformed", handler: ingestSearchHandler, body: `{`, status: nethttp.StatusBadRequest, code: "validation_error"},
+		{name: "search click malformed", handler: ingestSearchClickHandler, body: `{`, status: nethttp.StatusBadRequest, code: "validation_error"},
+		{
+			name: "search records unexpected failure", handler: ingestSearchHandler, body: `{"sessionId":"` + uuid.NewString() + `","query":"go","resultCount":3}`,
+			err: errors.New("queue down"), status: nethttp.StatusInternalServerError, code: "internal_error",
+		},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
+			w, body := runProfile(t, tc.handler(&fakeIngest{err: tc.err}, ingestMeta{}), profileRequest{
+				method: nethttp.MethodPost, target: "/", contentType: jsonContent, body: tc.body,
+			})
+			require.Equal(t, tc.status, w.Code, w.Body.String())
+			require.Equal(t, tc.code, errorCode(body))
+		})
+	}
+}
+
+func TestIngestMetaIgnoresCountryFromUnparsablePeer(t *testing.T) {
+	t.Parallel()
+
+	meta := newIngestMeta("CF-IPCountry", []string{"0.0.0.0/0"})
+	c, _ := commentContext(nethttp.MethodPost, "/", "", nil, "")
+	c.Request.RemoteAddr = "not-an-address"
+	c.Request.Header.Set("CF-IPCountry", "ID")
+
+	require.Empty(t, meta.country(c))
 }

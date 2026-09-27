@@ -7,6 +7,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/require"
 	notificationdomain "github.com/turahe/blog-api/internal/core/notification/domain"
@@ -83,6 +84,40 @@ func TestMeNotificationsListRejectsBadUnread(t *testing.T) {
 	require.Equal(t, nethttp.StatusBadRequest, w.Code)
 	require.Equal(t, "validation_error", errorCode(body))
 }
+
+func TestMeNotificationHandlerFailures(t *testing.T) {
+	t.Parallel()
+
+	user := testUserID
+
+	tests := []struct {
+		name    string
+		handler func(*fakeInbox) gin.HandlerFunc
+		user    *uuid.UUID
+		err     error
+		status  int
+		code    string
+	}{
+		{name: "list needs sign-in", handler: listInbox, status: nethttp.StatusUnauthorized, code: "unauthorized"},
+		{name: "list store failure", handler: listInbox, user: &user, err: errors.New("db down"), status: nethttp.StatusInternalServerError, code: "internal_error"},
+		{name: "read needs sign-in", handler: readInbox, status: nethttp.StatusUnauthorized, code: "unauthorized"},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
+			w, body := runProfile(t, tc.handler(&fakeInbox{err: tc.err}), profileRequest{
+				method: nethttp.MethodGet, target: "/", param: uuid.NewString(), user: tc.user,
+			})
+			require.Equal(t, tc.status, w.Code, w.Body.String())
+			require.Equal(t, tc.code, errorCode(body))
+		})
+	}
+}
+
+func listInbox(f *fakeInbox) gin.HandlerFunc { return meNotificationsListHandler(f) }
+
+func readInbox(f *fakeInbox) gin.HandlerFunc { return meNotificationReadHandler(f) }
 
 func TestMeNotificationRead(t *testing.T) {
 	t.Parallel()

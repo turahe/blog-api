@@ -25,6 +25,7 @@ type fakeSettings struct {
 	historyFilter settingsdomain.HistoryFilter
 	listErr       error
 	updateErr     error
+	historyErr    error
 }
 
 func (f *fakeSettings) List(_ context.Context, filter settingsservice.ListFilter) ([]settingsdomain.Setting, error) {
@@ -61,6 +62,9 @@ func (f *fakeSettings) Update(_ context.Context, actor settingsservice.Actor, up
 
 func (f *fakeSettings) History(_ context.Context, filter settingsdomain.HistoryFilter) (settingsdomain.HistoryPage, error) {
 	f.historyFilter = filter
+	if f.historyErr != nil {
+		return settingsdomain.HistoryPage{}, f.historyErr
+	}
 
 	return settingsdomain.HistoryPage{
 		Items: []settingsdomain.HistoryEntry{
@@ -282,4 +286,29 @@ func TestSettingsHistoryPaginatesAndShowsRedaction(t *testing.T) {
 
 	meta, _ := body["meta"].(map[string]any)
 	assert.InDelta(t, 2, meta["total"], 0)
+}
+
+func TestSettingsReadsMapStoreFailures(t *testing.T) {
+	t.Parallel()
+
+	down := errors.New("db down")
+
+	tests := []struct {
+		name  string
+		svc   *fakeSettings
+		route func(settingsRoutes) gin.HandlerFunc
+	}{
+		{name: "list", svc: &fakeSettings{listErr: down}, route: func(r settingsRoutes) gin.HandlerFunc { return r.get }},
+		{name: "history", svc: &fakeSettings{historyErr: down}, route: func(r settingsRoutes) gin.HandlerFunc { return r.history }},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
+			handler := tc.route(settingsHandlers(tc.svc, allSettingsPerms()))
+			w, body := runProfile(t, handler, profileRequest{method: nethttp.MethodGet, target: "/", user: &testUserID})
+			require.Equal(t, nethttp.StatusInternalServerError, w.Code, w.Body.String())
+			assert.Equal(t, "internal_error", errorCode(body))
+		})
+	}
 }

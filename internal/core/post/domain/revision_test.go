@@ -8,6 +8,23 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+func TestSnapshotOf(t *testing.T) {
+	t.Parallel()
+
+	cat, cover := uuid.New(), uuid.New()
+	post := Post{
+		ID: 7, UUID: uuid.New(), Title: "T", Slug: "t", Excerpt: "E", Content: "C", Status: StatusPublished,
+		CommentPolicy: CommentPolicyReadOnly, CategoryUUID: &cat, CoverImageMediaUUID: &cover, Version: 4,
+	}
+	tags := []RevisionTag{{ID: uuid.New(), Name: "go"}}
+	media := []RevisionMedia{{MediaAssetID: cover, Kind: "cover", SortOrder: 0}}
+
+	require.Equal(t, Snapshot{
+		Title: "T", Slug: "t", Excerpt: "E", Content: "C", Status: StatusPublished, CommentPolicy: CommentPolicyReadOnly,
+		CategoryUUID: &cat, CoverImageMediaUUID: &cover, Tags: tags, Media: media,
+	}, SnapshotOf(post, tags, media))
+}
+
 func TestDiffSnapshots(t *testing.T) {
 	t.Parallel()
 
@@ -43,6 +60,51 @@ func TestDiffSnapshots(t *testing.T) {
 	fields, diff = DiffSnapshots(prev, prev)
 	require.Empty(t, fields)
 	require.Empty(t, diff)
+}
+
+func TestDiffSnapshotsScalarFields(t *testing.T) {
+	t.Parallel()
+
+	cover := uuid.New()
+	prev := Snapshot{Slug: "old", Excerpt: "a", Status: StatusDraft, CommentPolicy: CommentPolicyOpen}
+	next := Snapshot{Slug: "new", Excerpt: "b", Status: StatusPublished, CommentPolicy: CommentPolicyDisabled, CoverImageMediaUUID: &cover}
+
+	fields, diff := DiffSnapshots(prev, next)
+
+	require.Equal(t, []string{FieldSlug, FieldExcerpt, FieldStatus, FieldCommentPolicy, FieldCoverImage}, fields)
+	require.Equal(t, map[string]any{"from": "old", "to": "new"}, diff[FieldSlug])
+	require.Equal(t, map[string]any{"from": "a", "to": "b"}, diff[FieldExcerpt])
+	require.Equal(t, map[string]any{"from": StatusDraft, "to": StatusPublished}, diff[FieldStatus])
+	require.Equal(t, map[string]any{"from": CommentPolicyOpen, "to": CommentPolicyDisabled}, diff[FieldCommentPolicy])
+	require.Equal(t, map[string]any{"from": (*uuid.UUID)(nil), "to": &cover}, diff[FieldCoverImage])
+}
+
+func TestDiffSnapshotsMediaAddedAndRemoved(t *testing.T) {
+	t.Parallel()
+
+	kept, dropped, added := uuid.New(), uuid.New(), uuid.New()
+	prev := Snapshot{Media: []RevisionMedia{{MediaAssetID: kept, Kind: "inline_image"}, {MediaAssetID: dropped, Kind: "inline_image"}}}
+	next := Snapshot{Media: []RevisionMedia{{MediaAssetID: kept, Kind: "inline_image"}, {MediaAssetID: added, Kind: "cover"}}}
+
+	fields, diff := DiffSnapshots(prev, next)
+
+	require.Equal(t, []string{FieldMedia}, fields)
+	require.Equal(t, map[string]any{
+		"added":   []RevisionMedia{{MediaAssetID: added, Kind: "cover"}},
+		"removed": []RevisionMedia{{MediaAssetID: dropped, Kind: "inline_image"}},
+	}, diff[FieldMedia])
+}
+
+func TestDiffSnapshotsComparesUnparseableSEOVerbatim(t *testing.T) {
+	t.Parallel()
+
+	prev := Snapshot{SEO: json.RawMessage(`{"seo_title":`)}
+
+	fields, _ := DiffSnapshots(prev, prev)
+	require.Empty(t, fields, "identical bytes are unchanged")
+
+	fields, _ = DiffSnapshots(prev, Snapshot{SEO: json.RawMessage(`{"seo_title":"x"}`)})
+	require.Equal(t, []string{FieldSEO}, fields)
 }
 
 func TestChangelog(t *testing.T) {

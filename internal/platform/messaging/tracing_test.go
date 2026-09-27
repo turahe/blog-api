@@ -60,4 +60,30 @@ func TestTracingRecordsTransactionPerMessage(t *testing.T) {
 	require.Len(t, transport.events, 1)
 	require.Equal(t, "transaction", transport.events[0].Type)
 	require.Equal(t, "queue.process", transport.events[0].Contexts["trace"]["op"])
+	require.Equal(t, sentry.SpanStatusInternalError, transport.events[0].Contexts["trace"]["status"])
+}
+
+//nolint:paralleltest // binds the global Sentry hub
+func TestTracingMarksSuccessfulMessageOK(t *testing.T) {
+	transport := &txTransport{}
+	require.NoError(t, sentry.Init(sentry.ClientOptions{
+		Dsn:              "https://public@example.com/1",
+		EnableTracing:    true,
+		TracesSampleRate: 1,
+		Transport:        transport,
+	}))
+	t.Cleanup(func() { sentry.CurrentHub().BindClient(nil) })
+
+	out := []*message.Message{message.NewMessage("out-1", nil)}
+
+	got, err := Tracing(func(*message.Message) ([]*message.Message, error) { return out, nil })(message.NewMessage("id-1", nil))
+	require.NoError(t, err)
+	require.Equal(t, out, got)
+
+	transport.mu.Lock()
+	defer transport.mu.Unlock()
+
+	require.Len(t, transport.events, 1)
+	require.Equal(t, sentry.SpanStatusOK, transport.events[0].Contexts["trace"]["status"])
+	require.Equal(t, "id-1", transport.events[0].Contexts["trace"]["data"].(map[string]any)["messaging.message.id"])
 }

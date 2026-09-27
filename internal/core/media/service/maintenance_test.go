@@ -8,19 +8,20 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/stretchr/testify/require"
 	mediadomain "github.com/turahe/blog-api/internal/core/media/domain"
 )
 
 func (r *fakeRepo) Abandoned(_ context.Context, before time.Time, limit int) ([]mediadomain.MediaAsset, error) {
 	return r.matching(limit, func(a mediadomain.MediaAsset) bool {
 		return a.DeletedAt == nil && a.Status != mediadomain.StatusReady && a.PresignExpiresAt != nil && a.PresignExpiresAt.Before(before)
-	}), nil
+	}), r.abandonedErr
 }
 
 func (r *fakeRepo) Trashed(_ context.Context, before time.Time, limit int) ([]mediadomain.MediaAsset, error) {
 	return r.matching(limit, func(a mediadomain.MediaAsset) bool {
 		return a.DeletedAt != nil && a.DeletedAt.Before(before)
-	}), nil
+	}), r.trashedErr
 }
 
 func (r *fakeRepo) matching(limit int, keep func(mediadomain.MediaAsset) bool) []mediadomain.MediaAsset {
@@ -157,10 +158,11 @@ func TestUsageClampsTopLimit(t *testing.T) {
 
 type fakePolicy struct {
 	policy mediadomain.TransformPolicy
+	err    error
 }
 
 func (f fakePolicy) TransformPolicy(context.Context) (mediadomain.TransformPolicy, error) {
-	return f.policy, nil
+	return f.policy, f.err
 }
 
 func TestVariantsAndPolicyDefaults(t *testing.T) {
@@ -175,7 +177,7 @@ func TestVariantsAndPolicyDefaults(t *testing.T) {
 	}
 
 	transformer := &fakeTransformer{}
-	svc.WithTransforms(transformer, []int{256}).WithPolicy(fakePolicy{mediadomain.TransformPolicy{
+	svc.WithTransforms(transformer, []int{256}).WithPolicy(fakePolicy{policy: mediadomain.TransformPolicy{
 		Quality: 70, Format: mediadomain.FormatWebP,
 		Variants: []mediadomain.Variant{{Name: "thumb", Width: 100}, {Name: "hero", Width: 1200, Format: mediadomain.FormatAVIF}},
 	}})
@@ -203,5 +205,49 @@ func TestVariantsAndPolicyDefaults(t *testing.T) {
 
 	if last := transformer.got[len(transformer.got)-1]; last != (mediadomain.Transform{Width: 256, Format: mediadomain.FormatWebP, Quality: 70}) {
 		t.Fatalf("TransformURL ignored the policy: %+v", last)
+	}
+}
+
+func TestPurgeOrphansFailures(t *testing.T) {
+	t.Parallel()
+
+	failure := errors.New("backend down")
+
+	tests := []struct {
+		name   string
+		policy PurgePolicy
+		setup  func(*fakeRepo)
+		want   error
+	}{
+		{name: "no limit does nothing", policy: PurgePolicy{}, setup: func(repo *fakeRepo) { repo.abandonedErr = failure }},
+		{name: "abandoned lookup fails", policy: PurgePolicy{Limit: 10}, setup: func(repo *fakeRepo) { repo.abandonedErr = failure }, want: failure},
+		{
+			name:   "trash lookup fails",
+			policy: PurgePolicy{Limit: 10, TrashRetention: time.Hour},
+			setup:  func(repo *fakeRepo) { repo.trashedErr = failure },
+			want:   failure,
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
+			svc, repo, storage := newTestService()
+			expired := baseTime().Add(-48 * time.Hour)
+			id := uuid.New()
+			repo.assets[id] = mediadomain.MediaAsset{UUID: id, StorageKey: "k", Status: mediadomain.StatusPending, PresignExpiresAt: &expired}
+			tc.setup(repo)
+
+			result, err := svc.PurgeOrphans(t.Context(), tc.policy)
+
+			require.ErrorIs(t, err, tc.want)
+			require.Zero(t, result.Trashed)
+
+			if tc.want == nil {
+				require.Equal(t, mediadomain.PurgeResult{}, result)
+				require.Empty(t, storage.deleted)
+			}
+		})
 	}
 }

@@ -6,6 +6,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/require"
 	authdomain "github.com/turahe/blog-api/internal/core/auth/domain"
@@ -167,6 +168,45 @@ func TestMeTwoFactorEndpoints(t *testing.T) {
 	})
 	require.Equal(t, nethttp.StatusConflict, w.Code)
 	require.Equal(t, "auth.2fa.already_enabled", errorCode(body))
+}
+
+func TestMeTwoFactorGuardsAndErrors(t *testing.T) {
+	t.Parallel()
+
+	user := uuid.New()
+	invalid := authdomain.ErrTwoFactorInvalidCode
+	tests := []struct {
+		name    string
+		handler func(twoFactorAPI) gin.HandlerFunc
+		body    string
+		user    *uuid.UUID
+		err     error
+		status  int
+		code    string
+	}{
+		{name: "status needs sign-in", handler: meTwoFactorGetHandler, status: nethttp.StatusUnauthorized, code: "unauthorized"},
+		{name: "status maps failure", handler: meTwoFactorGetHandler, user: &user, err: authdomain.ErrTwoFactorUnavailable, status: nethttp.StatusServiceUnavailable, code: "auth.2fa.unavailable"},
+		{name: "confirm needs sign-in", handler: meTwoFactorConfirmHandler, body: `{"code":"123456"}`, status: nethttp.StatusUnauthorized, code: "unauthorized"},
+		{name: "confirm needs code", handler: meTwoFactorConfirmHandler, body: `{}`, user: &user, status: nethttp.StatusBadRequest, code: "validation_error"},
+		{name: "confirm maps invalid code", handler: meTwoFactorConfirmHandler, body: `{"code":"123456"}`, user: &user, err: invalid, status: nethttp.StatusUnauthorized, code: "auth.2fa.invalid_code"},
+		{name: "disable needs sign-in", handler: meTwoFactorDisableHandler, body: `{"password":"pw","code":"123456"}`, status: nethttp.StatusUnauthorized, code: "unauthorized"},
+		{name: "disable needs password", handler: meTwoFactorDisableHandler, body: `{"code":"123456"}`, user: &user, status: nethttp.StatusBadRequest, code: "validation_error"},
+		{name: "disable maps invalid code", handler: meTwoFactorDisableHandler, body: `{"password":"pw","code":"123456"}`, user: &user, err: invalid, status: nethttp.StatusUnauthorized, code: "auth.2fa.invalid_code"},
+		{name: "backup codes need sign-in", handler: meTwoFactorBackupCodesHandler, body: `{"code":"123456"}`, status: nethttp.StatusUnauthorized, code: "unauthorized"},
+		{name: "backup codes need code", handler: meTwoFactorBackupCodesHandler, body: `{}`, user: &user, status: nethttp.StatusBadRequest, code: "validation_error"},
+		{name: "backup codes map invalid code", handler: meTwoFactorBackupCodesHandler, body: `{"code":"123456"}`, user: &user, err: invalid, status: nethttp.StatusUnauthorized, code: "auth.2fa.invalid_code"},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
+			w, body := runProfile(t, tc.handler(&fakeTwoFactor{err: tc.err}), profileRequest{
+				method: nethttp.MethodPost, target: "/", contentType: jsonContent, body: tc.body, user: tc.user,
+			})
+			require.Equal(t, tc.status, w.Code, w.Body.String())
+			require.Equal(t, tc.code, errorCode(body))
+		})
+	}
 }
 
 type fakeAdminLogin struct {

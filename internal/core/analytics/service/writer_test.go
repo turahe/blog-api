@@ -70,6 +70,38 @@ func TestWriterFlushesInBatchesAndOnClose(t *testing.T) {
 	assert.False(t, w.Enqueue(event()), "a closed writer drops events")
 }
 
+func TestNewWriterFillsDefaultOptions(t *testing.T) {
+	t.Parallel()
+
+	repo := &memEventRepo{}
+	w := NewWriter(repo, nil, WriterOptions{})
+
+	for range 3 {
+		require.True(t, w.Enqueue(event()))
+	}
+
+	require.NoError(t, w.Close(t.Context()))
+	assert.Equal(t, 3, repo.count())
+	assert.Len(t, repo.batches, 1, "a default batch holds more than three events")
+}
+
+func TestWriterCloseGivesUpWhenTheContextEnds(t *testing.T) {
+	t.Parallel()
+
+	repo := &memEventRepo{block: make(chan struct{})}
+	w := NewWriter(repo, nil, WriterOptions{BatchSize: 1, FlushInterval: time.Hour})
+	require.True(t, w.Enqueue(event()))
+
+	ctx, cancel := context.WithCancel(t.Context())
+	cancel()
+
+	require.ErrorIs(t, w.Close(ctx), context.Canceled, "the insert is still blocked")
+
+	close(repo.block)
+	require.NoError(t, w.Close(t.Context()), "a second Close waits for the flush")
+	assert.Equal(t, 1, repo.count())
+}
+
 func TestWriterFlushesOnTheInterval(t *testing.T) {
 	t.Parallel()
 

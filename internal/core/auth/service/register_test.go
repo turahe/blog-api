@@ -11,6 +11,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	authdomain "github.com/turahe/blog-api/internal/core/auth/domain"
+	"github.com/turahe/blog-api/internal/core/auth/ports"
 	authservice "github.com/turahe/blog-api/internal/core/auth/service"
 	userdomain "github.com/turahe/blog-api/internal/core/user/domain"
 )
@@ -18,11 +19,16 @@ import (
 type memRegistrations struct {
 	mu   sync.Mutex
 	rows map[string]authdomain.Registration
+	fail faults
 }
 
 func (m *memRegistrations) Create(_ context.Context, r authdomain.Registration, maxLive int) (bool, error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
+
+	if err := m.fail["Create"]; err != nil {
+		return false, err
+	}
 
 	live := 0
 
@@ -57,6 +63,10 @@ func (m *memRegistrations) Consume(_ context.Context, tokenHash string) (bool, e
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
+	if err := m.fail["Consume"]; err != nil {
+		return false, err
+	}
+
 	hit, ok := m.rows[tokenHash]
 	if !ok {
 		return false, nil
@@ -71,9 +81,12 @@ func (m *memRegistrations) Consume(_ context.Context, tokenHash string) (bool, e
 	return true, nil
 }
 
-type openPolicy struct{ open bool }
+type openPolicy struct {
+	open bool
+	err  error
+}
 
-func (p *openPolicy) RegistrationOpen(context.Context) (bool, error) { return p.open, nil }
+func (p *openPolicy) RegistrationOpen(context.Context) (bool, error) { return p.open, p.err }
 
 type sentMail struct {
 	kind  string
@@ -287,6 +300,119 @@ func TestRegistrationClosed(t *testing.T) {
 
 	unwired := newService(f.users, f.sessions, &memResets{}, &capturingSink{})
 	require.ErrorIs(t, unwired.Register(t.Context(), signUp("new@example.com", "reader")), authdomain.ErrRegistrationClosed)
+}
+
+func TestRegisterFailures(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name    string
+		hasher  ports.PasswordHasher
+		tokens  ports.TokenService
+		setup   func(f signupFixture)
+		wantErr error
+	}{
+		{name: "policy lookup", setup: func(f signupFixture) { f.policy.err = errBoom }, wantErr: errBoom},
+		{name: "username lookup", setup: func(f signupFixture) { f.users.fail = faults{"FindByUsernameOrEmail": errBoom} }, wantErr: errBoom},
+		{name: "hash password", hasher: failingHasher{}, wantErr: errBoom},
+		{name: "email lookup", setup: func(f signupFixture) { f.users.fail = faults{"FindByEmail": errBoom} }, wantErr: errBoom},
+		{name: "issue token", tokens: failingTokens{fail: faults{"IssueResetToken": errBoom}}, wantErr: errBoom},
+		{name: "store sign-up", setup: func(f signupFixture) { f.regs.fail = faults{"Create": errBoom} }, wantErr: errBoom},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			f := newSignupFixture(t)
+			if tt.setup != nil {
+				tt.setup(f)
+			}
+
+			hasher, tokens := tt.hasher, tt.tokens
+			if hasher == nil {
+				hasher = fakeHasher{}
+			}
+
+			if tokens == nil {
+				tokens = fakeTokens{}
+			}
+
+			svc := newServiceAt(f.users, f.sessions, &memResets{}, hasher, tokens, nil).
+				WithRegistration(f.regs, f.policy, f.mail)
+
+			require.ErrorIs(t, svc.Register(t.Context(), signUp("new@example.com", "reader")), tt.wantErr)
+			assert.Empty(t, f.regs.rows)
+		})
+	}
+}
+
+func TestRegisterWithoutNotifierStillStoresTheSignUp(t *testing.T) {
+	t.Parallel()
+
+	f := newSignupFixture(t)
+	f.svc.WithRegistration(f.regs, f.policy, nil)
+
+	require.NoError(t, f.svc.Register(t.Context(), signUp("new@example.com", "reader")))
+	assert.Len(t, f.regs.rows, 1)
+}
+
+// spentRegistrations models a concurrent verification consuming the token between lookup and
+// consume.
+type spentRegistrations struct{ *memRegistrations }
+
+func (spentRegistrations) Consume(context.Context, string) (bool, error) { return false, nil }
+
+func TestVerifyEmailFailures(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name       string
+		token      func(sent string) string
+		noPassword bool
+		setup      func(f signupFixture)
+		wantErr    error
+	}{
+		{name: "blank token", token: func(string) string { return "  " }, wantErr: authdomain.ErrValidation},
+		{name: "no password", noPassword: true, wantErr: authdomain.ErrValidation},
+		{name: "policy lookup", setup: func(f signupFixture) { f.policy.err = errBoom }, wantErr: errBoom},
+		{name: "address locked", setup: func(f signupFixture) { f.attempts.locked["email:new@example.com"] = true }, wantErr: authdomain.ErrAccountLocked},
+		{name: "consume", setup: func(f signupFixture) { f.regs.fail = faults{"Consume": errBoom} }, wantErr: errBoom},
+		{
+			name:    "consumed concurrently",
+			setup:   func(f signupFixture) { f.svc.WithRegistration(spentRegistrations{f.regs}, f.policy, f.mail) },
+			wantErr: authdomain.ErrRegistrationTokenInvalid,
+		},
+		{name: "create account", setup: func(f signupFixture) { f.users.fail = faults{"Create": errBoom} }, wantErr: errBoom},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			f := newSignupFixture(t)
+			require.NoError(t, f.svc.Register(t.Context(), signUp("new@example.com", "reader")))
+			token := f.mail.next(t).token
+
+			if tt.token != nil {
+				token = tt.token(token)
+			}
+
+			password := "Sup3rSecretPass"
+			if tt.noPassword {
+				password = ""
+			}
+
+			if tt.setup != nil {
+				tt.setup(f)
+			}
+
+			pair, err := f.svc.VerifyEmail(t.Context(), token, password, "ua", "ip")
+			require.ErrorIs(t, err, tt.wantErr)
+			assert.Empty(t, pair.AccessToken)
+			assert.Empty(t, f.users.byEmail, "no account is created")
+		})
+	}
 }
 
 func TestRegisterValidatesInput(t *testing.T) {

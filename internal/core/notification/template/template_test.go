@@ -99,6 +99,60 @@ func TestRendererFallsBackToBuiltIn(t *testing.T) {
 	}
 }
 
+func TestNilRendererUsesBuiltIn(t *testing.T) {
+	t.Parallel()
+
+	var renderer *template.Renderer
+
+	msg, err := renderer.Render(context.Background(), template.ChannelWeb, template.TypePasswordChanged, template.Data{})
+	require.NoError(t, err)
+	require.Equal(t, "Your password was changed", msg.Title)
+}
+
+func TestRenderUnknownType(t *testing.T) {
+	t.Parallel()
+
+	_, err := template.Render(template.ChannelEmail, "no.such.type", template.Data{})
+	require.ErrorContains(t, err, `unknown notification type "no.such.type"`)
+}
+
+func TestRenderTemplateRejectsBrokenFields(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name string
+		tpl  template.Template
+	}{
+		{name: "subject", tpl: template.Template{Channel: template.ChannelEmail, Subject: "{{.Missing}}"}},
+		{name: "title", tpl: template.Template{Channel: template.ChannelWeb, Title: "{{.Missing}}"}},
+		{name: "body", tpl: template.Template{Channel: template.ChannelWeb, Title: "t", Body: "{{.Missing}}"}},
+		{name: "preview", tpl: template.Template{Channel: template.ChannelSSE, Title: "t", Preview: "{{.Missing}}"}},
+		{name: "unparsable", tpl: template.Template{Channel: template.ChannelWeb, Title: "{{end}}"}},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			_, err := template.RenderTemplate(tt.tpl, template.Data{})
+			require.Error(t, err)
+		})
+	}
+}
+
+func TestDefaultsAreSorted(t *testing.T) {
+	t.Parallel()
+
+	defaults := template.Defaults()
+	require.NotEmpty(t, defaults)
+
+	for i := 1; i < len(defaults); i++ {
+		prev, cur := defaults[i-1], defaults[i]
+		require.True(t, prev.Type < cur.Type || (prev.Type == cur.Type && prev.Channel < cur.Channel),
+			"%s/%s sorts before %s/%s", prev.Type, prev.Channel, cur.Type, cur.Channel)
+	}
+}
+
 func TestStoredTemplateCannotLeakToken(t *testing.T) {
 	t.Parallel()
 
@@ -126,6 +180,11 @@ func TestValidate(t *testing.T) {
 		"unknown channel":    {Type: "x", Channel: "push", Title: "t"},
 		"sse without event":  {Type: "x", Channel: template.ChannelSSE, Title: "t"},
 		"email without subj": {Type: "x", Channel: template.ChannelEmail, Body: "b"},
+		"missing type":       {Type: " ", Channel: template.ChannelWeb, Title: "t"},
+		"web without title":  {Type: "x", Channel: template.ChannelWeb, Body: "b"},
+		"token in title":     {Type: "x", Channel: template.ChannelWeb, Title: "{{ .Token }}"},
+		"token in preview":   {Type: "x", Channel: template.ChannelSSE, Title: "t", Event: "e", Preview: "{{.Token}}"},
+		"unparsable pattern": {Type: "x", Channel: template.ChannelWeb, Title: "t", Body: "{{if}}"},
 	}
 	for name, tpl := range cases {
 		require.Error(t, template.Validate(tpl), name)

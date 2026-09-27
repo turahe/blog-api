@@ -114,6 +114,48 @@ func TestListRevisionsParsesFilters(t *testing.T) {
 	}
 }
 
+func TestListRevisionsFailures(t *testing.T) {
+	t.Parallel()
+
+	postID := uuid.NewString()
+	tests := []struct {
+		name   string
+		param  string
+		user   *uuid.UUID
+		err    error
+		status int
+		code   string
+	}{
+		{name: "needs sign-in", param: postID, status: nethttp.StatusUnauthorized, code: "unauthorized"},
+		{name: "rejects invalid post id", param: "nope", user: &testUserID, status: nethttp.StatusBadRequest, code: "validation_error"},
+		{name: "maps not found", param: postID, user: &testUserID, err: postdomain.ErrNotFound, status: nethttp.StatusNotFound, code: "not_found"},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
+			w, body := runProfile(t, adminListPostRevisionsHandler(&fakeRevisions{err: tc.err}, always(true)), profileRequest{
+				method: nethttp.MethodGet, target: "/", param: tc.param, user: tc.user,
+			})
+			require.Equal(t, tc.status, w.Code, w.Body.String())
+			require.Equal(t, tc.code, errorCode(body))
+		})
+	}
+}
+
+func TestListRevisionsAcceptsRFC3339Bounds(t *testing.T) {
+	t.Parallel()
+
+	svc := &fakeRevisions{}
+	w, _ := runProfile(t, adminListPostRevisionsHandler(svc, always(true)), profileRequest{
+		method: nethttp.MethodGet, param: uuid.NewString(), user: &testUserID,
+		target: "/?fromDate=2026-09-01T08:30:00Z&toDate=2026-09-02T10:00:00Z",
+	})
+	require.Equal(t, nethttp.StatusOK, w.Code, w.Body.String())
+	assert.Equal(t, time.Date(2026, 9, 1, 8, 30, 0, 0, time.UTC), *svc.filter.From)
+	assert.Equal(t, time.Date(2026, 9, 2, 10, 0, 0, 0, time.UTC), *svc.filter.To, "a timestamp is used as-is")
+}
+
 func TestGetRevisionByNumberOrUUID(t *testing.T) {
 	t.Parallel()
 
@@ -172,4 +214,34 @@ func TestRestoreRevisionPassesNoteAndEditor(t *testing.T) {
 	w, body = runProfile(t, h, profileRequest{method: nethttp.MethodPost, target: "/", param: postID, param2: "1", user: &testUserID})
 	require.Equal(t, nethttp.StatusConflict, w.Code)
 	assert.Equal(t, "post.version_conflict", errorCode(body))
+}
+
+func TestRestoreRevisionRejectsBeforeCallingService(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name   string
+		param  string
+		body   string
+		user   *uuid.UUID
+		status int
+		code   string
+	}{
+		{name: "needs sign-in", param: uuid.NewString(), status: nethttp.StatusUnauthorized, code: "unauthorized"},
+		{name: "rejects invalid post id", param: "nope", user: &testUserID, status: nethttp.StatusBadRequest, code: "validation_error"},
+		{name: "rejects malformed body", param: uuid.NewString(), body: `{`, user: &testUserID, status: nethttp.StatusBadRequest, code: "validation_error"},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
+			svc := &fakeRevisions{}
+			w, body := runProfile(t, adminRestorePostRevisionHandler(svc, always(true)), profileRequest{
+				method: nethttp.MethodPost, target: "/", param: tc.param, param2: "1", user: tc.user, contentType: jsonContent, body: tc.body,
+			})
+			require.Equal(t, tc.status, w.Code, w.Body.String())
+			require.Equal(t, tc.code, errorCode(body))
+			require.Nil(t, svc.ref.Number, "service must not be called")
+		})
+	}
 }

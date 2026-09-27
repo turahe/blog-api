@@ -2,9 +2,11 @@ package handlers
 
 import (
 	"context"
+	"errors"
 	nethttp "net/http"
 	"testing"
 
+	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/require"
 	userdomain "github.com/turahe/blog-api/internal/core/user/domain"
@@ -86,4 +88,33 @@ func TestPrivacyHandlers(t *testing.T) {
 		require.Equal(t, nethttp.StatusForbidden, w.Code)
 		require.Equal(t, "privacy.level_change_requires_reauth", errorCode(body))
 	})
+}
+
+func TestPrivacyHandlerFailures(t *testing.T) {
+	t.Parallel()
+
+	user := testUserID
+
+	tests := []struct {
+		name    string
+		handler gin.HandlerFunc
+		user    *uuid.UUID
+		status  int
+		code    string
+	}{
+		{name: "get needs sign-in", handler: meGetPrivacyHandler(&fakePrivacy{}), status: nethttp.StatusUnauthorized, code: "unauthorized"},
+		{name: "get store failure", handler: meGetPrivacyHandler(&fakePrivacy{err: errors.New("db down")}), user: &user, status: nethttp.StatusInternalServerError, code: "internal_error"},
+		{name: "put needs sign-in", handler: meUpdatePrivacyHandler(&fakePrivacy{}), status: nethttp.StatusUnauthorized, code: "unauthorized"},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
+			w, body := runProfile(t, tc.handler, profileRequest{
+				method: nethttp.MethodPut, target: "/", body: `{}`, contentType: jsonContent, user: tc.user,
+			})
+			require.Equal(t, tc.status, w.Code, w.Body.String())
+			require.Equal(t, tc.code, errorCode(body))
+		})
+	}
 }

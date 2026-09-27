@@ -2,6 +2,8 @@ package service
 
 import (
 	"context"
+	"errors"
+	"strings"
 	"testing"
 	"time"
 
@@ -26,6 +28,16 @@ type fakeRepo struct {
 	upvotes     map[uuid.UUID]map[uuid.UUID]bool
 	log         []commentdomain.ModerationEntry
 	lastFilter  commentdomain.ListFilter
+
+	policyErr     error
+	getErr        error
+	getByIDsErr   error
+	listErr       error
+	createErr     error
+	applyErr      error
+	hardDeleteErr error
+	listFlagsErr  error
+	logErr        error
 }
 
 func newFakeRepo() *fakeRepo {
@@ -38,6 +50,10 @@ func newFakeRepo() *fakeRepo {
 }
 
 func (r *fakeRepo) PostPolicy(_ context.Context, postID uuid.UUID) (commentdomain.Policy, error) {
+	if r.policyErr != nil {
+		return "", r.policyErr
+	}
+
 	if !r.publicPosts[postID] {
 		return "", commentdomain.ErrPostNotFound
 	}
@@ -50,6 +66,10 @@ func (r *fakeRepo) PostPolicy(_ context.Context, postID uuid.UUID) (commentdomai
 }
 
 func (r *fakeRepo) GetByID(_ context.Context, id uuid.UUID) (commentdomain.Comment, error) {
+	if r.getErr != nil {
+		return commentdomain.Comment{}, r.getErr
+	}
+
 	c, ok := r.comments[id]
 	if !ok {
 		return commentdomain.Comment{}, commentdomain.ErrNotFound
@@ -60,10 +80,18 @@ func (r *fakeRepo) GetByID(_ context.Context, id uuid.UUID) (commentdomain.Comme
 
 func (r *fakeRepo) List(_ context.Context, filter commentdomain.ListFilter) (commentdomain.ListResult, error) {
 	r.lastFilter = filter
+	if r.listErr != nil {
+		return commentdomain.ListResult{}, r.listErr
+	}
+
 	return commentdomain.ListResult{Page: filter.Page, PerPage: filter.PerPage}, nil
 }
 
 func (r *fakeRepo) Create(_ context.Context, c commentdomain.Comment) (commentdomain.Comment, error) {
+	if r.createErr != nil {
+		return commentdomain.Comment{}, r.createErr
+	}
+
 	r.comments[c.UUID] = c
 	return c, nil
 }
@@ -96,6 +124,10 @@ func (r *fakeRepo) ToggleUpvote(_ context.Context, commentID, voterID uuid.UUID,
 }
 
 func (r *fakeRepo) GetByIDs(_ context.Context, ids []uuid.UUID) ([]commentdomain.Comment, error) {
+	if r.getByIDsErr != nil {
+		return nil, r.getByIDsErr
+	}
+
 	var found []commentdomain.Comment
 
 	for _, id := range ids {
@@ -108,6 +140,10 @@ func (r *fakeRepo) GetByIDs(_ context.Context, ids []uuid.UUID) ([]commentdomain
 }
 
 func (r *fakeRepo) ApplyModerations(_ context.Context, changes []commentdomain.Moderation) error {
+	if r.applyErr != nil {
+		return r.applyErr
+	}
+
 	var stale []uuid.UUID
 
 	for _, change := range changes {
@@ -129,6 +165,10 @@ func (r *fakeRepo) ApplyModerations(_ context.Context, changes []commentdomain.M
 }
 
 func (r *fakeRepo) HardDelete(_ context.Context, id uuid.UUID, entry commentdomain.ModerationEntry) (bool, error) {
+	if r.hardDeleteErr != nil {
+		return false, r.hardDeleteErr
+	}
+
 	c, ok := r.comments[id]
 	if !ok {
 		return false, commentdomain.ErrNotFound
@@ -152,6 +192,10 @@ func (r *fakeRepo) HardDelete(_ context.Context, id uuid.UUID, entry commentdoma
 }
 
 func (r *fakeRepo) ListFlags(_ context.Context, id uuid.UUID) ([]commentdomain.Flag, error) {
+	if r.listFlagsErr != nil {
+		return nil, r.listFlagsErr
+	}
+
 	var flags []commentdomain.Flag
 
 	for _, flag := range r.flags {
@@ -164,6 +208,10 @@ func (r *fakeRepo) ListFlags(_ context.Context, id uuid.UUID) ([]commentdomain.F
 }
 
 func (r *fakeRepo) ListModerationLog(_ context.Context, id uuid.UUID) ([]commentdomain.ModerationEntry, error) {
+	if r.logErr != nil {
+		return nil, r.logErr
+	}
+
 	var entries []commentdomain.ModerationEntry
 
 	for _, entry := range r.log {
@@ -255,6 +303,69 @@ func TestIdentityHashesAreKeyedWhenAHasherIsSet(t *testing.T) {
 	}))
 	require.Len(t, f.repo.flags, 1)
 	require.Equal(t, "mac:198.51.100.1|curl", f.repo.flags[0].ReporterIPHash)
+}
+
+func TestCreateTruncatesTheUserAgent(t *testing.T) {
+	t.Parallel()
+
+	f := newFixture(Config{})
+
+	got, err := f.svc.Create(context.Background(), CreateInput{
+		PostUUID: f.post, AuthorUUID: &f.user, Content: "hi", UserAgent: " " + strings.Repeat("é", maxUserAgentRunes+10) + " ",
+	})
+	require.NoError(t, err)
+	require.Equal(t, strings.Repeat("é", maxUserAgentRunes), got.UserAgent)
+}
+
+func TestCreateFailures(t *testing.T) {
+	t.Parallel()
+
+	boom := errors.New("boom")
+	parentID := uuid.New()
+
+	tests := []struct {
+		name    string
+		cfg     Config
+		breakIt func(*fakeRepo)
+		in      func(f fixture) CreateInput
+	}{
+		{
+			name:    "store fails",
+			breakIt: func(r *fakeRepo) { r.createErr = boom },
+			in:      func(f fixture) CreateInput { return CreateInput{PostUUID: f.post, AuthorUUID: &f.user, Content: "hi"} },
+		},
+		{
+			name:    "parent lookup fails",
+			breakIt: func(r *fakeRepo) { r.getErr = boom },
+			in: func(f fixture) CreateInput {
+				return CreateInput{PostUUID: f.post, ParentUUID: &parentID, AuthorUUID: &f.user, Content: "hi"}
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			f := newFixture(tt.cfg)
+			tt.breakIt(f.repo)
+
+			_, err := f.svc.Create(t.Context(), tt.in(f))
+			require.ErrorIs(t, err, boom)
+		})
+	}
+}
+
+func TestCreateGuestNameTooLong(t *testing.T) {
+	t.Parallel()
+
+	f := newFixture(Config{GuestEnabled: true})
+
+	_, err := f.svc.Create(t.Context(), CreateInput{
+		PostUUID: f.post, AuthorName: strings.Repeat("n", maxAuthorNameRunes+1), AuthorEmail: "ann@example.com", Content: "hi",
+	})
+	require.ErrorIs(t, err, commentdomain.ErrValidation)
+	require.Empty(t, f.repo.comments)
 }
 
 func TestCreateRequireApprovalStartsPending(t *testing.T) {
@@ -404,6 +515,20 @@ func TestUpdateWithinEditWindow(t *testing.T) {
 	require.NotNil(t, got.EditedAt)
 }
 
+func TestUpdateFailures(t *testing.T) {
+	t.Parallel()
+
+	f := newFixture(Config{})
+	c := f.seed(commentdomain.Comment{AuthorUUID: &f.user, Content: "old"})
+
+	_, err := f.svc.Update(t.Context(), f.user, c.UUID, "   ")
+	require.ErrorIs(t, err, commentdomain.ErrValidation)
+
+	_, err = f.svc.Update(t.Context(), f.user, uuid.New(), "new")
+	require.ErrorIs(t, err, commentdomain.ErrNotFound)
+	require.Equal(t, "old", f.repo.comments[c.UUID].Content)
+}
+
 func TestUpdateAfterEditWindowExpires(t *testing.T) {
 	t.Parallel()
 
@@ -459,6 +584,14 @@ func TestDeleteSoftDeletesAndIsIdempotent(t *testing.T) {
 	require.NoError(t, f.svc.Delete(context.Background(), f.user, c.UUID))
 }
 
+func TestDeleteMissingComment(t *testing.T) {
+	t.Parallel()
+
+	f := newFixture(Config{})
+
+	require.ErrorIs(t, f.svc.Delete(t.Context(), f.user, uuid.New()), commentdomain.ErrNotFound)
+}
+
 func TestDeleteRejectsNonOwner(t *testing.T) {
 	t.Parallel()
 
@@ -489,6 +622,22 @@ func TestFlagValidatesReasonAndHashesGuestIdentity(t *testing.T) {
 	require.Len(t, f.repo.flags[0].ReporterIPHash, 64)
 }
 
+func TestFlagRejections(t *testing.T) {
+	t.Parallel()
+
+	f := newFixture(Config{})
+	c := f.seed(commentdomain.Comment{})
+
+	err := f.svc.Flag(t.Context(), FlagInput{
+		CommentUUID: c.UUID, Reason: "spam", Details: strings.Repeat("d", commentdomain.MaxFlagDetailsRunes+1),
+	})
+	require.ErrorIs(t, err, commentdomain.ErrValidation)
+
+	err = f.svc.Flag(t.Context(), FlagInput{CommentUUID: uuid.New(), Reason: "spam"})
+	require.ErrorIs(t, err, commentdomain.ErrNotFound)
+	require.Empty(t, f.repo.flags)
+}
+
 func TestFlagAndUpvoteRequireApprovedComment(t *testing.T) {
 	t.Parallel()
 
@@ -516,6 +665,15 @@ func TestToggleUpvote(t *testing.T) {
 	require.NoError(t, err)
 	require.False(t, upvoted)
 	require.Equal(t, 0, count)
+}
+
+func TestToggleUpvoteMissingComment(t *testing.T) {
+	t.Parallel()
+
+	f := newFixture(Config{})
+
+	_, _, err := f.svc.ToggleUpvote(t.Context(), f.user, uuid.New())
+	require.ErrorIs(t, err, commentdomain.ErrNotFound)
 }
 
 func TestGetThreadHidesNonPublicComments(t *testing.T) {
@@ -551,4 +709,56 @@ func TestListForPostDefaultsToRoots(t *testing.T) {
 
 	_, err = f.svc.ListForPost(context.Background(), uuid.New(), nil, 1, 20)
 	require.ErrorIs(t, err, commentdomain.ErrPostNotFound)
+}
+
+func TestGetThreadFailures(t *testing.T) {
+	t.Parallel()
+
+	boom := errors.New("boom")
+
+	tests := []struct {
+		name    string
+		breakIt func(*fakeRepo)
+		missing bool
+		wantErr error
+	}{
+		{name: "missing comment", breakIt: func(*fakeRepo) {}, missing: true, wantErr: commentdomain.ErrNotFound},
+		{name: "post policy fails", breakIt: func(r *fakeRepo) { r.policyErr = boom }, wantErr: boom},
+		{name: "replies fail", breakIt: func(r *fakeRepo) { r.listErr = boom }, wantErr: boom},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			f := newFixture(Config{})
+			id := f.seed(commentdomain.Comment{Content: "hi"}).UUID
+			if tt.missing {
+				id = uuid.New()
+			}
+
+			tt.breakIt(f.repo)
+
+			_, err := f.svc.GetThread(t.Context(), id)
+			require.ErrorIs(t, err, tt.wantErr)
+		})
+	}
+}
+
+func TestListMineShowsEveryLiveStatusNewestFirst(t *testing.T) {
+	t.Parallel()
+
+	f := newFixture(Config{})
+
+	got, err := f.svc.ListMine(t.Context(), f.user, 0, 0)
+	require.NoError(t, err)
+	require.Equal(t, 1, got.Page)
+	require.Equal(t, 20, got.PerPage)
+	require.Equal(t, &f.user, f.repo.lastFilter.AuthorUUID)
+	require.True(t, f.repo.lastFilter.NewestFirst)
+	require.ElementsMatch(t, []commentdomain.Status{
+		commentdomain.StatusPending, commentdomain.StatusApproved, commentdomain.StatusFlagged,
+		commentdomain.StatusSpam, commentdomain.StatusRejected,
+	}, f.repo.lastFilter.Statuses)
+	require.NotContains(t, f.repo.lastFilter.Statuses, commentdomain.StatusDeleted)
 }

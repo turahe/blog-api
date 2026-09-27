@@ -2,6 +2,7 @@ package service
 
 import (
 	"context"
+	"errors"
 	"strings"
 	"testing"
 
@@ -266,6 +267,73 @@ func TestBulkModerateValidation(t *testing.T) {
 	}
 }
 
+func TestBulkModerateFailures(t *testing.T) {
+	t.Parallel()
+
+	boom := errors.New("boom")
+
+	tests := []struct {
+		name    string
+		breakIt func(*fakeRepo)
+		reason  string
+		wantErr error
+	}{
+		{name: "long reason", breakIt: func(*fakeRepo) {}, reason: strings.Repeat("x", commentdomain.MaxModerationReasonRunes+1), wantErr: commentdomain.ErrValidation},
+		{name: "lookup fails", breakIt: func(r *fakeRepo) { r.getByIDsErr = boom }, wantErr: boom},
+		{name: "apply fails", breakIt: func(r *fakeRepo) { r.applyErr = boom }, wantErr: boom},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			f := newFixture(Config{})
+			c := f.seed(commentdomain.Comment{Status: commentdomain.StatusPending, Content: "hi"})
+			tt.breakIt(f.repo)
+
+			n, err := f.svc.BulkModerate(t.Context(), BulkModerateInput{
+				ModeratorUUID: uuid.New(), CommentUUIDs: []uuid.UUID{c.UUID}, Action: commentdomain.ActionApprove, Reason: tt.reason,
+			})
+			require.ErrorIs(t, err, tt.wantErr)
+			require.Zero(t, n)
+			require.Equal(t, commentdomain.StatusPending, f.repo.comments[c.UUID].Status)
+		})
+	}
+}
+
+func TestHardDeleteFailures(t *testing.T) {
+	t.Parallel()
+
+	boom := errors.New("boom")
+
+	f := newFixture(Config{})
+	c := f.seed(commentdomain.Comment{Content: "hi"})
+
+	_, err := f.svc.HardDelete(t.Context(), uuid.New(), c.UUID, strings.Repeat("x", commentdomain.MaxModerationReasonRunes+1))
+	require.ErrorIs(t, err, commentdomain.ErrValidation)
+
+	_, err = f.svc.HardDelete(t.Context(), uuid.New(), uuid.New(), "")
+	require.ErrorIs(t, err, commentdomain.ErrNotFound)
+
+	f.repo.hardDeleteErr = boom
+	_, err = f.svc.HardDelete(t.Context(), uuid.New(), c.UUID, "")
+	require.ErrorIs(t, err, boom)
+	require.Contains(t, f.repo.comments, c.UUID)
+	require.Empty(t, f.repo.log)
+}
+
+func TestStatsPassesThroughTheRepository(t *testing.T) {
+	t.Parallel()
+
+	f := newFixture(Config{})
+	f.seed(commentdomain.Comment{Status: commentdomain.StatusPending})
+	f.seed(commentdomain.Comment{Status: commentdomain.StatusFlagged})
+
+	stats, err := f.svc.Stats(t.Context())
+	require.NoError(t, err)
+	require.Equal(t, commentdomain.Stats{QueueDepth: 2}, stats)
+}
+
 func TestHardDeleteRemovesLeafComment(t *testing.T) {
 	t.Parallel()
 
@@ -351,4 +419,31 @@ func TestAdminGetIncludesFlagsAndHistory(t *testing.T) {
 
 	_, err = f.svc.AdminGet(context.Background(), uuid.New())
 	require.ErrorIs(t, err, commentdomain.ErrNotFound)
+}
+
+func TestAdminGetFailures(t *testing.T) {
+	t.Parallel()
+
+	boom := errors.New("boom")
+
+	tests := []struct {
+		name    string
+		breakIt func(*fakeRepo)
+	}{
+		{name: "flags fail", breakIt: func(r *fakeRepo) { r.listFlagsErr = boom }},
+		{name: "history fails", breakIt: func(r *fakeRepo) { r.logErr = boom }},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			f := newFixture(Config{})
+			c := f.seed(commentdomain.Comment{Content: "hi"})
+			tt.breakIt(f.repo)
+
+			_, err := f.svc.AdminGet(t.Context(), c.UUID)
+			require.ErrorIs(t, err, boom)
+		})
+	}
 }

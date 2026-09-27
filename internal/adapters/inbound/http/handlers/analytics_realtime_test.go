@@ -113,3 +113,103 @@ func TestAdminAnalyticsRealtimeClosesOnShutdown(t *testing.T) {
 	require.Equal(t, nethttp.StatusServiceUnavailable, w.Code, "no new streams after shutdown")
 	assert.Equal(t, codeRealtimeUnavailable, errorCode(body))
 }
+
+func TestAdminAnalyticsRealtimeNeedsSignIn(t *testing.T) {
+	t.Parallel()
+
+	w, body := runProfile(t, adminAnalyticsRealtimeHandler(&fakeLiveBoard{}, realtime.NewHub(1, 1), 0), profileRequest{
+		method: nethttp.MethodGet, target: "/",
+	})
+	require.Equal(t, nethttp.StatusUnauthorized, w.Code)
+	assert.Equal(t, "unauthorized", errorCode(body))
+}
+
+func TestStreamLiveStopsOnWriteFailure(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name   string
+		failAt int
+	}{
+		{name: "retry hint", failAt: 1},
+		{name: "opened frame", failAt: 2},
+		{name: "page view frame", failAt: 3},
+		{name: "search frame", failAt: 4},
+		{name: "summary frame", failAt: 5},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
+			hub := realtime.NewHub(1, 1)
+			conn, err := hub.Register(testUserID)
+			require.NoError(t, err)
+
+			board := &fakeLiveBoard{}
+			c, w := streamContext(t, tc.failAt)
+			streamLive(c, conn, board, time.Hour)
+			require.Equal(t, tc.failAt, w.writes, "no write after the failure")
+		})
+	}
+}
+
+func TestStreamLiveClosesOnShutdown(t *testing.T) {
+	t.Parallel()
+
+	hub := realtime.NewHub(1, 1)
+	conn, err := hub.Register(testUserID)
+	require.NoError(t, err)
+	hub.Shutdown()
+
+	c, _ := streamContext(t, 100)
+	rec := httptest.NewRecorder()
+	c.Writer.(*failingWriter).ResponseWriter = ginWriter(t, rec)
+
+	streamLive(c, conn, &fakeLiveBoard{}, time.Hour)
+	assert.Contains(t, rec.Body.String(), "event: stream.closed")
+	assert.Contains(t, rec.Body.String(), `"code":"shutdown"`)
+}
+
+// cancellingBoard cancels the request on its second snapshot, after one ticker round.
+type cancellingBoard struct {
+	fakeLiveBoard
+
+	cancel context.CancelFunc
+}
+
+func (b *cancellingBoard) Snapshot(cursor uint64) (analyticsdomain.LiveSnapshot, uint64) {
+	snapshot, next := b.fakeLiveBoard.Snapshot(cursor)
+	if len(b.cursors) == 2 {
+		b.cancel()
+	}
+
+	return snapshot, next
+}
+
+func TestStreamLiveRefreshesOnEachTick(t *testing.T) {
+	t.Parallel()
+
+	hub := realtime.NewHub(1, 1)
+	conn, err := hub.Register(testUserID)
+	require.NoError(t, err)
+
+	c, _ := streamContext(t, 100)
+	ctx, cancel := context.WithCancel(c.Request.Context())
+	c.Request = c.Request.WithContext(ctx)
+
+	board := &cancellingBoard{cancel: cancel}
+	streamLive(c, conn, board, time.Millisecond)
+
+	// A tick may race the cancellation in select, so the stream can take one more snapshot before it stops.
+	require.GreaterOrEqual(t, len(board.cursors), 2)
+	assert.Equal(t, []uint64{0, 7}, board.cursors[:2], "the second snapshot continues from the first cursor")
+}
+
+// ginWriter returns a gin.ResponseWriter that records into rec.
+func ginWriter(t *testing.T, rec *httptest.ResponseRecorder) gin.ResponseWriter {
+	t.Helper()
+
+	c, _ := gin.CreateTestContext(rec)
+
+	return c.Writer
+}

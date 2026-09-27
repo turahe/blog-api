@@ -72,7 +72,13 @@ func enableWith(t *testing.T, cfg config.Config) (*fakeTransport, func()) {
 	require.NoError(t, err)
 	t.Cleanup(func() {
 		flush()
+
+		c := sentrygo.CurrentHub().Client()
 		sentrygo.CurrentHub().BindClient(nil)
+
+		if c != nil {
+			c.Close()
+		}
 	})
 
 	return transport, flush
@@ -84,6 +90,14 @@ func TestInitDisabledIsNoop(t *testing.T) {
 	require.NoError(t, err)
 	require.NotNil(t, flush)
 	flush()
+	require.Nil(t, sentrygo.CurrentHub().Client())
+}
+
+//nolint:paralleltest // binds the global Sentry hub
+func TestInitReportsInvalidDSN(t *testing.T) {
+	flush, err := Init(config.Config{SentryDSN: "not a dsn"}, "v1")
+	require.ErrorContains(t, err, "init sentry")
+	require.Nil(t, flush)
 	require.Nil(t, sentrygo.CurrentHub().Client())
 }
 
@@ -166,6 +180,69 @@ func TestHandlerWithoutLogsSendsNoLogs(t *testing.T) {
 	flush()
 
 	require.Empty(t, transport.OfType("log"))
+}
+
+//nolint:paralleltest // reads the global Sentry hub
+func TestHandlerWithoutClientCapturesNothing(t *testing.T) {
+	require.Nil(t, sentrygo.CurrentHub().Client())
+
+	record := slog.NewRecord(time.Now(), slog.LevelError, "boom", 0)
+	require.NoError(t, NewHandler().Handle(context.Background(), record))
+}
+
+//nolint:paralleltest // binds the global Sentry hub
+func TestHandlerWithGroupPrefixesKeys(t *testing.T) {
+	transport := enable(t)
+	handler := NewHandler()
+
+	require.Same(t, handler, handler.WithGroup(""), "an empty group is a no-op")
+
+	slog.New(handler).WithGroup("job").With("name", "prune").WithGroup("db").
+		Error("query failed", "err", errors.New("deadlock"), "table", "posts")
+
+	events := transport.Events()
+	require.Len(t, events, 1)
+
+	event := events[0]
+	require.NotEmpty(t, event.Exception, "a grouped err attribute is still the exception")
+	require.Equal(t, "deadlock", event.Exception[len(event.Exception)-1].Value)
+	require.Equal(t, "prune", event.Contexts["log"]["job.name"])
+	require.Equal(t, "posts", event.Contexts["log"]["job.db.table"])
+	require.Contains(t, event.Contexts["log"], "job.db.err")
+}
+
+//nolint:paralleltest // binds the global Sentry hub
+func TestHandlerSkipsAttributesWithoutKey(t *testing.T) {
+	transport := enable(t)
+
+	record := slog.NewRecord(time.Now(), slog.LevelError, "boom", 0)
+	record.AddAttrs(slog.String("", "orphan"), slog.String("kept", "yes"))
+	require.NoError(t, NewHandler().Handle(context.Background(), record))
+
+	events := transport.Events()
+	require.Len(t, events, 1)
+	require.Equal(t, sentrygo.Context{"kept": "yes"}, events[0].Contexts["log"])
+}
+
+//nolint:paralleltest // binds the global Sentry hub
+func TestHandlerWithLogsMapsLevelsAndFloats(t *testing.T) {
+	transport, flush := enableWith(t, config.Config{SentryLogsLevel: "debug"})
+	logger := slog.New(NewHandler().WithLogs(slog.LevelDebug))
+
+	logger.Debug("cache miss", "ratio", 0.25)
+	logger.Warn("slow query")
+	flush()
+
+	var logs []sentrygo.Log
+	for _, e := range transport.OfType("log") {
+		logs = append(logs, e.Logs...)
+	}
+
+	require.Len(t, logs, 2)
+	require.Equal(t, sentrygo.LogLevelDebug, logs[0].Level)
+	require.InDelta(t, 0.25, logs[0].Attributes["ratio"].AsFloat64(), 1e-9)
+	require.Equal(t, sentrygo.LogLevelWarn, logs[1].Level)
+	require.Empty(t, transport.OfType(""), "records below Error are not captured as events")
 }
 
 func TestScrubRemovesSensitiveRequestData(t *testing.T) {

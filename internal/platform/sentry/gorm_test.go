@@ -1,6 +1,7 @@
 package sentry
 
 import (
+	"errors"
 	"testing"
 
 	sentrygo "github.com/getsentry/sentry-go"
@@ -24,6 +25,10 @@ func dryRunDB(tb testing.TB, plugins ...gorm.Plugin) *gorm.DB {
 		DisableAutomaticPing: true,
 	})
 	require.NoError(tb, err)
+
+	sqlDB, err := db.DB()
+	require.NoError(tb, err)
+	tb.Cleanup(func() { _ = sqlDB.Close() })
 
 	for _, p := range plugins {
 		require.NoError(tb, db.Use(p))
@@ -67,4 +72,74 @@ func TestGORMTracingIgnoresStatementsOutsideASpan(t *testing.T) {
 	flush()
 
 	require.Empty(t, transport.OfType("transaction"), "a statement never starts its own transaction")
+}
+
+func TestSampledParentWithoutContext(t *testing.T) {
+	t.Parallel()
+
+	require.Nil(t, sampledParent(&gorm.DB{Statement: &gorm.Statement{}}))
+}
+
+//nolint:paralleltest // binds the global Sentry hub
+func TestFinishGORMSpanStatus(t *testing.T) {
+	tests := []struct {
+		name string
+		err  error
+		want sentrygo.SpanStatus
+	}{
+		{name: "success", want: sentrygo.SpanStatusOK},
+		{name: "record not found", err: gorm.ErrRecordNotFound, want: sentrygo.SpanStatusOK},
+		{name: "failure", err: errors.New("deadlock"), want: sentrygo.SpanStatusInternalError},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			transport, flush := enableWith(t, config.Config{SentryLogsLevel: "off", SentryTracesSampleRate: 1})
+			tx := sentrygo.StartTransaction(t.Context(), "job")
+			db := dryRunDB(t).WithContext(tx.Context()).Model(&post{})
+
+			startGORMSpan(db)
+
+			if tt.err != nil {
+				_ = db.AddError(tt.err)
+			}
+
+			finishGORMSpan(db)
+			tx.Finish()
+			flush()
+
+			txs := transport.OfType("transaction")
+			require.Len(t, txs, 1)
+			require.Len(t, txs[0].Spans, 1)
+			require.Equal(t, tt.want, txs[0].Spans[0].Status)
+		})
+	}
+}
+
+//nolint:paralleltest // binds the global Sentry hub
+func TestFinishGORMSpanIgnoresMissingOrForeignSpan(t *testing.T) {
+	tests := []struct {
+		name  string
+		setup func(db *gorm.DB)
+	}{
+		{name: "no span started", setup: func(*gorm.DB) {}},
+		{name: "foreign value", setup: func(db *gorm.DB) { db.InstanceSet(gormSpanKey, "not a span") }},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			transport, flush := enableWith(t, config.Config{SentryLogsLevel: "off", SentryTracesSampleRate: 1})
+			tx := sentrygo.StartTransaction(t.Context(), "job")
+			db := dryRunDB(t).WithContext(tx.Context()).Model(&post{})
+
+			tt.setup(db)
+			finishGORMSpan(db)
+			tx.Finish()
+			flush()
+
+			txs := transport.OfType("transaction")
+			require.Len(t, txs, 1)
+			require.Empty(t, txs[0].Spans)
+		})
+	}
 }

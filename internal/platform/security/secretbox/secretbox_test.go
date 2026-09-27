@@ -44,6 +44,31 @@ func TestEncryptRoundTripAndTamper(t *testing.T) {
 	require.ErrorIs(t, err, ErrCiphertext)
 }
 
+func TestDecryptRejectsMalformedCiphertext(t *testing.T) {
+	t.Parallel()
+
+	box := testBox(t, 1)
+
+	tests := []struct {
+		name       string
+		ciphertext string
+	}{
+		{name: "missing version", ciphertext: base64.RawStdEncoding.EncodeToString(make([]byte, 32))},
+		{name: "body not base64", ciphertext: version + "!!!"},
+		{name: "shorter than a nonce", ciphertext: version + base64.RawStdEncoding.EncodeToString([]byte("short"))},
+		{name: "empty body", ciphertext: version},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			_, err := box.Decrypt(tt.ciphertext)
+			require.ErrorIs(t, err, ErrCiphertext)
+		})
+	}
+}
+
 func TestMACIsKeyed(t *testing.T) {
 	t.Parallel()
 

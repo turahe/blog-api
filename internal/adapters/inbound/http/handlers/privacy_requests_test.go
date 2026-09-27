@@ -2,12 +2,15 @@ package handlers
 
 import (
 	"context"
+	"errors"
 	nethttp "net/http"
 	"testing"
 	"time"
 
+	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/require"
+	authdomain "github.com/turahe/blog-api/internal/core/auth/domain"
 	privacydomain "github.com/turahe/blog-api/internal/core/privacy/domain"
 	privacyservice "github.com/turahe/blog-api/internal/core/privacy/service"
 )
@@ -113,3 +116,49 @@ func TestEraseHandler(t *testing.T) {
 		require.Equal(t, "privacy.erase_requires_reauth", errorCode(body))
 	})
 }
+
+func TestPrivacyRequestHandlerFailures(t *testing.T) {
+	t.Parallel()
+
+	user := testUserID
+
+	tests := []struct {
+		name    string
+		handler func(*fakePrivacyRequests) gin.HandlerFunc
+		user    *uuid.UUID
+		err     error
+		status  int
+		code    string
+		message string
+	}{
+		{name: "export needs sign-in", handler: exportHandler, status: nethttp.StatusUnauthorized, code: "unauthorized"},
+		{name: "erase needs sign-in", handler: eraseHandler, status: nethttp.StatusUnauthorized, code: "unauthorized"},
+		{
+			name: "inactive account", handler: eraseHandler, user: &user, err: authdomain.ErrUserInactive,
+			status: nethttp.StatusUnauthorized, code: "unauthorized", message: "Account is not active",
+		},
+		{
+			name: "unexpected failure", handler: exportHandler, user: &user, err: errors.New("db down"),
+			status: nethttp.StatusInternalServerError, code: "internal_error", message: "Failed to process privacy request",
+		},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
+			w, body := runProfile(t, tc.handler(&fakePrivacyRequests{err: tc.err}), profileRequest{
+				method: nethttp.MethodPost, target: "/", body: `{"currentPassword":"pw"}`, contentType: jsonContent, user: tc.user,
+			})
+			require.Equal(t, tc.status, w.Code, w.Body.String())
+			require.Equal(t, tc.code, errorCode(body))
+
+			if tc.message != "" {
+				require.Equal(t, tc.message, errorMessage(body))
+			}
+		})
+	}
+}
+
+func exportHandler(f *fakePrivacyRequests) gin.HandlerFunc { return meExportHandler(f) }
+
+func eraseHandler(f *fakePrivacyRequests) gin.HandlerFunc { return meEraseHandler(f) }

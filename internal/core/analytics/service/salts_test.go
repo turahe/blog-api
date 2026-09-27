@@ -115,3 +115,29 @@ func TestSaltStoreOutageFallsBackThenRecovers(t *testing.T) {
 	assert.Equal(t, shared, anonymousHash(t, ingest, sink))
 	assert.Equal(t, 2, store.calls)
 }
+
+type shortSaltStore struct{ calls int }
+
+func (s *shortSaltStore) DailySalt(context.Context, string, []byte, string) ([]byte, error) {
+	s.calls++
+
+	return []byte{1, 2, 3}, nil
+}
+
+func TestSaltStoreWithAMalformedSaltFallsBack(t *testing.T) {
+	t.Parallel()
+
+	store := &shortSaltStore{}
+	sink := &memSink{}
+	clock := &fixedClock{now: time.Date(2026, 9, 25, 10, 0, 0, 0, time.UTC)}
+
+	var logs bytes.Buffer
+
+	ingest := NewIngest(sink, newProcessHasher(), seqIDs{id: uuid.New()}, clock).
+		WithSalts(store, slog.New(slog.NewTextHandler(&logs, nil)))
+
+	local := anonymousHash(t, ingest, sink)
+	assert.Equal(t, local, anonymousHash(t, ingest, sink), "the stand-in salt holds until the retry")
+	assert.Equal(t, 1, store.calls)
+	assert.Contains(t, logs.String(), "stored salt has the wrong length")
+}

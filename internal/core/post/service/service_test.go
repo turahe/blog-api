@@ -2,12 +2,15 @@ package service
 
 import (
 	"context"
+	"errors"
 	"strings"
 	"testing"
 	"time"
 
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/require"
+	"github.com/turahe/blog-api/internal/core/event/eventtest"
+	mediadomain "github.com/turahe/blog-api/internal/core/media/domain"
 	postdomain "github.com/turahe/blog-api/internal/core/post/domain"
 	tagdomain "github.com/turahe/blog-api/internal/core/tag/domain"
 	tagservice "github.com/turahe/blog-api/internal/core/tag/service"
@@ -44,6 +47,11 @@ type fakePostRepo struct {
 	restoreCalls     int
 	restoreConflicts int
 	publicReads      int
+	getByIDErr       error
+	updateErr        error
+	softDeleteErr    error
+	slugsErr         error
+	coverImages      map[uuid.UUID]*uuid.UUID
 }
 
 type fakeTagLinker struct {
@@ -104,6 +112,10 @@ func (f *fakePostRepo) GetPublishedBySlug(_ context.Context, slug string) (postd
 }
 
 func (f *fakePostRepo) GetByID(_ context.Context, id uuid.UUID) (postdomain.Post, error) {
+	if f.getByIDErr != nil {
+		return postdomain.Post{}, f.getByIDErr
+	}
+
 	post, ok := f.posts[id]
 	if !ok {
 		return postdomain.Post{}, postdomain.ErrNotFound
@@ -127,6 +139,10 @@ func (f *fakePostRepo) Create(_ context.Context, post postdomain.Post) (postdoma
 
 func (f *fakePostRepo) Update(_ context.Context, post postdomain.Post) (postdomain.Post, error) {
 	f.updateCalls++
+	if f.updateErr != nil {
+		return postdomain.Post{}, f.updateErr
+	}
+
 	if stored, ok := f.posts[post.UUID]; ok && stored.Version != post.Version-1 {
 		return postdomain.Post{}, postdomain.ErrStaleVersion
 	}
@@ -160,6 +176,10 @@ func (f *fakePostRepo) GetDeletedByID(_ context.Context, id uuid.UUID) (postdoma
 }
 
 func (f *fakePostRepo) SoftDelete(_ context.Context, post postdomain.Post) error {
+	if f.softDeleteErr != nil {
+		return f.softDeleteErr
+	}
+
 	stored, ok := f.posts[post.UUID]
 	if !ok || stored.DeletedAt != nil {
 		return postdomain.ErrNotFound
@@ -189,6 +209,10 @@ func (f *fakePostRepo) Restore(_ context.Context, post postdomain.Post) (postdom
 }
 
 func (f *fakePostRepo) SlugsWithPrefix(_ context.Context, base string) ([]string, error) {
+	if f.slugsErr != nil {
+		return nil, f.slugsErr
+	}
+
 	var slugs []string
 
 	matches := func(slug string) bool { return slug == base || strings.HasPrefix(slug, base+"-") }
@@ -208,8 +232,18 @@ func (f *fakePostRepo) SlugsWithPrefix(_ context.Context, base string) ([]string
 	return slugs, nil
 }
 
-func (f *fakePostRepo) SetCoverImage(context.Context, uuid.UUID, *uuid.UUID, time.Time) error {
-	return f.setCoverImageErr
+func (f *fakePostRepo) SetCoverImage(_ context.Context, postID uuid.UUID, coverID *uuid.UUID, _ time.Time) error {
+	if f.setCoverImageErr != nil {
+		return f.setCoverImageErr
+	}
+
+	if f.coverImages == nil {
+		f.coverImages = map[uuid.UUID]*uuid.UUID{}
+	}
+
+	f.coverImages[postID] = coverID
+
+	return nil
 }
 
 func (f *fakeTagLinker) ResolveOrCreate(_ context.Context, names []string) ([]tagdomain.Tag, error) {
@@ -666,4 +700,397 @@ func TestPostServiceUpdateRejectsInvalidTagsBeforePersistingUpdate(t *testing.T)
 	require.ErrorIs(t, err, tagservice.ErrValidation)
 	require.Equal(t, 0, repo.updateCalls)
 	require.Len(t, repo.posts, 1)
+}
+
+func TestPostServiceGetPublishedBySlugBlankIsNotFound(t *testing.T) {
+	t.Parallel()
+
+	repo := newFakePostRepo()
+	svc := New(repo, nil, fixedClock{})
+
+	_, err := svc.GetPublishedBySlug(t.Context(), "   ")
+
+	require.ErrorIs(t, err, postdomain.ErrNotFound)
+	require.Zero(t, repo.publicReads)
+}
+
+func TestPostServiceCreateDraftFailures(t *testing.T) {
+	t.Parallel()
+
+	failure := errors.New("store unavailable")
+	tagNames := []string{"go"}
+
+	tests := []struct {
+		name  string
+		title string
+		tags  *[]string
+		build func(*fakePostRepo) *PostService
+		want  error
+	}{
+		{
+			name: "blank title", title: "   ",
+			build: func(repo *fakePostRepo) *PostService { return New(repo, randomIDs{}, fixedClock{now: lifecycleNow}) },
+			want:  ErrValidation,
+		},
+		{
+			name: "tags without tag support", title: "Title", tags: &tagNames,
+			build: func(repo *fakePostRepo) *PostService { return New(repo, randomIDs{}, fixedClock{now: lifecycleNow}) },
+			want:  ErrValidation,
+		},
+		{
+			name: "free slug lookup fails", title: "Title",
+			build: func(repo *fakePostRepo) *PostService {
+				repo.slugsErr = failure
+				return New(repo, randomIDs{}, fixedClock{now: lifecycleNow})
+			},
+			want: failure,
+		},
+		{
+			name: "tag link fails", title: "Title", tags: &tagNames,
+			build: func(repo *fakePostRepo) *PostService {
+				return New(repo, randomIDs{}, fixedClock{now: lifecycleNow}).WithTags(&fakeTagLinker{replaceErr: failure})
+			},
+			want: failure,
+		},
+		{
+			name: "revision fails", title: "Title",
+			build: func(repo *fakePostRepo) *PostService {
+				revs := newMemRevisions()
+				revs.latestErr = failure
+
+				return revisionService(repo, revs, &eventtest.Recorder{})
+			},
+			want: failure,
+		},
+		{
+			name: "current tags lookup fails", title: "Title",
+			build: func(repo *fakePostRepo) *PostService {
+				return New(repo, randomIDs{}, fixedClock{now: lifecycleNow}).WithTags(&fakeTagLinker{listErr: failure})
+			},
+			want: failure,
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
+			svc := tc.build(newFakePostRepo())
+
+			_, _, err := svc.CreateDraft(t.Context(), uuid.New(), tc.title, "", "", "body", nil, tc.tags)
+
+			require.ErrorIs(t, err, tc.want)
+		})
+	}
+}
+
+func TestPostServiceUpdateFailures(t *testing.T) {
+	t.Parallel()
+
+	failure := errors.New("store unavailable")
+	blank := "   "
+	fresh := "fresh-slug"
+	title := "New title"
+	tagNames := []string{"go"}
+
+	tests := []struct {
+		name    string
+		missing bool
+		in      postdomain.UpdateInput
+		setup   func(*fakePostRepo, *PostService) *PostService
+		want    error
+	}{
+		{name: "missing post", missing: true, in: postdomain.UpdateInput{Title: &title}, want: postdomain.ErrNotFound},
+		{name: "blank title", in: postdomain.UpdateInput{Title: &blank}, want: ErrValidation},
+		{name: "blank slug", in: postdomain.UpdateInput{Slug: &blank}, want: ErrValidation},
+		{
+			name: "slug lookup fails", in: postdomain.UpdateInput{Slug: &fresh},
+			setup: func(repo *fakePostRepo, svc *PostService) *PostService {
+				repo.slugTakenErr = failure
+				return svc
+			},
+			want: failure,
+		},
+		{name: "tags without tag support", in: postdomain.UpdateInput{Tags: &tagNames}, want: ErrValidation},
+		{
+			name: "tag link fails", in: postdomain.UpdateInput{Tags: &tagNames},
+			setup: func(_ *fakePostRepo, svc *PostService) *PostService {
+				return svc.WithTags(&fakeTagLinker{replaceErr: failure})
+			},
+			want: failure,
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
+			postID, actorID := uuid.New(), uuid.New()
+			repo := newFakePostRepo(postdomain.Post{UUID: postID, AuthorUUID: actorID, Title: "Title", Slug: "slug", Version: 1})
+			svc := New(repo, nil, fixedClock{now: lifecycleNow})
+
+			if tc.setup != nil {
+				svc = tc.setup(repo, svc)
+			}
+
+			if tc.missing {
+				postID = uuid.New()
+			}
+
+			_, _, err := svc.Update(t.Context(), postID, actorID, false, tc.in)
+
+			require.ErrorIs(t, err, tc.want)
+		})
+	}
+}
+
+func TestPostServiceUpdateKeepsUnchangedSlugWithoutLookup(t *testing.T) {
+	t.Parallel()
+
+	postID, actorID := uuid.New(), uuid.New()
+	repo := newFakePostRepo(postdomain.Post{UUID: postID, AuthorUUID: actorID, Title: "Title", Slug: "slug", Version: 1})
+	repo.slugTakenErr = errors.New("slug lookup must not run")
+	svc := New(repo, nil, fixedClock{now: lifecycleNow})
+
+	slug := "  SLUG "
+	got, _, err := svc.Update(t.Context(), postID, actorID, false, postdomain.UpdateInput{Slug: &slug})
+
+	require.NoError(t, err)
+	require.Equal(t, "slug", got.Slug)
+	require.Equal(t, 1, repo.updateCalls)
+}
+
+type replaceMediaFixture struct {
+	repo      *fakePostRepo
+	postMedia *fakePostMedia
+	revs      *memRevisions
+	media     seoMedia
+	postID    uuid.UUID
+	cover     uuid.UUID
+	inline    uuid.UUID
+	pending   uuid.UUID
+}
+
+func newReplaceMediaFixture() *replaceMediaFixture {
+	f := &replaceMediaFixture{
+		postMedia: &fakePostMedia{},
+		revs:      newMemRevisions(),
+		postID:    uuid.New(),
+		cover:     uuid.New(),
+		inline:    uuid.New(),
+		pending:   uuid.New(),
+	}
+	f.repo = newFakePostRepo(postdomain.Post{UUID: f.postID, AuthorUUID: uuid.New(), Title: "T", Slug: "t", Version: 1})
+	f.media = seoMedia{assets: map[uuid.UUID]mediadomain.MediaAsset{
+		f.cover:   {UUID: f.cover, Status: mediadomain.StatusReady},
+		f.inline:  {UUID: f.inline, Status: mediadomain.StatusReady},
+		f.pending: {UUID: f.pending, Status: mediadomain.StatusPending},
+	}}
+
+	return f
+}
+
+func (f *replaceMediaFixture) service() *PostService {
+	return revisionService(f.repo, f.revs, &eventtest.Recorder{}).WithMedia(f.postMedia, f.media)
+}
+
+func TestPostServiceReplaceMediaRejections(t *testing.T) {
+	t.Parallel()
+
+	failure := errors.New("store unavailable")
+
+	tests := []struct {
+		name    string
+		noMedia bool
+		setup   func(*replaceMediaFixture)
+		items   func(*replaceMediaFixture) []mediadomain.PostMediaItem
+		want    error
+	}{
+		{name: "media not configured", noMedia: true, want: ErrValidation},
+		{
+			name:  "missing post",
+			setup: func(f *replaceMediaFixture) { delete(f.repo.posts, f.postID) },
+			want:  postdomain.ErrNotFound,
+		},
+		{
+			name: "deleted post",
+			setup: func(f *replaceMediaFixture) {
+				post := f.repo.posts[f.postID]
+				post.DeletedAt = &lifecycleNow
+				f.repo.posts[f.postID] = post
+			},
+			want: postdomain.ErrNotFound,
+		},
+		{
+			name: "invalid kind",
+			items: func(f *replaceMediaFixture) []mediadomain.PostMediaItem {
+				return []mediadomain.PostMediaItem{{MediaAssetUUID: f.cover, Kind: "banner"}}
+			},
+			want: ErrValidation,
+		},
+		{
+			name: "missing asset id",
+			items: func(*replaceMediaFixture) []mediadomain.PostMediaItem {
+				return []mediadomain.PostMediaItem{{Kind: mediadomain.KindCover}}
+			},
+			want: ErrValidation,
+		},
+		{
+			name: "unknown asset",
+			items: func(*replaceMediaFixture) []mediadomain.PostMediaItem {
+				return []mediadomain.PostMediaItem{{MediaAssetUUID: uuid.New(), Kind: mediadomain.KindAttachment}}
+			},
+			want: ErrValidation,
+		},
+		{
+			name:  "asset lookup fails",
+			setup: func(f *replaceMediaFixture) { f.media.err = failure },
+			items: func(f *replaceMediaFixture) []mediadomain.PostMediaItem {
+				return []mediadomain.PostMediaItem{{MediaAssetUUID: f.cover, Kind: mediadomain.KindCover}}
+			},
+			want: failure,
+		},
+		{
+			name: "asset not ready",
+			items: func(f *replaceMediaFixture) []mediadomain.PostMediaItem {
+				return []mediadomain.PostMediaItem{{MediaAssetUUID: f.pending, Kind: mediadomain.KindInlineImage}}
+			},
+			want: ErrValidation,
+		},
+		{
+			name: "duplicate item",
+			items: func(f *replaceMediaFixture) []mediadomain.PostMediaItem {
+				return []mediadomain.PostMediaItem{
+					{MediaAssetUUID: f.inline, Kind: mediadomain.KindInlineImage},
+					{MediaAssetUUID: f.inline, Kind: " INLINE_IMAGE "},
+				}
+			},
+			want: ErrValidation,
+		},
+		{
+			name: "more than one cover",
+			items: func(f *replaceMediaFixture) []mediadomain.PostMediaItem {
+				return []mediadomain.PostMediaItem{
+					{MediaAssetUUID: f.cover, Kind: mediadomain.KindCover},
+					{MediaAssetUUID: f.inline, Kind: mediadomain.KindCover},
+				}
+			},
+			want: ErrValidation,
+		},
+		{
+			name:  "attachment store fails",
+			setup: func(f *replaceMediaFixture) { f.postMedia.replaceErr = failure },
+			want:  failure,
+		},
+		{
+			name:  "cover sync fails",
+			setup: func(f *replaceMediaFixture) { f.repo.setCoverImageErr = failure },
+			want:  failure,
+		},
+		{
+			name:  "revision fails",
+			setup: func(f *replaceMediaFixture) { f.postMedia.listErr = failure },
+			want:  failure,
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
+			f := newReplaceMediaFixture()
+			if tc.setup != nil {
+				tc.setup(f)
+			}
+
+			svc := f.service()
+			if tc.noMedia {
+				svc = New(f.repo, randomIDs{}, fixedClock{now: lifecycleNow})
+			}
+
+			var items []mediadomain.PostMediaItem
+			if tc.items != nil {
+				items = tc.items(f)
+			}
+
+			got, err := svc.ReplaceMedia(t.Context(), f.postID, items, true)
+
+			require.ErrorIs(t, err, tc.want)
+			require.Nil(t, got)
+
+			if errors.Is(tc.want, ErrValidation) {
+				require.Nil(t, f.postMedia.replaced, "rejected requests store nothing")
+			}
+		})
+	}
+}
+
+func TestPostServiceReplaceMediaStoresItemsAndSyncsCover(t *testing.T) {
+	t.Parallel()
+
+	f := newReplaceMediaFixture()
+	svc := f.service()
+	coverAsset := f.media.assets[f.cover]
+	inlineAsset := f.media.assets[f.inline]
+
+	got, err := svc.ReplaceMedia(t.Context(), f.postID, []mediadomain.PostMediaItem{
+		{MediaAssetUUID: f.cover, Kind: " Cover "},
+		{MediaAssetUUID: f.inline, Kind: mediadomain.KindInlineImage},
+		{MediaAssetUUID: f.inline, Kind: mediadomain.KindAttachment, SortOrder: 7},
+	}, false)
+	require.NoError(t, err)
+
+	want := []mediadomain.PostMediaItem{
+		{MediaAssetUUID: f.cover, Kind: mediadomain.KindCover, SortOrder: 0, Media: &coverAsset},
+		{MediaAssetUUID: f.inline, Kind: mediadomain.KindInlineImage, SortOrder: 1, Media: &inlineAsset},
+		{MediaAssetUUID: f.inline, Kind: mediadomain.KindAttachment, SortOrder: 7, Media: &inlineAsset},
+	}
+	require.Equal(t, want, got)
+	require.Equal(t, want, f.postMedia.replaced)
+	require.Equal(t, &f.cover, f.repo.coverImages[f.postID])
+
+	revs := f.revs.byPost[f.postID]
+	require.Len(t, revs, 1)
+	require.Equal(t, postdomain.RevisionUpdate, revs[0].Type)
+	require.Len(t, revs[0].Snapshot.Media, 3)
+
+	_, err = svc.ReplaceMedia(t.Context(), f.postID, []mediadomain.PostMediaItem{
+		{MediaAssetUUID: f.inline, Kind: mediadomain.KindInlineImage},
+	}, true)
+	require.NoError(t, err)
+	require.Nil(t, f.repo.coverImages[f.postID], "without a cover item the cover is cleared")
+}
+
+func TestParseOptionalUUID(t *testing.T) {
+	t.Parallel()
+
+	id := uuid.New()
+
+	tests := []struct {
+		name    string
+		raw     string
+		want    *uuid.UUID
+		invalid bool
+	}{
+		{name: "blank", raw: "   ", want: nil},
+		{name: "valid with spaces", raw: "  " + id.String() + " ", want: &id},
+		{name: "invalid", raw: "not-a-uuid", invalid: true},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
+			got, err := ParseOptionalUUID(tc.raw)
+			if tc.invalid {
+				require.True(t, uuid.IsInvalidLengthError(err), "got %v", err)
+				require.Nil(t, got)
+
+				return
+			}
+
+			require.NoError(t, err)
+			require.Equal(t, tc.want, got)
+		})
+	}
 }

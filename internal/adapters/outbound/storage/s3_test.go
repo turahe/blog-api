@@ -3,8 +3,12 @@ package storage
 import (
 	"context"
 	"errors"
+	"fmt"
 	"io"
 	"net/http"
+	"net/http/httptest"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -13,6 +17,9 @@ import (
 	v4 "github.com/aws/aws-sdk-go-v2/aws/signer/v4"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
 	"github.com/aws/smithy-go"
+	smithyhttp "github.com/aws/smithy-go/transport/http"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	"github.com/turahe/blog-api/internal/core/media/ports"
 	"github.com/turahe/blog-api/internal/platform/config"
 )
@@ -281,5 +288,248 @@ func TestDeleteObjectIgnoresMissingKeys(t *testing.T) {
 	deleter.err = errors.New("boom")
 	if err := client.DeleteObject(t.Context(), "key"); err == nil {
 		t.Fatal("expected storage errors to surface")
+	}
+}
+
+func TestNewS3RejectsMissingSettings(t *testing.T) {
+	t.Parallel()
+
+	valid := config.Config{S3Bucket: "blog-media", S3AccessKey: "key", S3SecretKey: "secret"}
+
+	tests := []struct {
+		name    string
+		mutate  func(*config.Config)
+		wantErr string
+	}{
+		{name: "blank bucket", mutate: func(c *config.Config) { c.S3Bucket = "  " }, wantErr: "S3_BUCKET"},
+		{name: "blank access key", mutate: func(c *config.Config) { c.S3AccessKey = "" }, wantErr: "S3_ACCESS_KEY"},
+		{name: "blank secret key", mutate: func(c *config.Config) { c.S3SecretKey = " " }, wantErr: "S3_SECRET_KEY"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			cfg := valid
+			tt.mutate(&cfg)
+
+			client, err := NewS3(t.Context(), cfg)
+			require.Error(t, err)
+			assert.Contains(t, err.Error(), tt.wantErr)
+			assert.Nil(t, client)
+		})
+	}
+}
+
+func TestNewS3DefaultsRegionAndVirtualHostStyle(t *testing.T) {
+	t.Parallel()
+
+	client, err := NewS3(t.Context(), config.Config{S3Bucket: " blog-media ", S3AccessKey: "key", S3SecretKey: "secret"})
+	require.NoError(t, err)
+
+	assert.Equal(t, "blog-media", client.bucket)
+	assert.False(t, client.usePathStyle)
+
+	s3Client, ok := client.head.(*s3.Client)
+	require.True(t, ok)
+	assert.Equal(t, "auto", s3Client.Options().Region)
+}
+
+func TestNewS3ReportsConfigLoadFailure(t *testing.T) {
+	dir := t.TempDir()
+	empty := filepath.Join(dir, "empty")
+	require.NoError(t, os.WriteFile(empty, nil, 0o600))
+
+	t.Setenv("AWS_CONFIG_FILE", empty)
+	t.Setenv("AWS_SHARED_CREDENTIALS_FILE", empty)
+	t.Setenv("AWS_PROFILE", "profile-that-does-not-exist")
+
+	_, err := NewS3(t.Context(), config.Config{S3Bucket: "b", S3AccessKey: "k", S3SecretKey: "s"})
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "load aws config")
+}
+
+func TestReadPrefixRejectsInvalidLength(t *testing.T) {
+	t.Parallel()
+
+	for _, n := range []int64{0, -1} {
+		t.Run(fmt.Sprint(n), func(t *testing.T) {
+			t.Parallel()
+
+			getter := &fakeGetClient{body: "data"}
+			client := &Client{bucket: "blog-media", get: getter}
+
+			_, err := client.ReadPrefix(t.Context(), "k", n)
+			require.Error(t, err)
+			assert.Contains(t, err.Error(), "invalid length")
+			assert.Nil(t, getter.lastRange, "no request should be issued")
+		})
+	}
+}
+
+func TestReadPrefixSurfacesStorageErrors(t *testing.T) {
+	t.Parallel()
+
+	boom := errors.New("boom")
+	client := &Client{bucket: "blog-media", get: &fakeGetClient{err: boom}}
+
+	_, err := client.ReadPrefix(t.Context(), "k", 8)
+	require.ErrorIs(t, err, boom)
+	assert.NotErrorIs(t, err, ports.ErrObjectNotFound)
+}
+
+func TestPutObjectUploadsThroughEndpoint(t *testing.T) {
+	t.Parallel()
+
+	type captured struct {
+		method, path, contentType string
+		body                      []byte
+	}
+
+	tests := []struct {
+		name    string
+		status  int
+		wantErr bool
+	}{
+		{name: "success", status: http.StatusOK},
+		{name: "access denied", status: http.StatusForbidden, wantErr: true},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			got := make(chan captured, 1)
+			srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				body, _ := io.ReadAll(r.Body)
+				got <- captured{method: r.Method, path: r.URL.Path, contentType: r.Header.Get("Content-Type"), body: body}
+
+				if tt.status != http.StatusOK {
+					w.Header().Set("Content-Type", "application/xml")
+					w.WriteHeader(tt.status)
+					_, _ = io.WriteString(w, `<Error><Code>AccessDenied</Code><Message>denied</Message></Error>`)
+
+					return
+				}
+
+				w.Header().Set("ETag", `"etag"`)
+				w.WriteHeader(http.StatusOK)
+			}))
+			t.Cleanup(srv.Close)
+
+			client, err := NewS3(t.Context(), config.Config{
+				S3Bucket:    "blog-media",
+				S3Region:    "us-east-1",
+				S3AccessKey: "key",
+				S3SecretKey: "secret",
+				S3Endpoint:  srv.URL,
+			})
+			require.NoError(t, err)
+
+			err = client.PutObject(t.Context(), "media/1/a.webp", "image/webp", []byte("payload"))
+			if tt.wantErr {
+				require.Error(t, err)
+			} else {
+				require.NoError(t, err)
+			}
+
+			req := <-got
+			assert.Equal(t, http.MethodPut, req.method)
+			assert.Equal(t, "/blog-media/media/1/a.webp", req.path)
+			assert.Equal(t, "image/webp", req.contentType)
+			assert.Contains(t, string(req.body), "payload")
+		})
+	}
+}
+
+func TestPresignPutWithoutContentType(t *testing.T) {
+	t.Parallel()
+
+	presigner := &fakePresignClient{request: &v4.PresignedHTTPRequest{URL: "https://example.test/upload"}}
+	client := &Client{bucket: "blog-media", presign: presigner}
+
+	url, headers, err := client.PresignPut(t.Context(), "k", "  ", time.Minute)
+	require.NoError(t, err)
+	assert.Equal(t, "https://example.test/upload", url)
+	assert.NotNil(t, headers)
+	assert.Empty(t, headers)
+}
+
+func TestPresignPutSurfacesErrors(t *testing.T) {
+	t.Parallel()
+
+	boom := errors.New("boom")
+	client := &Client{bucket: "blog-media", presign: &fakePresignClient{err: boom}}
+
+	url, headers, err := client.PresignPut(t.Context(), "k", "image/png", time.Minute)
+	require.ErrorIs(t, err, boom)
+	assert.Empty(t, url)
+	assert.Nil(t, headers)
+}
+
+func TestPresignGetSurfacesErrors(t *testing.T) {
+	t.Parallel()
+
+	boom := errors.New("boom")
+	client := &Client{bucket: "blog-media", presignGet: &fakePresignClient{err: boom}}
+
+	url, err := client.PresignGet(t.Context(), "k", time.Minute)
+	require.ErrorIs(t, err, boom)
+	assert.Empty(t, url)
+}
+
+func TestHeadObjectSurfacesStorageErrors(t *testing.T) {
+	t.Parallel()
+
+	boom := errors.New("boom")
+	client := &Client{bucket: "blog-media", head: &fakeHeadClient{err: boom}}
+
+	_, err := client.HeadObject(t.Context(), "k")
+	require.ErrorIs(t, err, boom)
+	assert.NotErrorIs(t, err, ports.ErrObjectNotFound)
+}
+
+func TestSignedHeadersSkipsHostAndEmptyValues(t *testing.T) {
+	t.Parallel()
+
+	got := signedHeaders(http.Header{
+		"host":       {"example.test"},
+		"X-Empty":    {},
+		"X-Amz-Meta": {"a", "b"},
+	})
+
+	assert.Equal(t, map[string]string{"X-Amz-Meta": "a, b"}, got)
+}
+
+func TestIsObjectNotFound(t *testing.T) {
+	t.Parallel()
+
+	statusErr := func(code int) error {
+		return &smithyhttp.ResponseError{
+			Response: &smithyhttp.Response{Response: &http.Response{StatusCode: code}},
+			Err:      errors.New("upstream"),
+		}
+	}
+
+	tests := []struct {
+		name string
+		err  error
+		want bool
+	}{
+		{name: "NotFound code", err: &smithy.GenericAPIError{Code: "NotFound"}, want: true},
+		{name: "NoSuchKey code", err: &smithy.GenericAPIError{Code: "NoSuchKey"}, want: true},
+		{name: "404 code", err: &smithy.GenericAPIError{Code: "404"}, want: true},
+		{name: "other api code", err: &smithy.GenericAPIError{Code: "AccessDenied"}, want: false},
+		{name: "http 404 status", err: fmt.Errorf("wrapped: %w", statusErr(http.StatusNotFound)), want: true},
+		{name: "http 500 status", err: statusErr(http.StatusInternalServerError), want: false},
+		{name: "plain error", err: errors.New("boom"), want: false},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			assert.Equal(t, tt.want, isObjectNotFound(tt.err))
+		})
 	}
 }

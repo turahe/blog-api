@@ -3,6 +3,7 @@ package newsletterprovider_test
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"io"
 	"mime"
 	"mime/multipart"
@@ -117,6 +118,19 @@ func TestSMTPRejectsHeaderInjectionAsPermanent(t *testing.T) {
 	require.ErrorIs(t, newsletterprovider.NewSMTP(&rawSender{}).Send(t.Context(), e), domain.ErrPermanent)
 }
 
+type badFromSender struct{ rawSender }
+
+func (*badFromSender) From() string { return "not an address" }
+
+func TestSMTPRejectsInvalidMailerFrom(t *testing.T) {
+	t.Parallel()
+
+	raw := &badFromSender{}
+	err := newsletterprovider.NewSMTP(raw).Send(t.Context(), email())
+	require.ErrorContains(t, err, "mailer from address")
+	require.Nil(t, raw.body)
+}
+
 func TestHTTPSignsDeliveries(t *testing.T) {
 	t.Parallel()
 
@@ -163,6 +177,47 @@ func TestHTTPClassifiesGatewayAnswers(t *testing.T) {
 
 		require.Error(t, err, status)
 		require.Equal(t, permanent, err != nil && strings.Contains(err.Error(), domain.ErrPermanent.Error()), status)
+	}
+}
+
+func TestHTTPDefaultsClient(t *testing.T) {
+	t.Parallel()
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusNoContent)
+	}))
+	t.Cleanup(server.Close)
+
+	require.NoError(t, newsletterprovider.NewHTTP(server.URL, secret, nil).Send(t.Context(), email()))
+}
+
+func TestHTTPRequestFailures(t *testing.T) {
+	t.Parallel()
+
+	closed := httptest.NewServer(http.NotFoundHandler())
+	closed.Close()
+
+	tests := []struct {
+		name      string
+		endpoint  string
+		changedAt time.Time
+		wantErr   string
+		permanent bool
+	}{
+		{name: "unencodable contact", endpoint: closed.URL, changedAt: time.Date(10000, 1, 1, 0, 0, 0, 0, time.UTC), wantErr: "encode newsletter.contact"},
+		{name: "invalid endpoint", endpoint: "://bad", changedAt: time.Now(), wantErr: "gateway request", permanent: true},
+		{name: "unreachable gateway", endpoint: closed.URL, changedAt: time.Now(), wantErr: "newsletter.contact gateway"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			err := newsletterprovider.NewHTTP(tt.endpoint, secret, nil).SyncContact(t.Context(),
+				ports.Contact{ID: uuid.New(), Status: domain.StatusErased, ChangedAt: tt.changedAt})
+			require.ErrorContains(t, err, tt.wantErr)
+			require.Equal(t, tt.permanent, errors.Is(err, domain.ErrPermanent))
+		})
 	}
 }
 

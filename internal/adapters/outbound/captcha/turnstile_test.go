@@ -32,6 +32,16 @@ func siteverify(t *testing.T, status int, body string) (*httptest.Server, *atomi
 	return srv, &calls
 }
 
+func TestNewTurnstileDefaults(t *testing.T) {
+	t.Parallel()
+
+	v := NewTurnstile("secret-key", "", nil)
+
+	require.Equal(t, TurnstileEndpoint, v.endpoint)
+	require.NotNil(t, v.client)
+	require.Equal(t, turnstileTimeout, v.client.Timeout)
+}
+
 func TestTurnstileAcceptsValidToken(t *testing.T) {
 	t.Parallel()
 
@@ -83,5 +93,31 @@ func TestTurnstileReportsProviderFaults(t *testing.T) {
 		ok, err := NewTurnstile("secret-key", srv.URL, nil).Verify(t.Context(), "token", "203.0.113.9")
 		require.Error(t, err, name)
 		require.False(t, ok, name)
+	}
+}
+
+func TestTurnstileReportsTransportFailures(t *testing.T) {
+	t.Parallel()
+
+	closed := httptest.NewServer(http.NotFoundHandler())
+	closed.Close()
+
+	tests := []struct {
+		name     string
+		endpoint string
+		wantErr  string
+	}{
+		{name: "invalid endpoint", endpoint: "://bad", wantErr: "turnstile request"},
+		{name: "unreachable endpoint", endpoint: closed.URL, wantErr: "turnstile siteverify"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			ok, err := NewTurnstile("secret-key", tt.endpoint, nil).Verify(t.Context(), "token", "")
+			require.ErrorContains(t, err, tt.wantErr)
+			require.False(t, ok)
+		})
 	}
 }

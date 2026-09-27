@@ -77,6 +77,83 @@ func TestSEORoutesRequirePermissions(t *testing.T) {
 	}
 }
 
+func TestPostSEOAccess(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name         string
+		roles        []string
+		unrestricted bool
+		slugAllowed  bool
+	}{
+		{name: "editor edits any post and slug", roles: []string{roleEditor}, unrestricted: true, slugAllowed: true},
+		{name: "author edits own posts and slug", roles: []string{roleAuthor}, unrestricted: false, slugAllowed: true},
+		{name: "reader does neither", roles: []string{"reader"}, unrestricted: false, slugAllowed: false},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
+			access := postSEOAccess(Deps{Roles: fakeRoleLookup{names: tc.roles}})
+			c, _ := commentContext(nethttp.MethodGet, "/", "", &testUserID, "")
+
+			unrestricted, err := access.unrestricted(c, testUserID)
+			require.NoError(t, err)
+			require.Equal(t, tc.unrestricted, unrestricted)
+			require.Equal(t, tc.slugAllowed, access.slugAllowed(c))
+		})
+	}
+}
+
+func TestSEOHandlersRejectBeforeCallingService(t *testing.T) {
+	t.Parallel()
+
+	failingRoles := seoAccess{
+		unrestricted: func(*gin.Context, uuid.UUID) (bool, error) { return false, errors.New("roles down") },
+		slugAllowed:  func(*gin.Context) bool { return false },
+	}
+	handlers := map[string]func(postSEOAPI, seoAccess) gin.HandlerFunc{
+		"get": adminGetPostSEOHandler, "update": adminUpdatePostSEOHandler, "preview": adminPreviewPostSEOHandler,
+	}
+	tests := []struct {
+		name    string
+		handler string
+		access  seoAccess
+		param   string
+		user    *uuid.UUID
+		status  int
+		code    string
+	}{
+		{name: "get needs sign-in", handler: "get", access: seoTestAccess(true, true), param: uuid.NewString(), status: nethttp.StatusUnauthorized, code: "unauthorized"},
+		{name: "get rejects invalid post id", handler: "get", access: seoTestAccess(true, true), param: "nope", user: &testUserID, status: nethttp.StatusBadRequest, code: "validation_error"},
+		{name: "get fails when roles fail", handler: "get", access: failingRoles, param: uuid.NewString(), user: &testUserID, status: nethttp.StatusInternalServerError, code: "internal_error"},
+		{name: "update needs sign-in", handler: "update", access: seoTestAccess(true, true), param: uuid.NewString(), status: nethttp.StatusUnauthorized, code: "unauthorized"},
+		{name: "preview needs sign-in", handler: "preview", access: seoTestAccess(true, true), param: uuid.NewString(), status: nethttp.StatusUnauthorized, code: "unauthorized"},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
+			svc := &fakeSEO{}
+			w, body := runProfile(t, handlers[tc.handler](svc, tc.access), profileRequest{
+				method: nethttp.MethodPost, target: "/", param: tc.param, user: tc.user, contentType: jsonContent, body: `{}`,
+			})
+			require.Equal(t, tc.status, w.Code, w.Body.String())
+			require.Equal(t, tc.code, errorCode(body))
+		})
+	}
+}
+
+func TestGetPostSEOMapsNotFound(t *testing.T) {
+	t.Parallel()
+
+	w, body := runProfile(t, adminGetPostSEOHandler(&fakeSEO{err: postdomain.ErrNotFound}, seoTestAccess(true, false)), profileRequest{
+		method: nethttp.MethodGet, target: "/", param: uuid.NewString(), user: &testUserID,
+	})
+	require.Equal(t, nethttp.StatusNotFound, w.Code)
+	require.Equal(t, "not_found", errorCode(body))
+}
+
 func TestGetPostSEOListsEveryField(t *testing.T) {
 	t.Parallel()
 
@@ -191,6 +268,32 @@ func TestPreviewPostSEOAcceptsDraftFields(t *testing.T) {
 		method: nethttp.MethodPost, target: "/", param: uuid.NewString(), user: &testUserID,
 	})
 	require.Equal(t, nethttp.StatusOK, w.Code, "the body is optional")
+}
+
+func TestPreviewPostSEOFailures(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name   string
+		body   string
+		err    error
+		status int
+		code   string
+	}{
+		{name: "malformed body", body: `{`, status: nethttp.StatusBadRequest, code: "validation_error"},
+		{name: "not found", body: `{"title":"Draft"}`, err: postdomain.ErrNotFound, status: nethttp.StatusNotFound, code: "not_found"},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
+			w, body := runProfile(t, adminPreviewPostSEOHandler(&fakeSEO{err: tc.err}, seoTestAccess(false, false)), profileRequest{
+				method: nethttp.MethodPost, target: "/", param: uuid.NewString(), user: &testUserID, contentType: jsonContent, body: tc.body,
+			})
+			require.Equal(t, tc.status, w.Code, w.Body.String())
+			require.Equal(t, tc.code, errorCode(body))
+		})
+	}
 }
 
 func TestPublicSEOMetaSetsRobotsHeader(t *testing.T) {

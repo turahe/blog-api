@@ -6,15 +6,20 @@ import (
 	"testing"
 
 	"github.com/google/uuid"
+	"github.com/stretchr/testify/require"
 	mediadomain "github.com/turahe/blog-api/internal/core/media/domain"
 )
 
 type fakeTransformer struct {
 	got []mediadomain.Transform
+	err error
 }
 
 func (f *fakeTransformer) URL(asset mediadomain.MediaAsset, t mediadomain.Transform) (string, error) {
 	f.got = append(f.got, t)
+	if f.err != nil {
+		return "", f.err
+	}
 
 	return "https://img.example.com/" + asset.StorageKey, nil
 }
@@ -66,5 +71,84 @@ func TestTransformURLValidatesAndDelegates(t *testing.T) {
 
 	if len(transformer.got) != 1 {
 		t.Fatalf("transformer called for rejected requests: %v", transformer.got)
+	}
+}
+
+func TestTransformURLFailures(t *testing.T) {
+	t.Parallel()
+
+	failure := errors.New("signer down")
+
+	tests := []struct {
+		name        string
+		policy      fakePolicy
+		transformer *fakeTransformer
+	}{
+		{name: "policy read fails", policy: fakePolicy{err: failure}, transformer: &fakeTransformer{}},
+		{name: "signing fails", transformer: &fakeTransformer{err: failure}},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
+			svc, repo, _ := newTestService()
+			ready := seedAsset(repo, "image/png", mediadomain.StatusReady)
+			svc.WithTransforms(tc.transformer, []int{256}).WithPolicy(tc.policy)
+
+			_, err := svc.TransformURL(t.Context(), ready, mediadomain.Transform{Width: 256})
+
+			require.ErrorIs(t, err, failure)
+		})
+	}
+}
+
+func TestVariantsFailuresAndSkips(t *testing.T) {
+	t.Parallel()
+
+	failure := errors.New("signer down")
+	variants := mediadomain.TransformPolicy{Variants: []mediadomain.Variant{{Name: "thumb", Width: 100}}}
+
+	tests := []struct {
+		name        string
+		policy      fakePolicy
+		transformer *fakeTransformer
+		status      string
+		deleted     bool
+		want        error
+	}{
+		{name: "policy read fails", policy: fakePolicy{err: failure}, transformer: &fakeTransformer{}, status: mediadomain.StatusReady, want: failure},
+		{name: "signing fails", policy: fakePolicy{policy: variants}, transformer: &fakeTransformer{err: failure}, status: mediadomain.StatusReady, want: failure},
+		{name: "pending asset gets no variants", policy: fakePolicy{policy: variants}, transformer: &fakeTransformer{}, status: mediadomain.StatusPending},
+		{name: "deleted asset gets no variants", policy: fakePolicy{policy: variants}, transformer: &fakeTransformer{}, status: mediadomain.StatusReady, deleted: true},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
+			svc, repo, _ := newTestService()
+			id := seedAsset(repo, "image/png", tc.status)
+			asset := repo.assets[id]
+
+			if tc.deleted {
+				deleted := baseTime()
+				asset.DeletedAt = &deleted
+			}
+
+			svc.WithTransforms(tc.transformer, nil).WithPolicy(tc.policy)
+
+			got, err := svc.Variants(t.Context(), asset)
+			if tc.want != nil {
+				require.ErrorIs(t, err, tc.want)
+				require.Nil(t, got)
+
+				return
+			}
+
+			require.NoError(t, err)
+			require.Equal(t, map[uuid.UUID]map[string]string{id: {}}, got)
+			require.Empty(t, tc.transformer.got)
+		})
 	}
 }

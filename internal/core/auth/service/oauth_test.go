@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	authdomain "github.com/turahe/blog-api/internal/core/auth/domain"
 	"github.com/turahe/blog-api/internal/core/auth/ports"
@@ -46,11 +47,16 @@ func (p *fakeProvider) Exchange(_ context.Context, code, verifier, redirectURI s
 type memOAuthStates struct {
 	mu     sync.Mutex
 	states map[string]authdomain.OAuthState
+	fail   faults
 }
 
 func (m *memOAuthStates) Save(_ context.Context, state string, value authdomain.OAuthState, _ time.Duration) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
+
+	if err := m.fail["Save"]; err != nil {
+		return err
+	}
 
 	m.states[state] = value
 
@@ -75,11 +81,16 @@ type memIdentities struct {
 	mu      sync.Mutex
 	links   map[string]uuid.UUID
 	touched int
+	fail    faults
 }
 
 func (m *memIdentities) FindUser(_ context.Context, provider, subject string) (uuid.UUID, error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
+
+	if err := m.fail["FindUser"]; err != nil {
+		return uuid.Nil, err
+	}
 
 	id, ok := m.links[provider+"|"+subject]
 	if !ok {
@@ -92,6 +103,10 @@ func (m *memIdentities) FindUser(_ context.Context, provider, subject string) (u
 func (m *memIdentities) Link(_ context.Context, userID uuid.UUID, identity authdomain.OAuthIdentity, _ time.Time) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
+
+	if err := m.fail["Link"]; err != nil {
+		return err
+	}
 
 	for key, id := range m.links {
 		if id == userID && strings.HasPrefix(key, identity.Provider+"|") {
@@ -107,6 +122,10 @@ func (m *memIdentities) Link(_ context.Context, userID uuid.UUID, identity authd
 func (m *memIdentities) Touch(context.Context, string, string, time.Time) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
+
+	if err := m.fail["Touch"]; err != nil {
+		return err
+	}
 
 	m.touched++
 
@@ -185,6 +204,17 @@ func TestOAuthStartRejectsUnknownProviderAndRedirect(t *testing.T) {
 	_, err = f.svc.OAuthStart(t.Context(), "google", "https://evil.example.com/oauth/callback")
 	require.ErrorIs(t, err, authdomain.ErrOAuthRedirectURI)
 	require.Empty(t, f.states.states)
+}
+
+func TestOAuthStartReportsStateStoreFailure(t *testing.T) {
+	t.Parallel()
+
+	f := newOAuthFixture(t)
+	f.states.fail = faults{"Save": errBoom}
+
+	start, err := f.svc.OAuthStart(t.Context(), "google", oauthRedirect)
+	require.ErrorIs(t, err, errBoom)
+	assert.Empty(t, start.AuthorizeURL)
 }
 
 func TestOAuthUnconfiguredServiceReportsUnknownProvider(t *testing.T) {
@@ -316,4 +346,53 @@ func TestOAuthCallbackReportsLinkConflict(t *testing.T) {
 
 	_, _, status := authservice.MapError(err)
 	require.Equal(t, 409, status)
+}
+
+func TestOAuthCallbackAccountResolutionFailures(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name    string
+		setup   func(f *oauthFixture)
+		wantErr error
+	}{
+		{
+			name: "touch linked identity",
+			setup: func(f *oauthFixture) {
+				f.identities.links["google|g-123"] = f.userID
+				f.identities.fail = faults{"Touch": errBoom}
+			},
+			wantErr: errBoom,
+		},
+		{name: "identity lookup", setup: func(f *oauthFixture) { f.identities.fail = faults{"FindUser": errBoom} }, wantErr: errBoom},
+		{
+			name:    "linked account no longer exists",
+			setup:   func(f *oauthFixture) { f.identities.links["google|g-123"] = uuid.New() },
+			wantErr: authdomain.ErrOAuthNoAccount,
+		},
+		{
+			name: "account lookup",
+			setup: func(f *oauthFixture) {
+				f.identities.links["google|g-123"] = f.userID
+				f.users.fail = faults{"FindByID": errBoom}
+			},
+			wantErr: errBoom,
+		},
+		{name: "email lookup", setup: func(f *oauthFixture) { f.users.fail = faults{"FindByEmail": errBoom} }, wantErr: errBoom},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			f := newOAuthFixture(t)
+			state := f.start(t, "google")
+			tt.setup(f)
+
+			res, err := f.svc.OAuthCallback(t.Context(), "google", "good", state, "ua", "127.0.0.1")
+			require.ErrorIs(t, err, tt.wantErr)
+			assert.Empty(t, res.Tokens.AccessToken)
+			assert.Nil(t, res.Challenge)
+		})
+	}
 }

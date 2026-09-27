@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"net/url"
+	"strings"
 	"sync/atomic"
 	"testing"
 
@@ -143,6 +144,37 @@ func TestResendRejectsHeaderInjectionWithoutCalling(t *testing.T) {
 	require.Zero(t, hits.Load())
 }
 
+// failingTransport never reaches a server.
+type failingTransport struct{ err error }
+
+func (f failingTransport) RoundTrip(*http.Request) (*http.Response, error) { return nil, f.err }
+
+func TestResendErrorWithoutResponse(t *testing.T) {
+	t.Parallel()
+
+	sender, err := mail.NewResend("re_test", "blog@example.test", &http.Client{Transport: failingTransport{err: errors.New("network down")}})
+	require.NoError(t, err)
+
+	err = sender.Send(t.Context(), ports.Message{To: "ada@example.com", Subject: "Hi", Text: "body"})
+
+	resendErr, ok := errors.AsType[*mail.ResendError](err)
+	require.True(t, ok, "error %v is not a *mail.ResendError", err)
+	require.Zero(t, resendErr.Status)
+	require.False(t, resendErr.Permanent())
+	require.True(t, strings.HasPrefix(err.Error(), "resend: "), err.Error())
+	require.Contains(t, err.Error(), "network down")
+}
+
+func TestResendErrorUnwrap(t *testing.T) {
+	t.Parallel()
+
+	cause := errors.New("cause")
+	err := error(&mail.ResendError{Status: http.StatusBadGateway, Err: cause})
+
+	require.ErrorIs(t, err, cause)
+	require.Equal(t, "resend answered 502: cause", err.Error())
+}
+
 func TestNewResendValidatesSettings(t *testing.T) {
 	t.Parallel()
 
@@ -151,4 +183,8 @@ func TestNewResendValidatesSettings(t *testing.T) {
 
 	_, err = mail.NewResend("re_test", "not an address", nil)
 	require.ErrorContains(t, err, "from address")
+
+	sender, err := mail.NewResend(" re_test ", " blog@example.test ", nil)
+	require.NoError(t, err)
+	require.Equal(t, "blog@example.test", sender.From())
 }

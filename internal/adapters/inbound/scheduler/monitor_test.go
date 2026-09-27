@@ -55,7 +55,14 @@ func bindSentry(t *testing.T) *captureTransport {
 		Dsn:       "https://public@example.com/1",
 		Transport: transport,
 	}))
-	t.Cleanup(func() { sentry.CurrentHub().BindClient(nil) })
+	t.Cleanup(func() {
+		c := sentry.CurrentHub().Client()
+		sentry.CurrentHub().BindClient(nil)
+
+		if c != nil {
+			c.Close()
+		}
+	})
 
 	return transport
 }

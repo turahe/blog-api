@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"context"
+	"errors"
 	nethttp "net/http"
 	"testing"
 	"time"
@@ -155,4 +156,37 @@ func TestAdminResetPasswordErrors(t *testing.T) {
 	})
 	require.Equal(t, nethttp.StatusNotFound, w.Code, w.Body.String())
 	require.Equal(t, "user.not_found", errorCode(body))
+}
+
+func TestAdminUserHandlersMoreFailures(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name    string
+		handler gin.HandlerFunc
+		param   string
+		body    string
+		status  int
+		code    string
+	}{
+		{
+			name: "create records unexpected failure", handler: adminCreateUserHandler(&fakeAdminUsers{err: errors.New("db down")}, canManage(true)),
+			body: newUserBody + `}`, status: nethttp.StatusInternalServerError, code: "internal_error",
+		},
+		{
+			name: "reset rejects malformed body", handler: adminResetPasswordHandler(&fakeAdminUsers{}),
+			param: uuid.NewString(), body: `{`, status: nethttp.StatusBadRequest, code: "validation_error",
+		},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
+			w, body := runProfile(t, tc.handler, profileRequest{
+				method: nethttp.MethodPost, target: "/", param: tc.param, contentType: jsonContent, body: tc.body,
+			})
+			require.Equal(t, tc.status, w.Code, w.Body.String())
+			require.Equal(t, tc.code, errorCode(body))
+		})
+	}
 }

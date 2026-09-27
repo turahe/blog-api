@@ -2,6 +2,7 @@ package service
 
 import (
 	"context"
+	"errors"
 	"testing"
 	"time"
 
@@ -17,10 +18,22 @@ type fakeReportRepo struct {
 	sort      string
 	limits    []int
 	cohorts   [2]string
+	// errs fails the named query: "site", "previous site" (the second SiteRows call),
+	// "referrers", "transitions", "search queries", or "positions".
+	errs map[string]error
 }
 
 func (f *fakeReportRepo) SiteRows(_ context.Context, sel domain.Selection) ([]domain.SiteRow, error) {
 	f.siteCalls = append(f.siteCalls, sel)
+
+	key := "site"
+	if len(f.siteCalls) > 1 {
+		key = "previous site"
+	}
+
+	if err := f.errs[key]; err != nil {
+		return nil, err
+	}
 
 	return f.site[sel.First], nil
 }
@@ -28,7 +41,7 @@ func (f *fakeReportRepo) SiteRows(_ context.Context, sel domain.Selection) ([]do
 func (f *fakeReportRepo) Referrers(_ context.Context, _ domain.Selection, limit int) ([]domain.ReferrerRow, error) {
 	f.limits = append(f.limits, limit)
 
-	return nil, nil
+	return nil, f.errs["referrers"]
 }
 
 func (f *fakeReportRepo) Dimensions(context.Context, domain.Selection) ([]domain.DimensionRow, error) {
@@ -43,7 +56,7 @@ func (f *fakeReportRepo) Pages(_ context.Context, cur, prev domain.Selection, so
 }
 
 func (f *fakeReportRepo) Transitions(context.Context, domain.Selection, int) ([]domain.TransitionRow, error) {
-	return nil, nil
+	return nil, f.errs["transitions"]
 }
 
 func (f *fakeReportRepo) EntryExitPages(context.Context, domain.Selection, int) ([]domain.PathCount, []domain.PathCount, error) {
@@ -51,11 +64,15 @@ func (f *fakeReportRepo) EntryExitPages(context.Context, domain.Selection, int) 
 }
 
 func (f *fakeReportRepo) SearchQueries(context.Context, domain.Selection, int) (domain.SearchQueries, error) {
+	if err := f.errs["search queries"]; err != nil {
+		return domain.SearchQueries{}, err
+	}
+
 	return domain.SearchQueries{Totals: domain.QueryRow{ClickSeconds: 30, SearchesWithClick: 3}}, nil
 }
 
 func (f *fakeReportRepo) Positions(context.Context, domain.Selection, int) ([]domain.PositionRow, error) {
-	return nil, nil
+	return nil, f.errs["positions"]
 }
 
 func (f *fakeReportRepo) ClickedResults(context.Context, domain.Selection, int) ([]domain.ResultRow, error) {
@@ -211,4 +228,73 @@ func TestReportsRejectInvalidQueries(t *testing.T) {
 		From: date("2026-01-01"), To: date("2026-04-02"), Grain: domain.GrainDay,
 	})
 	require.NoError(t, err, "92 days is the longest daily range")
+}
+
+func TestReportsPassThroughRepositoryFailures(t *testing.T) {
+	t.Parallel()
+
+	boom := errors.New("boom")
+	overview := func(r *Reports, q domain.ReportQuery) error { _, err := r.Overview(t.Context(), q); return err }
+	navigation := func(r *Reports, q domain.ReportQuery) error { _, err := r.Navigation(t.Context(), q); return err }
+	retention := func(r *Reports, q domain.ReportQuery) error { _, err := r.Retention(t.Context(), q); return err }
+	search := func(r *Reports, q domain.ReportQuery) error { _, err := r.Search(t.Context(), q); return err }
+
+	tests := []struct {
+		name   string
+		fail   string
+		report func(*Reports, domain.ReportQuery) error
+	}{
+		{name: "overview site rows", fail: "site", report: overview},
+		{name: "overview previous site rows", fail: "previous site", report: overview},
+		{name: "overview referrers", fail: "referrers", report: overview},
+		{name: "navigation transitions", fail: "transitions", report: navigation},
+		{name: "retention site rows", fail: "site", report: retention},
+		{name: "search site rows", fail: "site", report: search},
+		{name: "search queries", fail: "search queries", report: search},
+		{name: "search positions", fail: "positions", report: search},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			repo := &fakeReportRepo{errs: map[string]error{tt.fail: boom}}
+
+			require.ErrorIs(t, tt.report(newTestReports(repo), domain.ReportQuery{Compare: true}), boom)
+		})
+	}
+}
+
+func TestReportsFailWithoutAUsableTimeZone(t *testing.T) {
+	t.Parallel()
+
+	boom := errors.New("boom")
+	clock := &fixedClock{now: time.Date(2026, 9, 25, 16, 30, 0, 0, time.UTC)}
+	reports := func(r *Reports) map[string]error {
+		ctx, q := t.Context(), domain.ReportQuery{}
+		errs := map[string]error{}
+		_, errs["overview"] = r.Overview(ctx, q)
+		_, errs["pages"] = r.Pages(ctx, q)
+		_, errs["navigation"] = r.Navigation(ctx, q)
+		_, errs["retention"] = r.Retention(ctx, q)
+		_, errs["search"] = r.Search(ctx, q)
+
+		return errs
+	}
+
+	t.Run("zone unavailable", func(t *testing.T) {
+		t.Parallel()
+
+		for name, err := range reports(NewReports(&fakeReportRepo{}, failingZone{err: boom}, clock)) {
+			require.ErrorIs(t, err, boom, name)
+		}
+	})
+
+	t.Run("unknown zone", func(t *testing.T) {
+		t.Parallel()
+
+		for name, err := range reports(NewReports(&fakeReportRepo{}, fixedTimezone("Mars/Olympus"), clock)) {
+			require.ErrorContains(t, err, `site time zone "Mars/Olympus"`, name)
+		}
+	})
 }

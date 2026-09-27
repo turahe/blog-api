@@ -54,6 +54,29 @@ func quiet() *slog.Logger {
 	return slog.New(slog.DiscardHandler)
 }
 
+func TestNewDefaultsLogger(t *testing.T) {
+	t.Parallel()
+
+	s := New(&fakeStore{}, time.Minute, nil)
+
+	require.NotNil(t, s.logger)
+	require.Empty(t, s.Jobs())
+}
+
+func TestJobsReturnsRegisteredJobs(t *testing.T) {
+	t.Parallel()
+
+	s := New(&fakeStore{}, time.Minute, quiet(),
+		Job{Name: "a", Every: time.Hour},
+		Job{Name: "b", Every: time.Minute},
+	)
+
+	jobs := s.Jobs()
+	require.Len(t, jobs, 2)
+	require.Equal(t, "a", jobs[0].Name)
+	require.Equal(t, time.Minute, jobs[1].Every)
+}
+
 func TestRunChecksEveryJobUntilCancelled(t *testing.T) {
 	t.Parallel()
 

@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	nethttp "net/http"
 	"net/http/httptest"
 	"testing"
@@ -407,5 +408,112 @@ func TestMapCommentErrorCodes(t *testing.T) {
 		require.True(t, mapCommentError(c, err))
 		require.Equal(t, want.status, w.Code, err.Error())
 		require.Equal(t, want.code, decodeEnvelope(t, w).Error.Code, err.Error())
+	}
+}
+
+// erroringComments answers every call with a sample comment and err.
+func erroringComments(err error) *fakeCommentService {
+	comment := commentdomain.Comment{
+		UUID: testCommentID, PostUUID: testPostID, Content: "hi", Status: commentdomain.StatusApproved,
+		CreatedAt: testTime, UpdatedAt: testTime,
+	}
+	page := commentdomain.ListResult{Items: []commentdomain.Comment{comment}, Page: 1, PerPage: 20, Total: 1}
+
+	return &fakeCommentService{
+		createFn: func(context.Context, commentservice.CreateInput) (commentdomain.Comment, error) { return comment, err },
+		listFn: func(context.Context, uuid.UUID, *uuid.UUID, int, int) (commentdomain.ListResult, error) {
+			return page, err
+		},
+		threadFn: func(context.Context, uuid.UUID) (commentdomain.Thread, error) {
+			return commentdomain.Thread{Comment: comment}, err
+		},
+		mineFn: func(context.Context, uuid.UUID, int, int) (commentdomain.ListResult, error) { return page, err },
+		updateFn: func(context.Context, uuid.UUID, uuid.UUID, string) (commentdomain.Comment, error) {
+			return comment, err
+		},
+		deleteFn: func(context.Context, uuid.UUID, uuid.UUID) error { return err },
+		flagFn:   func(context.Context, commentservice.FlagInput) error { return err },
+		upvoteFn: func(context.Context, uuid.UUID, uuid.UUID) (bool, int, error) { return false, 0, err },
+	}
+}
+
+func TestCommentHandlerPaths(t *testing.T) {
+	t.Parallel()
+
+	id := testCommentID.String()
+	tests := []struct {
+		name    string
+		handler func(commentAPI) gin.HandlerFunc
+		method  string
+		target  string
+		body    string
+		user    *uuid.UUID
+		param   string
+		err     error
+		status  int
+		code    string
+	}{
+		{name: "list rejects invalid post id", handler: listPostCommentsHandler, method: nethttp.MethodGet, target: "/", param: "nope", status: nethttp.StatusBadRequest, code: "validation_error"},
+		{name: "list rejects invalid parent id", handler: listPostCommentsHandler, method: nethttp.MethodGet, target: "/?parentId=nope", param: id, status: nethttp.StatusBadRequest, code: "validation_error"},
+		{name: "list renders items", handler: listPostCommentsHandler, method: nethttp.MethodGet, target: "/", param: id, status: nethttp.StatusOK},
+		{name: "create rejects invalid post id", handler: createPostCommentHandler, method: nethttp.MethodPost, target: "/", body: `{"content":"hi"}`, param: "nope", status: nethttp.StatusBadRequest, code: "validation_error"},
+		{name: "create reply", handler: createPostCommentHandler, method: nethttp.MethodPost, target: "/", body: `{"content":"hi","parentId":"` + id + `"}`, user: &testUserID, param: testPostID.String(), status: nethttp.StatusCreated},
+		{name: "get rejects invalid id", handler: getCommentHandler, method: nethttp.MethodGet, target: "/", param: "nope", status: nethttp.StatusBadRequest, code: "validation_error"},
+		{name: "get maps not found", handler: getCommentHandler, method: nethttp.MethodGet, target: "/", param: id, err: commentdomain.ErrNotFound, status: nethttp.StatusNotFound, code: "not_found"},
+		{name: "flag rejects invalid id", handler: flagCommentHandler, method: nethttp.MethodPost, target: "/", body: `{"reasonCode":"spam"}`, param: "nope", status: nethttp.StatusBadRequest, code: "validation_error"},
+		{name: "flag as signed-in user", handler: flagCommentHandler, method: nethttp.MethodPost, target: "/", body: `{"reasonCode":"spam"}`, user: &testUserID, param: id, status: nethttp.StatusAccepted},
+		{name: "flag maps not found", handler: flagCommentHandler, method: nethttp.MethodPost, target: "/", body: `{"reasonCode":"spam"}`, param: id, err: commentdomain.ErrNotFound, status: nethttp.StatusNotFound, code: "not_found"},
+		{name: "mine lists", handler: listMyCommentsHandler, method: nethttp.MethodGet, target: "/?page=2&perPage=5", user: &testUserID, status: nethttp.StatusOK},
+		{name: "mine maps failure", handler: listMyCommentsHandler, method: nethttp.MethodGet, target: "/", user: &testUserID, err: errors.New("db down"), status: nethttp.StatusInternalServerError, code: "internal_error"},
+		{name: "patch rejects invalid id", handler: patchCommentHandler, method: nethttp.MethodPatch, target: "/", body: `{"content":"x"}`, user: &testUserID, param: "nope", status: nethttp.StatusBadRequest, code: "validation_error"},
+		{name: "patch rejects missing content", handler: patchCommentHandler, method: nethttp.MethodPatch, target: "/", body: `{}`, user: &testUserID, param: id, status: nethttp.StatusBadRequest, code: "validation_error"},
+		{name: "patch updates", handler: patchCommentHandler, method: nethttp.MethodPatch, target: "/", body: `{"content":"x"}`, user: &testUserID, param: id, status: nethttp.StatusOK},
+		{name: "delete rejects invalid id", handler: deleteCommentHandler, method: nethttp.MethodDelete, target: "/", user: &testUserID, param: "nope", status: nethttp.StatusBadRequest, code: "validation_error"},
+		{name: "delete succeeds", handler: deleteCommentHandler, method: nethttp.MethodDelete, target: "/", user: &testUserID, param: id, status: nethttp.StatusOK},
+		{name: "upvote rejects invalid id", handler: upvoteCommentHandler, method: nethttp.MethodPost, target: "/", user: &testUserID, param: "nope", status: nethttp.StatusBadRequest, code: "validation_error"},
+		{name: "upvote maps not found", handler: upvoteCommentHandler, method: nethttp.MethodPost, target: "/", user: &testUserID, param: id, err: commentdomain.ErrNotFound, status: nethttp.StatusNotFound, code: "not_found"},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
+			c, w := commentContext(tc.method, tc.target, tc.body, tc.user, tc.param)
+			tc.handler(erroringComments(tc.err))(c)
+			require.Equal(t, tc.status, w.Code, w.Body.String())
+
+			envelope := decodeEnvelope(t, w)
+			if tc.code != "" {
+				require.Equal(t, tc.code, envelope.Error.Code)
+				return
+			}
+
+			require.Nil(t, envelope.Error)
+		})
+	}
+}
+
+func TestCommentListsRenderItems(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name    string
+		handler func(commentAPI) gin.HandlerFunc
+		user    *uuid.UUID
+	}{
+		{name: "post comments", handler: listPostCommentsHandler},
+		{name: "my comments", handler: listMyCommentsHandler, user: &testUserID},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
+			c, w := commentContext(nethttp.MethodGet, "/", "", tc.user, testPostID.String())
+			tc.handler(erroringComments(nil))(c)
+			require.Equal(t, nethttp.StatusOK, w.Code)
+
+			items := as[[]any](t, decodeEnvelope(t, w).Data)
+			require.Len(t, items, 1)
+			require.Equal(t, testCommentID.String(), as[map[string]any](t, items[0])["id"])
+		})
 	}
 }

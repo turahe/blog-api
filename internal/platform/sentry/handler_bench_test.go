@@ -48,7 +48,13 @@ func benchSentry(b *testing.B, cfg config.Config) {
 	require.NoError(b, err)
 	b.Cleanup(func() {
 		flush()
+
+		c := sentrygo.CurrentHub().Client()
 		sentrygo.CurrentHub().BindClient(nil)
+
+		if c != nil {
+			c.Close()
+		}
 	})
 }
 

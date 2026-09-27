@@ -1,6 +1,7 @@
 package dotenv
 
 import (
+	"io/fs"
 	"os"
 	"path/filepath"
 	"testing"
@@ -20,9 +21,11 @@ func TestLoadSetsMissingKeysOnly(t *testing.T) {
 	), 0o600))
 
 	t.Setenv("APP_KEEP", "from-shell")
-	require.NoError(t, os.Unsetenv("APP_ENV"))
-	require.NoError(t, os.Unsetenv("APP_JWT_ISSUER"))
-	require.NoError(t, os.Unsetenv("APP_QUOTED"))
+
+	for _, key := range []string{"APP_ENV", "APP_JWT_ISSUER", "APP_QUOTED"} {
+		t.Setenv(key, "")
+		require.NoError(t, os.Unsetenv(key))
+	}
 
 	require.NoError(t, Load(path))
 	require.Equal(t, "from-file", os.Getenv("APP_ENV"))
@@ -38,6 +41,23 @@ func TestLoadRejectsMalformedLine(t *testing.T) {
 	path := filepath.Join(dir, ".env")
 	require.NoError(t, os.WriteFile(path, []byte("NO_EQUALS\n"), 0o600))
 	require.ErrorContains(t, Load(path), "expected KEY=VALUE")
+}
+
+func TestLoadMissingFile(t *testing.T) {
+	t.Parallel()
+
+	err := Load(filepath.Join(t.TempDir(), "missing.env"))
+	require.ErrorIs(t, err, fs.ErrNotExist)
+}
+
+func TestLoadRejectsInvalidKey(t *testing.T) {
+	t.Parallel()
+
+	path := filepath.Join(t.TempDir(), ".env")
+	require.NoError(t, os.WriteFile(path, []byte("# NUL bytes are not valid in variable names\nBAD\x00KEY=value\n"), 0o600))
+
+	err := Load(path)
+	require.ErrorContains(t, err, ":2: set")
 }
 
 //nolint:paralleltest // t.Chdir mutates the process working directory
@@ -61,6 +81,16 @@ func TestResolveEmptyDisablesWhenMissing(t *testing.T) {
 	require.Empty(t, path)
 }
 
+//nolint:paralleltest // t.Chdir mutates the process working directory
+func TestResolveDefaultReportsUnreadableDotEnv(t *testing.T) {
+	t.Chdir(t.TempDir())
+	require.NoError(t, os.Symlink(".env", ".env"))
+
+	path, err := Resolve("")
+	require.ErrorContains(t, err, `env file ".env"`)
+	require.Empty(t, path)
+}
+
 func TestResolveDashDisables(t *testing.T) {
 	t.Parallel()
 
@@ -74,4 +104,57 @@ func TestResolveExplicitMissingErrors(t *testing.T) {
 
 	_, err := Resolve(filepath.Join(t.TempDir(), "missing.env"))
 	require.ErrorContains(t, err, "env file")
+}
+
+func TestResolveExplicitExisting(t *testing.T) {
+	t.Parallel()
+
+	path := filepath.Join(t.TempDir(), "app.env")
+	require.NoError(t, os.WriteFile(path, nil, 0o600))
+
+	got, err := Resolve(path)
+	require.NoError(t, err)
+	require.Equal(t, path, got)
+}
+
+func TestParseLine(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name      string
+		raw       string
+		wantKey   string
+		wantValue string
+		wantSkip  bool
+		wantErr   string
+	}{
+		{name: "blank", raw: "   ", wantSkip: true},
+		{name: "comment", raw: "  # APP_ENV=x", wantSkip: true},
+		{name: "plain", raw: "APP_ENV = local ", wantKey: "APP_ENV", wantValue: "local"},
+		{name: "export", raw: "export  APP_ENV=local", wantKey: "APP_ENV", wantValue: "local"},
+		{name: "single quoted", raw: "A='x y'", wantKey: "A", wantValue: "x y"},
+		{name: "one char value", raw: "A=\"", wantKey: "A", wantValue: "\""},
+		{name: "empty value", raw: "A=", wantKey: "A", wantValue: ""},
+		{name: "mismatched quotes", raw: "A=\"x'", wantKey: "A", wantValue: "\"x'"},
+		{name: "missing equals", raw: "A", wantErr: "expected KEY=VALUE"},
+		{name: "empty key", raw: " =value", wantErr: "empty key"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			key, value, skip, err := parseLine(tt.raw)
+			if tt.wantErr != "" {
+				require.ErrorContains(t, err, tt.wantErr)
+
+				return
+			}
+
+			require.NoError(t, err)
+			require.Equal(t, tt.wantKey, key)
+			require.Equal(t, tt.wantValue, value)
+			require.Equal(t, tt.wantSkip, skip)
+		})
+	}
 }

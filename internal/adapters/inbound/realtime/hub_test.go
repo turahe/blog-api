@@ -51,6 +51,24 @@ func TestHubLimitsStreamsPerUser(t *testing.T) {
 	require.Equal(t, 2, hub.Connections())
 }
 
+func TestHubUnregisterLastStreamForgetsUser(t *testing.T) {
+	t.Parallel()
+
+	hub := NewHub(1, 1)
+	user := uuid.New()
+
+	conn, err := hub.Register(user)
+	require.NoError(t, err)
+
+	hub.Unregister(conn)
+
+	require.Zero(t, hub.Connections())
+	require.NotContains(t, hub.conns, user)
+
+	hub.Deliver(notificationdomain.Notification{UUID: uuid.New(), UserUUID: user})
+	require.Empty(t, conn.Events(), "an unregistered stream receives nothing")
+}
+
 func TestHubDropsForFullBuffer(t *testing.T) {
 	t.Parallel()
 

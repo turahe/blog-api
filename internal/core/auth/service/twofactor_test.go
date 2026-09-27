@@ -2,6 +2,7 @@ package service_test
 
 import (
 	"context"
+	"crypto/sha256"
 	"encoding/hex"
 	"errors"
 	"strings"
@@ -10,6 +11,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	authdomain "github.com/turahe/blog-api/internal/core/auth/domain"
 	authservice "github.com/turahe/blog-api/internal/core/auth/service"
@@ -40,6 +42,7 @@ type twoFactorRecord struct {
 type memTwoFactor struct {
 	mu   sync.Mutex
 	byID map[uuid.UUID]*twoFactorRecord
+	fail faults
 }
 
 func newMemTwoFactor() *memTwoFactor { return &memTwoFactor{byID: map[uuid.UUID]*twoFactorRecord{}} }
@@ -47,6 +50,10 @@ func newMemTwoFactor() *memTwoFactor { return &memTwoFactor{byID: map[uuid.UUID]
 func (m *memTwoFactor) Find(_ context.Context, userID uuid.UUID) (authdomain.TwoFactor, error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
+
+	if err := m.fail["Find"]; err != nil {
+		return authdomain.TwoFactor{}, err
+	}
 
 	rec, ok := m.byID[userID]
 	if !ok {
@@ -69,6 +76,10 @@ func (m *memTwoFactor) SavePending(_ context.Context, userID uuid.UUID, cipherte
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
+	if err := m.fail["SavePending"]; err != nil {
+		return err
+	}
+
 	if rec, ok := m.byID[userID]; ok && rec.tf.Enabled() {
 		return authdomain.ErrTwoFactorAlreadyEnabled
 	}
@@ -84,6 +95,10 @@ func (m *memTwoFactor) SavePending(_ context.Context, userID uuid.UUID, cipherte
 func (m *memTwoFactor) Confirm(_ context.Context, userID uuid.UUID, step int64, hashes []string, at time.Time) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
+
+	if err := m.fail["Confirm"]; err != nil {
+		return err
+	}
 
 	rec, ok := m.byID[userID]
 	if !ok || rec.tf.Enabled() || rec.tf.LastUsedStep >= step {
@@ -104,6 +119,10 @@ func (m *memTwoFactor) UseStep(_ context.Context, userID uuid.UUID, step int64) 
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
+	if err := m.fail["UseStep"]; err != nil {
+		return false, err
+	}
+
 	rec, ok := m.byID[userID]
 	if !ok || rec.tf.LastUsedStep >= step {
 		return false, nil
@@ -117,6 +136,10 @@ func (m *memTwoFactor) UseStep(_ context.Context, userID uuid.UUID, step int64) 
 func (m *memTwoFactor) UseBackupCode(_ context.Context, userID uuid.UUID, hash string, _ time.Time) (bool, error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
+
+	if err := m.fail["UseBackupCode"]; err != nil {
+		return false, err
+	}
 
 	rec, ok := m.byID[userID]
 	if !ok {
@@ -136,6 +159,10 @@ func (m *memTwoFactor) ReplaceBackupCodes(_ context.Context, userID uuid.UUID, h
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
+	if err := m.fail["ReplaceBackupCodes"]; err != nil {
+		return err
+	}
+
 	rec := m.byID[userID]
 	rec.codes = map[string]bool{}
 
@@ -150,6 +177,10 @@ func (m *memTwoFactor) Delete(_ context.Context, userID uuid.UUID) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
+	if err := m.fail["Delete"]; err != nil {
+		return err
+	}
+
 	delete(m.byID, userID)
 
 	return nil
@@ -159,6 +190,7 @@ type memChallenges struct {
 	mu       sync.Mutex
 	logins   map[string]authdomain.PendingLogin
 	attempts map[string]int
+	fail     faults
 }
 
 func newMemChallenges() *memChallenges {
@@ -168,6 +200,10 @@ func newMemChallenges() *memChallenges {
 func (m *memChallenges) Save(_ context.Context, hash string, login authdomain.PendingLogin, _ time.Duration) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
+
+	if err := m.fail["Save"]; err != nil {
+		return err
+	}
 
 	m.logins[hash] = login
 
@@ -190,6 +226,10 @@ func (m *memChallenges) Attempt(_ context.Context, hash string) (int, error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
+	if err := m.fail["Attempt"]; err != nil {
+		return 0, err
+	}
+
 	if _, ok := m.logins[hash]; !ok {
 		return 0, authdomain.ErrChallengeInvalid
 	}
@@ -202,6 +242,10 @@ func (m *memChallenges) Attempt(_ context.Context, hash string) (int, error) {
 func (m *memChallenges) Consume(_ context.Context, hash string) (bool, error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
+
+	if err := m.fail["Consume"]; err != nil {
+		return false, err
+	}
 
 	_, ok := m.logins[hash]
 	delete(m.logins, hash)
@@ -437,4 +481,429 @@ func TestRegenerateBackupCodesReplacesOldOnes(t *testing.T) {
 
 	_, err = f.svc.CompleteTwoFactor(t.Context(), f.challenge(t), fresh[0])
 	require.NoError(t, err)
+}
+
+// failingBox fails the SecretBox methods named in fail.
+type failingBox struct {
+	fakeBox
+
+	fail faults
+}
+
+func (b failingBox) Encrypt(p []byte) (string, error) {
+	if err := b.fail["Encrypt"]; err != nil {
+		return "", err
+	}
+
+	return b.fakeBox.Encrypt(p)
+}
+
+func (b failingBox) Decrypt(c string) ([]byte, error) {
+	if err := b.fail["Decrypt"]; err != nil {
+		return nil, err
+	}
+
+	return b.fakeBox.Decrypt(c)
+}
+
+// racingChallenges loses every Consume to a concurrent request.
+type racingChallenges struct{ *memChallenges }
+
+func (r racingChallenges) Consume(ctx context.Context, hash string) (bool, error) {
+	_, _ = r.memChallenges.Consume(ctx, hash)
+	return false, nil
+}
+
+// replayedSteps reports every TOTP step as already used by a concurrent request.
+type replayedSteps struct{ *memTwoFactor }
+
+func (replayedSteps) UseStep(context.Context, uuid.UUID, int64) (bool, error) { return false, nil }
+
+func challengeHash(raw string) string {
+	sum := sha256.Sum256([]byte(raw))
+	return hex.EncodeToString(sum[:])
+}
+
+func TestLoginPropagatesTwoFactorFailures(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name  string
+		setup func(f *twoFactorFixture)
+	}{
+		{name: "enrollment lookup", setup: func(f *twoFactorFixture) { f.repo.fail = faults{"Find": errBoom} }},
+		{name: "challenge store", setup: func(f *twoFactorFixture) { f.challenges.fail = faults{"Save": errBoom} }},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			f := newTwoFactorFixture(t)
+			f.enroll(t)
+			tt.setup(f)
+
+			res, err := f.svc.Login(t.Context(), tfEmail, tfPassword, "ua", "127.0.0.1", false)
+			require.ErrorIs(t, err, errBoom)
+			assert.Nil(t, res.Challenge)
+			assert.Empty(t, res.Tokens.AccessToken, "a failed second-factor check never falls through to tokens")
+		})
+	}
+}
+
+func TestTwoFactorUnavailableWithoutConfiguration(t *testing.T) {
+	t.Parallel()
+
+	user := activeTestUser()
+	users, sessions, resets := newMemStores(user)
+	svc := newServiceAt(users, sessions, resets, fakeHasher{}, fakeTokens{}, nil)
+	ctx := t.Context()
+
+	calls := map[string]func() error{
+		"complete": func() error { _, err := svc.CompleteTwoFactor(ctx, "token", "123456"); return err },
+		"status":   func() error { _, err := svc.TwoFactorStatus(ctx, user.UUID); return err },
+		"setup":    func() error { _, err := svc.SetupTwoFactor(ctx, user.UUID); return err },
+		"confirm":  func() error { _, err := svc.ConfirmTwoFactor(ctx, user.UUID, "123456"); return err },
+		"disable":  func() error { return svc.DisableTwoFactor(ctx, user.UUID, oldPassword, "123456") },
+		"regenerate": func() error {
+			_, err := svc.RegenerateBackupCodes(ctx, user.UUID, "123456")
+			return err
+		},
+	}
+
+	for name, call := range calls {
+		require.ErrorIs(t, call(), authdomain.ErrTwoFactorUnavailable, name)
+	}
+}
+
+func TestCompleteTwoFactorFailures(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name    string
+		setup   func(t *testing.T, f *twoFactorFixture, token string)
+		code    func(t *testing.T, f *twoFactorFixture, backup []string) string
+		wantErr error
+	}{
+		{
+			name:    "attempt counter failure",
+			setup:   func(_ *testing.T, f *twoFactorFixture, _ string) { f.challenges.fail = faults{"Attempt": errBoom} },
+			wantErr: errBoom,
+		},
+		{
+			name:    "backup code lookup failure",
+			setup:   func(_ *testing.T, f *twoFactorFixture, _ string) { f.repo.fail = faults{"UseBackupCode": errBoom} },
+			code:    func(_ *testing.T, _ *twoFactorFixture, backup []string) string { return backup[0] },
+			wantErr: errBoom,
+		},
+		{
+			name:    "consume failure",
+			setup:   func(_ *testing.T, f *twoFactorFixture, _ string) { f.challenges.fail = faults{"Consume": errBoom} },
+			wantErr: errBoom,
+		},
+		{
+			name: "challenge consumed by a concurrent request",
+			setup: func(_ *testing.T, f *twoFactorFixture, _ string) {
+				f.svc.WithTwoFactor(f.repo, fakeBox{}, racingChallenges{f.challenges}, "Blog")
+			},
+			wantErr: authdomain.ErrChallengeInvalid,
+		},
+		{
+			name: "account suspended during the challenge",
+			setup: func(_ *testing.T, f *twoFactorFixture, _ string) {
+				u := f.users.byID[f.userID]
+				u.Status = userdomain.StatusSuspended
+				f.users.byID[f.userID] = u
+			},
+			wantErr: authdomain.ErrUserInactive,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			f := newTwoFactorFixture(t)
+			backup := f.enroll(t)
+			token := f.challenge(t)
+			tt.setup(t, f, token)
+
+			code := f.code(t)
+			if tt.code != nil {
+				code = tt.code(t, f, backup)
+			}
+
+			pair, err := f.svc.CompleteTwoFactor(t.Context(), token, code)
+			require.ErrorIs(t, err, tt.wantErr)
+			assert.Empty(t, pair.AccessToken)
+			assert.Nil(t, f.users.byID[f.userID].LastLoginAt, "no login is recorded")
+		})
+	}
+}
+
+func TestCompleteTwoFactorBurnsChallengeOverAttemptLimit(t *testing.T) {
+	t.Parallel()
+
+	f := newTwoFactorFixture(t)
+	f.enroll(t)
+	token := f.challenge(t)
+
+	f.challenges.mu.Lock()
+	f.challenges.attempts[challengeHash(token)] = 5
+	f.challenges.mu.Unlock()
+
+	_, err := f.svc.CompleteTwoFactor(t.Context(), token, f.code(t))
+	require.ErrorIs(t, err, authdomain.ErrChallengeInvalid)
+
+	_, err = f.challenges.Get(t.Context(), challengeHash(token))
+	require.ErrorIs(t, err, authdomain.ErrChallengeInvalid, "the challenge is consumed")
+}
+
+func TestTwoFactorStatus(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name    string
+		setup   func(t *testing.T, f *twoFactorFixture)
+		want    authdomain.TwoFactorStatus
+		wantErr error
+	}{
+		{name: "not enrolled", setup: func(*testing.T, *twoFactorFixture) {}, want: authdomain.TwoFactorStatus{}},
+		{
+			name: "pending",
+			setup: func(t *testing.T, f *twoFactorFixture) {
+				_, err := f.svc.SetupTwoFactor(t.Context(), f.userID)
+				require.NoError(t, err)
+			},
+			want: authdomain.TwoFactorStatus{Pending: true},
+		},
+		{
+			name:    "lookup failure",
+			setup:   func(_ *testing.T, f *twoFactorFixture) { f.repo.fail = faults{"Find": errBoom} },
+			wantErr: errBoom,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			f := newTwoFactorFixture(t)
+			tt.setup(t, f)
+
+			status, err := f.svc.TwoFactorStatus(t.Context(), f.userID)
+			if tt.wantErr != nil {
+				require.ErrorIs(t, err, tt.wantErr)
+				return
+			}
+
+			require.NoError(t, err)
+			assert.Equal(t, tt.want, status)
+		})
+	}
+}
+
+func TestSetupTwoFactorFailures(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name    string
+		userID  func(f *twoFactorFixture) uuid.UUID
+		setup   func(f *twoFactorFixture)
+		wantErr error
+	}{
+		{
+			name: "unknown account", userID: func(*twoFactorFixture) uuid.UUID { return uuid.New() },
+			setup: func(*twoFactorFixture) {}, wantErr: authdomain.ErrUserInactive,
+		},
+		{name: "enrollment lookup", setup: func(f *twoFactorFixture) { f.repo.fail = faults{"Find": errBoom} }, wantErr: errBoom},
+		{
+			name: "encrypt secret",
+			setup: func(f *twoFactorFixture) {
+				f.svc.WithTwoFactor(f.repo, failingBox{fail: faults{"Encrypt": errBoom}}, f.challenges, "Blog")
+			},
+			wantErr: errBoom,
+		},
+		{name: "save pending", setup: func(f *twoFactorFixture) { f.repo.fail = faults{"SavePending": errBoom} }, wantErr: errBoom},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			f := newTwoFactorFixture(t)
+			tt.setup(f)
+
+			userID := f.userID
+			if tt.userID != nil {
+				userID = tt.userID(f)
+			}
+
+			setup, err := f.svc.SetupTwoFactor(t.Context(), userID)
+			require.ErrorIs(t, err, tt.wantErr)
+			assert.Empty(t, setup.Secret)
+		})
+	}
+}
+
+func TestConfirmTwoFactorFailures(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name    string
+		setup   func(t *testing.T, f *twoFactorFixture)
+		wantErr error
+	}{
+		{
+			name:    "enrollment lookup",
+			setup:   func(_ *testing.T, f *twoFactorFixture) { f.repo.fail = faults{"Find": errBoom} },
+			wantErr: errBoom,
+		},
+		{
+			name:    "already enabled",
+			setup:   func(t *testing.T, f *twoFactorFixture) { f.enroll(t) },
+			wantErr: authdomain.ErrTwoFactorAlreadyEnabled,
+		},
+		{
+			name: "store confirmation",
+			setup: func(t *testing.T, f *twoFactorFixture) {
+				_, err := f.svc.SetupTwoFactor(t.Context(), f.userID)
+				require.NoError(t, err)
+
+				f.repo.fail = faults{"Confirm": errBoom}
+			},
+			wantErr: errBoom,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			f := newTwoFactorFixture(t)
+			tt.setup(t, f)
+
+			code := "123456"
+			if tf, err := f.repo.Find(t.Context(), f.userID); err == nil && tf.SecretCiphertext != "" {
+				code = f.code(t)
+			}
+
+			codes, err := f.svc.ConfirmTwoFactor(t.Context(), f.userID, code)
+			require.ErrorIs(t, err, tt.wantErr)
+			assert.Empty(t, codes)
+		})
+	}
+}
+
+func TestRegenerateBackupCodesFailures(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name    string
+		setup   func(t *testing.T, f *twoFactorFixture)
+		code    string
+		wantErr error
+	}{
+		{name: "not enrolled", setup: func(*testing.T, *twoFactorFixture) {}, wantErr: authdomain.ErrTwoFactorNotEnrolled},
+		{
+			name: "enrollment not confirmed",
+			setup: func(t *testing.T, f *twoFactorFixture) {
+				_, err := f.svc.SetupTwoFactor(t.Context(), f.userID)
+				require.NoError(t, err)
+			},
+			wantErr: authdomain.ErrTwoFactorNotEnrolled,
+		},
+		{
+			name: "wrong code", setup: func(t *testing.T, f *twoFactorFixture) { f.enroll(t) },
+			code: "000000", wantErr: authdomain.ErrTwoFactorInvalidCode,
+		},
+		{
+			name: "store codes",
+			setup: func(t *testing.T, f *twoFactorFixture) {
+				f.enroll(t)
+				f.repo.fail = faults{"ReplaceBackupCodes": errBoom}
+			},
+			wantErr: errBoom,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			f := newTwoFactorFixture(t)
+			tt.setup(t, f)
+
+			code := tt.code
+			if code == "" {
+				code = "123456"
+				if tf, err := f.repo.Find(t.Context(), f.userID); err == nil && tf.SecretCiphertext != "" {
+					code = f.code(t)
+				}
+			}
+
+			codes, err := f.svc.RegenerateBackupCodes(t.Context(), f.userID, code)
+			require.ErrorIs(t, err, tt.wantErr)
+			assert.Empty(t, codes)
+		})
+	}
+}
+
+func TestDisableTwoFactorRejectsMalformedCodes(t *testing.T) {
+	t.Parallel()
+
+	f := newTwoFactorFixture(t)
+	f.enroll(t)
+
+	for _, code := range []string{"", "   ", "abc", "abcde-fghi1", "0000 00", "abcdefghjkm"} {
+		err := f.svc.DisableTwoFactor(t.Context(), f.userID, tfPassword, code)
+		require.ErrorIs(t, err, authdomain.ErrTwoFactorInvalidCode, "code %q", code)
+	}
+
+	status, err := f.svc.TwoFactorStatus(t.Context(), f.userID)
+	require.NoError(t, err)
+	assert.True(t, status.Enabled, "two-factor stays on")
+}
+
+func TestTOTPVerificationFailures(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name    string
+		setup   func(f *twoFactorFixture)
+		wantErr error
+	}{
+		{name: "step store failure", setup: func(f *twoFactorFixture) { f.repo.fail = faults{"UseStep": errBoom} }, wantErr: errBoom},
+		{
+			name: "step used by a concurrent request",
+			setup: func(f *twoFactorFixture) {
+				f.svc.WithTwoFactor(replayedSteps{f.repo}, fakeBox{}, f.challenges, "Blog")
+			},
+			wantErr: authdomain.ErrTwoFactorInvalidCode,
+		},
+		{
+			name: "secret cannot be decrypted",
+			setup: func(f *twoFactorFixture) {
+				f.svc.WithTwoFactor(f.repo, failingBox{fail: faults{"Decrypt": errBoom}}, f.challenges, "Blog")
+			},
+			wantErr: errBoom,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			f := newTwoFactorFixture(t)
+			f.enroll(t)
+			code := f.code(t)
+			tt.setup(f)
+
+			err := f.svc.DisableTwoFactor(t.Context(), f.userID, tfPassword, code)
+			require.ErrorIs(t, err, tt.wantErr)
+
+			_, findErr := f.repo.Find(t.Context(), f.userID)
+			require.NoError(t, findErr, "the enrollment is kept")
+		})
+	}
 }

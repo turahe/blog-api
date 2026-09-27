@@ -3,6 +3,7 @@ package handlers
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	nethttp "net/http"
 	"net/http/httptest"
 	"strings"
@@ -207,4 +208,32 @@ func TestStopAndCurrentImpersonationHandlers(t *testing.T) {
 		assert.Equal(t, false, dataOf(body)["active"])
 		assert.Nil(t, dataOf(body)["session"])
 	})
+}
+
+func TestImpersonationHandlerFailures(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name    string
+		handler func(impersonationAPI) gin.HandlerFunc
+		user    *uuid.UUID
+		err     error
+		status  int
+		code    string
+	}{
+		{name: "start needs sign-in", handler: adminStartImpersonationHandler, status: nethttp.StatusUnauthorized, code: "unauthorized"},
+		{name: "current maps validation", handler: adminCurrentImpersonationHandler, user: &testUserID, err: impdomain.ErrValidation, status: nethttp.StatusBadRequest, code: "validation_error"},
+		{name: "current records unexpected failure", handler: adminCurrentImpersonationHandler, user: &testUserID, err: errors.New("db down"), status: nethttp.StatusInternalServerError, code: "internal_error"},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
+			w, body := runProfile(t, tc.handler(&fakeImpersonation{err: tc.err}), profileRequest{
+				method: nethttp.MethodPost, target: "/", user: tc.user, contentType: jsonContent, body: `{}`,
+			})
+			require.Equal(t, tc.status, w.Code, w.Body.String())
+			require.Equal(t, tc.code, errorCode(body))
+		})
+	}
 }

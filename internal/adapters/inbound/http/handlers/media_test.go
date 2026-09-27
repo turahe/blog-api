@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"fmt"
 	nethttp "net/http"
 	"net/http/httptest"
 	"testing"
@@ -24,9 +25,18 @@ type fakeMediaService struct {
 	completeFn  func(ctx context.Context, id uuid.UUID) (mediadomain.MediaAsset, error)
 	transformFn func(ctx context.Context, id uuid.UUID, t mediadomain.Transform) (string, error)
 	usageFn     func(ctx context.Context, filter mediadomain.UsageFilter) (mediadomain.Usage, error)
+	listFn      func(ctx context.Context, filter mediadomain.ListFilter) (mediadomain.ListResult, error)
+	getReadyFn  func(ctx context.Context, id uuid.UUID) (mediadomain.MediaAsset, error)
+	deleteFn    func(ctx context.Context, id uuid.UUID) error
+	tagsFn      func(ctx context.Context, id uuid.UUID, tags []string) (mediadomain.MediaAsset, error)
+	variantsFn  func(ctx context.Context, assets ...mediadomain.MediaAsset) (map[uuid.UUID]map[string]string, error)
 }
 
-func (f *fakeMediaService) Variants(context.Context, ...mediadomain.MediaAsset) (map[uuid.UUID]map[string]string, error) {
+func (f *fakeMediaService) Variants(ctx context.Context, assets ...mediadomain.MediaAsset) (map[uuid.UUID]map[string]string, error) {
+	if f.variantsFn != nil {
+		return f.variantsFn(ctx, assets...)
+	}
+
 	return nil, nil
 }
 
@@ -42,7 +52,11 @@ func (f *fakeMediaService) CompleteUpload(ctx context.Context, id uuid.UUID) (me
 	return f.completeFn(ctx, id)
 }
 
-func (f *fakeMediaService) List(context.Context, mediadomain.ListFilter) (mediadomain.ListResult, error) {
+func (f *fakeMediaService) List(ctx context.Context, filter mediadomain.ListFilter) (mediadomain.ListResult, error) {
+	if f.listFn != nil {
+		return f.listFn(ctx, filter)
+	}
+
 	return mediadomain.ListResult{}, nil
 }
 
@@ -50,15 +64,27 @@ func (f *fakeMediaService) Get(context.Context, uuid.UUID) (mediadomain.MediaAss
 	return mediadomain.MediaAsset{}, mediaservice.ErrNotFound
 }
 
-func (f *fakeMediaService) GetReady(context.Context, uuid.UUID) (mediadomain.MediaAsset, error) {
+func (f *fakeMediaService) GetReady(ctx context.Context, id uuid.UUID) (mediadomain.MediaAsset, error) {
+	if f.getReadyFn != nil {
+		return f.getReadyFn(ctx, id)
+	}
+
 	return mediadomain.MediaAsset{}, mediaservice.ErrNotFound
 }
 
-func (f *fakeMediaService) Delete(context.Context, uuid.UUID) error {
+func (f *fakeMediaService) Delete(ctx context.Context, id uuid.UUID) error {
+	if f.deleteFn != nil {
+		return f.deleteFn(ctx, id)
+	}
+
 	return nil
 }
 
-func (f *fakeMediaService) UpdateTags(context.Context, uuid.UUID, []string) (mediadomain.MediaAsset, error) {
+func (f *fakeMediaService) UpdateTags(ctx context.Context, id uuid.UUID, tags []string) (mediadomain.MediaAsset, error) {
+	if f.tagsFn != nil {
+		return f.tagsFn(ctx, id, tags)
+	}
+
 	return mediadomain.MediaAsset{}, mediaservice.ErrNotFound
 }
 
@@ -209,6 +235,37 @@ func TestMediaPresignValidation(t *testing.T) {
 	require.Equal(t, "validation_error", envelope.Error.Code)
 }
 
+func TestMediaPresignRejectsBeforeCallingService(t *testing.T) {
+	t.Parallel()
+
+	svc := &fakeMediaService{presignFn: func(context.Context, *uuid.UUID, string, string, int64, []string) (mediadomain.PresignResult, error) {
+		t.Fatal("presign should not be called")
+		return mediadomain.PresignResult{}, nil
+	}}
+
+	tests := []struct {
+		name   string
+		user   *uuid.UUID
+		body   string
+		status int
+		code   string
+	}{
+		{name: "anonymous", body: `{}`, status: nethttp.StatusUnauthorized, code: "unauthorized"},
+		{name: "missing fields", user: &testUserID, body: `{}`, status: nethttp.StatusBadRequest, code: "validation_error"},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
+			w, body := runProfile(t, adminPresignMediaHandler(svc), profileRequest{
+				method: nethttp.MethodPost, target: "/api/v1/admin/media", contentType: jsonContent, body: tc.body, user: tc.user,
+			})
+			require.Equal(t, tc.status, w.Code)
+			require.Equal(t, tc.code, errorCode(body))
+		})
+	}
+}
+
 func TestMediaUsageReport(t *testing.T) {
 	t.Parallel()
 	gin.SetMode(gin.TestMode)
@@ -258,6 +315,19 @@ func TestMediaUsageReport(t *testing.T) {
 	require.Nil(t, envelope.Data.TopUploaders[1]["userId"])
 }
 
+func TestMediaUsageReportMapsServiceErrors(t *testing.T) {
+	t.Parallel()
+
+	svc := &fakeMediaService{usageFn: func(context.Context, mediadomain.UsageFilter) (mediadomain.Usage, error) {
+		return mediadomain.Usage{}, fmt.Errorf("%w: top out of range", mediaservice.ErrValidation)
+	}}
+
+	w, body := runProfile(t, adminMediaUsageHandler(svc), profileRequest{method: nethttp.MethodGet, target: "/?top=5"})
+	require.Equal(t, nethttp.StatusBadRequest, w.Code, w.Body.String())
+	require.Equal(t, "validation_error", errorCode(body))
+	require.Empty(t, w.Header().Get("Cache-Control"))
+}
+
 func TestMediaCompleteMapsErrors(t *testing.T) {
 	t.Parallel()
 	gin.SetMode(gin.TestMode)
@@ -292,6 +362,248 @@ func TestMediaCompleteMapsErrors(t *testing.T) {
 
 			var envelope responses.Envelope
 			require.NoError(t, json.Unmarshal(w.Body.Bytes(), &envelope))
+			require.Equal(t, tc.code, envelope.Error.Code)
+		})
+	}
+}
+
+func sampleAsset() mediadomain.MediaAsset {
+	return mediadomain.MediaAsset{UUID: uuid.New(), ContentType: "image/png", Status: mediadomain.StatusReady, Tags: []string{"hero"}}
+}
+
+func TestMediaCompleteReturnsAssetWithVariants(t *testing.T) {
+	t.Parallel()
+
+	asset := sampleAsset()
+	svc := &fakeMediaService{
+		completeFn: func(_ context.Context, id uuid.UUID) (mediadomain.MediaAsset, error) {
+			require.Equal(t, asset.UUID, id)
+			return asset, nil
+		},
+		variantsFn: func(_ context.Context, assets ...mediadomain.MediaAsset) (map[uuid.UUID]map[string]string, error) {
+			require.Len(t, assets, 1)
+			return map[uuid.UUID]map[string]string{asset.UUID: {"thumb": "https://img/thumb"}}, nil
+		},
+	}
+
+	w, body := runProfile(t, adminCompleteMediaHandler(svc), profileRequest{method: nethttp.MethodPost, target: "/complete", param: asset.UUID.String()})
+	require.Equal(t, nethttp.StatusOK, w.Code, w.Body.String())
+	require.Equal(t, asset.UUID.String(), dataOf(body)["id"])
+	require.Equal(t, map[string]any{"thumb": "https://img/thumb"}, dataOf(body)["variants"])
+
+	w, body = runProfile(t, adminCompleteMediaHandler(svc), profileRequest{method: nethttp.MethodPost, target: "/complete", param: "nope"})
+	require.Equal(t, nethttp.StatusBadRequest, w.Code)
+	require.Equal(t, "Invalid media id", errorMessage(body))
+}
+
+func TestAdminListMediaHandler(t *testing.T) {
+	t.Parallel()
+
+	asset := sampleAsset()
+	tests := []struct {
+		name        string
+		query       string
+		listErr     error
+		variantsErr error
+		status      int
+		code        string
+		wantFilter  mediadomain.ListFilter
+	}{
+		{
+			name: "passes filters", query: "?page=2&perPage=5&q=cat&disk=s3&status=ready&unused=true", status: nethttp.StatusOK,
+			wantFilter: mediadomain.ListFilter{Page: 2, PerPage: 5, Query: "cat", Disk: "s3", Status: "ready", Unused: true},
+		},
+		{
+			name: "invalid paging falls back", query: "?page=-1&perPage=x&unused=yes", status: nethttp.StatusOK,
+			wantFilter: mediadomain.ListFilter{Page: 1, PerPage: 20},
+		},
+		{name: "list failure", listErr: mediaservice.ErrValidation, status: nethttp.StatusBadRequest, code: "validation_error", wantFilter: mediadomain.ListFilter{Page: 1, PerPage: 20}},
+		{name: "variants failure", variantsErr: mediaservice.ErrStorage, status: nethttp.StatusBadGateway, code: "storage_unavailable", wantFilter: mediadomain.ListFilter{Page: 1, PerPage: 20}},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
+			var got mediadomain.ListFilter
+
+			svc := &fakeMediaService{
+				listFn: func(_ context.Context, filter mediadomain.ListFilter) (mediadomain.ListResult, error) {
+					got = filter
+					return mediadomain.ListResult{Items: []mediadomain.MediaAsset{asset}, Total: 1, Page: filter.Page, PerPage: filter.PerPage}, tc.listErr
+				},
+				variantsFn: func(context.Context, ...mediadomain.MediaAsset) (map[uuid.UUID]map[string]string, error) {
+					return nil, tc.variantsErr
+				},
+			}
+
+			w, body := runProfile(t, adminListMediaHandler(svc), profileRequest{method: nethttp.MethodGet, target: "/api/v1/admin/media" + tc.query})
+			require.Equal(t, tc.status, w.Code, w.Body.String())
+			require.Equal(t, tc.code, errorCode(body))
+			require.Equal(t, tc.wantFilter, got)
+
+			if tc.status == nethttp.StatusOK {
+				data, ok := body["data"].([]any)
+				require.True(t, ok)
+				require.Len(t, data, 1)
+			}
+		})
+	}
+}
+
+func TestAdminDeleteMediaHandler(t *testing.T) {
+	t.Parallel()
+
+	id := uuid.New()
+	tests := []struct {
+		name   string
+		param  string
+		err    error
+		status int
+		code   string
+	}{
+		{name: "invalid id", param: "nope", status: nethttp.StatusBadRequest, code: "validation_error"},
+		{name: "deleted", param: id.String(), status: nethttp.StatusOK},
+		{name: "not found", param: id.String(), err: mediaservice.ErrNotFound, status: nethttp.StatusNotFound, code: "not_found"},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
+			svc := &fakeMediaService{deleteFn: func(_ context.Context, got uuid.UUID) error {
+				require.Equal(t, id, got)
+				return tc.err
+			}}
+			w, body := runProfile(t, adminDeleteMediaHandler(svc), profileRequest{method: nethttp.MethodDelete, target: "/", param: tc.param})
+			require.Equal(t, tc.status, w.Code)
+			require.Equal(t, tc.code, errorCode(body))
+			require.Equal(t, tc.status == nethttp.StatusOK, body["ok"] == true)
+		})
+	}
+}
+
+func TestAdminPatchMediaTagsHandler(t *testing.T) {
+	t.Parallel()
+
+	asset := sampleAsset()
+	tests := []struct {
+		name   string
+		param  string
+		body   string
+		err    error
+		status int
+		code   string
+	}{
+		{name: "invalid id", param: "nope", body: `{"tags":[]}`, status: nethttp.StatusBadRequest, code: "validation_error"},
+		{name: "missing tags", param: asset.UUID.String(), body: `{}`, status: nethttp.StatusBadRequest, code: "validation_error"},
+		{name: "updated", param: asset.UUID.String(), body: `{"tags":["hero"]}`, status: nethttp.StatusOK},
+		{name: "upload expired", param: asset.UUID.String(), body: `{"tags":["hero"]}`, err: mediaservice.ErrUploadExpired, status: nethttp.StatusConflict, code: "media.upload_expired"},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
+			svc := &fakeMediaService{tagsFn: func(_ context.Context, id uuid.UUID, tags []string) (mediadomain.MediaAsset, error) {
+				require.Equal(t, asset.UUID, id)
+				require.Equal(t, []string{"hero"}, tags)
+
+				return asset, tc.err
+			}}
+			w, body := runProfile(t, adminPatchMediaTagsHandler(svc), profileRequest{
+				method: nethttp.MethodPatch, target: "/tags", contentType: jsonContent, body: tc.body, param: tc.param,
+			})
+			require.Equal(t, tc.status, w.Code, w.Body.String())
+			require.Equal(t, tc.code, errorCode(body))
+
+			if tc.status == nethttp.StatusOK {
+				require.Equal(t, []any{"hero"}, dataOf(body)["tags"])
+			}
+		})
+	}
+}
+
+func TestPublicGetMediaHandler(t *testing.T) {
+	t.Parallel()
+
+	asset := sampleAsset()
+	tests := []struct {
+		name   string
+		param  string
+		err    error
+		status int
+		code   string
+	}{
+		{name: "invalid id", param: "nope", status: nethttp.StatusBadRequest, code: "validation_error"},
+		{name: "ready asset", param: asset.UUID.String(), status: nethttp.StatusOK},
+		{name: "not ready", param: asset.UUID.String(), err: mediaservice.ErrNotFound, status: nethttp.StatusNotFound, code: "not_found"},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
+			svc := &fakeMediaService{getReadyFn: func(context.Context, uuid.UUID) (mediadomain.MediaAsset, error) {
+				return asset, tc.err
+			}}
+			w, body := runProfile(t, publicGetMediaHandler(svc), profileRequest{method: nethttp.MethodGet, target: "/", param: tc.param})
+			require.Equal(t, tc.status, w.Code)
+			require.Equal(t, tc.code, errorCode(body))
+
+			if tc.status == nethttp.StatusOK {
+				require.Equal(t, asset.UUID.String(), dataOf(body)["id"])
+				require.NotContains(t, dataOf(body), "variants")
+			}
+		})
+	}
+}
+
+func TestRenderMediaWithoutService(t *testing.T) {
+	t.Parallel()
+
+	c, _ := gin.CreateTestContext(httptest.NewRecorder())
+	asset := sampleAsset()
+
+	out, ok := renderMedia(c, nil, asset)
+	require.True(t, ok)
+	require.Len(t, out, 1)
+	require.Equal(t, asset.UUID.String(), out[0]["id"])
+	require.NotContains(t, out[0], "variants")
+}
+
+func TestMapMediaError(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name     string
+		err      error
+		status   int
+		code     string
+		recorded bool
+	}{
+		{name: "nil", err: nil},
+		{name: "validation", err: mediaservice.ErrValidation, status: nethttp.StatusBadRequest, code: "validation_error"},
+		{name: "not found", err: mediaservice.ErrNotFound, status: nethttp.StatusNotFound, code: "not_found"},
+		{name: "incomplete", err: mediaservice.ErrUploadIncomplete, status: nethttp.StatusConflict, code: "media.upload_incomplete"},
+		{name: "expired", err: mediaservice.ErrUploadExpired, status: nethttp.StatusConflict, code: "media.upload_expired"},
+		{name: "storage", err: mediaservice.ErrStorage, status: nethttp.StatusBadGateway, code: "storage_unavailable", recorded: true},
+		{name: "unknown", err: context.DeadlineExceeded, status: nethttp.StatusInternalServerError, code: "internal_error", recorded: true},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
+			w := httptest.NewRecorder()
+			c, _ := gin.CreateTestContext(w)
+
+			require.Equal(t, tc.err != nil, mapMediaError(c, tc.err))
+			require.Equal(t, tc.recorded, len(c.Errors) > 0)
+
+			if tc.err == nil {
+				require.Zero(t, w.Body.Len())
+				return
+			}
+
+			var envelope responses.Envelope
+			require.NoError(t, json.Unmarshal(w.Body.Bytes(), &envelope))
+			require.Equal(t, tc.status, w.Code)
 			require.Equal(t, tc.code, envelope.Error.Code)
 		})
 	}

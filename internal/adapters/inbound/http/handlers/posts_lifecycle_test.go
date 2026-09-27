@@ -164,3 +164,42 @@ func TestAdminPostLifecycleHandlersRejectBadID(t *testing.T) {
 	require.Equal(t, "validation_error", envelope.Error.Code)
 	require.Empty(t, svc.calls)
 }
+
+func TestAdminPostLifecycleMorePaths(t *testing.T) {
+	t.Parallel()
+
+	actor := testUserID
+
+	tests := []struct {
+		name   string
+		build  func(postLifecycleAPI) gin.HandlerFunc
+		param  string
+		user   *uuid.UUID
+		err    error
+		status int
+		code   string
+		calls  []string
+	}{
+		{name: "publish records the signed-in actor", build: adminPublishPostHandler, param: uuid.NewString(), user: &actor, status: nethttp.StatusOK, calls: []string{"publish_by"}},
+		{name: "delete maps not found", build: adminDeletePostHandler, param: uuid.NewString(), err: postdomain.ErrNotFound, status: nethttp.StatusNotFound, code: "not_found", calls: []string{"delete"}},
+		{name: "restore rejects a bad id", build: adminRestorePostHandler, param: "nope", status: nethttp.StatusBadRequest, code: "validation_error"},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
+			svc := &fakePostLifecycle{err: tc.err}
+			w, body := runProfile(t, tc.build(svc), profileRequest{
+				method: nethttp.MethodPost, target: "/", param: tc.param, user: tc.user,
+			})
+			require.Equal(t, tc.status, w.Code, w.Body.String())
+			require.Equal(t, tc.calls, svc.calls)
+
+			if tc.code != "" {
+				require.Equal(t, tc.code, errorCode(body))
+			} else {
+				require.Equal(t, "published", dataOf(body)["status"])
+			}
+		})
+	}
+}

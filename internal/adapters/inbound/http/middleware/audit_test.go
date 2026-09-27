@@ -4,11 +4,13 @@ import (
 	"context"
 	nethttp "net/http"
 	"net/http/httptest"
+	"strings"
 	"sync"
 	"testing"
 
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"github.com/turahe/blog-api/internal/adapters/inbound/routes"
 	"github.com/turahe/blog-api/internal/core/audit"
@@ -143,6 +145,20 @@ func TestAuditSkipsReadsFailuresAndNoisyOperations(t *testing.T) {
 			method: nethttp.MethodPost, path: "/settings", pattern: "/settings",
 			route: adminRoute("admin.settings.put"), actor: &actor, status: nethttp.StatusNotImplemented,
 		},
+		"health write": {
+			method: nethttp.MethodPost, path: "/health/probe", pattern: "/health/probe",
+			route: routes.Route{OperationID: "health.probe", Group: routes.GroupHealth},
+			actor: &actor, status: nethttp.StatusOK,
+		},
+		"analytics ingest": {
+			method: nethttp.MethodPost, path: "/analytics/events", pattern: "/analytics/events",
+			route: routes.Route{OperationID: "analytics.events.ingest", Group: routes.GroupAnalytics},
+			actor: &actor, status: nethttp.StatusAccepted,
+		},
+		"route without a group": {
+			method: nethttp.MethodPost, path: "/misc", pattern: "/misc",
+			route: routes.Route{OperationID: "misc.create"}, actor: &actor, status: nethttp.StatusCreated,
+		},
 	}
 
 	for name, tc := range cases {
@@ -235,6 +251,41 @@ func TestAuditAdminOnlyActionHasNoCategory(t *testing.T) {
 	require.Empty(t, entries[0].Category)
 	require.Equal(t, "tag", entries[0].ResourceType)
 	require.Nil(t, entries[0].ResourceID)
+}
+
+func TestAuditOperationWithoutCollectionHasNoResource(t *testing.T) {
+	t.Parallel()
+
+	actor := uuid.New()
+
+	entries := runAudit(t, auditCase{
+		method: nethttp.MethodPost, path: "/reindex", pattern: "/reindex",
+		route: adminRoute("reindex"), actor: &actor, status: nethttp.StatusOK,
+	})
+
+	require.Len(t, entries, 1)
+	require.Empty(t, entries[0].ResourceType)
+	require.Nil(t, entries[0].ResourceID)
+}
+
+func TestAuditTruncatesLongUserAgent(t *testing.T) {
+	t.Parallel()
+	gin.SetMode(gin.TestMode)
+
+	writer := &captureWriter{}
+	router := gin.New()
+	router.Use(Audit(writer))
+	router.POST("/tags", routes.WithMeta(adminRoute("admin.tags.create")), func(c *gin.Context) {
+		c.Set(ContextUserIDKey, uuid.New())
+		c.Status(nethttp.StatusCreated)
+	})
+
+	req := httptest.NewRequestWithContext(t.Context(), nethttp.MethodPost, "/tags", nil)
+	req.Header.Set("User-Agent", strings.Repeat("a", maxAuditUserAgent+100))
+	router.ServeHTTP(httptest.NewRecorder(), req)
+
+	require.Len(t, writer.entries, 1)
+	assert.Equal(t, strings.Repeat("a", maxAuditUserAgent), writer.entries[0].UserAgent)
 }
 
 func TestAuditWithoutWriterPassesThrough(t *testing.T) {

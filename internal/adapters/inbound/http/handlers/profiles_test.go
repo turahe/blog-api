@@ -264,6 +264,40 @@ func TestAdminProfileHandlers(t *testing.T) {
 	require.Equal(t, nethttp.StatusNotFound, w.Code)
 }
 
+func TestProfileWritesRejectBeforeCallingService(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name    string
+		handler func(profileAPI) gin.HandlerFunc
+		param   string
+		user    *uuid.UUID
+		status  int
+		code    string
+	}{
+		{name: "me patch needs sign-in", handler: mePatchProfileHandler, status: nethttp.StatusUnauthorized, code: "unauthorized"},
+		{name: "admin patch needs sign-in", handler: adminPatchProfileHandler, param: uuid.NewString(), status: nethttp.StatusUnauthorized, code: "unauthorized"},
+		{name: "admin patch rejects invalid id", handler: adminPatchProfileHandler, param: "nope", user: &testUserID, status: nethttp.StatusBadRequest, code: "validation_error"},
+		{
+			name: "avatar upload needs sign-in", handler: func(p profileAPI) gin.HandlerFunc { return meUploadAvatarHandler(p, 1024) },
+			status: nethttp.StatusUnauthorized, code: "unauthorized",
+		},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
+			profiles := &fakeProfiles{}
+			w, body := runProfile(t, tc.handler(profiles), profileRequest{
+				method: nethttp.MethodPatch, target: "/", param: tc.param, user: tc.user, body: `{"bio":"x"}`, contentType: jsonContent,
+			})
+			require.Equal(t, tc.status, w.Code, w.Body.String())
+			require.Equal(t, tc.code, errorCode(body))
+			require.Equal(t, uuid.Nil, profiles.target, "service must not be called")
+		})
+	}
+}
+
 func TestPublicUserProfile(t *testing.T) {
 	t.Parallel()
 
@@ -358,6 +392,32 @@ func TestMeUploadAvatar(t *testing.T) {
 	})
 	require.Equal(t, nethttp.StatusBadRequest, w.Code)
 	require.Equal(t, responses.ErrorCodeValidation, errorCode(resp))
+}
+
+func TestMeUploadAvatarStopsReadingOversizedRequests(t *testing.T) {
+	t.Parallel()
+
+	user := uuid.New()
+	profiles := &fakeProfiles{}
+	body, contentType := multipartBody(t, "file", "huge.png", bytes.Repeat([]byte("x"), multipartOverhead+1024))
+
+	w, resp := runProfile(t, meUploadAvatarHandler(profiles, 16), profileRequest{
+		method: nethttp.MethodPost, target: "/api/v1/me/avatar", user: &user, body: body, contentType: contentType,
+	})
+	require.Equal(t, nethttp.StatusRequestEntityTooLarge, w.Code)
+	require.Equal(t, "profile.avatar_too_large", errorCode(resp))
+	require.Nil(t, profiles.uploadBytes)
+}
+
+func TestMeDeleteAvatarMapsUnavailableStorage(t *testing.T) {
+	t.Parallel()
+
+	user := uuid.New()
+	w, body := runProfile(t, meDeleteAvatarHandler(&fakeProfiles{err: userservice.ErrAvatarsUnavailable}), profileRequest{
+		method: nethttp.MethodDelete, target: "/api/v1/me/avatar", user: &user,
+	})
+	require.Equal(t, nethttp.StatusServiceUnavailable, w.Code)
+	require.Equal(t, "profile.avatar_unavailable", errorCode(body))
 }
 
 func TestMeDeleteAvatar(t *testing.T) {

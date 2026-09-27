@@ -20,10 +20,11 @@ type fixedClock struct{ t time.Time }
 func (c fixedClock) Now() time.Time { return c.t }
 
 type fakeProfileRepo struct {
-	views    map[uuid.UUID]userdomain.ProfileView
-	saveErr  error
-	saved    int
-	getCalls int
+	views        map[uuid.UUID]userdomain.ProfileView
+	saveErr      error
+	setAvatarErr error
+	saved        int
+	getCalls     int
 }
 
 func newFakeProfileRepo(views ...userdomain.ProfileView) *fakeProfileRepo {
@@ -76,6 +77,10 @@ func (r *fakeProfileRepo) SaveProfile(_ context.Context, id uuid.UUID, fullName 
 }
 
 func (r *fakeProfileRepo) SetAvatar(_ context.Context, id uuid.UUID, mediaID *uuid.UUID, _ time.Time) error {
+	if r.setAvatarErr != nil {
+		return r.setAvatarErr
+	}
+
 	view, ok := r.views[id]
 	if !ok {
 		return userdomain.ErrNotFound
@@ -103,6 +108,7 @@ func (r *fakeProfileRepo) SavePrivacy(_ context.Context, id uuid.UUID, privacy u
 type fakeAvatarStore struct {
 	assets    map[uuid.UUID]mediadomain.MediaAsset
 	uploadErr error
+	getErr    error
 	deleted   []uuid.UUID
 	lastInput mediadomain.ImageUpload
 }
@@ -129,6 +135,10 @@ func (s *fakeAvatarStore) UploadImage(_ context.Context, input mediadomain.Image
 }
 
 func (s *fakeAvatarStore) Get(_ context.Context, id uuid.UUID) (mediadomain.MediaAsset, error) {
+	if s.getErr != nil {
+		return mediadomain.MediaAsset{}, s.getErr
+	}
+
 	asset, ok := s.assets[id]
 	if !ok {
 		return mediadomain.MediaAsset{}, mediadomain.ErrNotFound
@@ -176,12 +186,17 @@ func TestApplyPatchValidatesFields(t *testing.T) {
 		"bio multiline":         {userdomain.ProfilePatch{Bio: set("line one\nline two")}, true},
 		"bio control char":      {userdomain.ProfilePatch{Bio: set("bad\x00byte")}, false},
 		"bio too long":          {userdomain.ProfilePatch{Bio: set(strings.Repeat("é", 4001))}, false},
+		"null bio":              {userdomain.ProfilePatch{Bio: cleared}, true},
+		"location":              {userdomain.ProfilePatch{ContactLocation: set("Jakarta, Indonesia")}, true},
+		"location too long":     {userdomain.ProfilePatch{ContactLocation: set(strings.Repeat("l", maxLocationRunes+1))}, false},
+		"location newline":      {userdomain.ProfilePatch{ContactLocation: set("Jakarta\nIndonesia")}, false},
 		"website":               {userdomain.ProfilePatch{ContactWebsite: set("https://ada.dev/about")}, true},
 		"website javascript":    {userdomain.ProfilePatch{ContactWebsite: set("javascript:alert(1)")}, false},
 		"website credentials":   {userdomain.ProfilePatch{ContactWebsite: set("https://u:p@ada.dev")}, false},
 		"website relative":      {userdomain.ProfilePatch{ContactWebsite: set("/about")}, false},
 		"twitter with at":       {userdomain.ProfilePatch{Twitter: set("@ada_l")}, true},
 		"twitter too long":      {userdomain.ProfilePatch{Twitter: set("abcdefghijklmnop")}, false},
+		"null twitter":          {userdomain.ProfilePatch{Twitter: cleared}, true},
 		"github":                {userdomain.ProfilePatch{GitHub: set("ada-lovelace")}, true},
 		"github url":            {userdomain.ProfilePatch{GitHub: set("https://github.com/ada")}, false},
 		"linkedin":              {userdomain.ProfilePatch{LinkedIn: set("ada-lovelace-1815")}, true},
@@ -244,6 +259,20 @@ func TestApplyPatchNormalizesAndClears(t *testing.T) {
 	require.Equal(t, now, *profile.MarketingConsentUpdatedAt, "unchanged consent keeps its timestamp")
 }
 
+func TestGetReturnsTheFullView(t *testing.T) {
+	t.Parallel()
+
+	view := activeView("ada")
+	svc := NewProfileService(newFakeProfileRepo(view), fixedClock{t: time.Now()})
+
+	got, err := svc.Get(t.Context(), view.User.UUID)
+	require.NoError(t, err)
+	require.Equal(t, view, got)
+
+	_, err = svc.Get(t.Context(), uuid.New())
+	require.ErrorIs(t, err, userdomain.ErrNotFound)
+}
+
 func TestUpdateSavesInvalidatesAndReturnsFreshView(t *testing.T) {
 	t.Parallel()
 
@@ -267,6 +296,31 @@ func TestUpdateSavesInvalidatesAndReturnsFreshView(t *testing.T) {
 	_, err = svc.Update(t.Context(), view.User.UUID, view.User.UUID, userdomain.ProfilePatch{DisplayName: set("Taken")})
 	require.ErrorIs(t, err, userdomain.ErrDisplayNameTaken)
 	require.Equal(t, 1, cache.Invalidations(readcache.Users), "failed writes do not invalidate")
+}
+
+func TestUpdateRejectsInvalidPatchWithoutSaving(t *testing.T) {
+	t.Parallel()
+
+	view := activeView("ada")
+	repo := newFakeProfileRepo(view)
+	svc := NewProfileService(repo, fixedClock{t: time.Now()})
+
+	_, err := svc.Update(t.Context(), view.User.UUID, view.User.UUID, userdomain.ProfilePatch{Locale: set("english")})
+	require.ErrorIs(t, err, userdomain.ErrProfileValidation)
+	require.Zero(t, repo.saved)
+}
+
+func TestUpdateChangesMarketingConsent(t *testing.T) {
+	t.Parallel()
+
+	view := activeView("ada")
+	svc := NewProfileService(newFakeProfileRepo(view), fixedClock{t: time.Now()})
+
+	got, err := svc.Update(t.Context(), view.User.UUID, view.User.UUID,
+		userdomain.ProfilePatch{MarketingConsent: userdomain.Change[bool]{Set: true, Value: new(!view.Profile.MarketingConsent)}})
+	require.NoError(t, err)
+	require.NotEqual(t, view.Profile.MarketingConsent, got.Profile.MarketingConsent)
+	require.NotNil(t, got.Profile.MarketingConsentUpdatedAt)
 }
 
 func TestPublicHonoursVisibilityAndStatus(t *testing.T) {
@@ -305,6 +359,9 @@ func TestPublicHonoursVisibilityAndStatus(t *testing.T) {
 	require.ErrorIs(t, err, userdomain.ErrNotFound)
 
 	_, err = svc.Public(t.Context(), "  ", nil, false)
+	require.ErrorIs(t, err, userdomain.ErrNotFound)
+
+	_, err = svc.Public(t.Context(), "nobody", nil, true)
 	require.ErrorIs(t, err, userdomain.ErrNotFound)
 }
 
@@ -402,4 +459,119 @@ func TestDeleteAvatar(t *testing.T) {
 	require.NoError(t, svc.DeleteAvatar(t.Context(), userID))
 	require.Nil(t, repo.views[userID].AvatarUUID)
 	require.Equal(t, []uuid.UUID{owned.UUID}, store.deleted)
+}
+
+func TestUploadAvatarFirstAvatarAndStaleReferences(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name     string
+		previous *uuid.UUID
+	}{
+		{name: "no previous avatar"},
+		{name: "previous asset already gone", previous: new(uuid.New())},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			view := activeView("ada")
+			view.AvatarUUID = tt.previous
+			repo := newFakeProfileRepo(view)
+			store := newFakeAvatarStore()
+			svc := NewProfileService(repo, fixedClock{t: time.Now()}).WithAvatars(store, 10)
+
+			asset, err := svc.UploadAvatar(t.Context(), view.User.UUID, "a.png", []byte("x"))
+			require.NoError(t, err)
+			require.Equal(t, &asset.UUID, repo.views[view.User.UUID].AvatarUUID)
+			require.Empty(t, store.deleted)
+		})
+	}
+}
+
+func TestUploadAvatarFailsWhenTheReferenceCannotBeSaved(t *testing.T) {
+	t.Parallel()
+
+	boom := errors.New("boom")
+	view := activeView("ada")
+	repo := newFakeProfileRepo(view)
+	repo.setAvatarErr = boom
+	svc := NewProfileService(repo, fixedClock{t: time.Now()}).WithAvatars(newFakeAvatarStore(), 10)
+
+	_, err := svc.UploadAvatar(t.Context(), view.User.UUID, "a.png", []byte("x"))
+	require.ErrorIs(t, err, boom)
+	require.Nil(t, repo.views[view.User.UUID].AvatarUUID)
+}
+
+func TestDeleteAvatarFailures(t *testing.T) {
+	t.Parallel()
+
+	boom := errors.New("boom")
+
+	tests := []struct {
+		name     string
+		avatars  bool
+		user     func(view userdomain.ProfileView) uuid.UUID
+		breakIt  func(*fakeProfileRepo, *fakeAvatarStore)
+		wantErr  error
+		unlinked bool
+	}{
+		{
+			name:    "avatars not configured",
+			user:    func(v userdomain.ProfileView) uuid.UUID { return v.User.UUID },
+			breakIt: func(*fakeProfileRepo, *fakeAvatarStore) {},
+			wantErr: ErrAvatarsUnavailable,
+		},
+		{
+			name:    "unknown user",
+			avatars: true,
+			user:    func(userdomain.ProfileView) uuid.UUID { return uuid.New() },
+			breakIt: func(*fakeProfileRepo, *fakeAvatarStore) {},
+			wantErr: userdomain.ErrNotFound,
+		},
+		{
+			name:    "reference cannot be cleared",
+			avatars: true,
+			user:    func(v userdomain.ProfileView) uuid.UUID { return v.User.UUID },
+			breakIt: func(r *fakeProfileRepo, _ *fakeAvatarStore) { r.setAvatarErr = boom },
+			wantErr: boom,
+		},
+		{
+			name:     "asset lookup fails after unlinking",
+			avatars:  true,
+			user:     func(v userdomain.ProfileView) uuid.UUID { return v.User.UUID },
+			breakIt:  func(_ *fakeProfileRepo, s *fakeAvatarStore) { s.getErr = boom },
+			wantErr:  boom,
+			unlinked: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			view := activeView("ada")
+			userID := view.User.UUID
+			owned := mediadomain.MediaAsset{UUID: uuid.New(), UploadedByUUID: &userID, Tags: []string{AvatarTag}}
+			view.AvatarUUID = &owned.UUID
+			repo := newFakeProfileRepo(view)
+			store := newFakeAvatarStore(owned)
+			tt.breakIt(repo, store)
+
+			svc := NewProfileService(repo, fixedClock{t: time.Now()})
+			if tt.avatars {
+				svc = svc.WithAvatars(store, 10)
+			}
+
+			require.ErrorIs(t, svc.DeleteAvatar(t.Context(), tt.user(view)), tt.wantErr)
+			require.Empty(t, store.deleted)
+
+			if tt.unlinked {
+				require.Nil(t, repo.views[userID].AvatarUUID)
+			} else {
+				require.Equal(t, &owned.UUID, repo.views[userID].AvatarUUID)
+			}
+		})
+	}
 }

@@ -147,6 +147,47 @@ func TestPostRepositoryListAdminFilters(t *testing.T) {
 	require.Equal(t, int64(2), page.Total)
 }
 
+func TestPostRepositoryGetPublishedBySlug(t *testing.T) {
+	t.Parallel()
+
+	tx := integrationTx(t)
+	repo := NewPostRepository(tx)
+	author := insertUser(t, tx)
+	now := time.Now().UTC()
+	published := createPost(t, repo, postFixture{author: author, status: postdomain.StatusPublished, createdAt: now, publishedAt: &now})
+	draft := createPost(t, repo, postFixture{author: author, createdAt: now})
+	deleted := softDelete(t, repo, createPost(t, repo, postFixture{
+		author: author, status: postdomain.StatusPublished, createdAt: now, publishedAt: &now,
+	}))
+
+	tests := []struct {
+		name    string
+		ctx     context.Context
+		slug    string
+		wantErr error
+	}{
+		{name: "published", ctx: t.Context(), slug: published.Slug},
+		{name: "draft", ctx: t.Context(), slug: draft.Slug, wantErr: postdomain.ErrNotFound},
+		{name: "deleted", ctx: t.Context(), slug: deleted.Slug, wantErr: postdomain.ErrNotFound},
+		{name: "unknown", ctx: t.Context(), slug: uniqueSlug("missing"), wantErr: postdomain.ErrNotFound},
+		{name: "database error", ctx: canceledContext(t), slug: published.Slug, wantErr: context.Canceled},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, err := repo.GetPublishedBySlug(tt.ctx, tt.slug)
+			if tt.wantErr != nil {
+				require.ErrorIs(t, err, tt.wantErr)
+				return
+			}
+
+			require.NoError(t, err)
+			require.Equal(t, published.UUID, got.UUID)
+			require.Equal(t, postdomain.StatusPublished, got.Status)
+		})
+	}
+}
+
 func TestPostRepositorySoftDeleteRestoreAndSlugReuse(t *testing.T) {
 	t.Parallel()
 

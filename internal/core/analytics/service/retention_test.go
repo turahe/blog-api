@@ -2,11 +2,13 @@ package service
 
 import (
 	"context"
+	"errors"
 	"testing"
 	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"github.com/turahe/blog-api/internal/core/analytics/ports"
 )
 
 type fakeRetentionRepo struct {
@@ -14,15 +16,25 @@ type fakeRetentionRepo struct {
 	rawBefore  []time.Time
 	rollupDays []string
 	saltsFrom  string
+	saltsErr   error
+	rawErr     error
 }
 
 func (f *fakeRetentionRepo) PruneSalts(_ context.Context, keepFrom string) (int64, error) {
+	if f.saltsErr != nil {
+		return 0, f.saltsErr
+	}
+
 	f.saltsFrom = keepFrom
 
 	return 2, nil
 }
 
 func (f *fakeRetentionRepo) PruneRaw(_ context.Context, before time.Time, limit int) (int64, error) {
+	if f.rawErr != nil {
+		return 0, f.rawErr
+	}
+
 	f.rawBefore = append(f.rawBefore, before)
 	n := min(f.rawLeft, int64(limit))
 	f.rawLeft -= n
@@ -36,14 +48,17 @@ func (f *fakeRetentionRepo) PruneDayRollups(_ context.Context, day string) (int6
 	return 7, nil
 }
 
-type fixedRetention struct{ days, months int }
+type fixedRetention struct {
+	days, months       int
+	daysErr, monthsErr error
+}
 
 func (f fixedRetention) RawRetentionDays(context.Context) (int, error) {
-	return f.days, nil
+	return f.days, f.daysErr
 }
 
 func (f fixedRetention) DayRollupRetentionMonths(context.Context) (int, error) {
-	return f.months, nil
+	return f.months, f.monthsErr
 }
 
 func TestRetentionRunPrunesInBatches(t *testing.T) {
@@ -77,4 +92,47 @@ func TestRetentionRunKeepsDailyRollupsForeverAtZero(t *testing.T) {
 	assert.Equal(t, time.Date(2026, 8, 1, 0, 0, 0, 0, time.UTC), result.RawBefore, "floor: the previous month")
 	assert.Empty(t, repo.rollupDays)
 	assert.Empty(t, result.RollupsBefore)
+}
+
+func TestRetentionRunFailures(t *testing.T) {
+	t.Parallel()
+
+	boom := errors.New("boom")
+	settings := fixedRetention{days: 90, months: 25}
+
+	tests := []struct {
+		name     string
+		repo     *fakeRetentionRepo
+		settings fixedRetention
+		tz       ports.TimezoneSource
+		wantErr  error
+	}{
+		{name: "time zone unavailable", repo: &fakeRetentionRepo{}, settings: settings, tz: failingZone{err: boom}, wantErr: boom},
+		{name: "raw retention unavailable", repo: &fakeRetentionRepo{}, settings: fixedRetention{daysErr: boom}, tz: fixedTimezone("UTC"), wantErr: boom},
+		{name: "rollup retention unavailable", repo: &fakeRetentionRepo{}, settings: fixedRetention{days: 90, monthsErr: boom}, tz: fixedTimezone("UTC"), wantErr: boom},
+		{name: "salt prune fails", repo: &fakeRetentionRepo{saltsErr: boom}, settings: settings, tz: fixedTimezone("UTC"), wantErr: boom},
+		{name: "raw prune fails", repo: &fakeRetentionRepo{rawErr: boom}, settings: settings, tz: fixedTimezone("UTC"), wantErr: boom},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			clock := &fixedClock{now: time.Date(2026, 9, 25, 3, 0, 0, 0, time.UTC)}
+
+			_, err := NewRetention(tt.repo, tt.settings, tt.tz, clock).Run(t.Context())
+			require.ErrorIs(t, err, tt.wantErr)
+		})
+	}
+}
+
+func TestRetentionRunRejectsAnUnknownTimeZone(t *testing.T) {
+	t.Parallel()
+
+	clock := &fixedClock{now: time.Date(2026, 9, 25, 3, 0, 0, 0, time.UTC)}
+	repo := &fakeRetentionRepo{}
+
+	_, err := NewRetention(repo, fixedRetention{days: 90}, fixedTimezone("Mars/Olympus"), clock).Run(t.Context())
+	require.ErrorContains(t, err, `site time zone "Mars/Olympus"`)
+	assert.Empty(t, repo.saltsFrom, "nothing is pruned")
 }

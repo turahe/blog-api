@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	authdomain "github.com/turahe/blog-api/internal/core/auth/domain"
 	authservice "github.com/turahe/blog-api/internal/core/auth/service"
@@ -135,6 +136,101 @@ func TestEmailChangeRoundTrip(t *testing.T) {
 
 	_, err = f.svc.ConfirmEmailChange(ctx, f.user.UUID, f.notifier.token)
 	require.ErrorIs(t, err, authservice.ErrEmailChangeTokenUsed)
+}
+
+func TestRequestEmailChangeFailures(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name        string
+		setup       func(f *emailChangeFixture)
+		tokenFaults faults
+		wantErr     error
+	}{
+		{name: "inactive account", setup: func(f *emailChangeFixture) { suspend(f.users, f.user.UUID) }, wantErr: authdomain.ErrUserInactive},
+		{name: "availability lookup", setup: func(f *emailChangeFixture) { f.users.fail = faults{"FindByEmail": errBoom} }, wantErr: errBoom},
+		{name: "issue token", tokenFaults: faults{"IssueResetToken": errBoom}, wantErr: errBoom},
+		{name: "revoke earlier requests", setup: func(f *emailChangeFixture) { f.resets.fail = faults{"RevokePending": errBoom} }, wantErr: errBoom},
+		{name: "store token", setup: func(f *emailChangeFixture) { f.resets.fail = faults{"Create": errBoom} }, wantErr: errBoom},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			f := newEmailChangeFixture(t)
+			if tt.setup != nil {
+				tt.setup(f)
+			}
+
+			svc := authservice.New(f.users, f.sessions, f.resets, fakeHasher{}, failingTokens{fail: tt.tokenFaults}, f.clock,
+				uuidGen{}, authservice.Config{}, nil).WithEmailChange(f.notifier, f.cache)
+
+			request, err := svc.RequestEmailChange(t.Context(), f.user.UUID, "new@example.com", "Secret123456")
+			require.ErrorIs(t, err, tt.wantErr)
+			assert.Equal(t, authdomain.EmailChangeRequest{}, request)
+			assert.Empty(t, f.notifier.token, "nothing is sent")
+		})
+	}
+}
+
+func suspend(users *memUsers, id uuid.UUID) {
+	u := users.byID[id]
+	u.Status = userdomain.StatusSuspended
+	users.byID[id] = u
+	users.byEmail[u.Email] = u
+}
+
+func TestConfirmEmailChangeFailures(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name    string
+		setup   func(f *emailChangeFixture)
+		wantErr error
+	}{
+		{name: "token lookup", setup: func(f *emailChangeFixture) { f.resets.fail = faults{"FindByHash": errBoom} }, wantErr: errBoom},
+		{name: "account suspended since the request", setup: func(f *emailChangeFixture) { suspend(f.users, f.user.UUID) }, wantErr: authdomain.ErrUserInactive},
+		{name: "availability lookup", setup: func(f *emailChangeFixture) { f.users.fail = faults{"FindByEmail": errBoom} }, wantErr: errBoom},
+		{name: "update email", setup: func(f *emailChangeFixture) { f.users.fail = faults{"UpdateEmail": errBoom} }, wantErr: errBoom},
+		{name: "spend token", setup: func(f *emailChangeFixture) { f.resets.fail = faults{"MarkUsed": errBoom} }, wantErr: errBoom},
+		{name: "revoke sessions", setup: func(f *emailChangeFixture) { f.sessions.fail = faults{"RevokeAllForUser": errBoom} }, wantErr: errBoom},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			f := newEmailChangeFixture(t)
+
+			_, err := f.svc.RequestEmailChange(t.Context(), f.user.UUID, "new@example.com", "Secret123456")
+			require.NoError(t, err)
+
+			tt.setup(f)
+
+			user, err := f.svc.ConfirmEmailChange(t.Context(), f.user.UUID, f.notifier.token)
+			require.ErrorIs(t, err, tt.wantErr)
+			assert.Equal(t, userdomain.User{}, user)
+			assert.Empty(t, f.notifier.changed, "no change notice")
+			assert.Zero(t, f.cache.Invalidations(readcache.Users))
+		})
+	}
+}
+
+func TestConfirmEmailChangeToAddressTheUserAlreadyHolds(t *testing.T) {
+	t.Parallel()
+
+	f := newEmailChangeFixture(t)
+	ctx := t.Context()
+
+	_, err := f.svc.RequestEmailChange(ctx, f.user.UUID, "new@example.com", "Secret123456")
+	require.NoError(t, err)
+
+	f.users.byEmail["new@example.com"] = f.users.byID[f.user.UUID]
+
+	user, err := f.svc.ConfirmEmailChange(ctx, f.user.UUID, f.notifier.token)
+	require.NoError(t, err, "an address held by the same account is available to it")
+	assert.Equal(t, "new@example.com", user.Email)
 }
 
 func TestConfirmEmailChangeRejectsExpiredAndForeignTokens(t *testing.T) {

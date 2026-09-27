@@ -1,6 +1,7 @@
 package domain
 
 import (
+	"encoding/json"
 	"strings"
 	"testing"
 	"time"
@@ -31,6 +32,40 @@ func codes(violations []FieldViolation) map[string]string {
 	return out
 }
 
+func TestDecodeSEO(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name string
+		raw  json.RawMessage
+		want SEO
+	}{
+		{name: "nil", raw: nil},
+		{name: "blank", raw: json.RawMessage("  \n")},
+		{name: "fields", raw: json.RawMessage(`{"seo_title":"T","robots_noindex":true}`), want: SEO{Title: "T", RobotsNoindex: true}},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			got, err := DecodeSEO(tt.raw)
+			require.NoError(t, err)
+			assert.Equal(t, tt.want, got)
+		})
+	}
+}
+
+func TestDecodeSEORejectsMalformedJSON(t *testing.T) {
+	t.Parallel()
+
+	_, err := DecodeSEO(json.RawMessage(`{"seo_title":`))
+
+	var syntax *json.SyntaxError
+	require.ErrorAs(t, err, &syntax)
+	assert.ErrorContains(t, err, "decode seo snapshot")
+}
+
 func TestSEOApplyNormalisesAndClears(t *testing.T) {
 	t.Parallel()
 
@@ -56,6 +91,36 @@ func TestSEOApplyNormalisesAndClears(t *testing.T) {
 	assert.Nil(t, next.OGImageUUID)
 	assert.False(t, next.RobotsNoindex)
 	assert.Equal(t, "Old", current.Title, "Apply must not mutate the receiver")
+}
+
+func TestSEOApplySetsCardImageAndRobots(t *testing.T) {
+	t.Parallel()
+
+	image := uuid.New()
+	card := TwitterSummary
+	nofollow := true
+	blank := []string{" ", ""}
+
+	next := SEO{Keywords: []string{"old"}}.Apply(SEOPatch{
+		Keywords:       &blank,
+		TwitterCard:    &card,
+		TwitterImage:   OptionalUUID{Present: true, Value: &image},
+		RobotsNofollow: &nofollow,
+	})
+
+	assert.Nil(t, next.Keywords, "only blank keywords clear the list")
+	assert.Equal(t, TwitterSummary, next.TwitterCard)
+	assert.Equal(t, &image, next.TwitterImageUUID)
+	assert.True(t, next.RobotsNofollow)
+}
+
+func TestSEOValidationErrorMatchesErrValidation(t *testing.T) {
+	t.Parallel()
+
+	var err error = &SEOValidationError{Violations: make([]FieldViolation, 2)}
+
+	require.ErrorIs(t, err, ErrValidation)
+	assert.Equal(t, "2 invalid seo field(s)", err.Error())
 }
 
 func TestSEOValidateReportsEveryField(t *testing.T) {
@@ -100,6 +165,37 @@ func TestSEOValidateAcceptsSiteAndAllowedHosts(t *testing.T) {
 	noBase.CanonicalBase = ""
 	seo.CanonicalURL = "https://anything.example.net/x"
 	assert.Empty(t, seo.Validate(noBase), "without a canonical base any host is allowed")
+}
+
+func TestSEOValidateTextAndURLRules(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name  string
+		seo   SEO
+		field string
+		code  string
+	}{
+		{name: "keyword with markup", seo: SEO{Keywords: []string{"ok", "<b>", "<i>"}}, field: "seo_keywords", code: SEOCodeMarkup},
+		{name: "keyword too long", seo: SEO{Keywords: []string{strings.Repeat("k", MaxSEOKeyword+1)}}, field: "seo_keywords", code: SEOCodeTooLong},
+		{name: "control character", seo: SEO{OGTitle: "bell\a"}, field: "og_title", code: SEOCodeInvalidFormat},
+		{
+			name:  "overlong URL",
+			seo:   SEO{CanonicalURL: "https://blog.example.com/" + strings.Repeat("p", MaxSEOURL)},
+			field: "canonical_url",
+			code:  SEOCodeTooLong,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			violations := tt.seo.Validate(seoDefaults())
+			require.Len(t, violations, 1)
+			assert.Equal(t, map[string]string{tt.field: tt.code}, codes(violations))
+		})
+	}
 }
 
 func TestSEOWarningsAreAdvisory(t *testing.T) {
@@ -233,6 +329,62 @@ func TestRenderHomeSEOPrefersHomeSettings(t *testing.T) {
 	assert.Empty(t, meta.Canonical)
 	assert.NotContains(t, meta.OpenGraph, "og:url")
 	assert.Equal(t, "summary_large_image", meta.Twitter["twitter:card"])
+}
+
+func TestPreviewOf(t *testing.T) {
+	t.Parallel()
+
+	meta := RenderSEO(SEOInput{
+		Post: Post{Title: "Title", Slug: "t", Excerpt: "Excerpt"},
+		SEO: SEO{
+			OGTitle: "OG title", OGURL: "https://blog.example.com/og", TwitterTitle: "Tw title",
+			TwitterCreator: "@blog",
+		},
+		Defaults:   seoDefaults(),
+		OGImageURL: "https://img/og.jpg",
+	})
+	warnings := []FieldViolation{{Field: "seo_title", Code: SEOCodeTooLongAdvisory}}
+
+	preview := PreviewOf(meta, warnings)
+
+	assert.Equal(t, SearchPreview{Title: meta.Title, URL: meta.Canonical, Description: meta.MetaDescription}, preview.Search)
+	assert.Equal(t, SocialPreview{
+		Title: "OG title", Description: "Excerpt", ImageURL: "https://img/og.jpg",
+		URL: "https://blog.example.com/og", SiteName: "Blog",
+	}, preview.OG)
+	assert.Equal(t, TwitterPreview{
+		Card: "summary_large_image", Title: "Tw title", Description: "Excerpt", ImageURL: "https://img/og.jpg", Creator: "@blog",
+	}, preview.Twitter)
+	assert.Equal(t, warnings, preview.Warnings)
+}
+
+func TestPlainTextDropsControlCharacters(t *testing.T) {
+	t.Parallel()
+
+	assert.Equal(t, "ab c", PlainText("a\x00b\x07 \tc"))
+}
+
+func TestRenderSEORobots(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name string
+		seo  SEO
+		want string
+	}{
+		{name: "default", want: "index,follow"},
+		{name: "noindex", seo: SEO{RobotsNoindex: true}, want: "noindex,follow"},
+		{name: "nofollow", seo: SEO{RobotsNofollow: true}, want: "index,nofollow"},
+		{name: "both", seo: SEO{RobotsNoindex: true, RobotsNofollow: true}, want: "noindex,nofollow"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			assert.Equal(t, tt.want, RenderSEO(SEOInput{Post: Post{Title: "T"}, SEO: tt.seo}).Robots)
+		})
+	}
 }
 
 func TestSummaryTruncatesLongContent(t *testing.T) {

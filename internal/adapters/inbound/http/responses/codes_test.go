@@ -58,15 +58,36 @@ func TestBuildResponseCode(t *testing.T) {
 
 func TestCaseCodeForStatus(t *testing.T) {
 	t.Parallel()
-	require.Equal(t, CaseSuccess, CaseCodeForStatus(200))
-	require.Equal(t, CaseSuccess, CaseCodeForStatus(201))
-	require.Equal(t, CaseAccepted, CaseCodeForStatus(202))
-	require.Equal(t, CaseValidation, CaseCodeForStatus(400))
-	require.Equal(t, CaseUnauthorized, CaseCodeForStatus(401))
-	require.Equal(t, CaseForbidden, CaseCodeForStatus(403))
-	require.Equal(t, CaseNotFound, CaseCodeForStatus(404))
-	require.Equal(t, CaseConflict, CaseCodeForStatus(409))
-	require.Equal(t, CaseUnprocessable, CaseCodeForStatus(422))
-	require.Equal(t, CaseRateLimited, CaseCodeForStatus(429))
-	require.Equal(t, CaseInternalError, CaseCodeForStatus(500))
+
+	tests := []struct {
+		name   string
+		status int
+		want   int
+	}{
+		{name: "ok", status: 200, want: CaseSuccess},
+		{name: "created", status: 201, want: CaseSuccess},
+		{name: "accepted", status: 202, want: CaseAccepted},
+		{name: "no content", status: 204, want: CaseSuccess},
+		{name: "other 2xx", status: 206, want: CaseSuccess},
+		{name: "bad request", status: 400, want: CaseValidation},
+		{name: "unauthorized", status: 401, want: CaseUnauthorized},
+		{name: "forbidden", status: 403, want: CaseForbidden},
+		{name: "not found", status: 404, want: CaseNotFound},
+		{name: "conflict", status: 409, want: CaseConflict},
+		{name: "unprocessable", status: 422, want: CaseUnprocessable},
+		{name: "rate limited", status: 429, want: CaseRateLimited},
+		{name: "internal", status: 500, want: CaseInternalError},
+		{name: "other 5xx", status: 503, want: CaseInternalError},
+		{name: "unmapped 4xx", status: 418, want: CaseInternalError},
+		{name: "redirect", status: 302, want: CaseInternalError},
+		{name: "informational", status: 100, want: CaseInternalError},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			require.Equal(t, tt.want, CaseCodeForStatus(tt.status))
+		})
+	}
 }

@@ -26,6 +26,83 @@ func TestCamelKey(t *testing.T) {
 	}
 }
 
+func TestCamelTree(t *testing.T) {
+	t.Parallel()
+
+	unencodable := make(chan int)
+
+	tests := []struct {
+		name string
+		in   any
+		want any
+	}{
+		{
+			name: "renames keys at every depth",
+			in: map[string]any{
+				"post_id": 1,
+				"media_items": []any{
+					map[string]any{"sort_order": 2, "tags": []string{"snake_case_value"}},
+				},
+			},
+			want: map[string]any{
+				"postId": float64(1),
+				"mediaItems": []any{
+					map[string]any{"sortOrder": float64(2), "tags": []any{"snake_case_value"}},
+				},
+			},
+		},
+		{
+			name: "scalars pass through",
+			in:   "snake_case",
+			want: "snake_case",
+		},
+		{
+			name: "unencodable values are returned unchanged",
+			in:   unencodable,
+			want: unencodable,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			assert.Equal(t, tt.want, camelTree(tt.in))
+		})
+	}
+}
+
+func TestFieldViolations(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name       string
+		violations []postdomain.FieldViolation
+		want       string
+	}{
+		{name: "none", violations: nil, want: `[]`},
+		{
+			name: "field named as in requests",
+			violations: []postdomain.FieldViolation{
+				{Field: "seo_title", Code: "too_long", Message: "The SEO title may not be greater than 70 characters."},
+				{Field: "slug", Code: "taken", Message: "The slug has already been taken."},
+			},
+			want: `[
+				{"field": "seoTitle", "code": "too_long", "message": "The SEO title may not be greater than 70 characters."},
+				{"field": "slug", "code": "taken", "message": "The slug has already been taken."}
+			]`,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			assertJSON(t, tt.want, FieldViolations(tt.violations))
+		})
+	}
+}
+
 func TestPostRevisionRenamesStoredFieldNames(t *testing.T) {
 	t.Parallel()
 

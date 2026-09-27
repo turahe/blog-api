@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"context"
+	"errors"
 	nethttp "net/http"
 	"net/http/httptest"
 	"testing"
@@ -180,4 +181,49 @@ func TestAnalyticsIngestGate(t *testing.T) {
 
 	svc.err = assert.AnError
 	assert.Equal(t, nethttp.StatusInternalServerError, run(svc, optional, "tok").Code)
+}
+
+type failingSettingsValues struct{}
+
+func (failingSettingsValues) Values(context.Context) (settingsdomain.Values, error) {
+	return settingsdomain.Values{}, errors.New("settings down")
+}
+
+func TestConsentHandlerFailures(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name    string
+		handler gin.HandlerFunc
+		param   string
+		body    string
+		status  int
+		code    string
+		message string
+	}{
+		{
+			name: "store rejects malformed body", handler: storeConsentHandler(&fakeConsent{}), body: `{`,
+			status: nethttp.StatusBadRequest, code: "validation_error", message: "The given data was invalid.",
+		},
+		{
+			name: "withdraw records unexpected failure", handler: withdrawConsentHandler(&fakeConsent{err: errors.New("db down")}), param: uuid.NewString(),
+			status: nethttp.StatusInternalServerError, code: "internal_error", message: "Failed to process consent",
+		},
+		{
+			name: "gate fails when settings fail", handler: analyticsIngestGate(&fakeConsent{}, failingSettingsValues{}),
+			status: nethttp.StatusInternalServerError, code: "internal_error", message: "Failed to load settings",
+		},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
+			w, body := runProfile(t, tc.handler, profileRequest{
+				method: nethttp.MethodPost, target: "/", param: tc.param, contentType: jsonContent, body: tc.body,
+			})
+			require.Equal(t, tc.status, w.Code, w.Body.String())
+			require.Equal(t, tc.code, errorCode(body))
+			require.Equal(t, tc.message, errorMessage(body))
+		})
+	}
 }

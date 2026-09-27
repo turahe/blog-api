@@ -195,3 +195,32 @@ func TestAdminAnalyticsExportsAreAdminOnly(t *testing.T) {
 	c := NewControllers(Deps{})
 	assert.Nil(t, c.Exports.Create, "a stub without the service")
 }
+
+func TestAnalyticsExportHandlersGuards(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name    string
+		handler func(analyticsExportsAPI) gin.HandlerFunc
+		user    *uuid.UUID
+		err     error
+		status  int
+		code    string
+	}{
+		{name: "request needs sign-in", handler: adminAnalyticsExportHandler, status: nethttp.StatusUnauthorized, code: "unauthorized"},
+		{name: "list needs sign-in", handler: adminAnalyticsExportsListHandler, status: nethttp.StatusUnauthorized, code: "unauthorized"},
+		{name: "list maps step-up", handler: adminAnalyticsExportsListHandler, user: &testUserID, err: analyticsdomain.ErrStepUpRequired, status: nethttp.StatusForbidden, code: "analytics.step_up_required"},
+		{name: "get needs sign-in", handler: adminAnalyticsExportGetHandler, status: nethttp.StatusUnauthorized, code: "unauthorized"},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
+			w, body := runProfile(t, tc.handler(&fakeAnalyticsExports{err: tc.err}), profileRequest{
+				method: nethttp.MethodGet, target: "/", param: uuid.NewString(), user: tc.user, contentType: jsonContent, body: `{}`,
+			})
+			require.Equal(t, tc.status, w.Code, w.Body.String())
+			require.Equal(t, tc.code, errorCode(body))
+		})
+	}
+}

@@ -2,6 +2,7 @@ package service_test
 
 import (
 	"context"
+	"errors"
 	"testing"
 	"time"
 
@@ -11,6 +12,7 @@ import (
 	authdomain "github.com/turahe/blog-api/internal/core/auth/domain"
 	"github.com/turahe/blog-api/internal/core/event"
 	"github.com/turahe/blog-api/internal/core/impersonation/domain"
+	"github.com/turahe/blog-api/internal/core/impersonation/ports"
 	"github.com/turahe/blog-api/internal/core/impersonation/service"
 	userdomain "github.com/turahe/blog-api/internal/core/user/domain"
 )
@@ -29,6 +31,13 @@ type fakeRepo struct {
 	sessions map[uuid.UUID]domain.Session
 	// signIns maps a refresh-session family to its latest unrevoked expiry.
 	signIns map[uuid.UUID]time.Time
+
+	getErr     error
+	activeErr  error
+	expiredErr error
+	endErr     error
+	// endLost makes End report that another request already ended the session.
+	endLost bool
 }
 
 func (r *fakeRepo) read(s domain.Session) domain.Session {
@@ -54,6 +63,10 @@ func (r *fakeRepo) Create(_ context.Context, s domain.Session) error {
 }
 
 func (r *fakeRepo) Get(_ context.Context, id uuid.UUID) (domain.Session, error) {
+	if r.getErr != nil {
+		return domain.Session{}, r.getErr
+	}
+
 	s, ok := r.sessions[id]
 	if !ok {
 		return domain.Session{}, domain.ErrNotFound
@@ -63,6 +76,10 @@ func (r *fakeRepo) Get(_ context.Context, id uuid.UUID) (domain.Session, error) 
 }
 
 func (r *fakeRepo) ActiveForActor(_ context.Context, actorID uuid.UUID) (domain.Session, bool, error) {
+	if r.activeErr != nil {
+		return domain.Session{}, false, r.activeErr
+	}
+
 	for _, s := range r.sessions {
 		if s.ActorUUID == actorID && s.State == domain.StateActive {
 			return r.read(s), true, nil
@@ -73,6 +90,10 @@ func (r *fakeRepo) ActiveForActor(_ context.Context, actorID uuid.UUID) (domain.
 }
 
 func (r *fakeRepo) End(_ context.Context, id uuid.UUID, state domain.State, reason domain.EndReason, at time.Time) (bool, error) {
+	if r.endErr != nil || r.endLost {
+		return false, r.endErr
+	}
+
 	s, ok := r.sessions[id]
 	if !ok || s.State != domain.StateActive {
 		return false, nil
@@ -85,6 +106,10 @@ func (r *fakeRepo) End(_ context.Context, id uuid.UUID, state domain.State, reas
 }
 
 func (r *fakeRepo) Expired(_ context.Context, now time.Time, limit int) ([]domain.Session, error) {
+	if r.expiredErr != nil {
+		return nil, r.expiredErr
+	}
+
 	var out []domain.Session
 
 	for _, s := range r.sessions {
@@ -107,6 +132,12 @@ func (u fakeUsers) FindByID(_ context.Context, id uuid.UUID) (userdomain.User, e
 	return user, nil
 }
 
+type failingUsers struct{ err error }
+
+func (u failingUsers) FindByID(context.Context, uuid.UUID) (userdomain.User, error) {
+	return userdomain.User{}, u.err
+}
+
 type fakePerms map[uuid.UUID]domain.Grants
 
 func (p fakePerms) Enforce(_ context.Context, userID uuid.UUID, permission string) (bool, error) {
@@ -117,15 +148,50 @@ func (p fakePerms) Grants(_ context.Context, userID uuid.UUID) (domain.Grants, e
 	return p[userID], nil
 }
 
-type fakeStepUp struct{ fail bool }
+// failingPerms fails Enforce, or Grants for the users in grantsErr, and otherwise answers
+// from fakePerms.
+type failingPerms struct {
+	fakePerms
 
-func (f fakeStepUp) VerifyStepUp(context.Context, uuid.UUID, string, string) (bool, error) {
-	return !f.fail, nil
+	enforceErr error
+	grantsErr  map[uuid.UUID]error
 }
 
-type fakeTokens struct{ issued []authdomain.AccessClaims }
+func (p failingPerms) Enforce(ctx context.Context, userID uuid.UUID, permission string) (bool, error) {
+	if p.enforceErr != nil {
+		return false, p.enforceErr
+	}
+
+	return p.fakePerms.Enforce(ctx, userID, permission)
+}
+
+func (p failingPerms) Grants(ctx context.Context, userID uuid.UUID) (domain.Grants, error) {
+	if err := p.grantsErr[userID]; err != nil {
+		return domain.Grants{}, err
+	}
+
+	return p.fakePerms.Grants(ctx, userID)
+}
+
+type fakeStepUp struct {
+	fail bool
+	err  error
+}
+
+func (f fakeStepUp) VerifyStepUp(context.Context, uuid.UUID, string, string) (bool, error) {
+	return !f.fail, f.err
+}
+
+type fakeTokens struct {
+	issued []authdomain.AccessClaims
+	err    error
+}
 
 func (t *fakeTokens) IssueAccess(c authdomain.AccessClaims) (string, error) {
+	if t.err != nil {
+		return "", t.err
+	}
+
 	t.issued = append(t.issued, c)
 	return "token-" + c.SessionID, nil
 }
@@ -189,6 +255,13 @@ func newFixture(t *testing.T) *fixture {
 	}
 
 	return f
+}
+
+// rebuild replaces the service with one using users and perms.
+func (f *fixture) rebuild(users ports.Users, perms ports.Permissions) {
+	f.svc = service.New(f.repo, users, perms, f.stepUp, f.tokens, seqIDs{}, f.clock,
+		service.Config{TTL: time.Hour, AdminRole: "admin"}).
+		WithEvents(event.Unit{Recorder: f.events})
 }
 
 func (f *fixture) input() service.StartInput {
@@ -267,6 +340,40 @@ func TestStartRejections(t *testing.T) {
 	}
 }
 
+func TestStartDependencyFailures(t *testing.T) {
+	t.Parallel()
+
+	boom := errors.New("boom")
+
+	cases := map[string]func(f *fixture){
+		"permission check": func(f *fixture) { f.rebuild(f.users, failingPerms{fakePerms: f.perms, enforceErr: boom}) },
+		"step-up check":    func(f *fixture) { f.stepUp.err = boom },
+		"target lookup":    func(f *fixture) { f.rebuild(failingUsers{err: boom}, f.perms) },
+		"actor grants": func(f *fixture) {
+			f.rebuild(f.users, failingPerms{fakePerms: f.perms, grantsErr: map[uuid.UUID]error{f.actor: boom}})
+		},
+		"target grants": func(f *fixture) {
+			f.rebuild(f.users, failingPerms{fakePerms: f.perms, grantsErr: map[uuid.UUID]error{f.target: boom}})
+		},
+		"active session read": func(f *fixture) { f.repo.activeErr = boom },
+		"token signing":       func(f *fixture) { f.tokens.err = boom },
+	}
+
+	for name, breakIt := range cases {
+		t.Run(name, func(t *testing.T) {
+			t.Parallel()
+
+			f := newFixture(t)
+			breakIt(f)
+
+			out, err := f.svc.Start(t.Context(), f.input())
+			require.ErrorIs(t, err, boom)
+			assert.Equal(t, service.Started{}, out)
+			assert.Empty(t, f.events.types)
+		})
+	}
+}
+
 func TestStartRejectsSecondActiveSession(t *testing.T) {
 	t.Parallel()
 
@@ -333,6 +440,52 @@ func TestVerify(t *testing.T) {
 		require.ErrorIs(t, f.svc.Verify(t.Context(), out.Session.UUID.String(), f.target, f.actor), domain.ErrEnded)
 		require.ErrorIs(t, f.svc.Verify(t.Context(), uuid.NewString(), f.actor, f.target), domain.ErrEnded)
 		require.ErrorIs(t, f.svc.Verify(t.Context(), "not-a-uuid", f.actor, f.target), domain.ErrEnded)
+	})
+
+	t.Run("session lookup failure", func(t *testing.T) {
+		t.Parallel()
+
+		boom := errors.New("boom")
+		f := newFixture(t)
+		out := f.started(t)
+		f.repo.getErr = boom
+
+		require.ErrorIs(t, f.svc.Verify(t.Context(), out.Session.UUID.String(), f.actor, f.target), boom)
+	})
+
+	t.Run("ended session is refused", func(t *testing.T) {
+		t.Parallel()
+
+		f := newFixture(t)
+		out := f.started(t)
+		_, err := f.svc.Stop(t.Context(), f.actor, nil)
+		require.NoError(t, err)
+
+		require.ErrorIs(t, f.svc.Verify(t.Context(), out.Session.UUID.String(), f.actor, f.target), domain.ErrEnded)
+	})
+
+	t.Run("permission check failure", func(t *testing.T) {
+		t.Parallel()
+
+		boom := errors.New("boom")
+		f := newFixture(t)
+		out := f.started(t)
+		f.rebuild(f.users, failingPerms{fakePerms: f.perms, enforceErr: boom})
+
+		require.ErrorIs(t, f.svc.Verify(t.Context(), out.Session.UUID.String(), f.actor, f.target), boom)
+		assert.Equal(t, domain.StateActive, f.repo.sessions[out.Session.UUID].State)
+	})
+
+	t.Run("failure to close an expired session", func(t *testing.T) {
+		t.Parallel()
+
+		boom := errors.New("boom")
+		f := newFixture(t)
+		out := f.started(t)
+		f.clock.now = out.Session.ExpiresAt
+		f.repo.endErr = boom
+
+		require.ErrorIs(t, f.svc.Verify(t.Context(), out.Session.UUID.String(), f.actor, f.target), boom)
 	})
 
 	t.Run("expiry closes the session", func(t *testing.T) {
@@ -428,6 +581,65 @@ func TestStopAndCurrent(t *testing.T) {
 	require.ErrorIs(t, f.svc.Verify(t.Context(), out.Session.UUID.String(), f.actor, f.target), domain.ErrEnded)
 }
 
+func TestStopAfterExpiryRecordsExpired(t *testing.T) {
+	t.Parallel()
+
+	f := newFixture(t)
+	out := f.started(t)
+	f.clock.now = out.Session.ExpiresAt
+
+	stopped, err := f.svc.Stop(t.Context(), f.actor, nil)
+	require.NoError(t, err)
+	assert.Equal(t, domain.StateExpired, stopped.State)
+	require.NotNil(t, stopped.EndReason)
+	assert.Equal(t, domain.EndExpired, *stopped.EndReason)
+	assert.Equal(t, []string{event.ImpersonationStarted, event.ImpersonationExpired}, f.events.types)
+}
+
+func TestStopAndCurrentLookups(t *testing.T) {
+	t.Parallel()
+
+	boom := errors.New("boom")
+
+	t.Run("unknown session", func(t *testing.T) {
+		t.Parallel()
+
+		f := newFixture(t)
+		unknown := uuid.New()
+
+		_, err := f.svc.Stop(t.Context(), f.actor, &unknown)
+		require.ErrorIs(t, err, domain.ErrNotFound)
+
+		_, active, err := f.svc.Current(t.Context(), f.actor, &unknown)
+		require.NoError(t, err)
+		assert.False(t, active)
+	})
+
+	t.Run("session lookup fails", func(t *testing.T) {
+		t.Parallel()
+
+		f := newFixture(t)
+		out := f.started(t)
+		f.repo.getErr = boom
+
+		_, err := f.svc.Stop(t.Context(), f.actor, &out.Session.UUID)
+		require.ErrorIs(t, err, boom)
+
+		_, _, err = f.svc.Current(t.Context(), f.actor, &out.Session.UUID)
+		require.ErrorIs(t, err, boom)
+	})
+
+	t.Run("active session lookup fails", func(t *testing.T) {
+		t.Parallel()
+
+		f := newFixture(t)
+		f.repo.activeErr = boom
+
+		_, err := f.svc.Stop(t.Context(), f.actor, nil)
+		require.ErrorIs(t, err, boom)
+	})
+}
+
 func TestStopRejectsAnotherActorsSession(t *testing.T) {
 	t.Parallel()
 
@@ -454,4 +666,44 @@ func TestExpireStale(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, 1, closed)
 	assert.Equal(t, []string{event.ImpersonationStarted, event.ImpersonationExpired}, f.events.types)
+}
+
+func TestExpireStaleFailures(t *testing.T) {
+	t.Parallel()
+
+	boom := errors.New("boom")
+
+	cases := map[string]func(r *fakeRepo){
+		"listing fails": func(r *fakeRepo) { r.expiredErr = boom },
+		"closing fails": func(r *fakeRepo) { r.endErr = boom },
+	}
+
+	for name, breakIt := range cases {
+		t.Run(name, func(t *testing.T) {
+			t.Parallel()
+
+			f := newFixture(t)
+			f.started(t)
+			f.clock.now = epoch.Add(2 * time.Hour)
+			breakIt(f.repo)
+
+			closed, err := f.svc.ExpireStale(t.Context(), 10)
+			require.ErrorIs(t, err, boom)
+			assert.Zero(t, closed)
+		})
+	}
+}
+
+func TestExpireStaleSkipsSessionsEndedConcurrently(t *testing.T) {
+	t.Parallel()
+
+	f := newFixture(t)
+	f.started(t)
+	f.clock.now = epoch.Add(2 * time.Hour)
+	f.repo.endLost = true
+
+	closed, err := f.svc.ExpireStale(t.Context(), 10)
+	require.NoError(t, err)
+	assert.Zero(t, closed)
+	assert.Equal(t, []string{event.ImpersonationStarted}, f.events.types, "the winner records the end")
 }

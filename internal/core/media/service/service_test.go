@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/stretchr/testify/require"
 	mediadomain "github.com/turahe/blog-api/internal/core/media/domain"
 	"github.com/turahe/blog-api/internal/core/media/ports"
 )
@@ -183,8 +184,16 @@ func TestCompleteUploadExpiredPendingAsset(t *testing.T) {
 }
 
 type fakeRepo struct {
-	assets      map[uuid.UUID]mediadomain.MediaAsset
-	usageFilter mediadomain.UsageFilter
+	assets        map[uuid.UUID]mediadomain.MediaAsset
+	usageFilter   mediadomain.UsageFilter
+	listFilter    mediadomain.ListFilter
+	getErr        error
+	createErr     error
+	updateErr     error
+	clearErr      error
+	softDeleteErr error
+	abandonedErr  error
+	trashedErr    error
 }
 
 func newFakeRepo() *fakeRepo {
@@ -192,10 +201,18 @@ func newFakeRepo() *fakeRepo {
 }
 
 func (r *fakeRepo) Create(_ context.Context, asset mediadomain.MediaAsset) (mediadomain.MediaAsset, error) {
+	if r.createErr != nil {
+		return mediadomain.MediaAsset{}, r.createErr
+	}
+
 	return r.store(asset), nil
 }
 
 func (r *fakeRepo) GetByID(_ context.Context, id uuid.UUID) (mediadomain.MediaAsset, error) {
+	if r.getErr != nil {
+		return mediadomain.MediaAsset{}, r.getErr
+	}
+
 	asset, ok := r.assets[id]
 	if !ok {
 		return mediadomain.MediaAsset{}, ErrNotFound
@@ -205,10 +222,16 @@ func (r *fakeRepo) GetByID(_ context.Context, id uuid.UUID) (mediadomain.MediaAs
 }
 
 func (r *fakeRepo) Update(_ context.Context, asset mediadomain.MediaAsset) (mediadomain.MediaAsset, error) {
+	if r.updateErr != nil {
+		return mediadomain.MediaAsset{}, r.updateErr
+	}
+
 	return r.store(asset), nil
 }
 
 func (r *fakeRepo) List(_ context.Context, filter mediadomain.ListFilter) (mediadomain.ListResult, error) {
+	r.listFilter = filter
+
 	items := make([]mediadomain.MediaAsset, 0, len(r.assets))
 	for _, asset := range r.assets {
 		if asset.DeletedAt != nil {
@@ -222,6 +245,10 @@ func (r *fakeRepo) List(_ context.Context, filter mediadomain.ListFilter) (media
 }
 
 func (r *fakeRepo) SoftDelete(_ context.Context, id uuid.UUID, deletedAt time.Time) error {
+	if r.softDeleteErr != nil {
+		return r.softDeleteErr
+	}
+
 	asset, ok := r.assets[id]
 	if !ok || asset.DeletedAt != nil {
 		return ErrNotFound
@@ -235,7 +262,7 @@ func (r *fakeRepo) SoftDelete(_ context.Context, id uuid.UUID, deletedAt time.Ti
 }
 
 func (r *fakeRepo) ClearEntityReferences(_ context.Context, _ uuid.UUID) error {
-	return nil
+	return r.clearErr
 }
 
 func (r *fakeRepo) store(asset mediadomain.MediaAsset) mediadomain.MediaAsset {
@@ -248,6 +275,7 @@ func (r *fakeRepo) store(asset mediadomain.MediaAsset) mediadomain.MediaAsset {
 type fakeObjectStorage struct {
 	presignURL     string
 	presignHeaders map[string]string
+	presignErr     error
 	lastPresignKey string
 	headInfo       map[string]ports.ObjectInfo
 	headErr        error
@@ -300,6 +328,10 @@ func newFakeObjectStorage() *fakeObjectStorage {
 
 func (s *fakeObjectStorage) PresignPut(_ context.Context, key, _ string, _ time.Duration) (string, map[string]string, error) {
 	s.lastPresignKey = key
+	if s.presignErr != nil {
+		return "", nil, s.presignErr
+	}
+
 	return s.presignURL, cloneHeaders(s.presignHeaders), nil
 }
 
@@ -391,4 +423,294 @@ func cloneHeaders(headers map[string]string) map[string]string {
 	maps.Copy(cloned, headers)
 
 	return cloned
+}
+
+func TestNewIgnoresBlankMIMEEntries(t *testing.T) {
+	t.Parallel()
+
+	svc := New(newFakeRepo(), newFakeObjectStorage(), fakeIDs{next: fixedID()}, fakeClock{now: baseTime()},
+		" minio ", []string{"  ", " IMAGE/PNG "}, 2048, time.Minute)
+
+	result, err := svc.PresignUpload(t.Context(), nil, "a.png", "image/png", 10, nil)
+	require.NoError(t, err)
+	require.Equal(t, "minio", result.Asset.Disk)
+
+	_, err = svc.PresignUpload(t.Context(), nil, "a.png", "", 10, nil)
+	require.ErrorIs(t, err, ErrValidation, "a blank entry does not allow a blank content type")
+}
+
+func TestPresignUploadFailures(t *testing.T) {
+	t.Parallel()
+
+	failure := errors.New("backend down")
+
+	tests := []struct {
+		name  string
+		setup func(*fakeRepo, *fakeObjectStorage)
+		want  error
+	}{
+		{name: "create fails", setup: func(repo *fakeRepo, _ *fakeObjectStorage) { repo.createErr = failure }, want: failure},
+		{name: "presign fails", setup: func(_ *fakeRepo, storage *fakeObjectStorage) { storage.presignErr = failure }, want: ErrStorage},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
+			svc, repo, storage := newTestService()
+			tc.setup(repo, storage)
+
+			_, err := svc.PresignUpload(t.Context(), nil, "a.png", "image/png", 10, nil)
+
+			require.ErrorIs(t, err, tc.want)
+		})
+	}
+}
+
+func TestCompleteUploadFailures(t *testing.T) {
+	t.Parallel()
+
+	failure := errors.New("backend down")
+
+	tests := []struct {
+		name  string
+		setup func(*fakeRepo, *fakeObjectStorage, *mediadomain.MediaAsset)
+		want  error
+	}{
+		{
+			name:  "missing asset",
+			setup: func(repo *fakeRepo, _ *fakeObjectStorage, _ *mediadomain.MediaAsset) { repo.getErr = ErrNotFound },
+			want:  ErrNotFound,
+		},
+		{
+			name:  "lookup fails",
+			setup: func(repo *fakeRepo, _ *fakeObjectStorage, _ *mediadomain.MediaAsset) { repo.getErr = failure },
+			want:  failure,
+		},
+		{
+			name: "deleted asset",
+			setup: func(_ *fakeRepo, _ *fakeObjectStorage, asset *mediadomain.MediaAsset) {
+				deleted := baseTime()
+				asset.DeletedAt = &deleted
+			},
+			want: ErrNotFound,
+		},
+		{
+			name: "head fails",
+			setup: func(_ *fakeRepo, storage *fakeObjectStorage, _ *mediadomain.MediaAsset) {
+				storage.headErr = failure
+			},
+			want: ErrStorage,
+		},
+		{
+			name: "stored type not allowed",
+			setup: func(_ *fakeRepo, storage *fakeObjectStorage, asset *mediadomain.MediaAsset) {
+				storage.headInfo[asset.StorageKey] = ports.ObjectInfo{Size: 64, ContentType: "text/html"}
+			},
+			want: ErrValidation,
+		},
+		{
+			name: "stored size too large",
+			setup: func(_ *fakeRepo, storage *fakeObjectStorage, asset *mediadomain.MediaAsset) {
+				storage.headInfo[asset.StorageKey] = ports.ObjectInfo{Size: 4096, ContentType: "image/png"}
+			},
+			want: ErrValidation,
+		},
+		{
+			name: "update fails",
+			setup: func(repo *fakeRepo, storage *fakeObjectStorage, asset *mediadomain.MediaAsset) {
+				storage.headInfo[asset.StorageKey] = ports.ObjectInfo{Size: 64, ContentType: "image/webp"}
+				storage.objects[asset.StorageKey] = mustBase64(t, tinyWebP)
+				repo.updateErr = failure
+			},
+			want: failure,
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
+			svc, repo, storage := newTestService()
+			asset := makePendingAsset()
+			tc.setup(repo, storage, &asset)
+			repo.store(asset)
+
+			_, err := svc.CompleteUpload(t.Context(), asset.UUID)
+
+			require.ErrorIs(t, err, tc.want)
+			require.Equal(t, mediadomain.StatusPending, repo.assets[asset.UUID].Status)
+		})
+	}
+}
+
+func TestCompleteUploadWithoutPresignExpiryNeverExpires(t *testing.T) {
+	t.Parallel()
+
+	svc, repo, storage := newTestService()
+	asset := makePendingAsset()
+	asset.PresignExpiresAt = nil
+	repo.store(asset)
+	storage.headInfo[asset.StorageKey] = ports.ObjectInfo{Size: 64, ContentType: "image/webp"}
+	storage.objects[asset.StorageKey] = mustBase64(t, tinyWebP)
+
+	got, err := svc.CompleteUpload(t.Context(), asset.UUID)
+
+	require.NoError(t, err)
+	require.Equal(t, mediadomain.StatusReady, got.Status)
+}
+
+func TestListNormalisesFilter(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name string
+		in   mediadomain.ListFilter
+		want mediadomain.ListFilter
+	}{
+		{
+			name: "defaults and trims",
+			in:   mediadomain.ListFilter{Page: 0, PerPage: 0, Query: "  cat  ", Disk: " MINIO ", Status: " Ready "},
+			want: mediadomain.ListFilter{Page: 1, PerPage: 20, Query: "cat", Disk: "minio", Status: "ready"},
+		},
+		{
+			name: "caps page size",
+			in:   mediadomain.ListFilter{Page: 3, PerPage: 101},
+			want: mediadomain.ListFilter{Page: 3, PerPage: 20},
+		},
+		{
+			name: "keeps valid paging",
+			in:   mediadomain.ListFilter{Page: 2, PerPage: 100},
+			want: mediadomain.ListFilter{Page: 2, PerPage: 100},
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
+			svc, repo, _ := newTestService()
+			repo.store(makePendingAsset())
+
+			got, err := svc.List(t.Context(), tc.in)
+
+			require.NoError(t, err)
+			require.Equal(t, tc.want, repo.listFilter)
+			require.Len(t, got.Items, 1)
+		})
+	}
+}
+
+func TestGetPassesThroughLookupFailure(t *testing.T) {
+	t.Parallel()
+
+	failure := errors.New("backend down")
+	svc, repo, _ := newTestService()
+	repo.getErr = failure
+
+	_, err := svc.Get(t.Context(), fixedID())
+
+	require.ErrorIs(t, err, failure)
+}
+
+func TestDeleteFailures(t *testing.T) {
+	t.Parallel()
+
+	failure := errors.New("backend down")
+
+	tests := []struct {
+		name  string
+		setup func(*fakeRepo)
+		id    uuid.UUID
+		want  error
+	}{
+		{name: "missing asset", setup: func(*fakeRepo) {}, id: uuid.New(), want: ErrNotFound},
+		{name: "clearing references fails", setup: func(repo *fakeRepo) { repo.clearErr = failure }, id: fixedID(), want: failure},
+		{name: "soft delete fails", setup: func(repo *fakeRepo) { repo.softDeleteErr = failure }, id: fixedID(), want: failure},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
+			svc, repo, _ := newTestService()
+			repo.store(makePendingAsset())
+			tc.setup(repo)
+
+			require.ErrorIs(t, svc.Delete(t.Context(), tc.id), tc.want)
+			require.Nil(t, repo.assets[fixedID()].DeletedAt)
+		})
+	}
+}
+
+func TestUpdateTags(t *testing.T) {
+	t.Parallel()
+
+	failure := errors.New("backend down")
+	many := make([]string, 51)
+	for i := range many {
+		many[i] = "tag-" + strings.Repeat("x", i+1)
+	}
+
+	tests := []struct {
+		name  string
+		id    uuid.UUID
+		tags  []string
+		setup func(*fakeRepo)
+		want  []string
+		err   error
+	}{
+		{
+			name: "trims, drops blanks, and de-duplicates case-insensitively",
+			id:   fixedID(),
+			tags: []string{"  Cats ", "", "   ", "cats", "Dogs"},
+			want: []string{"Cats", "Dogs"},
+		},
+		{name: "clears with no tags", id: fixedID(), tags: nil, want: []string{}},
+		{name: "missing asset", id: uuid.New(), tags: []string{"a"}, err: ErrNotFound},
+		{name: "tag too long", id: fixedID(), tags: []string{strings.Repeat("a", 65)}, err: ErrValidation},
+		{name: "too many tags", id: fixedID(), tags: many, err: ErrValidation},
+		{name: "update fails", id: fixedID(), tags: []string{"a"}, setup: func(repo *fakeRepo) { repo.updateErr = failure }, err: failure},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
+			svc, repo, _ := newTestService()
+			original := makePendingAsset()
+			original.Tags = []string{"old"}
+			repo.store(original)
+
+			if tc.setup != nil {
+				tc.setup(repo)
+			}
+
+			got, err := svc.UpdateTags(t.Context(), tc.id, tc.tags)
+			if tc.err != nil {
+				require.ErrorIs(t, err, tc.err)
+				require.Equal(t, []string{"old"}, repo.assets[fixedID()].Tags)
+
+				return
+			}
+
+			require.NoError(t, err)
+			require.ElementsMatch(t, tc.want, got.Tags)
+			require.ElementsMatch(t, tc.want, repo.assets[fixedID()].Tags)
+			require.Equal(t, baseTime(), got.UpdatedAt)
+		})
+	}
+}
+
+func TestSanitizeFilenameRejectsDotNames(t *testing.T) {
+	t.Parallel()
+
+	for _, name := range []string{".", ".."} {
+		t.Run(name, func(t *testing.T) {
+			t.Parallel()
+
+			_, err := sanitizeFilename(name)
+			require.ErrorIs(t, err, ErrValidation)
+		})
+	}
 }

@@ -2,9 +2,12 @@ package jwt_test
 
 import (
 	"crypto/ecdsa"
+	"crypto/ed25519"
 	"crypto/elliptic"
 	"crypto/rand"
 	"crypto/x509"
+	"encoding/base64"
+	"encoding/hex"
 	"encoding/pem"
 	"maps"
 	"testing"
@@ -12,6 +15,7 @@ import (
 
 	jwtlib "github.com/golang-jwt/jwt/v5"
 	"github.com/google/uuid"
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	authdomain "github.com/turahe/blog-api/internal/core/auth/domain"
 	jwttoken "github.com/turahe/blog-api/internal/platform/security/jwt"
@@ -142,6 +146,93 @@ func TestParseAccessRejectsForeignIssuerAndMissingExpiry(t *testing.T) {
 	require.ErrorIs(t, err, authdomain.ErrInvalidToken, "exp is required")
 }
 
+func TestParseAccessRejectsInvalidTokens(t *testing.T) {
+	t.Parallel()
+
+	priv := generateP256(t)
+	svc, err := jwttoken.New(encodePrivatePEM(t, priv), encodePublicPEM(t, &priv.PublicKey),
+		"01234567890123456789012345678901", "blog-api")
+	require.NoError(t, err)
+
+	now := time.Now().UTC()
+	valid := jwtlib.MapClaims{"sub": uuid.NewString(), "iss": "blog-api", "exp": now.Add(time.Minute).Unix()}
+
+	sign := func(method jwtlib.SigningMethod, key any, claims jwtlib.MapClaims) string {
+		t.Helper()
+
+		raw, err := jwtlib.NewWithClaims(method, claims).SignedString(key)
+		require.NoError(t, err)
+
+		return raw
+	}
+
+	good := sign(jwtlib.SigningMethodES256, priv, valid)
+	tampered := good[:len(good)-4] + "AAAA"
+	if tampered == good {
+		tampered = good[:len(good)-4] + "BBBB"
+	}
+
+	tests := []struct {
+		name  string
+		token string
+	}{
+		{name: "empty", token: ""},
+		{name: "garbage", token: "not.a.jwt"},
+		{name: "tampered signature", token: tampered},
+		{name: "signed by another key", token: sign(jwtlib.SigningMethodES256, generateP256(t), valid)},
+		{
+			name:  "alg none",
+			token: sign(jwtlib.SigningMethodNone, jwtlib.UnsafeAllowNoneSignatureType, valid),
+		},
+		{
+			name:  "HS256 keyed with the public key",
+			token: sign(jwtlib.SigningMethodHS256, []byte(encodePublicPEM(t, &priv.PublicKey)), valid),
+		},
+		{
+			name: "expired",
+			token: sign(jwtlib.SigningMethodES256, priv, jwtlib.MapClaims{
+				"sub": uuid.NewString(), "iss": "blog-api", "exp": now.Add(-time.Minute).Unix(),
+			}),
+		},
+		{
+			name: "subject not a uuid",
+			token: sign(jwtlib.SigningMethodES256, priv, jwtlib.MapClaims{
+				"sub": "admin", "iss": "blog-api", "exp": now.Add(time.Minute).Unix(),
+			}),
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			_, err := svc.ParseAccess(tt.token)
+			require.ErrorIs(t, err, authdomain.ErrInvalidToken)
+		})
+	}
+}
+
+func TestParseAccessWithoutIssuedAt(t *testing.T) {
+	t.Parallel()
+
+	priv := generateP256(t)
+	svc, err := jwttoken.New(encodePrivatePEM(t, priv), encodePublicPEM(t, &priv.PublicKey),
+		"01234567890123456789012345678901", "blog-api")
+	require.NoError(t, err)
+
+	subject := uuid.New()
+	raw, err := jwtlib.NewWithClaims(jwtlib.SigningMethodES256, jwtlib.MapClaims{
+		"sub": subject.String(), "iss": "blog-api", "exp": time.Now().Add(time.Minute).Unix(),
+	}).SignedString(priv)
+	require.NoError(t, err)
+
+	claims, err := svc.ParseAccess(raw)
+	require.NoError(t, err)
+	require.Equal(t, subject, claims.Subject)
+	require.True(t, claims.IssuedAt.IsZero())
+	require.False(t, claims.ExpiresAt.IsZero())
+}
+
 func TestRefreshHashStable(t *testing.T) {
 	t.Parallel()
 
@@ -149,6 +240,53 @@ func TestRefreshHashStable(t *testing.T) {
 	raw, hash, err := svc.IssueRefresh()
 	require.NoError(t, err)
 	require.Equal(t, hash, svc.HashRefresh(raw))
+}
+
+func TestIssueResetToken(t *testing.T) {
+	t.Parallel()
+
+	svc := newTestService(t)
+
+	raw, hash, jti, err := svc.IssueResetToken()
+	require.NoError(t, err)
+
+	decoded, err := base64.RawURLEncoding.DecodeString(raw)
+	require.NoError(t, err)
+	assert.Len(t, decoded, 32)
+
+	jtiBytes, err := hex.DecodeString(jti)
+	require.NoError(t, err)
+	assert.Len(t, jtiBytes, 16)
+
+	assert.Equal(t, hash, svc.HashResetToken(raw))
+
+	raw2, hash2, jti2, err := svc.IssueResetToken()
+	require.NoError(t, err)
+	assert.NotEqual(t, raw, raw2)
+	assert.NotEqual(t, hash, hash2)
+	assert.NotEqual(t, jti, jti2)
+}
+
+func TestHashResetToken(t *testing.T) {
+	t.Parallel()
+
+	priv := generateP256(t)
+	newService := func(hashKey string) *jwttoken.Service {
+		svc, err := jwttoken.New(encodePrivatePEM(t, priv), encodePublicPEM(t, &priv.PublicKey), hashKey, "blog-api")
+		require.NoError(t, err)
+
+		return svc
+	}
+
+	svc := newService("01234567890123456789012345678901")
+	other := newService("abcdefghijabcdefghijabcdefghijab")
+
+	hash := svc.HashResetToken("token")
+	assert.Len(t, hash, 64)
+	assert.Equal(t, hash, svc.HashResetToken("token"), "stable")
+	assert.NotEqual(t, hash, svc.HashResetToken("token2"))
+	assert.NotEqual(t, hash, other.HashResetToken("token"), "keyed by the hash key")
+	assert.NotEqual(t, hash, svc.HashRefresh("token"), "reset and refresh hashes must not collide")
 }
 
 func TestRejectsMismatchedKeyPair(t *testing.T) {
@@ -179,6 +317,98 @@ func TestRejectsNonP256Key(t *testing.T) {
 		"blog-api",
 	)
 	require.Error(t, err)
+}
+
+func TestNewRejectsInvalidConfig(t *testing.T) {
+	t.Parallel()
+
+	const hashKey = "01234567890123456789012345678901"
+
+	priv := generateP256(t)
+	privPEM, pubPEM := encodePrivatePEM(t, priv), encodePublicPEM(t, &priv.PublicKey)
+
+	p384, err := ecdsa.GenerateKey(elliptic.P384(), rand.Reader)
+	require.NoError(t, err)
+
+	edPub, edPriv, err := ed25519.GenerateKey(rand.Reader)
+	require.NoError(t, err)
+
+	edPrivDER, err := x509.MarshalPKCS8PrivateKey(edPriv)
+	require.NoError(t, err)
+
+	edPubDER, err := x509.MarshalPKIXPublicKey(edPub)
+	require.NoError(t, err)
+
+	pemOf := func(typ string, der []byte) string {
+		return string(pem.EncodeToMemory(&pem.Block{Type: typ, Bytes: der}))
+	}
+
+	tests := []struct {
+		name       string
+		privatePEM string
+		publicPEM  string
+		hashKey    string
+		wantErr    string
+	}{
+		{name: "short hash key", privatePEM: privPEM, publicPEM: pubPEM, hashKey: "short", wantErr: "at least 32 bytes"},
+		{name: "private key not PEM", privatePEM: "garbage", publicPEM: pubPEM, hashKey: hashKey, wantErr: "no PEM block"},
+		{
+			name: "private key not ECDSA", privatePEM: pemOf("PRIVATE KEY", edPrivDER), publicPEM: pubPEM,
+			hashKey: hashKey, wantErr: "not an ECDSA private key",
+		},
+		{
+			name: "private key undecodable", privatePEM: pemOf("PRIVATE KEY", []byte("junk")), publicPEM: pubPEM,
+			hashKey: hashKey, wantErr: "unsupported private key encoding",
+		},
+		{name: "public key not PEM", privatePEM: privPEM, publicPEM: "garbage", hashKey: hashKey, wantErr: "no PEM block"},
+		{
+			name: "public key undecodable", privatePEM: privPEM, publicPEM: pemOf("PUBLIC KEY", []byte("junk")),
+			hashKey: hashKey, wantErr: "unsupported public key encoding",
+		},
+		{
+			name: "public key not ECDSA", privatePEM: privPEM, publicPEM: pemOf("PUBLIC KEY", edPubDER),
+			hashKey: hashKey, wantErr: "not an ECDSA public key",
+		},
+		{
+			name: "public key not P-256", privatePEM: privPEM, publicPEM: encodePublicPEM(t, &p384.PublicKey),
+			hashKey: hashKey, wantErr: "P-256",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			svc, err := jwttoken.New(tt.privatePEM, tt.publicPEM, tt.hashKey, "blog-api")
+			require.ErrorContains(t, err, tt.wantErr)
+			assert.Nil(t, svc)
+		})
+	}
+}
+
+func TestNewAcceptsSEC1KeyAndDefaultsIssuer(t *testing.T) {
+	t.Parallel()
+
+	priv := generateP256(t)
+	sec1, err := x509.MarshalECPrivateKey(priv)
+	require.NoError(t, err)
+
+	const hashKey = "01234567890123456789012345678901"
+
+	svc, err := jwttoken.New(string(pem.EncodeToMemory(&pem.Block{Type: "EC PRIVATE KEY", Bytes: sec1})),
+		encodePublicPEM(t, &priv.PublicKey), hashKey, "")
+	require.NoError(t, err)
+
+	named, err := jwttoken.New(encodePrivatePEM(t, priv), encodePublicPEM(t, &priv.PublicKey), hashKey, "blog-api")
+	require.NoError(t, err)
+
+	now := time.Now().UTC()
+	subject := uuid.New()
+	raw := mustIssue(t, svc, authdomain.AccessClaims{Subject: subject, ExpiresAt: now.Add(time.Minute), IssuedAt: now})
+
+	claims, err := named.ParseAccess(raw)
+	require.NoError(t, err, "an empty issuer defaults to blog-api")
+	require.Equal(t, subject, claims.Subject)
 }
 
 func newTestService(t *testing.T) *jwttoken.Service {

@@ -1,6 +1,10 @@
 package notificationbus
 
 import (
+	"bytes"
+	"context"
+	"errors"
+	"log/slog"
 	"testing"
 	"time"
 
@@ -66,4 +70,84 @@ func TestPublishConsume(t *testing.T) {
 	case <-time.After(5 * time.Second):
 		t.Fatal("notification was not delivered")
 	}
+}
+
+type failingPublisher struct{ err error }
+
+func (p failingPublisher) Publish(string, ...*message.Message) error { return p.err }
+func (p failingPublisher) Close() error                              { return nil }
+
+func TestPublishLogsFailures(t *testing.T) {
+	t.Parallel()
+
+	unencodable := sample()
+	unencodable.CreatedAt = time.Date(10000, 1, 1, 0, 0, 0, 0, time.UTC)
+
+	tests := []struct {
+		name string
+		pub  message.Publisher
+		n    notificationdomain.Notification
+	}{
+		{name: "unencodable notification", pub: failingPublisher{}, n: unencodable},
+		{name: "broker refuses", pub: failingPublisher{err: errors.New("broker down")}, n: sample()},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			logs := &bytes.Buffer{}
+			NewPublisher(tt.pub, Topic, slog.New(slog.NewTextHandler(logs, nil))).Publish(t.Context(), tt.n)
+
+			require.Contains(t, logs.String(), "live push not published")
+		})
+	}
+}
+
+type fakeSubscriber struct {
+	messages chan *message.Message
+	err      error
+}
+
+func (s fakeSubscriber) Subscribe(context.Context, string) (<-chan *message.Message, error) {
+	return s.messages, s.err
+}
+
+func (s fakeSubscriber) Close() error { return nil }
+
+func TestConsumeReportsSubscribeFailure(t *testing.T) {
+	t.Parallel()
+
+	boom := errors.New("boom")
+
+	err := Consume(t.Context(), fakeSubscriber{err: boom}, Topic, func(notificationdomain.Notification) {
+		t.Error("deliver must not be called")
+	}, nil)
+	require.ErrorIs(t, err, boom)
+	require.ErrorContains(t, err, Topic)
+}
+
+func TestConsumeAcksMalformedMessagesWithoutDelivering(t *testing.T) {
+	t.Parallel()
+
+	messages := make(chan *message.Message, 1)
+	t.Cleanup(func() { close(messages) })
+
+	logs := &bytes.Buffer{}
+	delivered := make(chan notificationdomain.Notification, 1)
+
+	require.NoError(t, Consume(t.Context(), fakeSubscriber{messages: messages}, Topic,
+		func(n notificationdomain.Notification) { delivered <- n }, slog.New(slog.NewTextHandler(logs, nil))))
+
+	msg := message.NewMessage(watermill.NewUUID(), []byte("garbage"))
+	messages <- msg
+
+	select {
+	case <-msg.Acked():
+	case <-time.After(5 * time.Second):
+		t.Fatal("malformed message was not acknowledged")
+	}
+
+	require.Contains(t, logs.String(), "dropped malformed live push")
+	require.Empty(t, delivered)
 }

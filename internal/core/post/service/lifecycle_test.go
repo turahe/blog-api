@@ -2,12 +2,14 @@ package service
 
 import (
 	"context"
+	"errors"
 	"strings"
 	"testing"
 	"time"
 
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/require"
+	"github.com/turahe/blog-api/internal/core/event/eventtest"
 	postdomain "github.com/turahe/blog-api/internal/core/post/domain"
 )
 
@@ -234,4 +236,121 @@ func TestPublishNotifiesWithActor(t *testing.T) {
 
 	require.Equal(t, []publishCall{{post: post.UUID, actor: &editor}, {post: post.UUID}}, notifier.calls,
 		"only transitions into published notify")
+}
+
+func TestTransitionFailsWhenRevisionFails(t *testing.T) {
+	t.Parallel()
+
+	failure := errors.New("revision store unavailable")
+	post := lifecyclePost(postdomain.StatusDraft)
+	revs := newMemRevisions()
+	revs.latestErr = failure
+	notifier := &fakePublishNotifier{}
+	svc := revisionService(newFakePostRepo(post), revs, &eventtest.Recorder{}).WithNotifier(notifier)
+
+	_, err := svc.Publish(t.Context(), post.UUID)
+
+	require.ErrorIs(t, err, failure)
+	require.Empty(t, notifier.calls)
+}
+
+func TestDeleteFailures(t *testing.T) {
+	t.Parallel()
+
+	failure := errors.New("store unavailable")
+
+	tests := []struct {
+		name  string
+		setup func(*fakePostRepo, *memRevisions)
+	}{
+		{name: "soft delete fails", setup: func(repo *fakePostRepo, _ *memRevisions) { repo.softDeleteErr = failure }},
+		{name: "revision fails", setup: func(_ *fakePostRepo, revs *memRevisions) { revs.latestErr = failure }},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
+			post := lifecyclePost(postdomain.StatusDraft)
+			repo := newFakePostRepo(post)
+			revs := newMemRevisions()
+			tc.setup(repo, revs)
+			svc := revisionService(repo, revs, &eventtest.Recorder{})
+
+			require.ErrorIs(t, svc.Delete(t.Context(), post.UUID), failure)
+		})
+	}
+}
+
+func TestRestoreFailures(t *testing.T) {
+	t.Parallel()
+
+	failure := errors.New("store unavailable")
+
+	tests := []struct {
+		name      string
+		setup     func(*fakePostRepo)
+		want      error
+		wantCalls int
+	}{
+		{
+			name:      "slug claimed on every attempt",
+			setup:     func(repo *fakePostRepo) { repo.restoreConflicts = slugAttempts },
+			want:      postdomain.ErrConflict,
+			wantCalls: slugAttempts,
+		},
+		{
+			name:  "slug lookup fails",
+			setup: func(repo *fakePostRepo) { repo.slugsErr = failure },
+			want:  failure,
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
+			deleted := lifecyclePost(postdomain.StatusDraft)
+			deleted.DeletedAt = &lifecycleNow
+			repo := newFakePostRepo(deleted)
+			tc.setup(repo)
+			svc := New(repo, nil, fixedClock{now: lifecycleNow})
+
+			_, err := svc.Restore(t.Context(), deleted.UUID)
+
+			require.ErrorIs(t, err, tc.want)
+			require.Equal(t, tc.wantCalls, repo.restoreCalls)
+			require.NotNil(t, repo.posts[deleted.UUID].DeletedAt, "the post stays in the trash")
+		})
+	}
+}
+
+func TestCreateDraftDerivesSlugFromTitle(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name  string
+		title string
+		want  string
+	}{
+		{name: "collapses repeated separators", title: "Hello  __ World", want: "hello-world"},
+		{
+			name:  "truncates long titles without a trailing hyphen",
+			title: strings.Repeat("abcd ", 60),
+			want:  strings.TrimSuffix(strings.Repeat("abcd-", postdomain.MaxSlugLength/5), "-"),
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
+			svc := New(newFakePostRepo(), randomIDs{}, fixedClock{now: lifecycleNow})
+
+			got, _, err := svc.CreateDraft(t.Context(), uuid.New(), tc.title, "", "", "body", nil, nil)
+
+			require.NoError(t, err)
+			require.Equal(t, tc.want, got.Slug)
+		})
+	}
 }

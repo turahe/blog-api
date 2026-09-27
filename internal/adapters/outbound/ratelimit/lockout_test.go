@@ -1,6 +1,8 @@
 package ratelimit
 
 import (
+	"context"
+	"errors"
 	"testing"
 	"time"
 
@@ -18,6 +20,20 @@ func newTestLockout(t *testing.T, maxFailures int) (*LoginLockout, *miniredis.Mi
 	t.Cleanup(func() { _ = client.Close() })
 
 	return NewLoginLockout(client, maxFailures, 10*time.Minute), server
+}
+
+func TestNewLoginLockoutDefaultsLockPeriod(t *testing.T) {
+	t.Parallel()
+
+	for _, lockFor := range []time.Duration{0, -time.Second} {
+		server := miniredis.RunT(t)
+		client := goredis.NewClient(&goredis.Options{Addr: server.Addr()})
+		t.Cleanup(func() { _ = client.Close() })
+
+		lockedFor, err := NewLoginLockout(client, 1, lockFor).Fail(t.Context(), "k")
+		require.NoError(t, err)
+		require.Equal(t, 15*time.Minute, lockedFor)
+	}
 }
 
 func TestLoginLockoutLocksAtThreshold(t *testing.T) {
@@ -78,4 +94,67 @@ func TestLoginLockoutResetClearsFailures(t *testing.T) {
 	lockedFor, err := lockout.Fail(ctx, "k")
 	require.NoError(t, err)
 	require.Zero(t, lockedFor)
+}
+
+// failSetPipelines fails any pipeline that writes a lock key.
+type failSetPipelines struct{}
+
+func (failSetPipelines) DialHook(next goredis.DialHook) goredis.DialHook          { return next }
+func (failSetPipelines) ProcessHook(next goredis.ProcessHook) goredis.ProcessHook { return next }
+
+func (failSetPipelines) ProcessPipelineHook(next goredis.ProcessPipelineHook) goredis.ProcessPipelineHook {
+	return func(ctx context.Context, cmds []goredis.Cmder) error {
+		for _, cmd := range cmds {
+			if cmd.Name() == "set" {
+				return errors.New("write refused")
+			}
+		}
+
+		return next(ctx, cmds)
+	}
+}
+
+func TestLoginLockoutRedisFailures(t *testing.T) {
+	t.Parallel()
+
+	t.Run("locked", func(t *testing.T) {
+		t.Parallel()
+
+		lockout, server := newTestLockout(t, 3)
+		server.Close()
+
+		remaining, err := lockout.Locked(t.Context(), "k")
+		require.Error(t, err)
+		require.Zero(t, remaining)
+	})
+
+	t.Run("counting a failure", func(t *testing.T) {
+		t.Parallel()
+
+		lockout, server := newTestLockout(t, 3)
+		server.Close()
+
+		lockedFor, err := lockout.Fail(t.Context(), "k")
+		require.Error(t, err)
+		require.Zero(t, lockedFor)
+	})
+
+	t.Run("setting the lock", func(t *testing.T) {
+		t.Parallel()
+
+		server := miniredis.RunT(t)
+		client := goredis.NewClient(&goredis.Options{Addr: server.Addr()})
+		t.Cleanup(func() { _ = client.Close() })
+		client.AddHook(failSetPipelines{})
+
+		lockout := NewLoginLockout(client, 1, time.Minute)
+
+		lockedFor, err := lockout.Fail(t.Context(), "k")
+		require.Error(t, err)
+		require.Zero(t, lockedFor)
+
+		remaining, err := lockout.Locked(t.Context(), "k")
+		require.NoError(t, err)
+		require.Zero(t, remaining, "no lock was written")
+	})
 }

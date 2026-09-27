@@ -1,7 +1,9 @@
 package ingestload
 
 import (
+	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
@@ -26,6 +28,21 @@ func (h handlerTransport) RoundTrip(r *http.Request) (*http.Response, error) {
 	h.handler.ServeHTTP(rec, r)
 
 	return rec.Result(), nil
+}
+
+type failingTransport struct{ err error }
+
+func (f failingTransport) RoundTrip(r *http.Request) (*http.Response, error) {
+	_ = r.Body.Close()
+
+	return nil, f.err
+}
+
+func TestRateWithoutElapsedTime(t *testing.T) {
+	t.Parallel()
+
+	assert.Zero(t, Result{Accepted: 10}.Rate())
+	assert.InDelta(t, 5, Result{Accepted: 10, Elapsed: 2 * time.Second}.Rate(), 1e-9)
 }
 
 func TestRunPacesEventsAcrossTheIngestRoutes(t *testing.T) {
@@ -103,6 +120,94 @@ func TestCheckReportsEveryMiss(t *testing.T) {
 	}
 }
 
+func TestRunStopsWhenContextIsCancelled(t *testing.T) {
+	t.Parallel()
+
+	synctest.Test(t, func(t *testing.T) {
+		ctx, cancel := context.WithCancel(t.Context())
+		cancel()
+
+		result, err := Run(ctx, Config{
+			BaseURL: "http://ingest.test", Rate: 100, Duration: time.Second,
+			Client: &http.Client{Transport: failingTransport{err: errors.New("unused")}},
+		})
+		require.ErrorIs(t, err, context.Canceled)
+		assert.Zero(t, result.Planned)
+		assert.Zero(t, result.Sent)
+	})
+}
+
+func TestRunSkipsEventsWhenWorkersFallBehind(t *testing.T) {
+	t.Parallel()
+
+	synctest.Test(t, func(t *testing.T) {
+		slow := http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+			time.Sleep(2 * time.Second)
+			w.WriteHeader(http.StatusAccepted)
+		})
+
+		result, err := Run(t.Context(), Config{
+			BaseURL: "http://ingest.test", Rate: 100, Duration: time.Second, Workers: 1,
+			Client: &http.Client{Transport: handlerTransport{handler: slow}},
+		})
+		require.NoError(t, err)
+
+		assert.Equal(t, int64(100), result.Planned)
+		assert.Positive(t, result.Skipped)
+		assert.Equal(t, result.Planned, result.Sent+result.Skipped)
+		assert.Equal(t, result.Sent, result.Accepted)
+		require.ErrorContains(t, result.Check(100, 0, 0), "events skipped")
+	})
+}
+
+func TestRunCountsTransportFailures(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name    string
+		baseURL string
+	}{
+		{name: "transport error", baseURL: "http://ingest.test"},
+		{name: "invalid base url", baseURL: "http://bad host"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			synctest.Test(t, func(t *testing.T) {
+				result, err := Run(t.Context(), Config{
+					BaseURL: tt.baseURL, Rate: 100, Duration: 100 * time.Millisecond,
+					Client: &http.Client{Transport: failingTransport{err: errors.New("connection refused")}},
+				})
+				require.NoError(t, err)
+
+				assert.Positive(t, result.Sent)
+				assert.Equal(t, result.Sent, result.Errors)
+				assert.Zero(t, result.Accepted)
+				assert.Empty(t, result.Statuses)
+				assert.Zero(t, result.Max, "no latency is recorded for failed requests")
+				require.ErrorContains(t, result.Check(100, 0, 0), "requests failed")
+			})
+		})
+	}
+}
+
+func TestWithDefaults(t *testing.T) {
+	t.Parallel()
+
+	got := withDefaults(Config{BaseURL: "http://api.test//", Rate: 1000})
+
+	assert.Equal(t, 100, got.Workers)
+	assert.Equal(t, 200, got.Sessions)
+	assert.True(t, strings.HasPrefix(got.PathPrefix, "/loadtest/"))
+	assert.Equal(t, "http://api.test", got.BaseURL)
+	require.NotNil(t, got.Client)
+	assert.Equal(t, 10*time.Second, got.Client.Timeout)
+
+	assert.Equal(t, 8, withDefaults(Config{Rate: 10}).Workers, "at least eight workers")
+}
+
 func TestDroppedEventsReadsTheCounter(t *testing.T) {
 	t.Parallel()
 
@@ -114,6 +219,45 @@ func TestDroppedEventsReadsTheCounter(t *testing.T) {
 	dropped, err := DroppedEvents(t.Context(), server.Client(), server.URL)
 	require.NoError(t, err)
 	assert.InDelta(t, 4, dropped, 0)
+}
+
+func TestDroppedEventsFailures(t *testing.T) {
+	t.Parallel()
+
+	serve := func(status int, body string) string {
+		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+			w.WriteHeader(status)
+			_, _ = fmt.Fprint(w, body)
+		}))
+		t.Cleanup(server.Close)
+
+		return server.URL
+	}
+
+	closed := httptest.NewServer(http.NotFoundHandler())
+	closed.Close()
+
+	tests := []struct {
+		name    string
+		url     string
+		wantErr string
+	}{
+		{name: "invalid url", url: "://bad", wantErr: "missing protocol scheme"},
+		{name: "unreachable", url: closed.URL, wantErr: "connect"},
+		{name: "bad status", url: serve(http.StatusServiceUnavailable, ""), wantErr: "metrics: status 503"},
+		{name: "oversized line", url: serve(http.StatusOK, strings.Repeat("x", 70_000)), wantErr: "token too long"},
+		{name: "metric missing", url: serve(http.StatusOK, "other_metric 1\n"), wantErr: "not found"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			dropped, err := DroppedEvents(t.Context(), http.DefaultClient, tt.url)
+			require.ErrorContains(t, err, tt.wantErr)
+			assert.Zero(t, dropped)
+		})
+	}
 }
 
 func TestRunRejectsBadConfig(t *testing.T) {

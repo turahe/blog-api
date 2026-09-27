@@ -2,7 +2,10 @@ package service
 
 import (
 	"context"
+	"encoding/json"
+	"errors"
 	"slices"
+	"strings"
 	"testing"
 	"time"
 
@@ -23,8 +26,10 @@ func (randomIDs) New() uuid.UUID { return uuid.New() }
 // memRevisions is an in-memory ports.RevisionRepository; live holds the ids Existing
 // reports as still present.
 type memRevisions struct {
-	byPost map[uuid.UUID][]postdomain.Revision
-	live   map[uuid.UUID]bool
+	byPost      map[uuid.UUID][]postdomain.Revision
+	live        map[uuid.UUID]bool
+	latestErr   error
+	existingErr error
 }
 
 func newMemRevisions() *memRevisions {
@@ -32,6 +37,10 @@ func newMemRevisions() *memRevisions {
 }
 
 func (m *memRevisions) Latest(_ context.Context, postID uuid.UUID) (postdomain.Revision, error) {
+	if m.latestErr != nil {
+		return postdomain.Revision{}, m.latestErr
+	}
+
 	revs := m.byPost[postID]
 	if len(revs) == 0 {
 		return postdomain.Revision{}, postdomain.ErrRevisionNotFound
@@ -68,6 +77,10 @@ func (m *memRevisions) Get(_ context.Context, postID uuid.UUID, ref postdomain.R
 }
 
 func (m *memRevisions) Existing(_ context.Context, refs ports.References) (ports.References, error) {
+	if m.existingErr != nil {
+		return ports.References{}, m.existingErr
+	}
+
 	keep := func(ids []uuid.UUID) []uuid.UUID {
 		out := []uuid.UUID{}
 
@@ -86,11 +99,17 @@ func (m *memRevisions) Existing(_ context.Context, refs ports.References) (ports
 func (m *memRevisions) Prune(context.Context, int) (int64, error) { return 0, nil }
 
 type fakePostMedia struct {
-	items    []mediadomain.PostMediaItem
-	replaced []mediadomain.PostMediaItem
+	items      []mediadomain.PostMediaItem
+	replaced   []mediadomain.PostMediaItem
+	replaceErr error
+	listErr    error
 }
 
 func (f *fakePostMedia) ReplaceAll(_ context.Context, _ uuid.UUID, items []mediadomain.PostMediaItem) error {
+	if f.replaceErr != nil {
+		return f.replaceErr
+	}
+
 	f.replaced = slices.Clone(items)
 	f.items = slices.Clone(items)
 
@@ -98,7 +117,7 @@ func (f *fakePostMedia) ReplaceAll(_ context.Context, _ uuid.UUID, items []media
 }
 
 func (f *fakePostMedia) ListByPostID(context.Context, uuid.UUID) ([]mediadomain.PostMediaItem, error) {
-	return f.items, nil
+	return f.items, f.listErr
 }
 
 func revisionService(repo *fakePostRepo, revs *memRevisions, events *eventtest.Recorder) *PostService {
@@ -290,4 +309,205 @@ func TestPostListRevisionsRejectsInvertedDateRange(t *testing.T) {
 
 	_, err := svc.ListRevisions(t.Context(), authorID, false, postdomain.RevisionFilter{PostUUID: postID, From: &from, To: &to})
 	require.ErrorIs(t, err, ErrValidation)
+}
+
+func TestPostRevisionsRequireRevisionSupport(t *testing.T) {
+	t.Parallel()
+
+	postID, authorID := uuid.New(), uuid.New()
+	svc := New(newFakePostRepo(postdomain.Post{UUID: postID, AuthorUUID: authorID, Slug: "t", Version: 1}), randomIDs{}, fixedClock{})
+	one := 1
+
+	tests := []struct {
+		name string
+		call func() error
+	}{
+		{name: "list", call: func() error {
+			_, err := svc.ListRevisions(t.Context(), authorID, false, postdomain.RevisionFilter{PostUUID: postID})
+			return err
+		}},
+		{name: "get", call: func() error {
+			_, err := svc.GetRevision(t.Context(), postID, postdomain.RevisionRef{Number: &one}, authorID, false)
+			return err
+		}},
+		{name: "restore", call: func() error {
+			_, err := svc.RestoreRevision(t.Context(), postID, postdomain.RevisionRef{Number: &one}, authorID, false, "")
+			return err
+		}},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
+			require.ErrorIs(t, tc.call(), ErrValidation)
+		})
+	}
+}
+
+func TestPostGetRevisionReturnsTheRevision(t *testing.T) {
+	t.Parallel()
+
+	postID, authorID := uuid.New(), uuid.New()
+	repo := newFakePostRepo(postdomain.Post{UUID: postID, AuthorUUID: authorID, Title: "T", Slug: "t", Version: 1})
+	revs := newMemRevisions()
+	want := postdomain.Revision{UUID: uuid.New(), PostUUID: postID, Number: 1, Snapshot: postdomain.Snapshot{Title: "T"}}
+	revs.byPost[postID] = []postdomain.Revision{want}
+	svc := revisionService(repo, revs, &eventtest.Recorder{})
+
+	got, err := svc.GetRevision(t.Context(), postID, postdomain.RevisionRef{UUID: &want.UUID}, authorID, false)
+
+	require.NoError(t, err)
+	require.Equal(t, want, got)
+}
+
+type restoreFixture struct {
+	repo      *fakePostRepo
+	revs      *memRevisions
+	tags      *fakeTagLinker
+	postMedia *fakePostMedia
+	seo       *memSEO
+	postID    uuid.UUID
+	authorID  uuid.UUID
+}
+
+func newRestoreFixture() *restoreFixture {
+	f := &restoreFixture{
+		revs:      newMemRevisions(),
+		tags:      &fakeTagLinker{},
+		postMedia: &fakePostMedia{},
+		seo:       &memSEO{byPost: map[uuid.UUID]postdomain.SEO{}},
+		postID:    uuid.New(),
+		authorID:  uuid.New(),
+	}
+	f.repo = newFakePostRepo(postdomain.Post{
+		UUID: f.postID, AuthorUUID: f.authorID, Title: "Current", Slug: "current", Status: postdomain.StatusDraft, Version: 2,
+	})
+	f.revs.byPost[f.postID] = []postdomain.Revision{{
+		UUID: uuid.New(), PostUUID: f.postID, Number: 1, Type: postdomain.RevisionCreate,
+		Snapshot: postdomain.Snapshot{
+			Title: "Original", Slug: "original", Status: postdomain.StatusDraft,
+			SEO: json.RawMessage(`{"seo_title":"Original SEO"}`),
+		},
+	}}
+
+	return f
+}
+
+func (f *restoreFixture) service() *PostService {
+	return revisionService(f.repo, f.revs, &eventtest.Recorder{}).
+		WithTags(f.tags).
+		WithMedia(f.postMedia, seoMedia{}).
+		WithSEO(f.seo, staticDefaults{}, mapImages{})
+}
+
+func TestPostRestoreRevisionFailures(t *testing.T) {
+	t.Parallel()
+
+	failure := errors.New("store unavailable")
+
+	tests := []struct {
+		name   string
+		note   string
+		number int
+		setup  func(*restoreFixture)
+		want   error
+	}{
+		{name: "note too long", number: 1, note: strings.Repeat("x", MaxRestoreNoteLength+1), want: ErrValidation},
+		{name: "unknown revision", number: 9, want: postdomain.ErrRevisionNotFound},
+		{name: "slug lookup fails", number: 1, setup: func(f *restoreFixture) { f.repo.slugTakenErr = failure }, want: failure},
+		{name: "reference lookup fails", number: 1, setup: func(f *restoreFixture) { f.revs.existingErr = failure }, want: failure},
+		{name: "post update fails", number: 1, setup: func(f *restoreFixture) { f.repo.updateErr = failure }, want: failure},
+		{name: "tag link fails", number: 1, setup: func(f *restoreFixture) { f.tags.replaceErr = failure }, want: failure},
+		{name: "tag list fails", number: 1, setup: func(f *restoreFixture) { f.tags.listErr = failure }, want: failure},
+		{name: "media store fails", number: 1, setup: func(f *restoreFixture) { f.postMedia.replaceErr = failure }, want: failure},
+		{name: "seo save fails", number: 1, setup: func(f *restoreFixture) { f.seo.saveErr = failure }, want: failure},
+		{name: "revision write fails", number: 1, setup: func(f *restoreFixture) { f.revs.latestErr = failure }, want: failure},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
+			f := newRestoreFixture()
+			if tc.setup != nil {
+				tc.setup(f)
+			}
+
+			number := tc.number
+			_, err := f.service().RestoreRevision(t.Context(), f.postID, postdomain.RevisionRef{Number: &number}, f.authorID, false, tc.note)
+
+			require.ErrorIs(t, err, tc.want)
+		})
+	}
+}
+
+func TestPostRestoreRevisionRejectsCorruptSEOSnapshot(t *testing.T) {
+	t.Parallel()
+
+	f := newRestoreFixture()
+	f.revs.byPost[f.postID][0].Snapshot.SEO = json.RawMessage(`{broken`)
+	one := 1
+
+	_, err := f.service().RestoreRevision(t.Context(), f.postID, postdomain.RevisionRef{Number: &one}, f.authorID, false, "")
+
+	var syntaxErr *json.SyntaxError
+	require.ErrorAs(t, err, &syntaxErr)
+	require.Zero(t, f.seo.saves)
+}
+
+func TestPostRevisionSnapshotFailuresAbortTheWrite(t *testing.T) {
+	t.Parallel()
+
+	failure := errors.New("store unavailable")
+
+	tests := []struct {
+		name  string
+		build func(*fakePostRepo, *memRevisions) *PostService
+	}{
+		{name: "tag list fails", build: func(repo *fakePostRepo, revs *memRevisions) *PostService {
+			return revisionService(repo, revs, &eventtest.Recorder{}).WithTags(&fakeTagLinker{listErr: failure})
+		}},
+		{name: "seo read fails", build: func(repo *fakePostRepo, revs *memRevisions) *PostService {
+			seo := &memSEO{byPost: map[uuid.UUID]postdomain.SEO{}, getErr: failure}
+			return revisionService(repo, revs, &eventtest.Recorder{}).WithSEO(seo, staticDefaults{}, mapImages{})
+		}},
+		{name: "revision event fails", build: func(repo *fakePostRepo, revs *memRevisions) *PostService {
+			return revisionService(repo, revs, &eventtest.Recorder{Err: failure})
+		}},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
+			post := lifecyclePost(postdomain.StatusDraft)
+			revs := newMemRevisions()
+			svc := tc.build(newFakePostRepo(post), revs)
+
+			require.ErrorIs(t, svc.Delete(t.Context(), post.UUID), failure)
+		})
+	}
+}
+
+func TestRevisionTypeForTransition(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		transition postdomain.Transition
+		want       postdomain.RevisionType
+	}{
+		{transition: postdomain.TransitionPublish, want: postdomain.RevisionPublish},
+		{transition: postdomain.TransitionUnpublish, want: postdomain.RevisionUnpublish},
+		{transition: postdomain.TransitionArchive, want: postdomain.RevisionArchive},
+		{transition: postdomain.Transition("other"), want: postdomain.RevisionUpdate},
+	}
+
+	for _, tc := range tests {
+		t.Run(string(tc.transition), func(t *testing.T) {
+			t.Parallel()
+
+			require.Equal(t, tc.want, revisionType(tc.transition))
+		})
+	}
 }

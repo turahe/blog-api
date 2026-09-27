@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	nethttp "net/http"
 	"testing"
@@ -330,4 +331,60 @@ func TestAdminCommentStatsSerializesAllStatuses(t *testing.T) {
 	require.Len(t, byStatus, 6)
 	require.InDelta(t, 2, byStatus["pending"], 0)
 	require.Nil(t, data["oldestQueuedAt"])
+}
+
+// failingModeration answers every call with err.
+func failingModeration(err error) *fakeModerationService {
+	return &fakeModerationService{
+		listFn: func(context.Context, commentservice.AdminListInput) (commentdomain.ListResult, error) {
+			return commentdomain.ListResult{}, err
+		},
+		getFn: func(context.Context, uuid.UUID) (commentdomain.Review, error) { return commentdomain.Review{}, err },
+		moderateFn: func(context.Context, commentservice.ModerateInput) (commentdomain.Comment, error) {
+			return commentdomain.Comment{}, err
+		},
+		bulkFn:       func(context.Context, commentservice.BulkModerateInput) (int, error) { return 0, err },
+		hardDeleteFn: func(context.Context, uuid.UUID, uuid.UUID, string) (bool, error) { return false, err },
+		statsFn:      func(context.Context) (commentdomain.Stats, error) { return commentdomain.Stats{}, err },
+	}
+}
+
+func TestAdminCommentHandlerFailures(t *testing.T) {
+	t.Parallel()
+
+	id := testCommentID.String()
+	missing := commentdomain.ErrNotFound
+	tests := []struct {
+		name    string
+		handler func(commentModerationAPI) gin.HandlerFunc
+		target  string
+		body    string
+		user    *uuid.UUID
+		param   string
+		err     error
+		status  int
+		code    string
+	}{
+		{name: "list rejects invalid post id", handler: adminListCommentsHandler, target: "/?postId=nope", status: nethttp.StatusBadRequest, code: "validation_error"},
+		{name: "list maps failure", handler: adminListCommentsHandler, target: "/?sort=oldest", err: errors.New("db down"), status: nethttp.StatusInternalServerError, code: "internal_error"},
+		{name: "get rejects invalid id", handler: adminGetCommentHandler, target: "/", param: "nope", status: nethttp.StatusBadRequest, code: "validation_error"},
+		{name: "get maps not found", handler: adminGetCommentHandler, target: "/", param: id, err: missing, status: nethttp.StatusNotFound, code: "not_found"},
+		{name: "stats map failure", handler: adminCommentStatsHandler, target: "/", err: errors.New("db down"), status: nethttp.StatusInternalServerError, code: "internal_error"},
+		{name: "moderate needs sign-in", handler: adminModerateCommentHandler, target: "/", body: `{"action":"approve"}`, param: id, status: nethttp.StatusUnauthorized, code: "unauthorized"},
+		{name: "moderate rejects invalid id", handler: adminModerateCommentHandler, target: "/", body: `{"action":"approve"}`, user: &testUserID, param: "nope", status: nethttp.StatusBadRequest, code: "validation_error"},
+		{name: "bulk needs sign-in", handler: adminBulkModerateCommentsHandler, target: "/", body: `{"ids":["` + id + `"],"action":"approve"}`, status: nethttp.StatusUnauthorized, code: "unauthorized"},
+		{name: "hard delete needs sign-in", handler: adminHardDeleteCommentHandler, target: "/", param: id, status: nethttp.StatusUnauthorized, code: "unauthorized"},
+		{name: "hard delete rejects invalid id", handler: adminHardDeleteCommentHandler, target: "/", user: &testUserID, param: "nope", status: nethttp.StatusBadRequest, code: "validation_error"},
+		{name: "hard delete maps not found", handler: adminHardDeleteCommentHandler, target: "/", user: &testUserID, param: id, err: missing, status: nethttp.StatusNotFound, code: "not_found"},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
+			c, w := commentContext(nethttp.MethodPost, tc.target, tc.body, tc.user, tc.param)
+			tc.handler(failingModeration(tc.err))(c)
+			require.Equal(t, tc.status, w.Code, w.Body.String())
+			require.Equal(t, tc.code, decodeEnvelope(t, w).Error.Code)
+		})
+	}
 }

@@ -179,3 +179,30 @@ func TestRecorderDropsAfterClose(t *testing.T) {
 	require.Empty(t, repo.stored())
 	require.NoError(t, r.Close(context.Background()), "Close is idempotent")
 }
+
+func TestRecorderDefaultsDropSilentlyWithoutHooks(t *testing.T) {
+	t.Parallel()
+
+	repo := &memRepo{}
+	r := service.NewRecorder(repo, nil, service.RecorderOptions{})
+	closeRecorder(t, r)
+
+	require.NotPanics(t, func() { r.Record(context.Background(), domain.Entry{Action: "late"}) })
+	require.Empty(t, repo.stored())
+}
+
+func TestRecorderCloseGivesUpWhenTheContextEnds(t *testing.T) {
+	t.Parallel()
+
+	repo := &memRepo{block: make(chan struct{})}
+	r := service.NewRecorder(repo, quietLogger(), service.RecorderOptions{BatchSize: 1, FlushInterval: time.Hour})
+	r.Record(context.Background(), domain.Entry{Action: "a"})
+
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	require.ErrorIs(t, r.Close(ctx), context.Canceled)
+
+	close(repo.block)
+	closeRecorder(t, r)
+	require.Len(t, repo.stored(), 1)
+}
