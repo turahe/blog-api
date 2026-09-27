@@ -5,7 +5,7 @@ go 1.27.1
 require (
 	cloud.google.com/go/cloudsqlconn v1.25.2
 	cloud.google.com/go/pubsub/v2 v2.7.0
-	github.com/IBM/sarama v1.61.0
+	github.com/IBM/sarama v1.61.1
 	github.com/ThreeDotsLabs/watermill v1.5.3
 	github.com/ThreeDotsLabs/watermill-amqp/v3 v3.1.0
 	github.com/ThreeDotsLabs/watermill-googlecloud/v2 v2.0.1
@@ -100,7 +100,7 @@ require (
 	github.com/go-playground/locales v0.14.1 // indirect
 	github.com/go-playground/universal-translator v0.18.2 // indirect
 	github.com/go-sql-driver/mysql v1.10.1 // indirect
-	github.com/goccy/go-json v0.10.6 // indirect
+	github.com/goccy/go-json v0.11.1 // indirect
 	github.com/goccy/go-yaml v1.19.2 // indirect
 	github.com/golang/groupcache v0.0.0-20241129210726-2c02b8208cf8 // indirect
 	github.com/google/s2a-go v0.1.10 // indirect
@@ -135,7 +135,7 @@ require (
 	github.com/munnerz/goautoneg v0.0.0-20191010083416-a7dc8b61c822 // indirect
 	github.com/oklog/ulid v1.3.1 // indirect
 	github.com/pelletier/go-toml/v2 v2.4.3 // indirect
-	github.com/pierrec/lz4/v4 v4.1.30 // indirect
+	github.com/pierrec/lz4/v4 v4.1.31 // indirect
 	github.com/pkg/errors v0.9.1 // indirect
 	github.com/prometheus/client_model v0.6.3 // indirect
 	github.com/prometheus/common v0.71.0 // indirect
