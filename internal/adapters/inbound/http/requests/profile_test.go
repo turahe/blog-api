@@ -13,7 +13,7 @@ func TestPatchProfileValidation(t *testing.T) {
 		{
 			name: "nested type errors use dotted paths",
 			body: `{"socialLinks":{"github":1}}`,
-			want: errs("socialLinks.github", "The socialLinks.github field must be a string."),
+			want: msgGeneral("json: cannot unmarshal number into Go struct field PatchProfile.socialLinks.github of type string"),
 		},
 	})
 }

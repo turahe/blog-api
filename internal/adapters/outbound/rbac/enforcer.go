@@ -7,9 +7,9 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/casbin/casbin/v2"
-	"github.com/casbin/casbin/v2/model"
-	"github.com/casbin/casbin/v2/persist"
+	"github.com/casbin/casbin/v3"
+	"github.com/casbin/casbin/v3/model"
+	"github.com/casbin/casbin/v3/persist"
 	"github.com/google/uuid"
 	"gorm.io/gorm"
 )
@@ -33,6 +33,8 @@ func (ruleRow) TableName() string { return "casbin_rules" }
 type adapter struct {
 	db *gorm.DB
 }
+
+var _ persist.Adapter = (*adapter)(nil)
 
 func (a *adapter) LoadPolicy(m model.Model) error {
 	var rows []ruleRow

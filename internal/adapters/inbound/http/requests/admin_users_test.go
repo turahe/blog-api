@@ -20,8 +20,8 @@ func TestAdminCreateUserValidation(t *testing.T) {
 		{name: "password too short", body: with(base, "password", long(11)), want: errs("password", msgMinChars("password", 12))},
 		{name: "password too long", body: with(base, "password", long(129)), want: errs("password", msgMaxChars("password", 128))},
 		{name: "too many roles", body: with(base, "roles", make([]string, 21)), want: errs("roles", msgMaxItems("roles", 20))},
-		{name: "empty role", body: with(base, "roles", []string{""}), want: errs("roles.0", msgRequired("roles.0"))},
-		{name: "role too long", body: with(base, "roles", []string{"a", long(65)}), want: errs("roles.1", msgMaxChars("roles.1", 64))},
+		{name: "empty role", body: with(base, "roles", []string{""}), want: errs("roles[0]", msgRequired("roles[0]"))},
+		{name: "role too long", body: with(base, "roles", []string{"a", long(65)}), want: errs("roles[1]", msgMaxChars("roles[1]", 64))},
 	})
 }
 
@@ -31,6 +31,6 @@ func TestAdminResetPasswordValidation(t *testing.T) {
 	runBindCases[AdminResetPassword](t, []bindCase{
 		{name: "empty body keeps default", body: `{}`},
 		{name: "explicit revoke", body: `{"revokeSessions": false}`},
-		{name: "revoke must be a bool", body: `{"revokeSessions": "no"}`, want: errs("revokeSessions", "The revokeSessions field must be true or false.")},
+		{name: "revoke must be a bool", body: `{"revokeSessions": "no"}`, want: msgGeneral("json: cannot unmarshal string into Go struct field AdminResetPassword.revokeSessions of type bool")},
 	})
 }

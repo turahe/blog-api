@@ -14,7 +14,7 @@ func TestUpdatePrivacyValidation(t *testing.T) {
 			body: with(nil, "visibilityProfile", "unlisted", "visibilityEmail", true, "visibilityContact", false,
 				"searchAllowIndexing", true, "currentPassword", "pw"),
 		},
-		{name: "visibility unknown", body: with(nil, "visibilityProfile", "friends"), want: errs("visibilityProfile", msgOneOf("visibilityProfile"))},
+		{name: "visibility unknown", body: with(nil, "visibilityProfile", "friends"), want: errs("visibilityProfile", msgOneOf("visibilityProfile", "public unlisted private"))},
 		{name: "password too long", body: with(nil, "currentPassword", long(129)), want: errs("currentPassword", msgMaxChars("currentPassword", 128))},
 	})
 }

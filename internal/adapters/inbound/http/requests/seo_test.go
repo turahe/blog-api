@@ -116,7 +116,7 @@ func TestPreviewPostSEOValidation(t *testing.T) {
 		{
 			name: "invalid image id is a form error",
 			body: `{"ogImageId": "nope"}`,
-			want: errs("_form", "The request body is invalid."),
+			want: msgGeneral("invalid UUID length: 4"),
 		},
 	})
 }

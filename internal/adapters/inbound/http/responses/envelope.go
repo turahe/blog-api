@@ -2,6 +2,7 @@ package responses
 
 import (
 	nethttp "net/http"
+	"reflect"
 	"strconv"
 
 	"github.com/gin-gonic/gin"
@@ -13,13 +14,25 @@ const ContextRequestIDKey = "request_id"
 // Envelope is the standard API response wrapper.
 // Paginated lists add Links and Laravel-style pagination fields on Meta.
 // Code is the packed response code from BuildResponseCode.
+//
+// For validation_error responses the envelope also exposes a Laravel-compatible
+// top-level `message` + `errors` bag so clients can consume either path:
+//
+//	{
+//	  "ok": false, "code": 4000002, "meta": {"requestId":"..."},
+//	  "message": "The given data was invalid.",
+//	  "errors":  {"email": ["The email field is required."]},
+//	  "error":   {"code":"validation_error","message":"...","details":{...}}
+//	}
 type Envelope struct {
-	OK    bool       `json:"ok"`
-	Code  int        `json:"code"`
-	Data  any        `json:"data,omitempty" swaggertype:"object"`
-	Links *PageLinks `json:"links,omitempty"`
-	Meta  any        `json:"meta,omitempty" swaggertype:"object"`
-	Error *ErrorBody `json:"error,omitempty"`
+	OK      bool                `json:"ok"`
+	Code    int                 `json:"code"`
+	Message string              `json:"message,omitempty"`
+	Errors  map[string][]string `json:"errors,omitempty" swaggertype:"object"`
+	Data    any                 `json:"data,omitempty" swaggertype:"object"`
+	Links   *PageLinks          `json:"links,omitempty"`
+	Meta    any                 `json:"meta,omitempty" swaggertype:"object"`
+	Error   *ErrorBody          `json:"error,omitempty"`
 }
 
 // Meta is the non-paginated success/error meta (request correlation only).
@@ -225,6 +238,11 @@ func Internal(c *gin.Context, err error, message string) {
 }
 
 // FailureFor writes an error envelope with an explicit service and case code.
+//
+// When opts.Code == ErrorCodeValidation and opts.Details is a bag of
+// map[string][]string (or map[string]any with []string/[]any values), the
+// envelope also surfaces a Laravel-compatible top-level `message` + `errors`
+// pair alongside the existing `error.code/message/details` fields.
 func FailureFor(c *gin.Context, status int, opts FailureOpts) {
 	service := opts.Service
 	if service == 0 {
@@ -236,12 +254,108 @@ func FailureFor(c *gin.Context, status int, opts FailureOpts) {
 		caseCode = CaseCodeForStatus(status)
 	}
 
-	c.AbortWithStatusJSON(status, Envelope{
+	envelope := Envelope{
 		OK:    false,
 		Code:  BuildResponseCode(status, service, caseCode),
 		Meta:  &Meta{RequestID: RequestID(c)},
 		Error: &ErrorBody{Code: opts.Code, Message: opts.Message, Details: opts.Details},
-	})
+	}
+
+	if opts.Code == ErrorCodeValidation && opts.Message != "" {
+		envelope.Message = opts.Message
+		envelope.Errors = normalizeValidationErrors(opts.Details)
+	}
+
+	c.AbortWithStatusJSON(status, envelope)
+}
+
+// normalizeValidationErrors coerces arbitrary validation detail bags into the
+// canonical Laravel map[field][]string shape. It handles both built-in types
+// and named aliases such as gin.H.
+func normalizeValidationErrors(details any) map[string][]string {
+	if details == nil {
+		return nil
+	}
+
+	switch v := details.(type) {
+	case map[string][]string:
+		return v
+	case map[string]any:
+		return normalizeAnyMap(v)
+	}
+
+	// Fallback: any named type whose underlying kind is a map with string keys
+	// (for example gin.H, which is "type H map[string]any").
+	rv := reflect.ValueOf(details)
+	if rv.Kind() != reflect.Map || rv.Type().Key().Kind() != reflect.String {
+		return nil
+	}
+	out := make(map[string][]string, rv.Len())
+	iter := rv.MapRange()
+	for iter.Next() {
+		field, ok := iter.Key().Interface().(string)
+		if !ok {
+			continue
+		}
+		msgs := collectStrings(iter.Value())
+		if len(msgs) > 0 {
+			out[field] = msgs
+		}
+	}
+	if len(out) > 0 {
+		return out
+	}
+	return nil
+}
+
+func normalizeAnyMap(v map[string]any) map[string][]string {
+	out := make(map[string][]string, len(v))
+	for field, val := range v {
+		msgs := collectStrings(reflect.ValueOf(val))
+		if len(msgs) > 0 {
+			out[field] = msgs
+		}
+	}
+	if len(out) > 0 {
+		return out
+	}
+	return nil
+}
+
+// collectStrings extracts []string or []any-of-strings (or a single string)
+// from an arbitrary value via reflect, handling named slices.
+func collectStrings(rv reflect.Value) []string {
+	if !rv.IsValid() {
+		return nil
+	}
+	// Unwrap interfaces / pointers
+	for rv.Kind() == reflect.Interface || rv.Kind() == reflect.Pointer {
+		if rv.IsNil() {
+			return nil
+		}
+		rv = rv.Elem()
+	}
+
+	switch rv.Kind() {
+	case reflect.String:
+		return []string{rv.String()}
+	case reflect.Slice, reflect.Array:
+		out := make([]string, 0, rv.Len())
+		for i := 0; i < rv.Len(); i++ {
+			ev := rv.Index(i)
+			for ev.Kind() == reflect.Interface || ev.Kind() == reflect.Pointer {
+				if ev.IsNil() {
+					break
+				}
+				ev = ev.Elem()
+			}
+			if ev.Kind() == reflect.String {
+				out = append(out, ev.String())
+			}
+		}
+		return out
+	}
+	return nil
 }
 
 func absolutePath(c *gin.Context) string {

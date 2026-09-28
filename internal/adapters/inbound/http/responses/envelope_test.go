@@ -284,6 +284,8 @@ func TestFailureWithDetails(t *testing.T) {
 	require.Equal(t, http.StatusBadRequest, w.Code)
 	assert.JSONEq(t, `{
 		"ok": false, "code": 4000002, "meta": {},
+		"message": "The given data was invalid.",
+		"errors":  {"title": ["The title field is required."]},
 		"error": {
 			"code": "validation_error", "message": "The given data was invalid.",
 			"details": {"title": ["The title field is required."]}

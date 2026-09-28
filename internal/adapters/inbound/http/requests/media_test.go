@@ -15,8 +15,8 @@ func TestPresignMediaValidation(t *testing.T) {
 		{name: "filename too long", body: with(base, "originalFilename", long(256)), want: errs("originalFilename", msgMaxChars("originalFilename", 255))},
 		{name: "contentType required", body: with(base, "contentType", absent), want: errs("contentType", msgRequired("contentType"))},
 		{name: "size required", body: with(base, "sizeBytes", absent), want: errs("sizeBytes", msgRequired("sizeBytes"))},
-		{name: "size positive", body: with(base, "sizeBytes", -1), want: errs("sizeBytes", "The sizeBytes field must be greater than 0.")},
-		{name: "size must be an integer", body: with(base, "sizeBytes", "big"), want: errs("sizeBytes", "The sizeBytes field must be an integer.")},
+		{name: "size positive", body: with(base, "sizeBytes", -1), want: errs("sizeBytes", "The sizeBytes must be greater than 0.")},
+		{name: "size must be an integer", body: with(base, "sizeBytes", "big"), want: msgGeneral("json: cannot unmarshal string into Go struct field PresignMedia.sizeBytes of type int64")},
 	})
 }
 

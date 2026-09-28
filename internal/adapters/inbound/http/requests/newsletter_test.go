@@ -1,7 +1,10 @@
 package requests
 
 import (
+	"maps"
 	"testing"
+
+	"github.com/stretchr/testify/require"
 )
 
 func TestNewsletterSubscribeValidation(t *testing.T) {
@@ -15,9 +18,9 @@ func TestNewsletterSubscribeValidation(t *testing.T) {
 		{name: "email too long", body: with(base, "email", long(255)), want: errs("email", msgMaxChars("email", 254))},
 		{name: "displayName too long", body: with(base, "displayName", long(101)), want: errs("displayName", msgMaxChars("displayName", 100))},
 		{name: "too many lists", body: with(base, "lists", make([]string, 21)), want: errs("lists", msgMaxItems("lists", 20))},
-		{name: "empty list", body: with(base, "lists", []string{""}), want: errs("lists.0", msgRequired("lists.0"))},
-		{name: "list too long", body: with(base, "lists", []string{long(65)}), want: errs("lists.0", msgMaxChars("lists.0", 64))},
-		{name: "format unknown", body: with(base, "format", "pdf"), want: errs("format", msgOneOf("format"))},
+		{name: "empty list", body: with(base, "lists", []string{""}), want: errs("lists[0]", msgRequired("lists[0]"))},
+		{name: "list too long", body: with(base, "lists", []string{long(65)}), want: errs("lists[0]", msgMaxChars("lists[0]", 64))},
+		{name: "format unknown", body: with(base, "format", "pdf"), want: errs("format", msgOneOf("format", "html plaintext"))},
 		{name: "honeypot too long", body: with(base, "honeypot", long(201)), want: errs("honeypot", msgMaxChars("honeypot", 200))},
 		{
 			name: "turnstile too long",
@@ -54,7 +57,7 @@ func TestNewsletterUnsubscribeValidation(t *testing.T) {
 		{name: "empty body is valid", body: `{}`},
 		{name: "valid", body: with(nil, "token", "t", "reasonCode", "too_frequent", "feedback", "less please")},
 		{name: "token too long", body: with(nil, "token", long(129)), want: errs("token", msgMaxChars("token", 128))},
-		{name: "reason unknown", body: with(nil, "reasonCode", "bored"), want: errs("reasonCode", msgOneOf("reasonCode"))},
+		{name: "reason unknown", body: with(nil, "reasonCode", "bored"), want: errs("reasonCode", msgOneOf("reasonCode", "too_frequent not_relevant never_signed_up other"))},
 		{name: "feedback too long", body: with(nil, "feedback", long(1001)), want: errs("feedback", msgMaxChars("feedback", 1000))},
 	})
 }
@@ -65,10 +68,10 @@ func TestNewsletterPreferencesValidation(t *testing.T) {
 	runBindCases[NewsletterPreferences](t, []bindCase{
 		{name: "empty body is valid", body: `{}`},
 		{name: "valid", body: with(nil, "format", "html", "lists", []string{"weekly"}, "unsubscribeAll", false)},
-		{name: "format unknown", body: with(nil, "format", "pdf"), want: errs("format", msgOneOf("format"))},
+		{name: "format unknown", body: with(nil, "format", "pdf"), want: errs("format", msgOneOf("format", "html plaintext"))},
 		{name: "too many lists", body: with(nil, "lists", make([]string, 21)), want: errs("lists", msgMaxItems("lists", 20))},
-		{name: "empty list", body: with(nil, "lists", []string{""}), want: errs("lists.0", msgRequired("lists.0"))},
-		{name: "list too long", body: with(nil, "lists", []string{long(65)}), want: errs("lists.0", msgMaxChars("lists.0", 64))},
+		{name: "empty list", body: with(nil, "lists", []string{""}), want: errs("lists[0]", msgRequired("lists[0]"))},
+		{name: "list too long", body: with(nil, "lists", []string{long(65)}), want: errs("lists[0]", msgMaxChars("lists[0]", 64))},
 	})
 }
 
@@ -79,8 +82,8 @@ func TestNewsletterMeSubscribeValidation(t *testing.T) {
 		{name: "empty body is valid", body: `{}`},
 		{name: "valid", body: with(nil, "lists", []string{"weekly"}, "format", "plaintext")},
 		{name: "too many lists", body: with(nil, "lists", make([]string, 21)), want: errs("lists", msgMaxItems("lists", 20))},
-		{name: "empty list", body: with(nil, "lists", []string{""}), want: errs("lists.0", msgRequired("lists.0"))},
-		{name: "format unknown", body: with(nil, "format", "pdf"), want: errs("format", msgOneOf("format"))},
+		{name: "empty list", body: with(nil, "lists", []string{""}), want: errs("lists[0]", msgRequired("lists[0]"))},
+		{name: "format unknown", body: with(nil, "format", "pdf"), want: errs("format", msgOneOf("format", "html plaintext"))},
 	})
 }
 
@@ -90,8 +93,8 @@ func TestNewsletterMeUnsubscribeValidation(t *testing.T) {
 	runBindCases[NewsletterMeUnsubscribe](t, []bindCase{
 		{name: "empty body is valid", body: `{}`},
 		{name: "valid", body: with(nil, "lists", []string{"weekly"}, "reasonCode", "other", "feedback", "bye")},
-		{name: "list too long", body: with(nil, "lists", []string{long(65)}), want: errs("lists.0", msgMaxChars("lists.0", 64))},
-		{name: "reason unknown", body: with(nil, "reasonCode", "bored"), want: errs("reasonCode", msgOneOf("reasonCode"))},
+		{name: "list too long", body: with(nil, "lists", []string{long(65)}), want: errs("lists[0]", msgMaxChars("lists[0]", 64))},
+		{name: "reason unknown", body: with(nil, "reasonCode", "bored"), want: errs("reasonCode", msgOneOf("reasonCode", "too_frequent not_relevant never_signed_up other"))},
 		{name: "feedback too long", body: with(nil, "feedback", long(1001)), want: errs("feedback", msgMaxChars("feedback", 1000))},
 	})
 }
@@ -111,9 +114,9 @@ func TestNewsletterIssueCreateValidation(t *testing.T) {
 		{name: "lists required", body: with(base, "lists", absent), want: errs("lists", msgRequired("lists"))},
 		{name: "lists empty", body: with(base, "lists", []string{}), want: errs("lists", msgMinItems("lists", 1))},
 		{name: "too many lists", body: with(base, "lists", make([]string, 21)), want: errs("lists", msgMaxItems("lists", 20))},
-		{name: "empty list", body: with(base, "lists", []string{""}), want: errs("lists.0", msgRequired("lists.0"))},
-		{name: "status unknown", body: with(base, "status", "cancelled"), want: errs("status", msgOneOf("status"))},
-		{name: "sendAt must be a time", body: with(base, "sendAt", "tomorrow"), want: errs("_form", "The request body is invalid.")},
+		{name: "empty list", body: with(base, "lists", []string{""}), want: errs("lists[0]", msgRequired("lists[0]"))},
+		{name: "status unknown", body: with(base, "status", "cancelled"), want: errs("status", msgOneOf("status", "draft scheduled queued"))},
+		{name: "sendAt must be a time", body: with(base, "sendAt", "tomorrow"), want: msgGeneral(`parsing time "tomorrow" as "2006-01-02T15:04:05Z07:00": cannot parse "tomorrow" as "2006"`)},
 	})
 }
 
@@ -127,8 +130,8 @@ func TestNewsletterIssuePatchValidation(t *testing.T) {
 		{name: "preheader too long", body: with(nil, "preheader", long(201)), want: errs("preheader", msgMaxChars("preheader", 200))},
 		{name: "body too long", body: with(nil, "bodyMarkdown", long(200001)), want: errs("bodyMarkdown", msgMaxChars("bodyMarkdown", 200000))},
 		{name: "lists empty", body: with(nil, "lists", []string{}), want: errs("lists", msgMinItems("lists", 1))},
-		{name: "empty list", body: with(nil, "lists", []string{""}), want: errs("lists.0", msgRequired("lists.0"))},
-		{name: "status unknown", body: with(nil, "status", "sent"), want: errs("status", msgOneOf("status"))},
+		{name: "empty list", body: with(nil, "lists", []string{""}), want: errs("lists[0]", msgRequired("lists[0]"))},
+		{name: "status unknown", body: with(nil, "status", "sent"), want: errs("status", msgOneOf("status", "draft scheduled queued cancelled"))},
 	})
 }
 
@@ -140,17 +143,18 @@ func TestNewsletterProviderConfigValidation(t *testing.T) {
 
 	withList := func(pairs ...any) []any {
 		fields := make(map[string]any, len(list))
-		for k, v := range list {
-			fields[k] = v
-		}
+		maps.Copy(fields, list)
 
 		for i := 0; i+1 < len(pairs); i += 2 {
+			key, ok := pairs[i].(string)
+			require.True(t, ok, "key %v is not a string", pairs[i])
+
 			if pairs[i+1] == absent {
-				delete(fields, pairs[i].(string))
+				delete(fields, key)
 				continue
 			}
 
-			fields[pairs[i].(string)] = pairs[i+1]
+			fields[key] = pairs[i+1]
 		}
 
 		return []any{fields}
@@ -175,14 +179,14 @@ func TestNewsletterProviderConfigValidation(t *testing.T) {
 		},
 		{name: "lists required", body: with(base, "lists", absent), want: errs("lists", msgRequired("lists"))},
 		{name: "lists empty", body: with(base, "lists", []any{}), want: errs("lists", msgMinItems("lists", 1))},
-		{name: "list slug required", body: with(base, "lists", withList("slug", absent)), want: errs("lists.0.slug", msgRequired("lists.0.slug"))},
-		{name: "list slug too long", body: with(base, "lists", withList("slug", long(65))), want: errs("lists.0.slug", msgMaxChars("lists.0.slug", 64))},
-		{name: "list name required", body: with(base, "lists", withList("name", absent)), want: errs("lists.0.name", msgRequired("lists.0.name"))},
-		{name: "list name too long", body: with(base, "lists", withList("name", long(101))), want: errs("lists.0.name", msgMaxChars("lists.0.name", 100))},
+		{name: "list slug required", body: with(base, "lists", withList("slug", absent)), want: errs("slug", msgRequired("slug"))},
+		{name: "list slug too long", body: with(base, "lists", withList("slug", long(65))), want: errs("slug", msgMaxChars("slug", 64))},
+		{name: "list name required", body: with(base, "lists", withList("name", absent)), want: errs("name", msgRequired("name"))},
+		{name: "list name too long", body: with(base, "lists", withList("name", long(101))), want: errs("name", msgMaxChars("name", 100))},
 		{
 			name: "list description too long",
 			body: with(base, "lists", withList("description", long(501))),
-			want: errs("lists.0.description", msgMaxChars("lists.0.description", 500)),
+			want: errs("description", msgMaxChars("description", 500)),
 		},
 	})
 }

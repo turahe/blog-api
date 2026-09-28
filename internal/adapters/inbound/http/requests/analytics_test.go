@@ -105,7 +105,7 @@ func TestIngestNavigationValidation(t *testing.T) {
 		{name: "to required", body: with(base, "to", absent), want: errs("to", msgRequired("to"))},
 		{name: "to too long", body: with(base, "to", long(2049)), want: errs("to", msgMaxChars("to", 2048))},
 		{name: "transition required", body: with(base, "transition", absent), want: errs("transition", msgRequired("transition"))},
-		{name: "transition unknown", body: with(base, "transition", "teleport"), want: errs("transition", msgOneOf("transition"))},
+		{name: "transition unknown", body: with(base, "transition", "teleport"), want: errs("transition", msgOneOf("transition", "internal external back_forward direct"))},
 	})
 }
 
@@ -165,7 +165,7 @@ func TestIngestSearchClickValidation(t *testing.T) {
 		{name: "position required", body: with(base, "position", absent), want: errs("position", msgRequired("position"))},
 		{name: "position from one", body: with(base, "position", -2), want: errs("position", msgMin("position", 1))},
 		{name: "resourceType required", body: with(base, "resourceType", absent), want: errs("resourceType", msgRequired("resourceType"))},
-		{name: "resourceType unknown", body: with(base, "resourceType", "user"), want: errs("resourceType", msgOneOf("resourceType"))},
+		{name: "resourceType unknown", body: with(base, "resourceType", "user"), want: errs("resourceType", msgOneOf("resourceType", "post page category tag"))},
 		{name: "resourceId required", body: with(base, "resourceId", absent), want: errs("resourceId", msgRequired("resourceId"))},
 		{name: "resourceId must be a uuid", body: with(base, "resourceId", "x"), want: errs("resourceId", msgUUID("resourceId"))},
 	})
@@ -193,13 +193,13 @@ func TestAnalyticsReportValidation(t *testing.T) {
 	}{
 		{name: "empty query is valid", query: ""},
 		{name: "all fields valid", query: "from=2026-08-01&to=2026-08-31&grain=week&compare=none&limit=100&sort=rising"},
-		{name: "bad from", query: "from=08/01/2026", wantRule: "must match the format 2006-01-02"},
-		{name: "bad to", query: "to=2026-13-01", wantRule: "must match the format 2006-01-02"},
-		{name: "bad grain", query: "grain=year", wantRule: "is invalid"},
-		{name: "bad compare", query: "compare=yoy", wantRule: "is invalid"},
+		{name: "bad from", query: "from=08/01/2026", wantRule: "must be a valid date and time"},
+		{name: "bad to", query: "to=2026-13-01", wantRule: "must be a valid date and time"},
+		{name: "bad grain", query: "grain=year", wantRule: "must be one of: day week month"},
+		{name: "bad compare", query: "compare=yoy", wantRule: "must be one of: previous none"},
 		{name: "limit too small", query: "limit=-1", wantRule: "must be at least 1"},
-		{name: "limit too large", query: "limit=101", wantRule: "must not be greater than 100"},
-		{name: "bad sort", query: "sort=random", wantRule: "is invalid"},
+		{name: "limit too large", query: "limit=101", wantRule: "may not be greater than 100"},
+		{name: "bad sort", query: "sort=random", wantRule: "must be one of: views time rising"},
 	}
 
 	for _, tt := range tests {
@@ -218,7 +218,7 @@ func TestAnalyticsReportValidation(t *testing.T) {
 
 			require.Error(t, err)
 
-			details := validationErrorDetails(err)
+			details := FormatValidationError(err)
 			require.Len(t, details, 1)
 
 			for _, messages := range details {
@@ -278,7 +278,7 @@ func TestAnalyticsExportValidation(t *testing.T) {
 		{name: "from format", body: with(base, "from", "2026/08/01"), want: errs("from", msgDate("from"))},
 		{name: "to required", body: with(base, "to", absent), want: errs("to", msgRequired("to"))},
 		{name: "to format", body: with(base, "to", "tomorrow"), want: errs("to", msgDate("to"))},
-		{name: "grain unknown", body: with(base, "grain", "hour"), want: errs("grain", msgOneOf("grain"))},
+		{name: "grain unknown", body: with(base, "grain", "hour"), want: errs("grain", msgOneOf("grain", "day week month"))},
 		{name: "password required", body: with(base, "currentPassword", absent), want: errs("currentPassword", msgRequired("currentPassword"))},
 		{name: "password too long", body: with(base, "currentPassword", long(129)), want: errs("currentPassword", msgMaxChars("currentPassword", 128))},
 		{name: "code too long", body: with(base, "twoFactorCode", long(33)), want: errs("twoFactorCode", msgMaxChars("twoFactorCode", 32))},

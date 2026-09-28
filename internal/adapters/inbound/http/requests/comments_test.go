@@ -47,7 +47,7 @@ func TestModerateCommentValidation(t *testing.T) {
 	runBindCases[ModerateComment](t, []bindCase{
 		{name: "valid", body: with(base, "action", "spam", "reason", "ads", "notifyAuthor", true)},
 		{name: "action required", body: with(base, "action", absent), want: errs("action", msgRequired("action"))},
-		{name: "action unknown", body: with(base, "action", "delete"), want: errs("action", msgOneOf("action"))},
+		{name: "action unknown", body: with(base, "action", "delete"), want: errs("action", msgOneOf("action", "approve reject spam restore"))},
 		{name: "reason too long", body: with(base, "reason", long(1001)), want: errs("reason", msgMaxChars("reason", 1000))},
 	})
 }
@@ -61,8 +61,8 @@ func TestBulkModerateCommentsValidation(t *testing.T) {
 		{name: "valid", body: with(base, "reason", "off topic")},
 		{name: "ids required", body: with(base, "ids", absent), want: errs("ids", msgRequired("ids"))},
 		{name: "ids empty", body: with(base, "ids", []string{}), want: errs("ids", msgMinItems("ids", 1))},
-		{name: "id must be a uuid", body: with(base, "ids", []string{idA.String(), "x"}), want: errs("ids.1", msgUUID("ids.1"))},
-		{name: "action unknown", body: with(base, "action", "delete"), want: errs("action", msgOneOf("action"))},
+		{name: "id must be a uuid", body: with(base, "ids", []string{idA.String(), "x"}), want: errs("ids[1]", msgUUID("ids[1]"))},
+		{name: "action unknown", body: with(base, "action", "delete"), want: errs("action", msgOneOf("action", "approve reject spam restore"))},
 		{name: "reason too long", body: with(base, "reason", long(1001)), want: errs("reason", msgMaxChars("reason", 1000))},
 	})
 }
@@ -75,7 +75,7 @@ func TestFlagCommentValidation(t *testing.T) {
 	runBindCases[FlagComment](t, []bindCase{
 		{name: "valid", body: with(base, "reasonCode", "self_harm", "details", "see link")},
 		{name: "reason required", body: with(base, "reasonCode", absent), want: errs("reasonCode", msgRequired("reasonCode"))},
-		{name: "reason unknown", body: with(base, "reasonCode", "boring"), want: errs("reasonCode", msgOneOf("reasonCode"))},
+		{name: "reason unknown", body: with(base, "reasonCode", "boring"), want: errs("reasonCode", msgOneOf("reasonCode", "spam abuse hate harassment doxx self_harm copyright impersonation illegal other"))},
 		{name: "details too long", body: with(base, "details", long(2001)), want: errs("details", msgMaxChars("details", 2000))},
 	})
 }

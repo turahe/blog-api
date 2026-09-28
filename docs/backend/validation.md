@@ -18,27 +18,32 @@ Handlers call `bindJSON(c, &req)` instead of raw `ShouldBindJSON`. Failures retu
     "code": "validation_error",
     "message": "The given data was invalid.",
     "details": {
-      "email": ["The email field is required."],
+      "email": ["The email must be a valid email address."],
       "password": ["The password field is required."]
     }
   }
 }
 ```
 
-`details` is a map of JSON field name → message list (same shape as Laravel's `errors` bag).
-Nested fields use dotted paths like Laravel: `items.0.mediaAssetId`, `lists.0`.
-Struct tags use Gin `binding:"required,email,min=12,..."`; JSON names come from `json` tags
-registered on the shared validator engine. Messages follow Laravel's wording:
+`details` is a map of field name → message list, built by `requests.FormatValidationError`
+in the style of [turahe/pkg `response/validation.go`](https://github.com/turahe/pkg/blob/main/response/validation.go).
+Struct tags use Gin `binding:"required,email,min=12,..."`. The field name is the `json` tag
+registered on the shared validator engine; a field without one (for example a `form`-tagged
+query parameter) uses its Go name camelCased (`From` → `from`). Nested fields are keyed by
+their own name, not a dotted path: `items[0].kind` reports as `kind`, and a slice element as
+`roles[0]`.
 
 | Failure | Key | Message |
 |---|---|---|
 | `required` | field | `The title field is required.` |
-| `min` / `max` on a string | field | `The title field must not be greater than 255 characters.` |
-| `min` / `max` on an array | field | `The lists field must have at least 1 items.` |
-| `uuid`, `email`, `oneof` | field | `The categoryId field must be a valid UUID.`, `The selected status is invalid.` |
-| wrong JSON type | field | `The categoryId field must be a string.` (also integer, number, true or false, array, object) |
-| empty body | `_form` | `The request body is required.` |
-| malformed JSON | `_form` | `The request body must be valid JSON (syntax error at byte 21).` |
+| `min` / `max` (any kind) | field | `The title may not be greater than 255 characters.`, `The lists must be at least 1 characters.` |
+| `len` | field | `The code must be exactly 4 characters.` |
+| `email`, `uuid`, `url` | field | `The categoryId must be a valid UUID.` |
+| `oneof` | field | `The status must be one of: draft scheduled queued.` |
+| `gt` / `gte` / `lt` / `lte` / `eq` / `ne` | field | `The sortOrder must be greater than or equal to 0.` |
+| `datetime`, `timezone`, `ip`, `base64`, `json`, `required_if`, `required_with`, ... | field | `The from must be a valid date and time.` |
+| any other rule | field | `The confirmPassword field is invalid. (eqfield: NewPassword)` |
+| empty body, malformed JSON, wrong JSON type | `general` | the decoder error text, e.g. `EOF`, `unexpected EOF`, `json: cannot unmarshal string into Go struct field Login.remember of type bool` |
 
 JSON does not allow comments or raw line breaks inside strings (use `\n`), so a body with
 either fails as malformed JSON before any field is validated.

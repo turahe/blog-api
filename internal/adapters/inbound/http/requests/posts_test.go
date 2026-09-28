@@ -27,8 +27,8 @@ func TestUpdatePostValidation(t *testing.T) {
 	runBindCases[UpdatePost](t, []bindCase{
 		{name: "empty body is valid", body: `{}`},
 		{name: "null category clears", body: `{"categoryId": null, "commentPolicy": "read_only"}`},
-		{name: "comment policy unknown", body: `{"commentPolicy": "moderated"}`, want: errs("commentPolicy", msgOneOf("commentPolicy"))},
-		{name: "tags must be an array", body: `{"tags": "go"}`, want: errs("tags", "The tags field must be an array.")},
+		{name: "comment policy unknown", body: `{"commentPolicy": "moderated"}`, want: errs("commentPolicy", msgOneOf("commentPolicy", "open authenticated read_only disabled"))},
+		{name: "tags must be an array", body: `{"tags": "go"}`, want: msgGeneral("json: cannot unmarshal string into Go struct field UpdatePost.tags of type []string")},
 	})
 }
 
@@ -45,8 +45,8 @@ func TestReplacePostMediaValidation(t *testing.T) {
 			name: "item fields validated",
 			body: `{"items": [{"sortOrder": 0}]}`,
 			want: map[string][]string{
-				"items.0.mediaAssetId": {msgRequired("items.0.mediaAssetId")},
-				"items.0.kind":         {msgRequired("items.0.kind")},
+				"mediaAssetId": {msgRequired("mediaAssetId")},
+				"kind":         {msgRequired("kind")},
 			},
 		},
 	})

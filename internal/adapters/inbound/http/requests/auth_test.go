@@ -14,7 +14,7 @@ func TestLoginValidation(t *testing.T) {
 		{name: "email required", body: with(base, "email", absent), want: errs("email", msgRequired("email"))},
 		{name: "email format", body: with(base, "email", "nope"), want: errs("email", msgEmail("email"))},
 		{name: "password required", body: with(base, "password", absent), want: errs("password", msgRequired("password"))},
-		{name: "remember must be a bool", body: with(base, "remember", "yes"), want: errs("remember", "The remember field must be true or false.")},
+		{name: "remember must be a bool", body: with(base, "remember", "yes"), want: msgGeneral("json: cannot unmarshal string into Go struct field Login.remember of type bool")},
 	})
 }
 
@@ -148,7 +148,7 @@ func TestResetPasswordValidation(t *testing.T) {
 		{
 			name: "confirmation mismatch",
 			body: with(base, "confirmPassword", long(13)),
-			want: errs("confirmPassword", "The confirmPassword field must match newPassword."),
+			want: errs("confirmPassword", "The confirmPassword field is invalid. (eqfield: NewPassword)"),
 		},
 	})
 }
@@ -163,7 +163,7 @@ func TestChangePasswordValidation(t *testing.T) {
 		{name: "current required", body: with(base, "currentPassword", absent), want: errs("currentPassword", msgRequired("currentPassword"))},
 		{name: "new required", body: with(base, "newPassword", absent), want: map[string][]string{
 			"newPassword":     {msgRequired("newPassword")},
-			"confirmPassword": {"The confirmPassword field must match newPassword."},
+			"confirmPassword": {"The confirmPassword field is invalid. (eqfield: NewPassword)"},
 		}},
 		{
 			name: "new password too long",
@@ -173,7 +173,7 @@ func TestChangePasswordValidation(t *testing.T) {
 		{
 			name: "confirmation mismatch",
 			body: with(base, "confirmPassword", "other"),
-			want: errs("confirmPassword", "The confirmPassword field must match newPassword."),
+			want: errs("confirmPassword", "The confirmPassword field is invalid. (eqfield: NewPassword)"),
 		},
 	})
 }

@@ -4,10 +4,9 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"io"
+	"maps"
 	"net/http"
 	"net/http/httptest"
-	"reflect"
 	"strconv"
 	"strings"
 	"testing"
@@ -15,7 +14,6 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/gin-gonic/gin/binding"
 	"github.com/go-playground/validator/v10"
-	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"github.com/turahe/blog-api/internal/adapters/inbound/http/responses"
@@ -29,12 +27,14 @@ var absent absentField
 // with returns base as JSON after applying key/value pairs; a value of absent deletes the key.
 func with(base map[string]any, pairs ...any) string {
 	fields := make(map[string]any, len(base))
-	for k, v := range base {
-		fields[k] = v
-	}
+	maps.Copy(fields, base)
 
 	for i := 0; i+1 < len(pairs); i += 2 {
-		key := pairs[i].(string)
+		key, ok := pairs[i].(string)
+		if !ok {
+			panic(fmt.Sprintf("with: key %v is not a string", pairs[i]))
+		}
+
 		if pairs[i+1] == absent {
 			delete(fields, key)
 			continue
@@ -58,31 +58,30 @@ func errs(field, message string) map[string][]string {
 }
 
 func msgRequired(f string) string { return "The " + f + " field is required." }
-func msgEmail(f string) string    { return "The " + f + " field must be a valid email address." }
-func msgUUID(f string) string     { return "The " + f + " field must be a valid UUID." }
-func msgOneOf(f string) string    { return "The selected " + f + " is invalid." }
-func msgDate(f string) string     { return "The " + f + " field must match the format 2006-01-02." }
-func msgMinChars(f string, n int) string {
-	return "The " + f + " field must be at least " + strconv.Itoa(n) + " characters."
+func msgEmail(f string) string    { return "The " + f + " must be a valid email address." }
+func msgUUID(f string) string     { return "The " + f + " must be a valid UUID." }
+func msgDate(f string) string     { return "The " + f + " must be a valid date and time." }
+
+func msgOneOf(f, options string) string {
+	return "The " + f + " must be one of: " + options + "."
 }
 
-func msgMaxChars(f string, n int) string {
-	return "The " + f + " field must not be greater than " + strconv.Itoa(n) + " characters."
-}
-
-func msgMinItems(f string, n int) string {
-	return "The " + f + " field must have at least " + strconv.Itoa(n) + " items."
-}
-
-func msgMaxItems(f string, n int) string {
-	return "The " + f + " field must not have more than " + strconv.Itoa(n) + " items."
-}
-
+// min and max read as character counts whatever the field kind.
 func msgMin(f string, n int) string {
-	return "The " + f + " field must be at least " + strconv.Itoa(n) + "."
+	return "The " + f + " must be at least " + strconv.Itoa(n) + " characters."
 }
+
 func msgMax(f string, n int) string {
-	return "The " + f + " field must not be greater than " + strconv.Itoa(n) + "."
+	return "The " + f + " may not be greater than " + strconv.Itoa(n) + " characters."
+}
+
+func msgMinChars(f string, n int) string { return msgMin(f, n) }
+func msgMaxChars(f string, n int) string { return msgMax(f, n) }
+func msgMinItems(f string, n int) string { return msgMin(f, n) }
+func msgMaxItems(f string, n int) string { return msgMax(f, n) }
+
+func msgGeneral(message string) map[string][]string {
+	return map[string][]string{"general": {message}}
 }
 
 // bindDetails binds body into dst like BindJSON and returns the validation bag, or nil when valid.
@@ -91,7 +90,7 @@ func bindDetails(t *testing.T, body string, dst any) map[string][]string {
 
 	req := httptest.NewRequestWithContext(t.Context(), http.MethodPost, "/", strings.NewReader(body))
 	if err := binding.JSON.Bind(req, dst); err != nil {
-		return validationErrorDetails(err)
+		return FormatValidationError(err)
 	}
 
 	return nil
@@ -124,6 +123,7 @@ func TestInitRegistersJSONFieldNames(t *testing.T) {
 		Named  string `json:"named,omitempty" binding:"required"`
 		Plain  string `binding:"required"`
 		Hidden string `json:"-"               binding:"required"`
+		Query  string `form:"query"           binding:"required"`
 	}
 
 	err := binding.Validator.ValidateStruct(&sample{})
@@ -131,14 +131,17 @@ func TestInitRegistersJSONFieldNames(t *testing.T) {
 
 	assert.Equal(t, map[string][]string{
 		"named":  {"The named field is required."},
-		"Plain":  {"The Plain field is required."},
-		"Hidden": {"The Hidden field is required."},
-	}, validationErrorDetails(err))
+		"plain":  {"The plain field is required."},
+		"hidden": {"The hidden field is required."},
+		"query":  {"The query field is required."},
+	}, FormatValidationError(err))
 }
 
 func TestBindJSON(t *testing.T) {
 	t.Parallel()
 	gin.SetMode(gin.TestMode)
+
+	code := responses.BuildResponseCode(http.StatusBadRequest, responses.ServicePlatform, responses.CaseCodeForStatus(http.StatusBadRequest))
 
 	tests := []struct {
 		name     string
@@ -157,19 +160,25 @@ func TestBindJSON(t *testing.T) {
 			name:   "invalid body writes a validation envelope",
 			body:   `{"email":"nope"}`,
 			wantOK: false,
-			wantJSON: fmt.Sprintf(`{"ok":false,"code":%d,"meta":{"requestId":"req-1"},"error":{
+			wantJSON: fmt.Sprintf(`{"ok":false,"code":%d,"meta":{"requestId":"req-1"},
+				"message":"The given data was invalid.",
+				"errors":{"email":["The email must be a valid email address."],"password":["The password field is required."]},
+				"error":{
 				"code":"validation_error","message":"The given data was invalid.",
-				"details":{"email":["The email field must be a valid email address."],"password":["The password field is required."]}}}`,
-				responses.BuildResponseCode(http.StatusBadRequest, responses.ServicePlatform, responses.CaseCodeForStatus(http.StatusBadRequest))),
+				"details":{"email":["The email must be a valid email address."],"password":["The password field is required."]}}}`,
+				code),
 		},
 		{
-			name:   "empty body is a form error",
+			name:   "empty body is a general error",
 			body:   ``,
 			wantOK: false,
-			wantJSON: fmt.Sprintf(`{"ok":false,"code":%d,"meta":{"requestId":"req-1"},"error":{
+			wantJSON: fmt.Sprintf(`{"ok":false,"code":%d,"meta":{"requestId":"req-1"},
+				"message":"The given data was invalid.",
+				"errors":{"general":["EOF"]},
+				"error":{
 				"code":"validation_error","message":"The given data was invalid.",
-				"details":{"_form":["The request body is required."]}}}`,
-				responses.BuildResponseCode(http.StatusBadRequest, responses.ServicePlatform, responses.CaseCodeForStatus(http.StatusBadRequest))),
+				"details":{"general":["EOF"]}}}`,
+				code),
 		},
 	}
 
@@ -218,16 +227,10 @@ func TestFailValidation(t *testing.T) {
 	assert.False(t, envelope.OK)
 	require.NotNil(t, envelope.Error)
 	assert.Equal(t, responses.ErrorCodeValidation, envelope.Error.Code)
-	assert.Equal(t, map[string]any{"_form": []any{"The request body is invalid."}}, envelope.Error.Details)
+	assert.Equal(t, map[string]any{"general": []any{"boom"}}, envelope.Error.Details)
 }
 
-func TestValidationMessageHelpers(t *testing.T) {
-	t.Parallel()
-	require.Equal(t, "newPassword", lowerFirst("NewPassword"))
-	require.Equal(t, map[string][]string{"_form": {"The request body is required."}}, validationErrorDetails(io.EOF))
-}
-
-func TestValidationErrorDetails(t *testing.T) {
+func TestFormatValidationError(t *testing.T) {
 	t.Parallel()
 
 	cases := []struct {
@@ -240,60 +243,54 @@ func TestValidationErrorDetails(t *testing.T) {
 			name: "comment and raw newline are a syntax error",
 			body: "{\n  \"title\": \"a\",\n  // \"slug\": \"a\",\n  \"content\": \"line\nline\"\n}",
 			dst:  &CreatePost{},
-			want: map[string][]string{"_form": {"The request body must be valid JSON (syntax error at byte 21)."}},
+			want: msgGeneral("invalid character '/' looking for beginning of object key string"),
 		},
 		{
 			name: "truncated body",
 			body: `{"title": "a"`,
 			dst:  &CreatePost{},
-			want: map[string][]string{"_form": {"The request body must be valid JSON."}},
+			want: msgGeneral("unexpected EOF"),
 		},
 		{
-			name: "wrong JSON type is keyed by field",
+			name: "wrong JSON type is a general error",
 			body: `{"title": "a", "slug": "a", "content": "b", "categoryId": 1}`,
 			dst:  &CreatePost{},
-			want: map[string][]string{"categoryId": {"The categoryId field must be a string."}},
+			want: msgGeneral("json: cannot unmarshal number into Go struct field CreatePost.categoryId of type string"),
 		},
 		{
-			name: "wrong JSON type for an integer",
-			body: `{"items": [{"mediaAssetId": "x", "kind": "cover", "sortOrder": "1"}]}`,
-			dst:  &ReplacePostMedia{},
-			want: map[string][]string{"items.0.sortOrder": {"The items.0.sortOrder field must be an integer."}},
-		},
-		{
-			name: "wrong top-level type is a form error",
+			name: "wrong top-level type is a general error",
 			body: `[]`,
 			dst:  &CreatePost{},
-			want: map[string][]string{"_form": {"The request body is invalid."}},
+			want: msgGeneral("json: cannot unmarshal array into Go value of type requests.CreatePost"),
 		},
 		{
-			name: "rule failures use Laravel wording",
+			name: "rule failures",
 			body: `{"title": "` + strings.Repeat("x", 256) + `", "categoryId": "nope"}`,
 			dst:  &CreatePost{},
 			want: map[string][]string{
-				"title":      {"The title field must not be greater than 255 characters."},
-				"slug":       {"The slug field is required."},
-				"content":    {"The content field is required."},
-				"categoryId": {"The categoryId field must be a valid UUID."},
+				"title":      {msgMax("title", 255)},
+				"slug":       {msgRequired("slug")},
+				"content":    {msgRequired("content")},
+				"categoryId": {msgUUID("categoryId")},
 			},
 		},
 		{
-			name: "nested fields use dotted paths",
+			name: "nested fields use their own name",
 			body: `{"items": [{"mediaAssetId": "nope", "sortOrder": -1}]}`,
 			dst:  &ReplacePostMedia{},
 			want: map[string][]string{
-				"items.0.mediaAssetId": {"The items.0.mediaAssetId field must be a valid UUID."},
-				"items.0.kind":         {"The items.0.kind field is required."},
-				"items.0.sortOrder":    {"The items.0.sortOrder field must be greater than or equal to 0."},
+				"mediaAssetId": {msgUUID("mediaAssetId")},
+				"kind":         {msgRequired("kind")},
+				"sortOrder":    {"The sortOrder must be greater than or equal to 0."},
 			},
 		},
 		{
-			name: "size rules are worded by kind",
+			name: "min on a slice and oneof",
 			body: `{"subject": "s", "bodyMarkdown": "b", "lists": [], "status": "sent"}`,
 			dst:  &NewsletterIssueCreate{},
 			want: map[string][]string{
-				"lists":  {"The lists field must have at least 1 items."},
-				"status": {"The selected status is invalid."},
+				"lists":  {msgMin("lists", 1)},
+				"status": {msgOneOf("status", "draft scheduled queued")},
 			},
 		},
 	}
@@ -305,12 +302,12 @@ func TestValidationErrorDetails(t *testing.T) {
 			req := httptest.NewRequestWithContext(t.Context(), http.MethodPost, "/", strings.NewReader(tc.body))
 			err := binding.JSON.Bind(req, tc.dst)
 			require.Error(t, err)
-			require.Equal(t, tc.want, validationErrorDetails(err))
+			require.Equal(t, tc.want, FormatValidationError(err))
 		})
 	}
 }
 
-func TestFieldPath(t *testing.T) {
+func TestFormatValidationErrorWithoutNamespace(t *testing.T) {
 	t.Parallel()
 
 	engine, ok := binding.Validator.Engine().(*validator.Validate)
@@ -319,131 +316,158 @@ func TestFieldPath(t *testing.T) {
 	err := engine.Var("", "required")
 	require.Error(t, err)
 
-	assert.Equal(t, map[string][]string{"_form": {"The _form field is required."}}, validationErrorDetails(err),
-		"a variable without a namespace belongs to the whole form")
+	assert.Equal(t, map[string][]string{"": {"The  field is required."}}, FormatValidationError(err))
 }
 
-func TestBodyMessage(t *testing.T) {
-	t.Parallel()
+// fakeFieldError drives getFieldName and getErrorMessage with names and tags the validator
+// never produces on its own.
+type fakeFieldError struct {
+	validator.FieldError
 
-	var syntaxErr *json.SyntaxError
-	require.ErrorAs(t, json.Unmarshal([]byte(`{"a":}`), &map[string]any{}), &syntaxErr)
+	tag, param, field, structField, namespace string
+}
+
+func (f fakeFieldError) Tag() string         { return f.tag }
+func (f fakeFieldError) Param() string       { return f.param }
+func (f fakeFieldError) Field() string       { return f.field }
+func (f fakeFieldError) StructField() string { return f.structField }
+func (f fakeFieldError) Namespace() string   { return f.namespace }
+
+func TestGetFieldName(t *testing.T) {
+	t.Parallel()
 
 	tests := []struct {
 		name string
-		err  error
+		fe   fakeFieldError
 		want string
 	}{
-		{name: "syntax error", err: syntaxErr, want: "The request body must be valid JSON (syntax error at byte 6)."},
-		{name: "empty body", err: io.EOF, want: "The request body is required."},
-		{name: "wrapped empty body", err: fmt.Errorf("decode: %w", io.EOF), want: "The request body is required."},
-		{name: "truncated body", err: io.ErrUnexpectedEOF, want: "The request body must be valid JSON."},
-		{name: "anything else", err: errors.New("boom"), want: "The request body is invalid."},
+		{name: "registered json name", fe: fakeFieldError{field: "fullName", structField: "FullName", namespace: "Req.fullName"}, want: "fullName"},
+		{name: "no json name", fe: fakeFieldError{field: "FullName", structField: "FullName", namespace: "Req.FullName"}, want: "fullName"},
+		{name: "struct field without field name", fe: fakeFieldError{structField: "FullName", namespace: "Req.FullName"}, want: "fullName"},
+		{name: "no struct context keeps field", fe: fakeFieldError{field: "Email", structField: "Email", namespace: "Email"}, want: "Email"},
+		{name: "struct field only", fe: fakeFieldError{structField: "Email"}, want: "email"},
+		{name: "nothing", fe: fakeFieldError{}, want: ""},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
-			assert.Equal(t, tt.want, bodyMessage(tt.err))
+			assert.Equal(t, tt.want, getFieldName(tt.fe))
 		})
 	}
 }
 
-func TestTypeMessage(t *testing.T) {
-	t.Parallel()
-
-	tests := []struct {
-		name string
-		typ  reflect.Type
-		want string
-	}{
-		{name: "unknown type", typ: nil, want: "The f field is invalid."},
-		{name: "text unmarshaler", typ: reflect.TypeFor[uuid.UUID](), want: "The f field must be a string."},
-		{name: "string", typ: reflect.TypeFor[string](), want: "The f field must be a string."},
-		{name: "bool", typ: reflect.TypeFor[bool](), want: "The f field must be true or false."},
-		{name: "int64", typ: reflect.TypeFor[int64](), want: "The f field must be an integer."},
-		{name: "uint8", typ: reflect.TypeFor[uint8](), want: "The f field must be an integer."},
-		{name: "float32", typ: reflect.TypeFor[float32](), want: "The f field must be a number."},
-		{name: "slice", typ: reflect.TypeFor[[]string](), want: "The f field must be an array."},
-		{name: "array", typ: reflect.TypeFor[[2]int](), want: "The f field must be an array."},
-		{name: "map", typ: reflect.TypeFor[map[string]int](), want: "The f field must be an object."},
-		{name: "struct", typ: reflect.TypeFor[struct{ A int }](), want: "The f field must be an object."},
-		{name: "kind without a rule", typ: reflect.TypeFor[chan int](), want: "The f field is invalid."},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			t.Parallel()
-
-			assert.Equal(t, tt.want, typeMessage("f", tt.typ))
-		})
-	}
-}
-
-type ruleSample struct {
-	Required string         `json:"required" binding:"required"`
-	Email    string         `json:"email"    binding:"omitempty,email"`
-	ID       string         `json:"id"       binding:"omitempty,uuid"`
-	Choice   string         `json:"choice"   binding:"omitempty,oneof=a b"`
-	Date     string         `json:"date"     binding:"omitempty,datetime=2006-01-02"`
-	MinStr   string         `json:"minStr"   binding:"omitempty,min=3"`
-	MaxStr   string         `json:"maxStr"   binding:"max=2"`
-	MinList  []string       `json:"minList"  binding:"omitempty,min=2"`
-	MaxList  []string       `json:"maxList"  binding:"max=1"`
-	MaxMap   map[string]int `json:"maxMap"   binding:"max=1"`
-	MinNum   int            `json:"minNum"   binding:"min=5"`
-	MaxNum   int            `json:"maxNum"   binding:"max=5"`
-	Positive int            `json:"positive" binding:"gt=0"`
-	NonNeg   int            `json:"nonNeg"   binding:"gte=0"`
-	Password string         `json:"password"`
-	Confirm  string         `json:"confirm"  binding:"eqfield=Password"`
-	Site     string         `json:"site"     binding:"omitempty,url"`
-}
-
-func TestValidationMessage(t *testing.T) {
-	t.Parallel()
-
-	base := map[string]any{"required": "x", "minNum": 5, "positive": 1}
-
-	runBindCases[ruleSample](t, []bindCase{
-		{name: "valid", body: with(base, "email", "a@example.com", "confirm", "", "password", "")},
-		{name: "required", body: with(base, "required", absent), want: errs("required", "The required field is required.")},
-		{name: "email", body: with(base, "email", "nope"), want: errs("email", "The email field must be a valid email address.")},
-		{name: "uuid", body: with(base, "id", "nope"), want: errs("id", "The id field must be a valid UUID.")},
-		{name: "oneof", body: with(base, "choice", "c"), want: errs("choice", "The selected choice is invalid.")},
-		{name: "datetime", body: with(base, "date", "01/02/2026"), want: errs("date", "The date field must match the format 2006-01-02.")},
-		{name: "min string", body: with(base, "minStr", "ab"), want: errs("minStr", "The minStr field must be at least 3 characters.")},
-		{name: "max string", body: with(base, "maxStr", "abc"), want: errs("maxStr", "The maxStr field must not be greater than 2 characters.")},
-		{name: "min slice", body: with(base, "minList", []string{"a"}), want: errs("minList", "The minList field must have at least 2 items.")},
-		{name: "max slice", body: with(base, "maxList", []string{"a", "b"}), want: errs("maxList", "The maxList field must not have more than 1 items.")},
-		{name: "max map", body: with(base, "maxMap", map[string]int{"a": 1, "b": 2}), want: errs("maxMap", "The maxMap field must not have more than 1 items.")},
-		{name: "min number", body: with(base, "minNum", 4), want: errs("minNum", "The minNum field must be at least 5.")},
-		{name: "max number", body: with(base, "maxNum", 6), want: errs("maxNum", "The maxNum field must not be greater than 5.")},
-		{name: "gt", body: with(base, "positive", 0), want: errs("positive", "The positive field must be greater than 0.")},
-		{name: "gte", body: with(base, "nonNeg", -1), want: errs("nonNeg", "The nonNeg field must be greater than or equal to 0.")},
-		{name: "eqfield", body: with(base, "password", "a", "confirm", "b"), want: errs("confirm", "The confirm field must match password.")},
-		{name: "other rule", body: with(base, "site", "not a url"), want: errs("site", "The site field is invalid.")},
-	})
-}
-
-func TestLowerFirst(t *testing.T) {
+func TestToCamelCase(t *testing.T) {
 	t.Parallel()
 
 	tests := []struct {
 		in, want string
 	}{
 		{in: "", want: ""},
-		{in: "NewPassword", want: "newPassword"},
-		{in: "already", want: "already"},
-		{in: "Ärger", want: "ärger"},
+		{in: "FirstName", want: "firstName"},
+		{in: "firstName", want: "firstName"},
+		{in: "ID", want: "iD"},
+		{in: "_x", want: "_x"},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.in, func(t *testing.T) {
 			t.Parallel()
 
-			assert.Equal(t, tt.want, lowerFirst(tt.in))
+			assert.Equal(t, tt.want, toCamelCase(tt.in))
 		})
 	}
+}
+
+func TestGetErrorMessage(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		tag, param, want string
+	}{
+		{tag: "required", want: "The f field is required."},
+		{tag: "email", want: "The f must be a valid email address."},
+		{tag: "min", param: "3", want: "The f must be at least 3 characters."},
+		{tag: "max", param: "9", want: "The f may not be greater than 9 characters."},
+		{tag: "len", param: "4", want: "The f must be exactly 4 characters."},
+		{tag: "numeric", want: "The f must be a number."},
+		{tag: "alpha", want: "The f may only contain letters."},
+		{tag: "alphanum", want: "The f may only contain letters and numbers."},
+		{tag: "url", want: "The f must be a valid URL."},
+		{tag: "uuid", want: "The f must be a valid UUID."},
+		{tag: "oneof", param: "a b", want: "The f must be one of: a b."},
+		{tag: "gte", param: "0", want: "The f must be greater than or equal to 0."},
+		{tag: "lte", param: "5", want: "The f must be less than or equal to 5."},
+		{tag: "gt", param: "0", want: "The f must be greater than 0."},
+		{tag: "lt", param: "5", want: "The f must be less than 5."},
+		{tag: "eq", param: "x", want: "The f must be equal to x."},
+		{tag: "ne", param: "x", want: "The f must not be equal to x."},
+		{tag: "unique", want: "The f has already been taken."},
+		{tag: "exists", want: "The selected f is invalid."},
+		{tag: "date", want: "The f must be a valid date."},
+		{tag: "datetime", param: "2006-01-02", want: "The f must be a valid date and time."},
+		{tag: "timezone", want: "The f must be a valid timezone."},
+		{tag: "json", want: "The f must be a valid JSON string."},
+		{tag: "ip", want: "The f must be a valid IP address."},
+		{tag: "ipv4", want: "The f must be a valid IPv4 address."},
+		{tag: "ipv6", want: "The f must be a valid IPv6 address."},
+		{tag: "base64", want: "The f must be a valid base64 string."},
+		{tag: "required_if", param: "kind cover", want: "The f field is required when kind cover is present."},
+		{tag: "required_unless", param: "kind cover", want: "The f field is required unless kind cover is present."},
+		{tag: "required_with", param: "Other", want: "The f field is required when Other is present."},
+		{tag: "required_without", param: "Other", want: "The f field is required when Other is not present."},
+		{tag: "eqfield", param: "Password", want: "The f field is invalid. (eqfield: Password)"},
+		{tag: "e164", want: "The f field is invalid. (e164)"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.tag, func(t *testing.T) {
+			t.Parallel()
+
+			assert.Equal(t, tt.want, getErrorMessage(fakeFieldError{tag: tt.tag, param: tt.param}, "f"))
+		})
+	}
+}
+
+type ruleSample struct {
+	Required string   `json:"required" binding:"required"`
+	Email    string   `json:"email"    binding:"omitempty,email"`
+	ID       string   `json:"id"       binding:"omitempty,uuid"`
+	Choice   string   `json:"choice"   binding:"omitempty,oneof=a b"`
+	Date     string   `json:"date"     binding:"omitempty,datetime=2006-01-02"`
+	MinStr   string   `json:"minStr"   binding:"omitempty,min=3"`
+	MaxStr   string   `json:"maxStr"   binding:"max=2"`
+	MinList  []string `json:"minList"  binding:"omitempty,min=2"`
+	MinNum   int      `json:"minNum"   binding:"min=5"`
+	Positive int      `json:"positive" binding:"gt=0"`
+	Password string   `json:"password"`
+	Confirm  string   `json:"confirm"  binding:"eqfield=Password"`
+	Site     string   `json:"site"     binding:"omitempty,url"`
+	Code     string   `json:"code"     binding:"omitempty,len=4"`
+	Zone     string   `json:"zone"     binding:"omitempty,timezone"`
+}
+
+func TestValidationMessagesThroughBinding(t *testing.T) {
+	t.Parallel()
+
+	base := map[string]any{"required": "x", "minNum": 5, "positive": 1}
+
+	runBindCases[ruleSample](t, []bindCase{
+		{name: "valid", body: with(base, "email", "a@example.com", "confirm", "", "password", "")},
+		{name: "required", body: with(base, "required", absent), want: errs("required", msgRequired("required"))},
+		{name: "email", body: with(base, "email", "nope"), want: errs("email", msgEmail("email"))},
+		{name: "uuid", body: with(base, "id", "nope"), want: errs("id", msgUUID("id"))},
+		{name: "oneof", body: with(base, "choice", "c"), want: errs("choice", msgOneOf("choice", "a b"))},
+		{name: "datetime", body: with(base, "date", "01/02/2026"), want: errs("date", msgDate("date"))},
+		{name: "min string", body: with(base, "minStr", "ab"), want: errs("minStr", msgMin("minStr", 3))},
+		{name: "max string", body: with(base, "maxStr", "abc"), want: errs("maxStr", msgMax("maxStr", 2))},
+		{name: "min slice", body: with(base, "minList", []string{"a"}), want: errs("minList", msgMin("minList", 2))},
+		{name: "min number", body: with(base, "minNum", 4), want: errs("minNum", msgMin("minNum", 5))},
+		{name: "gt", body: with(base, "positive", 0), want: errs("positive", "The positive must be greater than 0.")},
+		{name: "eqfield", body: with(base, "password", "a", "confirm", "b"), want: errs("confirm", "The confirm field is invalid. (eqfield: Password)")},
+		{name: "url", body: with(base, "site", "not a url"), want: errs("site", "The site must be a valid URL.")},
+		{name: "len", body: with(base, "code", "12345"), want: errs("code", "The code must be exactly 4 characters.")},
+		{name: "timezone", body: with(base, "zone", "Mars/Olympus"), want: errs("zone", "The zone must be a valid timezone.")},
+	})
 }

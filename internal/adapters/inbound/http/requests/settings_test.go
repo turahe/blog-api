@@ -19,16 +19,16 @@ func TestUpdateSettingsValidation(t *testing.T) {
 		{name: "updates required", body: `{}`, want: errs("updates", msgRequired("updates"))},
 		{name: "updates empty", body: `{"updates":[]}`, want: errs("updates", msgMinItems("updates", 1))},
 		{name: "too many updates", body: with(nil, "updates", tooMany), want: errs("updates", msgMaxItems("updates", 100))},
-		{name: "key required", body: `{"updates":[{"value":1}]}`, want: errs("updates.0.key", msgRequired("updates.0.key"))},
+		{name: "key required", body: `{"updates":[{"value":1}]}`, want: errs("key", msgRequired("key"))},
 		{
 			name: "key too long",
 			body: with(nil, "updates", []any{map[string]any{"key": long(129)}}),
-			want: errs("updates.0.key", msgMaxChars("updates.0.key", 128)),
+			want: errs("key", msgMaxChars("key", 128)),
 		},
 		{
 			name: "negative version",
 			body: `{"updates":[{"key":"k","version":-1}]}`,
-			want: errs("updates.0.version", msgMin("updates.0.version", 0)),
+			want: errs("version", msgMin("version", 0)),
 		},
 	})
 }

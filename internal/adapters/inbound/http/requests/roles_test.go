@@ -16,8 +16,8 @@ func TestCreateRoleValidation(t *testing.T) {
 		{name: "name too long", body: with(base, "name", long(61)), want: errs("name", msgMaxChars("name", 60))},
 		{name: "description too long", body: with(base, "description", long(256)), want: errs("description", msgMaxChars("description", 255))},
 		{name: "too many permissions", body: with(base, "permissions", make([]string, 201)), want: errs("permissions", msgMaxItems("permissions", 200))},
-		{name: "empty permission", body: with(base, "permissions", []string{""}), want: errs("permissions.0", msgRequired("permissions.0"))},
-		{name: "permission too long", body: with(base, "permissions", []string{long(129)}), want: errs("permissions.0", msgMaxChars("permissions.0", 128))},
+		{name: "empty permission", body: with(base, "permissions", []string{""}), want: errs("permissions[0]", msgRequired("permissions[0]"))},
+		{name: "permission too long", body: with(base, "permissions", []string{long(129)}), want: errs("permissions[0]", msgMaxChars("permissions[0]", 128))},
 	})
 }
 
@@ -38,7 +38,7 @@ func TestSetRolePermissionsValidation(t *testing.T) {
 		{name: "empty list revokes all", body: `{"permissions":[]}`},
 		{name: "permissions required", body: `{}`, want: errs("permissions", msgRequired("permissions"))},
 		{name: "too many permissions", body: with(nil, "permissions", make([]string, 201)), want: errs("permissions", msgMaxItems("permissions", 200))},
-		{name: "permission too long", body: with(nil, "permissions", []string{long(129)}), want: errs("permissions.0", msgMaxChars("permissions.0", 128))},
+		{name: "permission too long", body: with(nil, "permissions", []string{long(129)}), want: errs("permissions[0]", msgMaxChars("permissions[0]", 128))},
 	})
 }
 
@@ -50,7 +50,7 @@ func TestAssignUserRolesValidation(t *testing.T) {
 		{name: "roles required", body: `{}`, want: errs("roles", msgRequired("roles"))},
 		{name: "roles empty", body: `{"roles":[]}`, want: errs("roles", msgMinItems("roles", 1))},
 		{name: "too many roles", body: with(nil, "roles", make([]string, 21)), want: errs("roles", msgMaxItems("roles", 20))},
-		{name: "empty role", body: `{"roles":[""]}`, want: errs("roles.0", msgRequired("roles.0"))},
-		{name: "role too long", body: with(nil, "roles", []string{long(65)}), want: errs("roles.0", msgMaxChars("roles.0", 64))},
+		{name: "empty role", body: `{"roles":[""]}`, want: errs("roles[0]", msgRequired("roles[0]"))},
+		{name: "role too long", body: with(nil, "roles", []string{long(65)}), want: errs("roles[0]", msgMaxChars("roles[0]", 64))},
 	})
 }
