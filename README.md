@@ -14,6 +14,7 @@ authentication, RBAC, media, analytics, impersonation, and audit tooling.**
 ![PostgreSQL 18](https://img.shields.io/badge/PostgreSQL-18-336791?logo=postgresql&logoColor=white)
 ![Redis 7+](https://img.shields.io/badge/Redis-7%2B-FF4438?logo=redis&logoColor=white)
 [![codecov](https://codecov.io/gh/turahe/blog-api/graph/badge.svg?token=Ix8cLCnU5Z)](https://codecov.io/gh/turahe/blog-api)
+[![Tests](https://github.com/turahe/blog-api/actions/workflows/test.yml/badge.svg?branch=main)](https://github.com/turahe/blog-api/actions/workflows/test.yml)
 ![License](https://img.shields.io/badge/License-MIT-blue.svg)
 ![Changelog](https://img.shields.io/badge/Changelog-keepachangelog-10B981.svg)
 
