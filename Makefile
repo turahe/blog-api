@@ -1,4 +1,4 @@
-.PHONY: test test-race test-integration test-brokers asyncapi-validate coverage lint routes-check swagger dev-keys infra-up infra-down docker-up docker-dev docker-down docker-build docker-logs docker-seed docker-migrate trivy
+.PHONY: test test-race test-integration test-brokers asyncapi-validate coverage lint routes-check swagger dev-keys infra-up infra-down docker-up docker-dev docker-down docker-push docker-build docker-logs docker-seed docker-migrate trivy
 
 MODULE := github.com/turahe/blog-api
 TEST_PKGS := ./cmd/... ./internal/... ./docs/...
@@ -104,6 +104,10 @@ docker-dev: dev-keys
 
 docker-down:
 	docker compose down
+
+# Multi-platform production image to Docker Hub; pass flags with ARGS, e.g. make docker-push ARGS="-t v1.4.0".
+docker-push:
+	scripts/docker-push.sh $(ARGS)
 
 docker-build:
 	docker compose build api
