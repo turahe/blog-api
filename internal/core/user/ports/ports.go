@@ -13,13 +13,13 @@ import (
 // Repository reads user accounts.
 type Repository interface {
 	FindByID(ctx context.Context, id uuid.UUID) (userdomain.User, error)
-	List(ctx context.Context, page, perPage int) ([]userdomain.User, int64, error)
+	List(ctx context.Context, filter userdomain.ListFilter) (userdomain.ListResult, error)
 }
 
 // Service is the user use-case API consumed by HTTP handlers.
 type Service interface {
 	GetByID(ctx context.Context, id uuid.UUID) (userdomain.User, error)
-	List(ctx context.Context, page, perPage int) ([]userdomain.User, int64, error)
+	List(ctx context.Context, filter userdomain.ListFilter) (userdomain.ListResult, error)
 }
 
 // ProfileRepository stores profiles, privacy settings, and avatar references.

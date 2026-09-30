@@ -81,6 +81,7 @@ either fails as malformed JSON before any field is validated.
   - `socialLinks.twitter`: `^@?[A-Za-z0-9_]{1,15}$` normalized to `@handle` unless full twitter URL
   - `socialLinks.linkedin`: profile slug matching `^[A-Za-z0-9\-]{5,}$` OR full https://www.linkedin.com/in/{slug} URL
   - `socialLinks.github`: `^[A-Za-z0-9][A-Za-z0-9\-]{0,38}$` OR https://github.com/{slug}
+  - `socialLinks.youtube`: must be a valid YouTube channel or user handle; accepts either full https://www.youtube.com/@handle, https://www.youtube.com/channel/{id}, https://www.youtube.com/c/{slug} URLs, or an `@handle` with 3–30 characters (letters, numbers, underscores, periods, and dashes); all other formats rejected.
   - `locale`: BCP 47 in application allowlist (default: en_US, en_GB, zh_Hans_CN, id_ID, vi_VN); fall back to en_US if unknown
   - `timezone`: IANA tzdb entry (e.g. `America/New_York`, `Asia/Jakarta`); reject abbreviations like `EST`/`GMT`
   - `marketingConsent`: strict boolean; when toggled true must also record a consent event through ConsentService with UTC timestamp and request_id

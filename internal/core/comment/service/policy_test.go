@@ -16,7 +16,8 @@ func TestPolicyDisabledHidesAndClosesComments(t *testing.T) {
 	f.repo.policies[f.post] = commentdomain.PolicyDisabled
 	ctx := context.Background()
 
-	_, err := f.svc.ListForPost(ctx, f.post, nil, 1, 20)
+	filter := commentdomain.ListFilter{PostUUID: &f.post}
+	_, err := f.svc.ListForPost(ctx, filter)
 	require.ErrorIs(t, err, commentdomain.ErrCommentsDisabled)
 
 	_, err = f.svc.GetThread(ctx, c.UUID)
@@ -45,7 +46,8 @@ func TestPolicyReadOnlyShowsButBlocksWrites(t *testing.T) {
 	f.repo.policies[f.post] = commentdomain.PolicyReadOnly
 	ctx := context.Background()
 
-	_, err := f.svc.ListForPost(ctx, f.post, nil, 1, 20)
+	filter := commentdomain.ListFilter{PostUUID: &f.post}
+	_, err := f.svc.ListForPost(ctx, filter)
 	require.NoError(t, err)
 
 	_, err = f.svc.GetThread(ctx, c.UUID)

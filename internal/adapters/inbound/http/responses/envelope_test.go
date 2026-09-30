@@ -171,7 +171,8 @@ func TestSuccessPaginatedLaravelShape(t *testing.T) {
 			require.Equal(t, tt.wantCurrent, meta.CurrentPage)
 			require.Equal(t, tt.wantLast, meta.LastPage)
 			require.Equal(t, tt.perPage, meta.PerPage)
-			require.Equal(t, tt.total, meta.Total)
+			require.NotNil(t, meta.Total)
+			require.Equal(t, tt.total, *meta.Total)
 			require.Equal(t, "http://example.com/api/v1/users", meta.Path)
 
 			if tt.wantFrom == nil {

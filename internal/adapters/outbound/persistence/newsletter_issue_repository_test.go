@@ -8,6 +8,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/require"
 	"github.com/turahe/blog-api/internal/core/newsletter/domain"
+	"github.com/turahe/blog-api/internal/shared/pagination"
 )
 
 func newIssue(lists []string, mutate func(*domain.Issue)) domain.Issue {
@@ -153,23 +154,23 @@ func TestNewsletterRepositoryListIssues(t *testing.T) {
 		want      []uuid.UUID
 		wantTotal int64
 	}{
-		{name: "newest first", filter: domain.IssueFilter{Page: 1, PerPage: 2}, want: []uuid.UUID{newest.UUID, middle.UUID}, wantTotal: 3},
-		{name: "second page", filter: domain.IssueFilter{Page: 2, PerPage: 2}, want: []uuid.UUID{oldest.UUID}, wantTotal: 3},
-		{name: "status", filter: domain.IssueFilter{Status: domain.IssueCancelled, Page: 1, PerPage: 1}, want: []uuid.UUID{newest.UUID}, wantTotal: 1},
+		{name: "newest first", filter: domain.IssueFilter{PageRequest: pagination.PageRequest{Page: 1, Limit: 2}}, want: []uuid.UUID{newest.UUID, middle.UUID}, wantTotal: 3},
+		{name: "second page", filter: domain.IssueFilter{PageRequest: pagination.PageRequest{Page: 2, Limit: 2}}, want: []uuid.UUID{oldest.UUID}, wantTotal: 3},
+		{name: "status", filter: domain.IssueFilter{Status: domain.IssueCancelled, PageRequest: pagination.PageRequest{Page: 1, Limit: 1}}, want: []uuid.UUID{newest.UUID}, wantTotal: 1},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			page, err := repo.ListIssues(t.Context(), tt.filter)
 			require.NoError(t, err)
-			require.GreaterOrEqual(t, page.Total, tt.wantTotal)
+			require.GreaterOrEqual(t, *page.Total, tt.wantTotal)
 			require.Equal(t, tt.want, issueIDs(page.Items)[:len(tt.want)])
-			require.Equal(t, tt.filter.Page, page.Page)
-			require.Equal(t, tt.filter.PerPage, page.PerPage)
+			require.Equal(t, tt.filter.PageRequest.Page, page.OffsetPage)
+			require.Equal(t, tt.filter.PageRequest.Limit, page.OffsetPerPage)
 		})
 	}
 
-	_, err := repo.ListIssues(canceledContext(t), domain.IssueFilter{Page: 1, PerPage: 1})
+	_, err := repo.ListIssues(canceledContext(t), domain.IssueFilter{PageRequest: pagination.PageRequest{Page: 1, Limit: 1}})
 	require.ErrorIs(t, err, context.Canceled)
 }
 

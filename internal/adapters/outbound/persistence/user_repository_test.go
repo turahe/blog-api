@@ -10,6 +10,7 @@ import (
 	"github.com/stretchr/testify/require"
 	authdomain "github.com/turahe/blog-api/internal/core/auth/domain"
 	userdomain "github.com/turahe/blog-api/internal/core/user/domain"
+	"github.com/turahe/blog-api/internal/shared/pagination"
 	"gorm.io/gorm"
 )
 
@@ -220,17 +221,17 @@ func TestUserRepositoryListPaginatesNewestFirst(t *testing.T) {
 	deleted := createUser(t, repo, at(4))
 	require.NoError(t, tx.Exec("UPDATE users SET deleted_at = now() WHERE uuid = ?", deleted.UUID).Error)
 
-	first, total, err := repo.List(ctx, 1, 2)
+	firstPage, err := repo.List(ctx, userdomain.ListFilter{PageRequest: pagination.PageRequest{Page: 1, Limit: 2}})
 	require.NoError(t, err)
-	require.GreaterOrEqual(t, total, int64(3))
-	require.Equal(t, []uuid.UUID{newest.UUID, middle.UUID}, userIDs(first), "deleted users are excluded")
+	require.GreaterOrEqual(t, *firstPage.Total, int64(3))
+	require.Equal(t, []uuid.UUID{newest.UUID, middle.UUID}, userIDs(firstPage.Items), "deleted users are excluded")
 
-	second, _, err := repo.List(ctx, 2, 2)
+	secondPage, err := repo.List(ctx, userdomain.ListFilter{PageRequest: pagination.PageRequest{Page: 2, Limit: 2}})
 	require.NoError(t, err)
-	require.NotEmpty(t, second)
-	require.Equal(t, oldest.UUID, second[0].UUID)
+	require.NotEmpty(t, secondPage.Items)
+	require.Equal(t, oldest.UUID, secondPage.Items[0].UUID)
 
-	_, _, err = repo.List(canceledContext(t), 1, 2)
+	_, err = repo.List(canceledContext(t), userdomain.ListFilter{PageRequest: pagination.PageRequest{Page: 1, Limit: 2}})
 	require.ErrorIs(t, err, context.Canceled)
 }
 

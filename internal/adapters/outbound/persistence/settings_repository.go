@@ -8,8 +8,19 @@ import (
 
 	"github.com/google/uuid"
 	settingsdomain "github.com/turahe/blog-api/internal/core/settings/domain"
+	"github.com/turahe/blog-api/internal/shared/pagination"
 	"gorm.io/gorm"
 )
+
+var settingsHistoryCfg = pagination.CursorConfig{
+	Kind: "settings_history",
+	Sort: []pagination.SortField{
+		{Name: "created_at", Column: "h.created_at", Dir: pagination.Desc, Type: pagination.TypeTime},
+		{Name: "id", Column: "h.id", Dir: pagination.Desc, Type: pagination.TypeInt64},
+	},
+	DefaultPerPage: 20,
+	MaxPerPage:     100,
+}
 
 // SettingsRepository stores changed settings and their history in PostgreSQL.
 type SettingsRepository struct {
@@ -146,26 +157,88 @@ type settingHistoryRow struct {
 // History implements ports.Repository.
 func (r *SettingsRepository) History(ctx context.Context, filter settingsdomain.HistoryFilter) (settingsdomain.HistoryPage, error) {
 	c := conn(ctx, r.db)
-	page := settingsdomain.HistoryPage{Items: []settingsdomain.HistoryEntry{}, Page: filter.Page, PerPage: filter.PerPage}
-
-	if err := c.Raw(`SELECT count(*) FROM settings_history WHERE (? = '' OR setting_key = ?)`,
-		filter.Key, filter.Key).Scan(&page.Total).Error; err != nil {
-		return page, fmt.Errorf("count settings history: %w", err)
+	pr := filter.PageRequest
+	if pr.Limit <= 0 {
+		pr.Limit = settingsHistoryCfg.DefaultPerPage
 	}
 
-	var rows []settingHistoryRow
-	if err := c.Raw(`
-		SELECT h.uuid, h.setting_key, h.previous_value::text AS previous_value, h.new_value::text AS new_value,
+	var cursorFields map[string]any
+	if pr.Mode == pagination.ModeCursor && pr.Cursor != "" {
+		decoded, _, err := pagination.DecodeCursor(settingsHistoryCfg, pr.Cursor)
+		if err != nil {
+			return settingsdomain.HistoryPage{}, err
+		}
+		if err := pagination.ValidateCursor(settingsHistoryCfg, decoded); err != nil {
+			return settingsdomain.HistoryPage{}, err
+		}
+		cursorFields = decoded
+	}
+	seek, err := pagination.BuildSeek(settingsHistoryCfg, pr, cursorFields)
+	if err != nil {
+		return settingsdomain.HistoryPage{}, err
+	}
+
+	baseWhere := `(? = '' OR h.setting_key = ?)`
+	whereArgs := []any{filter.Key, filter.Key}
+
+	countSQL := fmt.Sprintf(`SELECT count(*) FROM settings_history h WHERE %s`, baseWhere)
+	baseSQL := `
+		SELECT h.id, h.uuid, h.setting_key, h.previous_value::text AS previous_value, h.new_value::text AS new_value,
 			h.version, u.uuid AS changed_by, h.request_id, h.created_at
 		FROM settings_history h LEFT JOIN users u ON u.id = h.changed_by
-		WHERE (? = '' OR h.setting_key = ?)
-		ORDER BY h.created_at DESC, h.id DESC
-		LIMIT ? OFFSET ?`,
-		filter.Key, filter.Key, filter.PerPage, (filter.Page-1)*filter.PerPage).Scan(&rows).Error; err != nil {
-		return page, fmt.Errorf("list settings history: %w", err)
+		WHERE ` + baseWhere
+
+	var out settingsdomain.HistoryPage
+	if pr.IncludeTotal {
+		var total int64
+		if err := c.Raw(countSQL, whereArgs...).Scan(&total).Error; err != nil {
+			return out, fmt.Errorf("count settings history: %w", err)
+		}
+		out.Total = &total
 	}
 
-	for _, row := range rows {
+	querySQL := baseSQL
+	if seek.WhereClause != "" {
+		querySQL += ` AND ` + seek.WhereClause
+		whereArgs = append(whereArgs, seek.BindVars...)
+	}
+	querySQL += ` ` + seek.OrderClause + ` LIMIT ?`
+	queryArgs := append([]any{}, whereArgs...)
+	queryArgs = append(queryArgs, seek.LimitFetch)
+	if pr.Mode == pagination.ModeOffset {
+		querySQL += ` OFFSET ?`
+		queryArgs = append(queryArgs, pr.Offset)
+	}
+
+	var rawRows []struct {
+		ID            int64
+		UUID          uuid.UUID
+		SettingKey    string
+		PreviousValue *string
+		NewValue      string
+		Version       int64
+		ChangedBy     *uuid.UUID
+		RequestID     string
+		CreatedAt     time.Time
+	}
+	if err := c.Raw(querySQL, queryArgs...).Scan(&rawRows).Error; err != nil {
+		return out, fmt.Errorf("list settings history: %w", err)
+	}
+
+	if seek.ReverseDisplay {
+		for i, j := 0, len(rawRows)-1; i < j; i, j = i+1, j-1 {
+			rawRows[i], rawRows[j] = rawRows[j], rawRows[i]
+		}
+	}
+
+	type rowKey struct {
+		CreatedAt time.Time
+		ID        int64
+	}
+	keys := make([]rowKey, 0, len(rawRows))
+	items := make([]settingsdomain.HistoryEntry, 0, len(rawRows))
+	for _, row := range rawRows {
+		keys = append(keys, rowKey{CreatedAt: row.CreatedAt, ID: row.ID})
 		entry := settingsdomain.HistoryEntry{
 			UUID: row.UUID, Key: row.SettingKey, New: []byte(row.NewValue), Version: row.Version,
 			ChangedBy: row.ChangedBy, RequestID: row.RequestID, CreatedAt: row.CreatedAt,
@@ -173,11 +246,68 @@ func (r *SettingsRepository) History(ctx context.Context, filter settingsdomain.
 		if row.PreviousValue != nil {
 			entry.Previous = []byte(*row.PreviousValue)
 		}
-
-		page.Items = append(page.Items, entry)
+		items = append(items, entry)
 	}
 
-	return page, nil
+	page, hasNext, hasPrev := pagination.TruncatePage(items, pr.Limit, pr.Forward, pr.Cursor != "")
+	out.Items = page
+	out.HasNextPage = hasNext
+	out.HasPreviousPage = hasPrev
+	out.Limit = pr.Limit
+	if pr.Mode == pagination.ModeOffset {
+		out.OffsetPage = pr.Page
+		out.OffsetPerPage = pr.Limit
+	}
+
+	if len(page) > 0 {
+		var firstIdx, lastIdx int
+		switch {
+		case !pr.Forward && len(rawRows) > pr.Limit:
+			firstIdx = 1
+			lastIdx = pr.Limit
+		default:
+			firstIdx = 0
+			lastIdx = len(page) - 1
+		}
+		if out.HasNextPage {
+			k := keys[lastIdx]
+			fields := pagination.SortValues[settingsdomain.HistoryEntry](settingsHistoryCfg, page[len(page)-1],
+				func(_ settingsdomain.HistoryEntry, i int) any {
+					switch i {
+					case 0:
+						return k.CreatedAt
+					case 1:
+						return k.ID
+					}
+					return nil
+				})
+			cur, err := pagination.EncodeCursor(settingsHistoryCfg, fields)
+			if err != nil {
+				return out, err
+			}
+			out.NextCursor = cur
+		}
+		if out.HasPreviousPage {
+			k := keys[firstIdx]
+			fields := pagination.SortValues[settingsdomain.HistoryEntry](settingsHistoryCfg, page[0],
+				func(_ settingsdomain.HistoryEntry, i int) any {
+					switch i {
+					case 0:
+						return k.CreatedAt
+					case 1:
+						return k.ID
+					}
+					return nil
+				})
+			cur, err := pagination.EncodeCursor(settingsHistoryCfg, fields)
+			if err != nil {
+				return out, err
+			}
+			out.PreviousCursor = cur
+		}
+	}
+
+	return out, nil
 }
 
 func storedSettings(rows []settingRow) []settingsdomain.Stored {

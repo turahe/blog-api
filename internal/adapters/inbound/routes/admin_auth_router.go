@@ -4,14 +4,16 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
-// registerAdmin binds /admin routes (login is anonymous; the rest require auth).
-func registerAdmin(v1 *gin.RouterGroup, auth AuthMiddleware, c Controllers) {
+// RegisterAdminAuthRouter mounts admin routes. The anonymous /admin/auth/login
+// route is registered without middleware; the remaining /admin/* tree is
+// protected by the required bearer chain.
+func RegisterAdminAuthRouter(router *gin.RouterGroup, auth AuthMiddleware, c Controllers) {
 	g := GroupAdmin
 
-	none := v1.Group("")
+	none := router.Group("")
 	post(none, "/admin/auth/login", "admin.auth.login", g, AuthNone, c, c.Auth.AdminLogin)
 
-	admin := v1.Group("/admin")
+	admin := router.Group("/admin")
 	admin.Use(auth.Required...)
 
 	get(admin, "/users", "admin.users.list", g, AuthRequired, c, c.Users.AdminUsersList)

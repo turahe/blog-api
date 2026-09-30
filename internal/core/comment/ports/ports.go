@@ -42,6 +42,9 @@ type Repository interface {
 	PostPolicy(ctx context.Context, postID uuid.UUID) (commentdomain.Policy, error)
 	GetByID(ctx context.Context, id uuid.UUID) (commentdomain.Comment, error)
 	List(ctx context.Context, filter commentdomain.ListFilter) (commentdomain.ListResult, error)
+	ListPublic(ctx context.Context, filter commentdomain.ListFilter) (commentdomain.ListResult, error)
+	ListForMe(ctx context.Context, filter commentdomain.ListFilter) (commentdomain.ListResult, error)
+	ListAdmin(ctx context.Context, filter commentdomain.ListFilter) (commentdomain.ListResult, error)
 	Create(ctx context.Context, comment commentdomain.Comment) (commentdomain.Comment, error)
 	// Update persists content, status, edit and soft-delete fields.
 	Update(ctx context.Context, comment commentdomain.Comment) (commentdomain.Comment, error)

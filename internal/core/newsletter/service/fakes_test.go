@@ -326,7 +326,15 @@ func (r *memRepo) ListSubscribers(_ context.Context, filter domain.SubscriberFil
 
 	r.subscriberFilter = filter
 
-	return domain.SubscriberPage{Page: filter.Page, PerPage: filter.PerPage, Total: int64(len(r.subs))}, nil
+	total := int64(len(r.subs))
+	limit := filter.PageRequest.Limit
+	page := filter.PageRequest.Page
+	return domain.SubscriberPage{
+		Total:         &total,
+		Limit:         limit,
+		OffsetPage:    page,
+		OffsetPerPage: limit,
+	}, nil
 }
 
 func (r *memRepo) EraseSubscriber(_ context.Context, id uuid.UUID, at time.Time) error {
@@ -522,7 +530,15 @@ func (r *memRepo) ListIssues(_ context.Context, filter domain.IssueFilter) (doma
 
 	r.issueFilter = filter
 
-	return domain.IssuePage{Page: filter.Page, PerPage: filter.PerPage, Total: int64(len(r.issues))}, nil
+	total := int64(len(r.issues))
+	limit := filter.PageRequest.Limit
+	page := filter.PageRequest.Page
+	return domain.IssuePage{
+		Total:         &total,
+		Limit:         limit,
+		OffsetPage:    page,
+		OffsetPerPage: limit,
+	}, nil
 }
 
 func (r *memRepo) DueIssues(_ context.Context, now time.Time, limit int) ([]domain.Issue, error) {

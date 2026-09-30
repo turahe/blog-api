@@ -18,6 +18,7 @@ import (
 	"github.com/stretchr/testify/require"
 	mediadomain "github.com/turahe/blog-api/internal/core/media/domain"
 	mediaservice "github.com/turahe/blog-api/internal/core/media/service"
+	"github.com/turahe/blog-api/internal/shared/pagination"
 )
 
 type fakeMediaService struct {
@@ -411,14 +412,30 @@ func TestAdminListMediaHandler(t *testing.T) {
 	}{
 		{
 			name: "passes filters", query: "?page=2&perPage=5&q=cat&disk=s3&status=ready&unused=true", status: nethttp.StatusOK,
-			wantFilter: mediadomain.ListFilter{Page: 2, PerPage: 5, Query: "cat", Disk: "s3", Status: "ready", Unused: true},
+			wantFilter: mediadomain.ListFilter{
+				PageRequest: pagination.PageRequest{Mode: pagination.ModeOffset, Forward: true, Page: 2, Limit: 5, Offset: 0, IncludeTotal: true},
+				Query:       "cat", Disk: "s3", Status: "ready", Unused: true,
+			},
 		},
 		{
-			name: "invalid paging falls back", query: "?page=-1&perPage=x&unused=yes", status: nethttp.StatusOK,
-			wantFilter: mediadomain.ListFilter{Page: 1, PerPage: 20},
+			name: "invalid paging falls back", query: "?page=-1&perPage=x&unused=true", status: nethttp.StatusOK,
+			wantFilter: mediadomain.ListFilter{
+				PageRequest: pagination.PageRequest{Mode: pagination.ModeOffset, Forward: true, Page: 1, Limit: 20, IncludeTotal: true},
+				Unused:      true,
+			},
 		},
-		{name: "list failure", listErr: mediaservice.ErrValidation, status: nethttp.StatusBadRequest, code: "validation_error", wantFilter: mediadomain.ListFilter{Page: 1, PerPage: 20}},
-		{name: "variants failure", variantsErr: mediaservice.ErrStorage, status: nethttp.StatusBadGateway, code: "storage_unavailable", wantFilter: mediadomain.ListFilter{Page: 1, PerPage: 20}},
+		{
+			name: "list failure", listErr: mediaservice.ErrValidation, status: nethttp.StatusBadRequest, code: "validation_error",
+			wantFilter: mediadomain.ListFilter{
+				PageRequest: pagination.PageRequest{Forward: true, Limit: 20, IncludeTotal: true},
+			},
+		},
+		{
+			name: "variants failure", variantsErr: mediaservice.ErrStorage, status: nethttp.StatusBadGateway, code: "storage_unavailable",
+			wantFilter: mediadomain.ListFilter{
+				PageRequest: pagination.PageRequest{Forward: true, Limit: 20, IncludeTotal: true},
+			},
+		},
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
@@ -429,7 +446,14 @@ func TestAdminListMediaHandler(t *testing.T) {
 			svc := &fakeMediaService{
 				listFn: func(_ context.Context, filter mediadomain.ListFilter) (mediadomain.ListResult, error) {
 					got = filter
-					return mediadomain.ListResult{Items: []mediadomain.MediaAsset{asset}, Total: 1, Page: filter.Page, PerPage: filter.PerPage}, tc.listErr
+					total := int64(1)
+					return mediadomain.ListResult{
+						Items:         []mediadomain.MediaAsset{asset},
+						Total:         &total,
+						Limit:         filter.Limit,
+						OffsetPage:    filter.Page,
+						OffsetPerPage: filter.Limit,
+					}, tc.listErr
 				},
 				variantsFn: func(context.Context, ...mediadomain.MediaAsset) (map[uuid.UUID]map[string]string, error) {
 					return nil, tc.variantsErr

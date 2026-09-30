@@ -3,14 +3,25 @@ package handlers
 import (
 	"errors"
 	nethttp "net/http"
-	"strconv"
 
 	"github.com/gin-gonic/gin"
 	"github.com/turahe/blog-api/internal/adapters/inbound/http/middleware"
 	"github.com/turahe/blog-api/internal/adapters/inbound/http/responses"
 	userdomain "github.com/turahe/blog-api/internal/core/user/domain"
 	userservice "github.com/turahe/blog-api/internal/core/user/service"
+	"github.com/turahe/blog-api/internal/shared/pagination"
 )
+
+var usersAdminCfg = pagination.CursorConfig{
+	Kind: "users_admin",
+	Sort: []pagination.SortField{
+		{Name: "created_at", Dir: pagination.Desc, Type: pagination.TypeTime},
+		{Name: "id", Dir: pagination.Desc, Type: pagination.TypeInt64},
+	},
+	TTL:            pagination.DefaultTTL,
+	MaxPerPage:     pagination.DefaultMaxPerPage,
+	DefaultPerPage: pagination.DefaultPerPage,
+}
 
 // meGetHandler godoc
 //
@@ -46,46 +57,56 @@ func meGetHandler(users *userservice.UserService) gin.HandlerFunc {
 
 // adminUsersListHandler godoc
 //
-//	@Summary	List users
-//	@Tags		admin
-//	@Produce	json
-//	@Param		page	query		int	false	"page"		default(1)
-//	@Param		perPage	query		int	false	"per page"	default(20)
-//	@Success	200		{object}	responses.Envelope
-//	@Failure	401		{object}	responses.Envelope
-//	@Failure	403		{object}	responses.Envelope
-//	@Security	Bearer
-//	@Router		/api/v1/admin/users [get]
+//	@Summary		List users
+//	@Description	Supports both legacy offset pagination (page/perPage) and cursor-based keyset pagination (after/before/limit).
+//	@Tags			admin
+//	@Produce		json
+//	@Param			page			query		int		false	"page (legacy offset mode)"			default(1)
+//	@Param			perPage			query		int		false	"per page (legacy offset mode, alias limit)"	default(20)
+//	@Param			limit			query		int		false	"page size (cursor or offset)"		default(20)
+//	@Param			after			query		string	false	"opaque cursor: return items after this point"
+//	@Param			before			query		string	false	"opaque cursor: return items before this point"
+//	@Param			includeTotal	query		bool	false	"when false, skip COUNT(*) to reduce DB load"	default(true)
+//	@Success		200				{object}	responses.Envelope
+//	@Failure		401				{object}	responses.Envelope
+//	@Failure		403				{object}	responses.Envelope
+//	@Security		Bearer
+//	@Router			/api/v1/admin/users [get]
 func adminUsersListHandler(users *userservice.UserService) gin.HandlerFunc {
 	return func(c *gin.Context) {
-		page, _ := strconv.Atoi(c.DefaultQuery("page", "1"))
-		perPage, _ := strconv.Atoi(c.DefaultQuery("perPage", "20"))
-
-		items, total, err := users.List(c.Request.Context(), page, perPage)
+		pr, err := pagination.ParseRequest(c, usersAdminCfg)
 		if err != nil {
-			responses.Internal(c, err, "Failed to list users")
+			responses.Failure(c, nethttp.StatusBadRequest, pagination.ErrorCode(err), pagination.ErrorCause(err))
 			return
 		}
 
-		out := make([]gin.H, 0, len(items))
-		for _, user := range items {
+		filter := userdomain.ListFilter{PageRequest: pr}
+		result, err := users.List(c.Request.Context(), filter)
+		if err != nil {
+			switch {
+			case errors.Is(err, pagination.ErrCursorMalformed),
+				errors.Is(err, pagination.ErrCursorInvalidSignature),
+				errors.Is(err, pagination.ErrCursorExpired),
+				errors.Is(err, pagination.ErrCursorWrongKind),
+				errors.Is(err, pagination.ErrCursorMissingField),
+				errors.Is(err, pagination.ErrCursorFieldType),
+				errors.Is(err, pagination.ErrCursorUnsupported):
+				responses.Failure(c, nethttp.StatusBadRequest, pagination.ErrorCode(err), pagination.ErrorCause(err))
+			default:
+				responses.Internal(c, err, "Failed to list users")
+			}
+			return
+		}
+
+		out := make([]gin.H, 0, len(result.Items))
+		for _, user := range result.Items {
 			out = append(out, responses.User(user))
 		}
 
-		if page < 1 {
-			page = 1
-		}
-
-		if perPage < 1 || perPage > 100 {
-			perPage = 20
-		}
-
-		responses.SuccessPaginatedFor(c, nethttp.StatusOK, responses.PageOpts{
+		responses.SuccessPaginatedResult[userdomain.User](c, nethttp.StatusOK, responses.CursorPageOpts[userdomain.User]{
 			Service: responses.ServiceUsers,
+			Result:  result,
 			Data:    out,
-			Page:    page,
-			PerPage: perPage,
-			Total:   total,
 		})
 	}
 }

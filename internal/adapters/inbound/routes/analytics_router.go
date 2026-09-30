@@ -4,18 +4,19 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
-// registerAnalytics binds consent routes and the consent-gated ingestion routes. Consent
-// accepts an optional token so a signed-in visitor can link authenticated analytics.
-func registerAnalytics(v1 *gin.RouterGroup, auth AuthMiddleware, c Controllers) {
+// RegisterAnalyticsRouter mounts consent, ingestion, and admin-report analytics
+// routes. Consent accepts an optional bearer token; ingestion runs through the
+// configured rate limit/gate; admin reports require auth.
+func RegisterAnalyticsRouter(router *gin.RouterGroup, auth AuthMiddleware, c Controllers) {
 	g := GroupAnalytics
 
-	consent := v1.Group("")
+	consent := router.Group("")
 	consent.Use(auth.Optional...)
 	get(consent, "/analytics/consent", "analytics.consent.get", g, AuthNone, c, c.Analytics.ConsentGet)
 	post(consent, "/analytics/consent", "analytics.consent.store", g, AuthOptional, c, c.Analytics.ConsentStore)
 	del(consent, "/analytics/consent/:param1", "analytics.consent.withdraw", g, AuthOptional, c, c.Analytics.ConsentWithdraw)
 
-	ingest := v1.Group("")
+	ingest := router.Group("")
 	ingest.Use(c.Analytics.IngestLimits...)
 
 	if c.Analytics.IngestGate != nil {
@@ -29,14 +30,14 @@ func registerAnalytics(v1 *gin.RouterGroup, auth AuthMiddleware, c Controllers) 
 	post(ingest, "/analytics/ingest/search-click", "analytics.ingest.search_click", g, n, c, c.Analytics.SearchClick)
 	post(ingest, "/analytics/ingest/time-spent", "analytics.ingest.time_spent", g, n, c, c.Analytics.TimeSpent)
 
-	registerAnalyticsReports(v1, auth, c)
+	registerAnalyticsReportRoutes(router, auth, c)
 }
 
-// registerAnalyticsReports binds the admin dashboard reports, read from rollups, the live
-// stream, and rollup exports.
-func registerAnalyticsReports(v1 *gin.RouterGroup, auth AuthMiddleware, c Controllers) {
+// registerAnalyticsReportRoutes mounts the admin dashboard reports (rollups,
+// live stream, exports) as part of RegisterAnalyticsRouter.
+func registerAnalyticsReportRoutes(router *gin.RouterGroup, auth AuthMiddleware, c Controllers) {
 	ag, ar := GroupAdmin, AuthRequired
-	admin := v1.Group("/admin")
+	admin := router.Group("/admin")
 	admin.Use(auth.Required...)
 
 	get(admin, "/analytics/navigation", "admin.analytics.navigation", ag, ar, c, c.Analytics.AdminNavigation)

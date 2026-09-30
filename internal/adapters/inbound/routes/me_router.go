@@ -4,10 +4,12 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
-// registerMe binds authenticated self-service routes and the public profile under /api/v1.
-func registerMe(v1 *gin.RouterGroup, auth AuthMiddleware, c Controllers) {
+// RegisterMeRouter mounts the authenticated self-service routes and the public
+// profile lookup under /api/v1. The public profile accepts an optional token
+// so owners/admins can read private fields.
+func RegisterMeRouter(router *gin.RouterGroup, auth AuthMiddleware, c Controllers) {
 	g := GroupSelfService
-	me := v1.Group("")
+	me := router.Group("")
 	me.Use(auth.Required...)
 
 	get(me, "/me", "me.get", g, AuthRequired, c, c.Users.MeGet)
@@ -31,8 +33,7 @@ func registerMe(v1 *gin.RouterGroup, auth AuthMiddleware, c Controllers) {
 	get(me, "/me/notifications/stream", "me.notifications.stream", g, AuthRequired, c, c.Notifications.Stream)
 	post(me, "/me/notifications/:param1/read", "me.notifications.read", g, AuthRequired, c, c.Notifications.Read)
 
-	// Owners and admins may read private profiles, so the public profile accepts an optional token.
-	optional := v1.Group("")
+	optional := router.Group("")
 	optional.Use(auth.Optional...)
 	get(optional, "/users/:param1", "public.users.profile", GroupPublic, AuthOptional, c, c.Users.PublicProfile)
 }

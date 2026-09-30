@@ -9,6 +9,7 @@ import (
 	"github.com/stretchr/testify/require"
 	"github.com/turahe/blog-api/internal/core/audit/domain"
 	"github.com/turahe/blog-api/internal/core/audit/service"
+	"github.com/turahe/blog-api/internal/shared/pagination"
 )
 
 func TestActivityOwnerSeesCategorizedEntriesOnly(t *testing.T) {
@@ -18,13 +19,16 @@ func TestActivityOwnerSeesCategorizedEntriesOnly(t *testing.T) {
 	activity := service.NewActivity(repo)
 	user := uuid.New()
 
-	page, err := activity.ForOwner(context.Background(), domain.ActivityFilter{UserID: user, PerPage: 500})
+	pr := pagination.PageRequest{Mode: pagination.ModeOffset, Page: 1, Limit: 500, Offset: 0, IncludeTotal: true}
+	filter := domain.ActivityFilter{UserID: user}
+	filter.PageRequest = pr
+	page, err := activity.ForOwner(context.Background(), filter)
 	require.NoError(t, err)
 
 	require.True(t, repo.filter.CategorizedOnly)
 	require.Equal(t, user, repo.filter.UserID)
-	require.Equal(t, 1, page.Page)
-	require.Equal(t, 100, page.PerPage, "per_page is capped")
+	require.Equal(t, 1, page.OffsetPage)
+	require.Equal(t, 100, page.OffsetPerPage, "per_page is capped")
 }
 
 func TestActivityAdminSeesEverything(t *testing.T) {
@@ -32,11 +36,14 @@ func TestActivityAdminSeesEverything(t *testing.T) {
 
 	repo := &memRepo{}
 
-	_, err := service.NewActivity(repo).ForAdmin(context.Background(), domain.ActivityFilter{CategorizedOnly: true})
+	filter := domain.ActivityFilter{CategorizedOnly: true}
+	page, err := service.NewActivity(repo).ForAdmin(context.Background(), filter)
 	require.NoError(t, err)
 
 	require.False(t, repo.filter.CategorizedOnly)
-	require.Equal(t, 20, repo.filter.PerPage)
+	require.Equal(t, 1, repo.filter.PageRequest.Page)
+	require.Equal(t, 20, repo.filter.PageRequest.Limit)
+	require.Equal(t, 20, page.Limit)
 }
 
 func TestActivityRejectsInvertedRange(t *testing.T) {

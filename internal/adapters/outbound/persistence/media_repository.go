@@ -9,12 +9,24 @@ import (
 	"github.com/lib/pq"
 	mediadomain "github.com/turahe/blog-api/internal/core/media/domain"
 	"github.com/turahe/blog-api/internal/core/media/ports"
+	"github.com/turahe/blog-api/internal/shared/pagination"
 	"gorm.io/gorm"
 )
 
 var _ ports.Repository = (*MediaRepository)(nil)
 
 var mediaColumns = withRefs("media_assets", uuidRef("users", "media_assets.uploaded_by", "uploaded_by_uuid"))
+
+var mediaAdminCfg = pagination.CursorConfig{
+	Kind: "media_admin",
+	Sort: []pagination.SortField{
+		{Name: "created_at", Column: "media_assets.created_at", Dir: pagination.Desc, Type: pagination.TypeTime},
+		{Name: "id", Column: "media_assets.id", Dir: pagination.Desc, Type: pagination.TypeInt64},
+	},
+	TTL:            pagination.DefaultTTL,
+	MaxPerPage:     pagination.DefaultMaxPerPage,
+	DefaultPerPage: pagination.DefaultPerPage,
+}
 
 // MediaRepository implements mediaports.Repository.
 type MediaRepository struct {
@@ -117,6 +129,26 @@ func (r *MediaRepository) Update(ctx context.Context, asset mediadomain.MediaAss
 
 // List returns a page of live media assets matching the filter.
 func (r *MediaRepository) List(ctx context.Context, filter mediadomain.ListFilter) (mediadomain.ListResult, error) {
+	pr := filter.PageRequest
+	if pr.Limit <= 0 {
+		pr.Limit = pagination.DefaultPerPage
+	}
+	var cursorFields map[string]any
+	if pr.Mode == pagination.ModeCursor && pr.Cursor != "" {
+		decoded, _, err := pagination.DecodeCursor(mediaAdminCfg, pr.Cursor)
+		if err != nil {
+			return mediadomain.ListResult{}, err
+		}
+		if err := pagination.ValidateCursor(mediaAdminCfg, decoded); err != nil {
+			return mediadomain.ListResult{}, err
+		}
+		cursorFields = decoded
+	}
+	seek, err := pagination.BuildSeek(mediaAdminCfg, pr, cursorFields)
+	if err != nil {
+		return mediadomain.ListResult{}, err
+	}
+
 	q := conn(ctx, r.db).Model(&MediaAssetModel{}).Where("deleted_at IS NULL")
 
 	if filter.Query != "" {
@@ -136,24 +168,82 @@ func (r *MediaRepository) List(ctx context.Context, filter mediadomain.ListFilte
 		q = q.Where("status = ? AND "+mediaUnreferenced, mediadomain.StatusReady)
 	}
 
-	var total int64
-	if err := q.Count(&total).Error; err != nil {
-		return mediadomain.ListResult{}, err
+	if seek.WhereClause != "" {
+		q = q.Where(seek.WhereClause, seek.BindVars...)
+	}
+
+	var out mediadomain.ListResult
+	if pr.IncludeTotal {
+		var total int64
+		if err := q.Count(&total).Error; err != nil {
+			return mediadomain.ListResult{}, err
+		}
+		out.Total = &total
 	}
 
 	var models []MediaAssetModel
-
-	offset := (filter.Page - 1) * filter.PerPage
-	if err := q.Select(mediaColumns).Order("created_at DESC, id DESC").Limit(filter.PerPage).Offset(offset).Find(&models).Error; err != nil {
+	db := q.Select(mediaColumns).Order(seek.OrderClause).Limit(seek.LimitFetch)
+	if pr.Mode == pagination.ModeOffset {
+		db = db.Offset(pr.Offset)
+	}
+	if err := db.Find(&models).Error; err != nil {
 		return mediadomain.ListResult{}, err
 	}
-
+	if seek.ReverseDisplay {
+		for i, j := 0, len(models)-1; i < j; i, j = i+1, j-1 {
+			models[i], models[j] = models[j], models[i]
+		}
+	}
 	items := make([]mediadomain.MediaAsset, 0, len(models))
 	for _, model := range models {
 		items = append(items, mapMediaAsset(model))
 	}
-
-	return mediadomain.ListResult{Items: items, Total: total, Page: filter.Page, PerPage: filter.PerPage}, nil
+	page, hasNext, hasPrev := pagination.TruncatePage(items, pr.Limit, pr.Forward, pr.Cursor != "")
+	out.Items = page
+	out.HasNextPage = hasNext
+	out.HasPreviousPage = hasPrev
+	out.Limit = pr.Limit
+	if pr.Mode == pagination.ModeOffset {
+		out.OffsetPage = pr.Page
+		out.OffsetPerPage = pr.Limit
+	}
+	if len(page) > 0 {
+		if out.HasNextPage {
+			fields := pagination.SortValues[mediadomain.MediaAsset](mediaAdminCfg, page[len(page)-1],
+				func(row mediadomain.MediaAsset, i int) any {
+					switch i {
+					case 0:
+						return row.CreatedAt
+					case 1:
+						return row.ID
+					}
+					return nil
+				})
+			cur, err := pagination.EncodeCursor(mediaAdminCfg, fields)
+			if err != nil {
+				return mediadomain.ListResult{}, err
+			}
+			out.NextCursor = cur
+		}
+		if out.HasPreviousPage {
+			fields := pagination.SortValues[mediadomain.MediaAsset](mediaAdminCfg, page[0],
+				func(row mediadomain.MediaAsset, i int) any {
+					switch i {
+					case 0:
+						return row.CreatedAt
+					case 1:
+						return row.ID
+					}
+					return nil
+				})
+			cur, err := pagination.EncodeCursor(mediaAdminCfg, fields)
+			if err != nil {
+				return mediadomain.ListResult{}, err
+			}
+			out.PreviousCursor = cur
+		}
+	}
+	return out, nil
 }
 
 // SoftDelete marks the asset deleted at deletedAt.

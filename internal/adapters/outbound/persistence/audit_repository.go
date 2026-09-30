@@ -9,6 +9,7 @@ import (
 
 	"github.com/google/uuid"
 	auditdomain "github.com/turahe/blog-api/internal/core/audit/domain"
+	"github.com/turahe/blog-api/internal/shared/pagination"
 	"gorm.io/gorm"
 	"gorm.io/gorm/clause"
 )
@@ -48,6 +49,17 @@ func (AuditLogModel) TableName() string { return "audit_logs" }
 
 var auditLogColumns = withRefs("audit_logs", uuidRef("users", "audit_logs.actor_id", "actor_uuid"),
 	uuidRef("users", "audit_logs.impersonator_id", "impersonator_uuid"))
+
+var activityListCfg = pagination.CursorConfig{
+	Kind: "activity_logs",
+	Sort: []pagination.SortField{
+		{Name: "occurred_at", Column: "audit_logs.occurred_at", Dir: pagination.Desc, Type: pagination.TypeTime},
+		{Name: "id", Column: "audit_logs.id", Dir: pagination.Desc, Type: pagination.TypeInt64},
+	},
+	TTL:            pagination.DefaultTTL,
+	MaxPerPage:     pagination.DefaultMaxPerPage,
+	DefaultPerPage: pagination.DefaultPerPage,
+}
 
 // AuditRepository implements auditports.Repository.
 type AuditRepository struct {
@@ -132,6 +144,27 @@ func (r *AuditRepository) actorIDs(db *gorm.DB, entries []auditdomain.Entry) (ma
 
 // Activity lists entries the user performed or that target the user's account, newest first.
 func (r *AuditRepository) Activity(ctx context.Context, filter auditdomain.ActivityFilter) (auditdomain.ActivityPage, error) {
+	pr := filter.PageRequest
+	if pr.Limit <= 0 {
+		pr.Limit = activityListCfg.DefaultPerPage
+	}
+
+	var cursorFields map[string]any
+	if pr.Mode == pagination.ModeCursor && pr.Cursor != "" {
+		decoded, _, err := pagination.DecodeCursor(activityListCfg, pr.Cursor)
+		if err != nil {
+			return auditdomain.ActivityPage{}, err
+		}
+		if err := pagination.ValidateCursor(activityListCfg, decoded); err != nil {
+			return auditdomain.ActivityPage{}, err
+		}
+		cursorFields = decoded
+	}
+	seek, err := pagination.BuildSeek(activityListCfg, pr, cursorFields)
+	if err != nil {
+		return auditdomain.ActivityPage{}, err
+	}
+
 	query := conn(ctx, r.db).Model(&AuditLogModel{}).
 		Where("(audit_logs.actor_id = "+idOf("users")+" OR (audit_logs.resource_type = ? AND audit_logs.resource_id = ?))",
 			filter.UserID, auditdomain.ResourceUser, filter.UserID)
@@ -152,19 +185,32 @@ func (r *AuditRepository) Activity(ctx context.Context, filter auditdomain.Activ
 		query = query.Where("audit_logs.occurred_at <= ?", *filter.To)
 	}
 
-	var total int64
-	if err := query.Count(&total).Error; err != nil {
-		return auditdomain.ActivityPage{}, fmt.Errorf("count activity: %w", err)
+	if seek.WhereClause != "" {
+		query = query.Where(seek.WhereClause, seek.BindVars...)
+	}
+
+	var out auditdomain.ActivityPage
+	if pr.IncludeTotal {
+		var total int64
+		if err := query.Count(&total).Error; err != nil {
+			return auditdomain.ActivityPage{}, fmt.Errorf("count activity: %w", err)
+		}
+		out.Total = &total
 	}
 
 	var models []AuditLogModel
-
-	err := query.Select(auditLogColumns).
-		Order("audit_logs.occurred_at DESC, audit_logs.id DESC").
-		Offset((filter.Page - 1) * filter.PerPage).Limit(filter.PerPage).
-		Find(&models).Error
-	if err != nil {
+	db := query.Select(auditLogColumns).Order(seek.OrderClause).Limit(seek.LimitFetch)
+	if pr.Mode == pagination.ModeOffset {
+		db = db.Offset(pr.Offset)
+	}
+	if err := db.Find(&models).Error; err != nil {
 		return auditdomain.ActivityPage{}, fmt.Errorf("list activity: %w", err)
+	}
+
+	if seek.ReverseDisplay {
+		for i, j := 0, len(models)-1; i < j; i, j = i+1, j-1 {
+			models[i], models[j] = models[j], models[i]
+		}
 	}
 
 	items := make([]auditdomain.Entry, 0, len(models))
@@ -172,7 +218,67 @@ func (r *AuditRepository) Activity(ctx context.Context, filter auditdomain.Activ
 		items = append(items, auditEntry(model))
 	}
 
-	return auditdomain.ActivityPage{Items: items, Page: filter.Page, PerPage: filter.PerPage, Total: total}, nil
+	page, hasNext, hasPrev := pagination.TruncatePage(items, pr.Limit, pr.Forward, pr.Cursor != "")
+	pageModels := computePageModels(models, len(page), pr.Forward, len(items) > pr.Limit)
+
+	out.Items = page
+	out.HasNextPage = hasNext
+	out.HasPreviousPage = hasPrev
+	out.Limit = pr.Limit
+	if pr.Mode == pagination.ModeOffset {
+		out.OffsetPage = pr.Page
+		out.OffsetPerPage = pr.Limit
+	}
+	if len(page) > 0 {
+		if out.HasNextPage {
+			lastModel := pageModels[len(pageModels)-1]
+			fields := pagination.SortValues[auditdomain.Entry](activityListCfg, page[len(page)-1],
+				func(row auditdomain.Entry, i int) any {
+					switch i {
+					case 0:
+						return row.OccurredAt
+					case 1:
+						return lastModel.ID
+					}
+					return nil
+				})
+			cur, err := pagination.EncodeCursor(activityListCfg, fields)
+			if err != nil {
+				return auditdomain.ActivityPage{}, err
+			}
+			out.NextCursor = cur
+		}
+		if out.HasPreviousPage {
+			firstModel := pageModels[0]
+			fields := pagination.SortValues[auditdomain.Entry](activityListCfg, page[0],
+				func(row auditdomain.Entry, i int) any {
+					switch i {
+					case 0:
+						return row.OccurredAt
+					case 1:
+						return firstModel.ID
+					}
+					return nil
+				})
+			cur, err := pagination.EncodeCursor(activityListCfg, fields)
+			if err != nil {
+				return auditdomain.ActivityPage{}, err
+			}
+			out.PreviousCursor = cur
+		}
+	}
+
+	return out, nil
+}
+
+func computePageModels(models []AuditLogModel, pageLen int, forward bool, excess bool) []AuditLogModel {
+	if !excess {
+		return models
+	}
+	if forward {
+		return models[:pageLen]
+	}
+	return models[1 : pageLen+1]
 }
 
 // Prune deletes entries that occurred before cutoff in bounded batches.

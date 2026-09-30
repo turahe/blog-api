@@ -12,6 +12,7 @@ import (
 	"unicode/utf8"
 
 	"github.com/google/uuid"
+	"github.com/turahe/blog-api/internal/shared/pagination"
 )
 
 // Permissions checked by the admin routes. Subscribing and managing one's own subscription
@@ -193,6 +194,7 @@ type Membership struct {
 
 // Subscriber is one email address and its consent state.
 type Subscriber struct {
+	ID                  int64
 	UUID                uuid.UUID
 	Email               string
 	DisplayName         string
@@ -385,7 +387,12 @@ type Token struct {
 }
 
 // SubscriberFilter selects subscribers for the admin list.
+// Page and PerPage are kept for CSV export and older call sites; they shadow
+// the promoted PageRequest.Page field. The service layer converts these via
+// ParseLegacy into the embedded PageRequest when PageRequest.Limit is still
+// zero (uninitialized by a handler).
 type SubscriberFilter struct {
+	pagination.PageRequest
 	Status  Status
 	List    string
 	Query   string
@@ -394,12 +401,7 @@ type SubscriberFilter struct {
 }
 
 // SubscriberPage is one page of subscribers.
-type SubscriberPage struct {
-	Items   []Subscriber
-	Page    int
-	PerPage int
-	Total   int64
-}
+type SubscriberPage = pagination.PageResult[Subscriber]
 
 // Config holds the non-secret sending settings stored in the database.
 type Config struct {

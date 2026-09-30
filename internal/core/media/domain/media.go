@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/turahe/blog-api/internal/shared/pagination"
 )
 
 // ErrNotFound means the media asset does not exist or was deleted.
@@ -61,12 +62,11 @@ type PresignResult struct {
 // category, post cover, post attachment, or SEO image references; links inside post bodies
 // are not tracked, so an unused asset may still be linked from Markdown.
 type ListFilter struct {
-	Page    int
-	PerPage int
-	Query   string
-	Disk    string
-	Status  string
-	Unused  bool
+	pagination.PageRequest
+	Query  string
+	Disk   string
+	Status string
+	Unused bool
 }
 
 // UsageFilter narrows a storage usage report to one uploader.
@@ -110,12 +110,7 @@ type PurgeResult struct {
 }
 
 // ListResult is a page of media assets.
-type ListResult struct {
-	Items   []MediaAsset
-	Total   int64
-	Page    int
-	PerPage int
-}
+type ListResult = pagination.PageResult[MediaAsset]
 
 // Post media attachment kinds.
 const (

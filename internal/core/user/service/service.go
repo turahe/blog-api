@@ -7,6 +7,7 @@ import (
 	"github.com/google/uuid"
 	userdomain "github.com/turahe/blog-api/internal/core/user/domain"
 	"github.com/turahe/blog-api/internal/core/user/ports"
+	"github.com/turahe/blog-api/internal/shared/pagination"
 )
 
 // UserService implements ports.Service.
@@ -25,14 +26,18 @@ func (s *UserService) GetByID(ctx context.Context, id uuid.UUID) (userdomain.Use
 }
 
 // List returns a page of users.
-func (s *UserService) List(ctx context.Context, page, perPage int) ([]userdomain.User, int64, error) {
-	if page < 1 {
-		page = 1
+func (s *UserService) List(ctx context.Context, filter userdomain.ListFilter) (userdomain.ListResult, error) {
+	pr := &filter.PageRequest
+	if pr.Limit < 1 || pr.Limit > pagination.DefaultMaxPerPage {
+		pr.Limit = pagination.DefaultPerPage
+	}
+	if pr.Page < 1 {
+		pr.Page = 1
+	}
+	if pr.Mode == pagination.ModeOffset {
+		pr.Offset = (pr.Page - 1) * pr.Limit
+		pr.Forward = true
 	}
 
-	if perPage < 1 || perPage > 100 {
-		perPage = 20
-	}
-
-	return s.repo.List(ctx, page, perPage)
+	return s.repo.List(ctx, filter)
 }

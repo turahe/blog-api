@@ -75,3 +75,24 @@ func (r renderingRepository) List(ctx context.Context, filter commentdomain.List
 
 	return result, err
 }
+
+func (r renderingRepository) ListPublic(ctx context.Context, filter commentdomain.ListFilter) (commentdomain.ListResult, error) {
+	result, err := r.Repository.ListPublic(ctx, filter)
+	result.Items = r.fillAll(result.Items)
+
+	return result, err
+}
+
+func (r renderingRepository) ListForMe(ctx context.Context, filter commentdomain.ListFilter) (commentdomain.ListResult, error) {
+	result, err := r.Repository.ListForMe(ctx, filter)
+	result.Items = r.fillAll(result.Items)
+
+	return result, err
+}
+
+func (r renderingRepository) ListAdmin(ctx context.Context, filter commentdomain.ListFilter) (commentdomain.ListResult, error) {
+	result, err := r.Repository.ListAdmin(ctx, filter)
+	result.Items = r.fillAll(result.Items)
+
+	return result, err
+}

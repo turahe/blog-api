@@ -151,15 +151,68 @@ func TestCommentRoutesUseDeclaredAuthModes(t *testing.T) {
 	}
 }
 
-func TestRegisterUsesStubWhenHandlerNil(t *testing.T) {
+func TestExportedRouterFunctionsExistAndMount(t *testing.T) {
 	t.Parallel()
-
 	gin.SetMode(gin.TestMode)
 
-	router := gin.New()
-	routes.Register(router, routes.Controllers{Stub: routes.NotImplemented}, routes.AuthMiddleware{})
+	noop := func(c *gin.Context) {}
+	c := routes.Controllers{
+		Stub:   routes.NotImplemented,
+		Health: routes.Health{Live: noop, Ready: noop, Version: noop},
+		Auth: routes.Auth{
+			Login: noop, Register: noop, VerifyEmail: noop, Refresh: noop,
+			PasswordForgot: noop, PasswordResetValidity: noop, PasswordReset: noop,
+			OAuthStart: noop, OAuthCallback: noop, TwoFactorChallenge: noop,
+			Logout: noop, MePasswordUpdate: noop, MeTwoFactorGet: noop,
+			MeTwoFactorDisable: noop, MeTwoFactorSetup: noop, MeTwoFactorConfirm: noop,
+			MeTwoFactorBackupCodes: noop, AdminLogin: noop,
+		},
+		Users: routes.Users{MeGet: noop, PublicProfile: noop},
+	}
+	auth := routes.AuthMiddleware{
+		Required: gin.HandlersChain{func(c *gin.Context) { c.Next() }},
+		Optional: gin.HandlersChain{func(c *gin.Context) { c.Next() }},
+	}
 
-	recorder := httptest.NewRecorder()
-	router.ServeHTTP(recorder, httptest.NewRequestWithContext(t.Context(), nethttp.MethodGet, "/api/v1/media/m/transform", nil))
-	require.Equal(t, nethttp.StatusNotImplemented, recorder.Code)
+	t.Run("RegisterCommonRouter mounts /health on a caller-owned group", func(t *testing.T) {
+		t.Parallel()
+		engine := gin.New()
+		routes.RegisterCommonRouter(engine.Group("/prefix"), c)
+		info := engine.Routes()
+		got := map[string]bool{}
+		for _, r := range info {
+			got[r.Method+" "+r.Path] = true
+		}
+		require.True(t, got["GET /prefix/health/live"], "missing /prefix/health/live")
+		require.True(t, got["GET /prefix/health/ready"], "missing /prefix/health/ready")
+		require.True(t, got["GET /prefix/health/version"], "missing /prefix/health/version")
+	})
+
+	t.Run("RegisterUserAuthRouter mounts /auth/login and /auth/logout on caller group", func(t *testing.T) {
+		t.Parallel()
+		engine := gin.New()
+		routes.RegisterUserAuthRouter(engine.Group("/v1"), auth, c)
+		info := engine.Routes()
+		got := map[string]bool{}
+		for _, r := range info {
+			got[r.Method+" "+r.Path] = true
+		}
+		require.True(t, got["POST /v1/auth/login"], "missing /v1/auth/login")
+		require.True(t, got["POST /v1/auth/logout"], "missing /v1/auth/logout (required auth)")
+	})
+
+	t.Run("RegisterAdminAuthRouter mounts /admin/auth/login and /admin/posts on caller group", func(t *testing.T) {
+		t.Parallel()
+		c2 := c
+		c2.Posts = routes.Posts{AdminCreate: noop}
+		engine := gin.New()
+		routes.RegisterAdminAuthRouter(engine.Group(""), auth, c2)
+		info := engine.Routes()
+		got := map[string]bool{}
+		for _, r := range info {
+			got[r.Method+" "+r.Path] = true
+		}
+		require.True(t, got["POST /admin/auth/login"], "missing /admin/auth/login")
+		require.True(t, got["POST /admin/posts"], "missing /admin/posts (admin create)")
+	})
 }

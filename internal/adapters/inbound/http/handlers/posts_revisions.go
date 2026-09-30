@@ -14,7 +14,21 @@ import (
 	"github.com/turahe/blog-api/internal/adapters/inbound/http/responses"
 	postdomain "github.com/turahe/blog-api/internal/core/post/domain"
 	postservice "github.com/turahe/blog-api/internal/core/post/service"
+	"github.com/turahe/blog-api/internal/shared/pagination"
 )
+
+// postRevisionsCfg declares the pagination contract used by post revisions list.
+// Duplicated here (from persistence) rather than exported from the
+// persistence package to keep HTTP wiring free of repository-specific imports.
+var postRevisionsCfg = pagination.CursorConfig{
+	Kind: "post_revisions",
+	Sort: []pagination.SortField{
+		{Name: "revision_number", Dir: pagination.Desc, Type: pagination.TypeInt64},
+	},
+	TTL:            pagination.DefaultTTL,
+	MaxPerPage:     pagination.DefaultMaxPerPage,
+	DefaultPerPage: pagination.DefaultPerPage,
+}
 
 type postRevisionsAPI interface {
 	ListRevisions(ctx context.Context, viewerID uuid.UUID, unrestricted bool, filter postdomain.RevisionFilter) (postdomain.RevisionPage, error)
@@ -29,19 +43,25 @@ type allPosts func(c *gin.Context) bool
 //
 //	@Summary		List post revisions
 //	@Description	Newest first. Authors see only their own posts' history; editors and admins (post.revisions.view_all) see every post's.
+//	@Description	Supports both legacy offset pagination (page/perPage) and cursor-based keyset pagination (after/before/limit).
 //	@Tags			admin
 //	@Produce		json
-//	@Param			param1		path		string	true	"post UUID"
-//	@Param			page		query		int		false	"page (default 1)"
-//	@Param			perPage		query		int		false	"page size (default 20, max 100)"
-//	@Param			authorId	query		string	false	"only revisions by this user UUID"
-//	@Param			fromDate	query		string	false	"RFC 3339 time or YYYY-MM-DD (inclusive)"
-//	@Param			toDate		query		string	false	"RFC 3339 time or YYYY-MM-DD (inclusive, whole day)"
-//	@Param			includeDiff	query		bool	false	"include per-field diffs (default true)"
-//	@Success		200			{object}	responses.Envelope
-//	@Failure		400			{object}	responses.Envelope
-//	@Failure		403			{object}	responses.Envelope
-//	@Failure		404			{object}	responses.Envelope
+//	@Param			param1			path		string	true	"post UUID"
+//	@Param			page			query		int		false	"page (legacy offset mode)"						default(1)
+//	@Param			perPage			query		int		false	"per page (legacy offset mode, alias limit)"		default(20)
+//	@Param			limit			query		int		false	"page size (cursor or offset)"					default(20)
+//	@Param			after			query		string	false	"opaque cursor: return items after this point"
+//	@Param			before			query		string	false	"opaque cursor: return items before this point"
+//	@Param			includeTotal	query		bool	false	"when false, skip COUNT(*) to reduce DB load"	default(false)
+//	@Param			authorId		query		string	false	"only revisions by this user UUID"
+//	@Param			fromDate		query		string	false	"RFC 3339 time or YYYY-MM-DD (inclusive)"
+//	@Param			toDate			query		string	false	"RFC 3339 time or YYYY-MM-DD (inclusive, whole day)"
+//	@Param			includeDiff		query		bool	false	"include per-field diffs (default true)"
+//	@Success		200				{object}	responses.Envelope
+//	@Failure		400				{object}	responses.Envelope
+//	@Failure		401				{object}	responses.Envelope
+//	@Failure		403				{object}	responses.Envelope
+//	@Failure		404				{object}	responses.Envelope
 //	@Security		Bearer
 //	@Router			/api/v1/admin/posts/{param1}/revisions [get]
 func adminListPostRevisionsHandler(posts postRevisionsAPI, all allPosts) gin.HandlerFunc {
@@ -57,7 +77,13 @@ func adminListPostRevisionsHandler(posts postRevisionsAPI, all allPosts) gin.Han
 			return
 		}
 
-		filter, includeDiff, ok := revisionFilter(c, postID)
+		pr, err := pagination.ParseRequest(c, postRevisionsCfg)
+		if err != nil {
+			responses.Failure(c, nethttp.StatusBadRequest, pagination.ErrorCode(err), pagination.ErrorCause(err))
+			return
+		}
+
+		filter, includeDiff, ok := revisionFilter(c, postID, pr)
 		if !ok {
 			return
 		}
@@ -72,12 +98,10 @@ func adminListPostRevisionsHandler(posts postRevisionsAPI, all allPosts) gin.Han
 			items = append(items, responses.PostRevision(rev, includeDiff, false))
 		}
 
-		responses.SuccessPaginatedFor(c, nethttp.StatusOK, responses.PageOpts{
+		responses.SuccessPaginatedResult[postdomain.Revision](c, nethttp.StatusOK, responses.CursorPageOpts[postdomain.Revision]{
 			Service: responses.ServicePosts,
+			Result:  page,
 			Data:    items,
-			Page:    page.Page,
-			PerPage: page.PerPage,
-			Total:   page.Total,
 		})
 	}
 }
@@ -189,9 +213,9 @@ func revisionTarget(c *gin.Context) (uuid.UUID, uuid.UUID, postdomain.RevisionRe
 	return userID, postID, ref, true
 }
 
-func revisionFilter(c *gin.Context, postID uuid.UUID) (postdomain.RevisionFilter, bool, bool) {
+func revisionFilter(c *gin.Context, postID uuid.UUID, pr pagination.PageRequest) (postdomain.RevisionFilter, bool, bool) {
 	filter := postdomain.RevisionFilter{PostUUID: postID}
-	filter.Page, filter.PerPage = pageParams(c)
+	filter.PageRequest = pr
 
 	fail := func(message string) (postdomain.RevisionFilter, bool, bool) {
 		responses.Failure(c, nethttp.StatusBadRequest, responses.ErrorCodeValidation, message)

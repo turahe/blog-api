@@ -12,14 +12,26 @@ import (
 	"github.com/turahe/blog-api/internal/adapters/inbound/http/responses"
 	"github.com/turahe/blog-api/internal/adapters/inbound/routes"
 	notificationdomain "github.com/turahe/blog-api/internal/core/notification/domain"
+	"github.com/turahe/blog-api/internal/shared/pagination"
 )
 
 // headerUnreadCount carries the caller's unread total on inbox list responses.
 const headerUnreadCount = "X-Unread-Count"
 
 type notificationAPI interface {
-	List(ctx context.Context, userID uuid.UUID, unreadOnly bool, page, perPage int) (notificationdomain.ListResult, error)
+	List(ctx context.Context, userID uuid.UUID, unreadOnly bool, pr pagination.PageRequest) (notificationdomain.ListResult, error)
 	MarkRead(ctx context.Context, userID, id uuid.UUID) (notificationdomain.Notification, error)
+}
+
+var notificationsCfg = pagination.CursorConfig{
+	Kind: "notifications_me",
+	Sort: []pagination.SortField{
+		{Name: "created_at", Column: "n.created_at", Dir: pagination.Desc, Type: pagination.TypeTime},
+		{Name: "id", Column: "n.id", Dir: pagination.Desc, Type: pagination.TypeInt64},
+	},
+	TTL:            pagination.DefaultTTL,
+	MaxPerPage:     pagination.DefaultMaxPerPage,
+	DefaultPerPage: pagination.DefaultPerPage,
 }
 
 func notificationControllers(deps Deps) routes.Notifications {
@@ -40,13 +52,17 @@ func notificationControllers(deps Deps) routes.Notifications {
 //	@Description	In-app notices (replies, moderation outcomes, publications), newest first. The X-Unread-Count header holds the unread total across all pages.
 //	@Tags			me
 //	@Produce		json
-//	@Param			unread	query		bool	false	"only unread notifications"
-//	@Param			page	query		int		false	"page"		default(1)
-//	@Param			perPage	query		int		false	"per page"	default(20)
-//	@Success		200		{object}	responses.Envelope
-//	@Header			200		{integer}	X-Unread-Count	"unread notifications"
-//	@Failure		400		{object}	responses.Envelope
-//	@Failure		401		{object}	responses.Envelope
+//	@Param			unread		 query	bool	false	"only unread notifications"
+//	@Param			after		 query	string	false	"opaque forward cursor"
+//	@Param			before		 query	string	false	"opaque backward cursor"
+//	@Param			limit		 query	int		false	"items per page (alias: perPage)"	default(20)
+//	@Param			perPage		 query	int		false	"items per page"					default(20)
+//	@Param			includeTotal query	bool	false	"include total item count (slow)"	default(false)
+//	@Param			page		 query	int		false	"page number (legacy offset mode)"	default(1)
+//	@Success		200			{object}	responses.Envelope
+//	@Header			200			{integer}	X-Unread-Count	"unread notifications"
+//	@Failure		400			{object}	responses.Envelope
+//	@Failure		401			{object}	responses.Envelope
 //	@Security		Bearer
 //	@Router			/api/v1/me/notifications [get]
 func meNotificationsListHandler(inbox notificationAPI) gin.HandlerFunc {
@@ -66,9 +82,13 @@ func meNotificationsListHandler(inbox notificationAPI) gin.HandlerFunc {
 			}
 		}
 
-		page, perPage := pageParams(c)
+		pr, err := pagination.ParseRequest(c, notificationsCfg)
+		if err != nil {
+			responses.Failure(c, nethttp.StatusBadRequest, pagination.ErrorCode(err), pagination.ErrorCause(err))
+			return
+		}
 
-		result, err := inbox.List(c.Request.Context(), userID, unreadOnly, page, perPage)
+		result, err := inbox.List(c.Request.Context(), userID, unreadOnly, pr)
 		if err != nil {
 			failNotificationInternal(c, err)
 			return
@@ -79,13 +99,11 @@ func meNotificationsListHandler(inbox notificationAPI) gin.HandlerFunc {
 			items = append(items, responses.Notification(item))
 		}
 
-		c.Header(headerUnreadCount, strconv.FormatInt(result.Unread, 10))
-		responses.SuccessPaginatedFor(c, nethttp.StatusOK, responses.PageOpts{
+		c.Header(headerUnreadCount, strconv.FormatInt(notificationdomain.UnreadTotalFrom(result), 10))
+		responses.SuccessPaginatedResult[notificationdomain.Notification](c, nethttp.StatusOK, responses.CursorPageOpts[notificationdomain.Notification]{
 			Service: responses.ServiceNotifications,
+			Result:  result,
 			Data:    items,
-			Page:    result.Page,
-			PerPage: result.PerPage,
-			Total:   result.Total,
 		})
 	}
 }

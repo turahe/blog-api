@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/turahe/blog-api/internal/shared/pagination"
 )
 
 // ErrNotFound is returned by user lookups that match no account.
@@ -47,3 +48,9 @@ type User struct {
 func (u User) IsActive() bool {
 	return u.Status == StatusActive && u.DeletedAt == nil
 }
+
+type ListFilter struct {
+	pagination.PageRequest
+}
+
+type ListResult = pagination.PageResult[User]

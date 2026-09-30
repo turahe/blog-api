@@ -10,8 +10,20 @@ import (
 	"github.com/google/uuid"
 	authdomain "github.com/turahe/blog-api/internal/core/auth/domain"
 	userdomain "github.com/turahe/blog-api/internal/core/user/domain"
+	"github.com/turahe/blog-api/internal/shared/pagination"
 	"gorm.io/gorm"
 )
+
+var usersAdminCfg = pagination.CursorConfig{
+	Kind: "users_admin",
+	Sort: []pagination.SortField{
+		{Name: "created_at", Column: "created_at", Dir: pagination.Desc, Type: pagination.TypeTime},
+		{Name: "id", Column: "id", Dir: pagination.Desc, Type: pagination.TypeInt64},
+	},
+	TTL:            pagination.DefaultTTL,
+	MaxPerPage:     pagination.DefaultMaxPerPage,
+	DefaultPerPage: pagination.DefaultPerPage,
+}
 
 // UserRepository implements the user and auth user repository ports.
 type UserRepository struct {
@@ -119,27 +131,104 @@ func (r *UserRepository) UpdateEmail(ctx context.Context, id uuid.UUID, email st
 }
 
 // List returns a page of users.
-func (r *UserRepository) List(ctx context.Context, page, perPage int) ([]userdomain.User, int64, error) {
-	q := conn(ctx, r.db).Model(&UserModel{}).Where("deleted_at IS NULL")
+func (r *UserRepository) List(ctx context.Context, filter userdomain.ListFilter) (userdomain.ListResult, error) {
+	pr := filter.PageRequest
+	if pr.Limit <= 0 {
+		pr.Limit = pagination.DefaultPerPage
+	}
+	var cursorFields map[string]any
+	if pr.Mode == pagination.ModeCursor && pr.Cursor != "" {
+		decoded, _, err := pagination.DecodeCursor(usersAdminCfg, pr.Cursor)
+		if err != nil {
+			return userdomain.ListResult{}, err
+		}
+		if err := pagination.ValidateCursor(usersAdminCfg, decoded); err != nil {
+			return userdomain.ListResult{}, err
+		}
+		cursorFields = decoded
+	}
+	seek, err := pagination.BuildSeek(usersAdminCfg, pr, cursorFields)
+	if err != nil {
+		return userdomain.ListResult{}, err
+	}
 
-	var total int64
-	if err := q.Count(&total).Error; err != nil {
-		return nil, 0, err
+	q := conn(ctx, r.db).Model(&UserModel{}).Where("deleted_at IS NULL")
+	if seek.WhereClause != "" {
+		q = q.Where(seek.WhereClause, seek.BindVars...)
+	}
+
+	var out userdomain.ListResult
+	if pr.IncludeTotal {
+		var total int64
+		if err := q.Count(&total).Error; err != nil {
+			return userdomain.ListResult{}, err
+		}
+		out.Total = &total
 	}
 
 	var models []UserModel
-
-	offset := (page - 1) * perPage
-	if err := q.Order("created_at DESC, id DESC").Limit(perPage).Offset(offset).Find(&models).Error; err != nil {
-		return nil, 0, err
+	db := q.Order(seek.OrderClause).Limit(seek.LimitFetch)
+	if pr.Mode == pagination.ModeOffset {
+		db = db.Offset(pr.Offset)
 	}
-
-	users := make([]userdomain.User, 0, len(models))
+	if err := db.Find(&models).Error; err != nil {
+		return userdomain.ListResult{}, err
+	}
+	if seek.ReverseDisplay {
+		for i, j := 0, len(models)-1; i < j; i, j = i+1, j-1 {
+			models[i], models[j] = models[j], models[i]
+		}
+	}
+	items := make([]userdomain.User, 0, len(models))
 	for _, model := range models {
-		users = append(users, mapUser(model))
+		items = append(items, mapUser(model))
 	}
-
-	return users, total, nil
+	page, hasNext, hasPrev := pagination.TruncatePage(items, pr.Limit, pr.Forward, pr.Cursor != "")
+	out.Items = page
+	out.HasNextPage = hasNext
+	out.HasPreviousPage = hasPrev
+	out.Limit = pr.Limit
+	if pr.Mode == pagination.ModeOffset {
+		out.OffsetPage = pr.Page
+		out.OffsetPerPage = pr.Limit
+	}
+	if len(page) > 0 {
+		if out.HasNextPage {
+			fields := pagination.SortValues[userdomain.User](usersAdminCfg, page[len(page)-1],
+				func(row userdomain.User, i int) any {
+					switch i {
+					case 0:
+						return row.CreatedAt
+					case 1:
+						return row.ID
+					}
+					return nil
+				})
+			cur, err := pagination.EncodeCursor(usersAdminCfg, fields)
+			if err != nil {
+				return userdomain.ListResult{}, err
+			}
+			out.NextCursor = cur
+		}
+		if out.HasPreviousPage {
+			fields := pagination.SortValues[userdomain.User](usersAdminCfg, page[0],
+				func(row userdomain.User, i int) any {
+					switch i {
+					case 0:
+						return row.CreatedAt
+					case 1:
+						return row.ID
+					}
+					return nil
+				})
+			cur, err := pagination.EncodeCursor(usersAdminCfg, fields)
+			if err != nil {
+				return userdomain.ListResult{}, err
+			}
+			out.PreviousCursor = cur
+		}
+	}
+	return out, nil
 }
 
 // ListRoleNames returns the names of the roles assigned to the user.

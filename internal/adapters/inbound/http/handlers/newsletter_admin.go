@@ -14,6 +14,7 @@ import (
 	"github.com/turahe/blog-api/internal/adapters/inbound/routes"
 	nldomain "github.com/turahe/blog-api/internal/core/newsletter/domain"
 	nlservice "github.com/turahe/blog-api/internal/core/newsletter/service"
+	"github.com/turahe/blog-api/internal/shared/pagination"
 )
 
 // Subscriber CSV export paging.
@@ -21,6 +22,29 @@ const (
 	newsletterExportPage    = 100
 	newsletterExportMaxRows = 50000
 )
+
+var newsletterSubscribersCfg = pagination.CursorConfig{
+	Kind: "newsletter_subscribers_admin",
+	Sort: []pagination.SortField{
+		{Name: "subscribed_at", Column: "s.created_at", Dir: pagination.Desc, Type: pagination.TypeTime},
+		{Name: "email", Column: "s.normalized_email", Dir: pagination.Asc, Type: pagination.TypeString},
+		{Name: "id", Column: "s.id", Dir: pagination.Desc, Type: pagination.TypeInt64},
+	},
+	TTL:            pagination.DefaultTTL,
+	MaxPerPage:     pagination.DefaultMaxPerPage,
+	DefaultPerPage: pagination.DefaultPerPage,
+}
+
+var newsletterIssuesCfg = pagination.CursorConfig{
+	Kind: "newsletter_issues_admin",
+	Sort: []pagination.SortField{
+		{Name: "published_at", Column: "i.created_at", Dir: pagination.Desc, Type: pagination.TypeTime},
+		{Name: "id", Column: "i.id", Dir: pagination.Desc, Type: pagination.TypeInt64},
+	},
+	TTL:            pagination.DefaultTTL,
+	MaxPerPage:     pagination.DefaultMaxPerPage,
+	DefaultPerPage: pagination.DefaultPerPage,
+}
 
 type newsletterAdminAPI interface {
 	ListSubscribers(ctx context.Context, filter nldomain.SubscriberFilter) (nldomain.SubscriberPage, error)
@@ -61,16 +85,20 @@ func wireNewsletterAdmin(c *routes.Newsletter, deps Deps, nl newsletterAdminAPI)
 //	@Tags			admin
 //	@Produce		json
 //	@Produce		text/csv
-//	@Param			status	query		string	false	"pending_confirm, active, unsubscribed, bounced, complained, erased"
-//	@Param			list	query		string	false	"list slug"
-//	@Param			q		query		string	false	"email prefix"
-//	@Param			format	query		string	false	"json or csv"	Enums(json, csv)	default(json)
-//	@Param			page	query		int		false	"page"			default(1)
-//	@Param			perPage	query		int		false	"per page"		default(20)
-//	@Success		200		{object}	responses.Envelope
-//	@Failure		400		{object}	responses.Envelope
-//	@Failure		401		{object}	responses.Envelope
-//	@Failure		403		{object}	responses.Envelope
+//	@Param			status		query		string	false	"pending_confirm, active, unsubscribed, bounced, complained, erased"
+//	@Param			list		query		string	false	"list slug"
+//	@Param			q			query		string	false	"email prefix"
+//	@Param			format		query		string	false	"json or csv"	Enums(json, csv)	default(json)
+//	@Param			after		query		string	false	"opaque forward cursor"
+//	@Param			before		query		string	false	"opaque backward cursor"
+//	@Param			limit		query		int		false	"items per page (alias: perPage)"	default(20)
+//	@Param			perPage		query		int		false	"items per page"					default(20)
+//	@Param			includeTotal query	bool	false	"include total item count (slow)"	default(false)
+//	@Param			page		query		int		false	"page number (legacy offset mode)"	default(1)
+//	@Success		200			{object}	responses.Envelope
+//	@Failure		400			{object}	responses.Envelope
+//	@Failure		401			{object}	responses.Envelope
+//	@Failure		403			{object}	responses.Envelope
 //	@Security		Bearer
 //	@Router			/api/v1/admin/newsletter/subscribers [get]
 func adminNewsletterSubscribersHandler(nl newsletterAdminAPI, canExport func(*gin.Context) bool) gin.HandlerFunc {
@@ -100,7 +128,12 @@ func adminNewsletterSubscribersHandler(nl newsletterAdminAPI, canExport func(*gi
 			return
 		}
 
-		filter.Page, filter.PerPage = pageParams(c)
+		pr, err := pagination.ParseRequest(c, newsletterSubscribersCfg)
+		if err != nil {
+			responses.Failure(c, nethttp.StatusBadRequest, pagination.ErrorCode(err), pagination.ErrorCause(err))
+			return
+		}
+		filter.PageRequest = pr
 
 		page, err := nl.ListSubscribers(c.Request.Context(), filter)
 		if writeNewsletterError(c, err) {
@@ -112,8 +145,10 @@ func adminNewsletterSubscribersHandler(nl newsletterAdminAPI, canExport func(*gi
 			items = append(items, responses.NewsletterSubscriber(sub))
 		}
 
-		responses.SuccessPaginatedFor(c, nethttp.StatusOK, responses.PageOpts{
-			Service: responses.ServiceNewsletter, Data: items, Page: page.Page, PerPage: page.PerPage, Total: page.Total,
+		responses.SuccessPaginatedResult[nldomain.Subscriber](c, nethttp.StatusOK, responses.CursorPageOpts[nldomain.Subscriber]{
+			Service: responses.ServiceNewsletter,
+			Result:  page,
+			Data:    items,
 		})
 	}
 }
@@ -121,7 +156,7 @@ func adminNewsletterSubscribersHandler(nl newsletterAdminAPI, canExport func(*gi
 // exportNewsletterSubscribers streams the matching subscribers as CSV. The first page is read
 // before any output so a bad filter still gets a JSON error.
 func exportNewsletterSubscribers(c *gin.Context, nl newsletterAdminAPI, filter nldomain.SubscriberFilter) {
-	filter.Page, filter.PerPage = 1, newsletterExportPage
+	filter.PageRequest = pagination.ParseLegacy(newsletterSubscribersCfg, 1, newsletterExportPage)
 
 	page, err := nl.ListSubscribers(c.Request.Context(), filter)
 	if writeNewsletterError(c, err) {
@@ -152,7 +187,7 @@ func exportNewsletterSubscribers(c *gin.Context, nl newsletterAdminAPI, filter n
 			break
 		}
 
-		filter.Page++
+		filter.PageRequest = pagination.ParseLegacy(newsletterSubscribersCfg, filter.PageRequest.Page+1, newsletterExportPage)
 
 		if page, err = nl.ListSubscribers(c.Request.Context(), filter); err != nil {
 			responses.RecordError(c, err)
@@ -257,19 +292,29 @@ func adminNewsletterDeleteSubscriberHandler(nl newsletterAdminAPI) gin.HandlerFu
 //	@Summary	List newsletter issues
 //	@Tags		admin
 //	@Produce	json
-//	@Param		status	query		string	false	"draft, scheduled, queued, sending, sent, cancelled"
-//	@Param		page	query		int		false	"page"		default(1)
-//	@Param		perPage	query		int		false	"per page"	default(20)
-//	@Success	200		{object}	responses.Envelope
-//	@Failure	400		{object}	responses.Envelope
-//	@Failure	401		{object}	responses.Envelope
-//	@Failure	403		{object}	responses.Envelope
-//	@Security	Bearer
-//	@Router		/api/v1/admin/newsletter/issues [get]
+//	@Param			status		 query	string	false	"draft, scheduled, queued, sending, sent, cancelled"
+//	@Param			after		 query	string	false	"opaque forward cursor"
+//	@Param			before		 query	string	false	"opaque backward cursor"
+//	@Param			limit		 query	int		false	"items per page (alias: perPage)"	default(20)
+//	@Param			perPage		 query	int		false	"items per page"					default(20)
+//	@Param			includeTotal query	bool	false	"include total item count (slow)"	default(false)
+//	@Param			page		 query	int		false	"page number (legacy offset mode)"	default(1)
+//	@Success		200			{object}	responses.Envelope
+//	@Failure		400			{object}	responses.Envelope
+//	@Failure		401			{object}	responses.Envelope
+//	@Failure		403			{object}	responses.Envelope
+//	@Security		Bearer
+//	@Router			/api/v1/admin/newsletter/issues [get]
 func adminNewsletterIssuesHandler(nl newsletterAdminAPI) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		filter := nldomain.IssueFilter{Status: nldomain.IssueStatus(strings.TrimSpace(c.Query("status")))}
-		filter.Page, filter.PerPage = pageParams(c)
+
+		pr, err := pagination.ParseRequest(c, newsletterIssuesCfg)
+		if err != nil {
+			responses.Failure(c, nethttp.StatusBadRequest, pagination.ErrorCode(err), pagination.ErrorCause(err))
+			return
+		}
+		filter.PageRequest = pr
 
 		page, err := nl.ListIssues(c.Request.Context(), filter)
 		if writeNewsletterError(c, err) {
@@ -281,8 +326,8 @@ func adminNewsletterIssuesHandler(nl newsletterAdminAPI) gin.HandlerFunc {
 			items = append(items, responses.NewsletterIssue(issue, false))
 		}
 
-		responses.SuccessPaginatedFor(c, nethttp.StatusOK, responses.PageOpts{
-			Service: responses.ServiceNewsletter, Data: items, Page: page.Page, PerPage: page.PerPage, Total: page.Total,
+		responses.SuccessPaginatedResult[nldomain.Issue](c, nethttp.StatusOK, responses.CursorPageOpts[nldomain.Issue]{
+			Service: responses.ServiceNewsletter, Result: page, Data: items,
 		})
 	}
 }

@@ -20,6 +20,7 @@ import (
 	"github.com/turahe/blog-api/internal/core/readcache/readcachetest"
 	"github.com/turahe/blog-api/internal/core/settings/domain"
 	"github.com/turahe/blog-api/internal/core/settings/service"
+	"github.com/turahe/blog-api/internal/shared/pagination"
 )
 
 var testNow = time.Date(2026, 9, 25, 10, 0, 0, 0, time.UTC)
@@ -104,7 +105,9 @@ func (r *memoryRepo) History(_ context.Context, f domain.HistoryFilter) (domain.
 		return domain.HistoryPage{}, r.historyErr
 	}
 
-	page := domain.HistoryPage{Page: f.Page, PerPage: f.PerPage}
+	limit := f.PageRequest.Limit
+	pageNum := f.PageRequest.Page
+	page := domain.HistoryPage{Limit: limit, OffsetPage: pageNum, OffsetPerPage: limit}
 	for _, w := range slices.Backward(r.writes) {
 		if f.Key == "" || f.Key == w.Key {
 			page.Items = append(page.Items, domain.HistoryEntry{
@@ -114,7 +117,8 @@ func (r *memoryRepo) History(_ context.Context, f domain.HistoryFilter) (domain.
 		}
 	}
 
-	page.Total = int64(len(page.Items))
+	total := int64(len(page.Items))
+	page.Total = &total
 
 	return page, nil
 }
@@ -448,10 +452,10 @@ func TestHistoryPaginatesAndRedactsUnknownKeys(t *testing.T) {
 	}
 	svc, _, _ := newService(repo)
 
-	page, err := svc.History(t.Context(), domain.HistoryFilter{PerPage: 1000})
+	page, err := svc.History(t.Context(), domain.HistoryFilter{PageRequest: pagination.PageRequest{Limit: 1000}})
 	require.NoError(t, err)
-	assert.Equal(t, 1, page.Page)
-	assert.Equal(t, 100, page.PerPage, "per_page is capped")
+	assert.Equal(t, 1, page.OffsetPage)
+	assert.Equal(t, 100, page.OffsetPerPage, "per_page is capped")
 	require.Len(t, page.Items, 2)
 	assert.Equal(t, "site.name", page.Items[0].Key)
 	assert.False(t, page.Items[0].Redacted)
@@ -460,10 +464,10 @@ func TestHistoryPaginatesAndRedactsUnknownKeys(t *testing.T) {
 	assert.Nil(t, page.Items[1].Previous)
 	assert.Nil(t, page.Items[1].New)
 
-	page, err = svc.History(t.Context(), domain.HistoryFilter{Key: " site.name ", Page: 2})
+	page, err = svc.History(t.Context(), domain.HistoryFilter{Key: " site.name ", PageRequest: pagination.PageRequest{Page: 2}})
 	require.NoError(t, err)
-	assert.Equal(t, 2, page.Page)
-	assert.Equal(t, 20, page.PerPage, "per_page defaults")
+	assert.Equal(t, 2, page.OffsetPage)
+	assert.Equal(t, 20, page.OffsetPerPage, "per_page defaults")
 	require.Len(t, page.Items, 1)
 	assert.Equal(t, "site.name", page.Items[0].Key)
 

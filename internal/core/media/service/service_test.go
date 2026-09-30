@@ -12,6 +12,7 @@ import (
 	"github.com/stretchr/testify/require"
 	mediadomain "github.com/turahe/blog-api/internal/core/media/domain"
 	"github.com/turahe/blog-api/internal/core/media/ports"
+	"github.com/turahe/blog-api/internal/shared/pagination"
 )
 
 func TestPresignUploadRejectsBadFilename(t *testing.T) {
@@ -241,7 +242,14 @@ func (r *fakeRepo) List(_ context.Context, filter mediadomain.ListFilter) (media
 		items = append(items, cloneAsset(asset))
 	}
 
-	return mediadomain.ListResult{Items: items, Total: int64(len(items)), Page: filter.Page, PerPage: filter.PerPage}, nil
+	total := int64(len(items))
+	return mediadomain.ListResult{
+		Items:         items,
+		Total:         &total,
+		Limit:         filter.Limit,
+		OffsetPage:    filter.Page,
+		OffsetPerPage: filter.Limit,
+	}, nil
 }
 
 func (r *fakeRepo) SoftDelete(_ context.Context, id uuid.UUID, deletedAt time.Time) error {
@@ -570,18 +578,18 @@ func TestListNormalisesFilter(t *testing.T) {
 	}{
 		{
 			name: "defaults and trims",
-			in:   mediadomain.ListFilter{Page: 0, PerPage: 0, Query: "  cat  ", Disk: " MINIO ", Status: " Ready "},
-			want: mediadomain.ListFilter{Page: 1, PerPage: 20, Query: "cat", Disk: "minio", Status: "ready"},
+			in:   mediadomain.ListFilter{PageRequest: pagination.PageRequest{Page: 0, Limit: 0}, Query: "  cat  ", Disk: " MINIO ", Status: " Ready "},
+			want: mediadomain.ListFilter{PageRequest: pagination.PageRequest{Page: 1, Limit: 20}, Query: "cat", Disk: "minio", Status: "ready"},
 		},
 		{
 			name: "caps page size",
-			in:   mediadomain.ListFilter{Page: 3, PerPage: 101},
-			want: mediadomain.ListFilter{Page: 3, PerPage: 20},
+			in:   mediadomain.ListFilter{PageRequest: pagination.PageRequest{Page: 3, Limit: 101}},
+			want: mediadomain.ListFilter{PageRequest: pagination.PageRequest{Page: 3, Limit: 20}},
 		},
 		{
 			name: "keeps valid paging",
-			in:   mediadomain.ListFilter{Page: 2, PerPage: 100},
-			want: mediadomain.ListFilter{Page: 2, PerPage: 100},
+			in:   mediadomain.ListFilter{PageRequest: pagination.PageRequest{Page: 2, Limit: 100}},
+			want: mediadomain.ListFilter{PageRequest: pagination.PageRequest{Page: 2, Limit: 100}},
 		},
 	}
 

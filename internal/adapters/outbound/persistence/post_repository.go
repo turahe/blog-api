@@ -9,6 +9,7 @@ import (
 
 	"github.com/google/uuid"
 	postdomain "github.com/turahe/blog-api/internal/core/post/domain"
+	"github.com/turahe/blog-api/internal/shared/pagination"
 	"gorm.io/gorm"
 )
 
@@ -23,6 +24,36 @@ var postColumns = strings.Join([]string{
 	uuidRef("media_assets", "posts.cover_image_media_id", "cover_image_media_uuid"),
 }, ", ")
 
+// postListPublishedCfg declares the sort order for public post listings.
+// ORDER BY published_at DESC NULLS LAST, created_at DESC, id DESC matches
+// the historical ordering; id provides the deterministic tiebreak required
+// for keyset (cursor) pagination.
+var postListPublishedCfg = pagination.CursorConfig{
+	Kind: "posts_public",
+	Sort: []pagination.SortField{
+		{Name: "published_at", Column: "posts.published_at", Dir: pagination.Desc, Nulls: pagination.NullsLast, Type: pagination.TypeTime},
+		{Name: "created_at", Column: "posts.created_at", Dir: pagination.Desc, Type: pagination.TypeTime},
+		{Name: "id", Column: "posts.id", Dir: pagination.Desc, Type: pagination.TypeInt64},
+	},
+	TTL:            pagination.DefaultTTL,
+	MaxPerPage:     pagination.DefaultMaxPerPage,
+	DefaultPerPage: pagination.DefaultPerPage,
+}
+
+// postAdminCfg declares the sort order for admin post listings.
+// ORDER BY created_at DESC, id DESC matches the historical ordering; id
+// provides the deterministic tiebreak required for keyset (cursor) pagination.
+var postAdminCfg = pagination.CursorConfig{
+	Kind: "posts_admin",
+	Sort: []pagination.SortField{
+		{Name: "created_at", Column: "posts.created_at", Dir: pagination.Desc, Type: pagination.TypeTime},
+		{Name: "id", Column: "posts.id", Dir: pagination.Desc, Type: pagination.TypeInt64},
+	},
+	TTL:            pagination.DefaultTTL,
+	MaxPerPage:     pagination.DefaultMaxPerPage,
+	DefaultPerPage: pagination.DefaultPerPage,
+}
+
 // PostRepository implements postports.Repository.
 type PostRepository struct {
 	db *gorm.DB
@@ -33,81 +64,239 @@ func NewPostRepository(db *gorm.DB) *PostRepository {
 	return &PostRepository{db: db}
 }
 
-// ListPublished returns a page of published, non-deleted posts.
+// ListPublished returns a page of published, non-deleted posts using
+// cursor-based keyset pagination when after/before are present, and offset
+// pagination when the caller provides only page/perPage. The COUNT query is
+// skipped when IncludeTotal=false.
 func (r *PostRepository) ListPublished(ctx context.Context, filter postdomain.ListFilter) (postdomain.ListResult, error) {
+	pr := filter.PageRequest
+	if pr.Limit <= 0 {
+		pr.Limit = postListPublishedCfg.DefaultPerPage
+	}
+	var cursorFields map[string]any
+	if pr.Mode == pagination.ModeCursor && pr.Cursor != "" {
+		decoded, _, err := pagination.DecodeCursor(postListPublishedCfg, pr.Cursor)
+		if err != nil {
+			return postdomain.ListResult{}, err
+		}
+		if err := pagination.ValidateCursor(postListPublishedCfg, decoded); err != nil {
+			return postdomain.ListResult{}, err
+		}
+		cursorFields = decoded
+	}
+	seek, err := pagination.BuildSeek(postListPublishedCfg, pr, cursorFields)
+	if err != nil {
+		return postdomain.ListResult{}, err
+	}
+
 	q := conn(ctx, r.db).Model(&PostModel{}).Where("status = ? AND deleted_at IS NULL", string(postdomain.StatusPublished))
 	if filter.CategoryUUID != nil {
 		q = q.Where("category_id = "+idOf("categories"), *filter.CategoryUUID)
 	}
-
 	if filter.TagUUID != nil {
 		q = q.Where("id IN (SELECT post_id FROM post_tags WHERE tag_id = "+idOf("tags")+")", *filter.TagUUID)
 	}
+	if seek.WhereClause != "" {
+		q = q.Where(seek.WhereClause, seek.BindVars...)
+	}
 
-	var total int64
-	if err := q.Count(&total).Error; err != nil {
-		return postdomain.ListResult{}, err
+	var out postdomain.ListResult
+	if pr.IncludeTotal {
+		var total int64
+		if err := q.Count(&total).Error; err != nil {
+			return postdomain.ListResult{}, err
+		}
+		out.Total = &total
 	}
 
 	var models []PostModel
-
-	offset := (filter.Page - 1) * filter.PerPage
-	if err := q.Select(postColumns).Order("published_at DESC NULLS LAST, created_at DESC, id DESC").
-		Limit(filter.PerPage).Offset(offset).Find(&models).Error; err != nil {
+	db := q.Select(postColumns).Order(seek.OrderClause).Limit(seek.LimitFetch)
+	if pr.Mode == pagination.ModeOffset {
+		db = db.Offset(pr.Offset)
+	}
+	if err := db.Find(&models).Error; err != nil {
 		return postdomain.ListResult{}, err
 	}
-
+	if seek.ReverseDisplay {
+		for i, j := 0, len(models)-1; i < j; i, j = i+1, j-1 {
+			models[i], models[j] = models[j], models[i]
+		}
+	}
 	items := make([]postdomain.Post, 0, len(models))
 	for _, model := range models {
 		items = append(items, mapPost(model))
 	}
-
-	return postdomain.ListResult{Items: items, Total: total, Page: filter.Page, PerPage: filter.PerPage}, nil
+	page, hasNext, hasPrev := pagination.TruncatePage(items, pr.Limit, pr.Forward, pr.Cursor != "")
+	out.Items = page
+	out.HasNextPage = hasNext
+	out.HasPreviousPage = hasPrev
+	out.Limit = pr.Limit
+	if pr.Mode == pagination.ModeOffset {
+		out.OffsetPage = pr.Page
+		out.OffsetPerPage = pr.Limit
+	}
+	if len(page) > 0 {
+		if out.HasNextPage {
+			fields := pagination.SortValues[postdomain.Post](postListPublishedCfg, page[len(page)-1],
+				func(row postdomain.Post, i int) any {
+					switch i {
+					case 0:
+						return row.PublishedAt
+					case 1:
+						return row.CreatedAt
+					case 2:
+						return row.ID
+					}
+					return nil
+				})
+			cur, err := pagination.EncodeCursor(postListPublishedCfg, fields)
+			if err != nil {
+				return postdomain.ListResult{}, err
+			}
+			out.NextCursor = cur
+		}
+		if out.HasPreviousPage {
+			fields := pagination.SortValues[postdomain.Post](postListPublishedCfg, page[0],
+				func(row postdomain.Post, i int) any {
+					switch i {
+					case 0:
+						return row.PublishedAt
+					case 1:
+						return row.CreatedAt
+					case 2:
+						return row.ID
+					}
+					return nil
+				})
+			cur, err := pagination.EncodeCursor(postListPublishedCfg, fields)
+			if err != nil {
+				return postdomain.ListResult{}, err
+			}
+			out.PreviousCursor = cur
+		}
+	}
+	return out, nil
 }
 
-// ListAdmin returns a page of posts for the admin list, filtered by status, author, and query.
+// ListAdmin returns a page of posts for the admin list using cursor-based keyset
+// pagination when after/before are present, and offset pagination when the caller
+// provides only page/perPage. The COUNT query is skipped when IncludeTotal=false.
+// Preserves all filters: status, author, category, query (ILIKE), and trashed
+// (unscoped WHERE deleted_at IS NOT NULL).
 func (r *PostRepository) ListAdmin(ctx context.Context, filter postdomain.AdminListFilter) (postdomain.ListResult, error) {
+	pr := filter.PageRequest
+	if pr.Limit <= 0 {
+		pr.Limit = postAdminCfg.DefaultPerPage
+	}
+	var cursorFields map[string]any
+	if pr.Mode == pagination.ModeCursor && pr.Cursor != "" {
+		decoded, _, err := pagination.DecodeCursor(postAdminCfg, pr.Cursor)
+		if err != nil {
+			return postdomain.ListResult{}, err
+		}
+		if err := pagination.ValidateCursor(postAdminCfg, decoded); err != nil {
+			return postdomain.ListResult{}, err
+		}
+		cursorFields = decoded
+	}
+	seek, err := pagination.BuildSeek(postAdminCfg, pr, cursorFields)
+	if err != nil {
+		return postdomain.ListResult{}, err
+	}
+
 	q := conn(ctx, r.db).Model(&PostModel{}).Where("deleted_at IS NULL")
 	if filter.Trashed {
 		q = conn(ctx, r.db).Unscoped().Model(&PostModel{}).Where("deleted_at IS NOT NULL")
 	}
-
 	if filter.Status != "" {
 		q = q.Where("status = ?", filter.Status)
 	}
-
 	if filter.AuthorUUID != nil {
 		q = q.Where("author_id = "+idOf("users"), *filter.AuthorUUID)
 	}
-
 	if filter.CategoryUUID != nil {
 		q = q.Where("category_id = "+idOf("categories"), *filter.CategoryUUID)
 	}
-
 	if filter.Query != "" {
 		like := "%" + filter.Query + "%"
 		q = q.Where("title ILIKE ? OR slug ILIKE ?", like, like)
 	}
+	if seek.WhereClause != "" {
+		q = q.Where(seek.WhereClause, seek.BindVars...)
+	}
 
-	var total int64
-	if err := q.Count(&total).Error; err != nil {
-		return postdomain.ListResult{}, err
+	var out postdomain.ListResult
+	if pr.IncludeTotal {
+		var total int64
+		if err := q.Count(&total).Error; err != nil {
+			return postdomain.ListResult{}, err
+		}
+		out.Total = &total
 	}
 
 	var models []PostModel
-
-	offset := (filter.Page - 1) * filter.PerPage
-	if err := q.Select(postColumns).Order("created_at DESC, id DESC").
-		Limit(filter.PerPage).Offset(offset).Find(&models).Error; err != nil {
+	db := q.Select(postColumns).Order(seek.OrderClause).Limit(seek.LimitFetch)
+	if pr.Mode == pagination.ModeOffset {
+		db = db.Offset(pr.Offset)
+	}
+	if err := db.Find(&models).Error; err != nil {
 		return postdomain.ListResult{}, err
 	}
-
+	if seek.ReverseDisplay {
+		for i, j := 0, len(models)-1; i < j; i, j = i+1, j-1 {
+			models[i], models[j] = models[j], models[i]
+		}
+	}
 	items := make([]postdomain.Post, 0, len(models))
 	for _, model := range models {
 		items = append(items, mapPost(model))
 	}
-
-	return postdomain.ListResult{Items: items, Total: total, Page: filter.Page, PerPage: filter.PerPage}, nil
+	page, hasNext, hasPrev := pagination.TruncatePage(items, pr.Limit, pr.Forward, pr.Cursor != "")
+	out.Items = page
+	out.HasNextPage = hasNext
+	out.HasPreviousPage = hasPrev
+	out.Limit = pr.Limit
+	if pr.Mode == pagination.ModeOffset {
+		out.OffsetPage = pr.Page
+		out.OffsetPerPage = pr.Limit
+	}
+	if len(page) > 0 {
+		if out.HasNextPage {
+			fields := pagination.SortValues[postdomain.Post](postAdminCfg, page[len(page)-1],
+				func(row postdomain.Post, i int) any {
+					switch i {
+					case 0:
+						return row.CreatedAt
+					case 1:
+						return row.ID
+					}
+					return nil
+				})
+			cur, err := pagination.EncodeCursor(postAdminCfg, fields)
+			if err != nil {
+				return postdomain.ListResult{}, err
+			}
+			out.NextCursor = cur
+		}
+		if out.HasPreviousPage {
+			fields := pagination.SortValues[postdomain.Post](postAdminCfg, page[0],
+				func(row postdomain.Post, i int) any {
+					switch i {
+					case 0:
+						return row.CreatedAt
+					case 1:
+						return row.ID
+					}
+					return nil
+				})
+			cur, err := pagination.EncodeCursor(postAdminCfg, fields)
+			if err != nil {
+				return postdomain.ListResult{}, err
+			}
+			out.PreviousCursor = cur
+		}
+	}
+	return out, nil
 }
 
 // GetPublishedBySlug returns the published post with the slug or ErrNotFound.

@@ -16,6 +16,7 @@ import (
 	"github.com/turahe/blog-api/internal/core/readcache"
 	settingsdomain "github.com/turahe/blog-api/internal/core/settings/domain"
 	"github.com/turahe/blog-api/internal/core/settings/ports"
+	"github.com/turahe/blog-api/internal/shared/pagination"
 )
 
 // Limits on one request.
@@ -320,15 +321,20 @@ func (s *Service) History(ctx context.Context, filter settingsdomain.HistoryFilt
 		return settingsdomain.HistoryPage{}, fmt.Errorf("%w: key too long", ErrValidation)
 	}
 
-	if filter.Page < 1 {
-		filter.Page = 1
+	if filter.Limit < 1 {
+		filter.Limit = defaultPerPage
 	}
 
-	if filter.PerPage < 1 {
-		filter.PerPage = defaultPerPage
-	}
+	filter.Limit = min(filter.Limit, maxPerPage)
 
-	filter.PerPage = min(filter.PerPage, maxPerPage)
+	pr := &filter.PageRequest
+	if pr.Page < 1 {
+		pr.Page = 1
+	}
+	if pr.Mode == pagination.ModeOffset {
+		pr.Offset = (pr.Page - 1) * pr.Limit
+		pr.Forward = true
+	}
 
 	page, err := s.repo.History(ctx, filter)
 	if err != nil {

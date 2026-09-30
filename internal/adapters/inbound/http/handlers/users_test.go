@@ -20,8 +20,8 @@ type fakeUserRepo struct {
 	total int64
 	err   error
 
-	foundID       uuid.UUID
-	page, perPage int
+	foundID   uuid.UUID
+	gotFilter userdomain.ListFilter
 }
 
 func (f *fakeUserRepo) FindByID(_ context.Context, id uuid.UUID) (userdomain.User, error) {
@@ -29,9 +29,16 @@ func (f *fakeUserRepo) FindByID(_ context.Context, id uuid.UUID) (userdomain.Use
 	return f.user, f.err
 }
 
-func (f *fakeUserRepo) List(_ context.Context, page, perPage int) ([]userdomain.User, int64, error) {
-	f.page, f.perPage = page, perPage
-	return f.users, f.total, f.err
+func (f *fakeUserRepo) List(_ context.Context, filter userdomain.ListFilter) (userdomain.ListResult, error) {
+	f.gotFilter = filter
+	total := f.total
+	return userdomain.ListResult{
+		Items:         f.users,
+		Total:         &total,
+		Limit:         filter.Limit,
+		OffsetPage:    filter.Page,
+		OffsetPerPage: filter.Limit,
+	}, f.err
 }
 
 func sampleUser() userdomain.User {
@@ -96,7 +103,7 @@ func TestAdminUsersListHandler(t *testing.T) {
 	}{
 		{name: "defaults", query: "", status: nethttp.StatusOK, wantPage: 1, wantPerPage: 20},
 		{name: "explicit page", query: "?page=3&perPage=5", status: nethttp.StatusOK, wantPage: 3, wantPerPage: 5},
-		{name: "out of range values are clamped", query: "?page=0&perPage=500", status: nethttp.StatusOK, wantPage: 1, wantPerPage: 20},
+		{name: "out of range values are clamped", query: "?page=0&perPage=500", status: nethttp.StatusOK, wantPage: 1, wantPerPage: 100},
 		{name: "repository failure", query: "", err: errors.New("db down"), status: nethttp.StatusInternalServerError},
 	}
 	for _, tc := range tests {
@@ -116,8 +123,8 @@ func TestAdminUsersListHandler(t *testing.T) {
 				return
 			}
 
-			require.Equal(t, tc.wantPage, repo.page)
-			require.Equal(t, tc.wantPerPage, repo.perPage)
+			require.Equal(t, tc.wantPage, repo.gotFilter.Page)
+			require.Equal(t, tc.wantPerPage, repo.gotFilter.Limit)
 
 			data, ok := body["data"].([]any)
 			require.True(t, ok)

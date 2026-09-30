@@ -47,7 +47,11 @@ func (r *memRepo) Activity(_ context.Context, filter domain.ActivityFilter) (dom
 
 	r.filter = filter
 
-	return domain.ActivityPage{Page: filter.Page, PerPage: filter.PerPage}, nil
+	return domain.ActivityPage{
+		OffsetPage:    filter.PageRequest.Page,
+		OffsetPerPage: filter.PageRequest.Limit,
+		Limit:         filter.PageRequest.Limit,
+	}, nil
 }
 
 func (r *memRepo) Prune(_ context.Context, cutoff time.Time) (int64, error) {

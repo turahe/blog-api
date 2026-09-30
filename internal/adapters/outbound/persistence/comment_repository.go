@@ -9,10 +9,44 @@ import (
 	commentdomain "github.com/turahe/blog-api/internal/core/comment/domain"
 	"github.com/turahe/blog-api/internal/core/comment/ports"
 	postdomain "github.com/turahe/blog-api/internal/core/post/domain"
+	"github.com/turahe/blog-api/internal/shared/pagination"
 	"gorm.io/gorm"
 )
 
 var _ ports.Repository = (*CommentRepository)(nil)
+
+var commentsPublicCfg = pagination.CursorConfig{
+	Kind: "comments_public",
+	Sort: []pagination.SortField{
+		{Name: "created_at", Column: "comments.created_at", Dir: pagination.Asc, Type: pagination.TypeTime},
+		{Name: "id", Column: "comments.id", Dir: pagination.Asc, Type: pagination.TypeInt64},
+	},
+	TTL:            pagination.DefaultTTL,
+	MaxPerPage:     pagination.DefaultMaxPerPage,
+	DefaultPerPage: pagination.DefaultPerPage,
+}
+
+var commentsMeCfg = pagination.CursorConfig{
+	Kind: "comments_me",
+	Sort: []pagination.SortField{
+		{Name: "created_at", Column: "comments.created_at", Dir: pagination.Desc, Type: pagination.TypeTime},
+		{Name: "id", Column: "comments.id", Dir: pagination.Desc, Type: pagination.TypeInt64},
+	},
+	TTL:            pagination.DefaultTTL,
+	MaxPerPage:     pagination.DefaultMaxPerPage,
+	DefaultPerPage: pagination.DefaultPerPage,
+}
+
+var commentsAdminCfg = pagination.CursorConfig{
+	Kind: "comments_admin",
+	Sort: []pagination.SortField{
+		{Name: "created_at", Column: "comments.created_at", Dir: pagination.Asc, Type: pagination.TypeTime},
+		{Name: "id", Column: "comments.id", Dir: pagination.Asc, Type: pagination.TypeInt64},
+	},
+	TTL:            pagination.DefaultTTL,
+	MaxPerPage:     pagination.DefaultMaxPerPage,
+	DefaultPerPage: pagination.DefaultPerPage,
+}
 
 // CommentModel keeps DeletedAt as a plain pointer: soft-deleted comments stay readable
 // as thread placeholders, so GORM's automatic soft-delete scope must not apply.
@@ -108,7 +142,20 @@ func (r *CommentRepository) GetByID(ctx context.Context, id uuid.UUID) (commentd
 }
 
 // List returns a page of comments matching the filter with reply counts.
+// Kept as a simple offset-mode helper for internal thread-reply pagination.
 func (r *CommentRepository) List(ctx context.Context, filter commentdomain.ListFilter) (commentdomain.ListResult, error) {
+	pr := filter.PageRequest
+	page := pr.Page
+	if page < 1 {
+		page = 1
+	}
+	perPage := pr.Limit
+	if perPage < 1 {
+		perPage = 20
+	}
+	if perPage > 100 {
+		perPage = 100
+	}
 	q := conn(ctx, r.db).Model(&CommentModel{})
 	if filter.PostUUID != nil {
 		q = q.Where("comments.post_id = "+idOf("posts"), *filter.PostUUID)
@@ -135,8 +182,10 @@ func (r *CommentRepository) List(ctx context.Context, filter commentdomain.ListF
 	}
 
 	var total int64
-	if err := q.Count(&total).Error; err != nil {
-		return commentdomain.ListResult{}, err
+	if pr.IncludeTotal {
+		if err := q.Count(&total).Error; err != nil {
+			return commentdomain.ListResult{}, err
+		}
 	}
 
 	order := "comments.created_at ASC, comments.id ASC"
@@ -146,8 +195,9 @@ func (r *CommentRepository) List(ctx context.Context, filter commentdomain.ListF
 
 	var models []CommentModel
 
+	offset := (page - 1) * perPage
 	err := q.Select(commentColumns).Order(order).
-		Offset((filter.Page - 1) * filter.PerPage).Limit(filter.PerPage).
+		Limit(perPage).Offset(offset).
 		Find(&models).Error
 	if err != nil {
 		return commentdomain.ListResult{}, err
@@ -157,8 +207,168 @@ func (r *CommentRepository) List(ctx context.Context, filter commentdomain.ListF
 	for _, model := range models {
 		items = append(items, mapComment(model))
 	}
+	var totalPtr *int64
+	if pr.IncludeTotal {
+		totalPtr = &total
+	}
+	return commentdomain.ListResult{
+		Items:         items,
+		Total:         totalPtr,
+		Limit:         perPage,
+		OffsetPage:    page,
+		OffsetPerPage: perPage,
+	}, nil
+}
 
-	return commentdomain.ListResult{Items: items, Total: total, Page: filter.Page, PerPage: filter.PerPage}, nil
+// listWithCursor runs the shared cursor+seek pipeline using cfg and filter.
+func (r *CommentRepository) listWithCursor(ctx context.Context, cfg pagination.CursorConfig, filter commentdomain.ListFilter) (commentdomain.ListResult, error) {
+	pr := filter.PageRequest
+	if pr.Limit <= 0 {
+		pr.Limit = cfg.DefaultPerPage
+	}
+	var cursorFields map[string]any
+	if pr.Mode == pagination.ModeCursor && pr.Cursor != "" {
+		decoded, _, err := pagination.DecodeCursor(cfg, pr.Cursor)
+		if err != nil {
+			return commentdomain.ListResult{}, err
+		}
+		if err := pagination.ValidateCursor(cfg, decoded); err != nil {
+			return commentdomain.ListResult{}, err
+		}
+		cursorFields = decoded
+	}
+	seek, err := pagination.BuildSeek(cfg, pr, cursorFields)
+	if err != nil {
+		return commentdomain.ListResult{}, err
+	}
+
+	q := conn(ctx, r.db).Model(&CommentModel{})
+	if filter.PostUUID != nil {
+		q = q.Where("comments.post_id = "+idOf("posts"), *filter.PostUUID)
+	}
+
+	switch {
+	case filter.ParentUUID != nil:
+		q = q.Where("comments.parent_id = "+idOf("comments"), *filter.ParentUUID)
+	case filter.RootsOnly:
+		q = q.Where("comments.parent_id IS NULL")
+	}
+
+	if filter.AuthorUUID != nil {
+		q = q.Where("comments.author_id = "+idOf("users"), *filter.AuthorUUID)
+	}
+
+	if len(filter.Statuses) > 0 {
+		statuses := make([]string, 0, len(filter.Statuses))
+		for _, status := range filter.Statuses {
+			statuses = append(statuses, string(status))
+		}
+		q = q.Where("comments.status IN ?", statuses)
+	}
+	if seek.WhereClause != "" {
+		q = q.Where(seek.WhereClause, seek.BindVars...)
+	}
+
+	var out commentdomain.ListResult
+	if pr.IncludeTotal {
+		var total int64
+		if err := q.Count(&total).Error; err != nil {
+			return commentdomain.ListResult{}, err
+		}
+		out.Total = &total
+	}
+
+	var models []CommentModel
+	db := q.Select(commentColumns).Order(seek.OrderClause).Limit(seek.LimitFetch)
+	if pr.Mode == pagination.ModeOffset {
+		db = db.Offset(pr.Offset)
+	}
+	if err := db.Find(&models).Error; err != nil {
+		return commentdomain.ListResult{}, err
+	}
+	if seek.ReverseDisplay {
+		for i, j := 0, len(models)-1; i < j; i, j = i+1, j-1 {
+			models[i], models[j] = models[j], models[i]
+		}
+	}
+	items := make([]commentdomain.Comment, 0, len(models))
+	for _, model := range models {
+		items = append(items, mapComment(model))
+	}
+	page, hasNext, hasPrev := pagination.TruncatePage(items, pr.Limit, pr.Forward, pr.Cursor != "")
+	out.Items = page
+	out.HasNextPage = hasNext
+	out.HasPreviousPage = hasPrev
+	out.Limit = pr.Limit
+	if pr.Mode == pagination.ModeOffset {
+		out.OffsetPage = pr.Page
+		out.OffsetPerPage = pr.Limit
+	}
+	if len(page) > 0 {
+		if out.HasNextPage {
+			fields := pagination.SortValues[commentdomain.Comment](cfg, page[len(page)-1],
+				func(row commentdomain.Comment, i int) any {
+					switch i {
+					case 0:
+						return row.CreatedAt
+					case 1:
+						return row.ID
+					}
+					return nil
+				})
+			cur, err := pagination.EncodeCursor(cfg, fields)
+			if err != nil {
+				return commentdomain.ListResult{}, err
+			}
+			out.NextCursor = cur
+		}
+		if out.HasPreviousPage {
+			fields := pagination.SortValues[commentdomain.Comment](cfg, page[0],
+				func(row commentdomain.Comment, i int) any {
+					switch i {
+					case 0:
+						return row.CreatedAt
+					case 1:
+						return row.ID
+					}
+					return nil
+				})
+			cur, err := pagination.EncodeCursor(cfg, fields)
+			if err != nil {
+				return commentdomain.ListResult{}, err
+			}
+			out.PreviousCursor = cur
+		}
+	}
+	return out, nil
+}
+
+// ListPublic returns a page of public comments (for the public post listing endpoint).
+func (r *CommentRepository) ListPublic(ctx context.Context, filter commentdomain.ListFilter) (commentdomain.ListResult, error) {
+	return r.listWithCursor(ctx, commentsPublicCfg, filter)
+}
+
+// ListForMe returns a page of the caller's own comments, newest first.
+func (r *CommentRepository) ListForMe(ctx context.Context, filter commentdomain.ListFilter) (commentdomain.ListResult, error) {
+	return r.listWithCursor(ctx, commentsMeCfg, filter)
+}
+
+// ListAdmin returns a page of comments for the moderation admin listing.
+func (r *CommentRepository) ListAdmin(ctx context.Context, filter commentdomain.ListFilter) (commentdomain.ListResult, error) {
+	cfg := commentsAdminCfg
+	if filter.NewestFirst {
+		cfg = pagination.CursorConfig{
+			Kind:           "comments_admin_newest",
+			Sort: []pagination.SortField{
+				{Name: "created_at", Column: "comments.created_at", Dir: pagination.Desc, Type: pagination.TypeTime},
+				{Name: "id", Column: "comments.id", Dir: pagination.Desc, Type: pagination.TypeInt64},
+			},
+			TTL:            commentsAdminCfg.TTL,
+			MaxPerPage:     commentsAdminCfg.MaxPerPage,
+			DefaultPerPage: commentsAdminCfg.DefaultPerPage,
+		}
+	}
+	return r.listWithCursor(ctx, cfg, filter)
 }
 
 // Create inserts a comment and returns it with resolved references.

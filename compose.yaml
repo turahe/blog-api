@@ -35,6 +35,8 @@ services:
       <<: *app-env
       APP_ADDR: 0.0.0.0:8080
       METRICS_ADDR: 0.0.0.0:9090
+      # Set SENTRY_DSN in .env after creating a project in GlitchTip.
+      SENTRY_DSN: ${SENTRY_DSN:-}
     volumes:
       - ./configs/dev:/configs/dev:ro
     ports:
@@ -49,6 +51,56 @@ services:
         condition: service_healthy
       mailpit:
         condition: service_healthy
+
+  glitchtip-postgres:
+    image: postgres:18-alpine
+    profiles: [observability]
+    environment:
+      POSTGRES_DB: glitchtip
+      POSTGRES_USER: glitchtip
+      POSTGRES_PASSWORD: ${GLITCHTIP_DB_PASSWORD:-glitchtip-dev}
+    volumes:
+      - ./.data/glitchtip-postgres:/var/lib/postgresql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U glitchtip -d glitchtip"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  glitchtip-valkey:
+    image: valkey/valkey:9
+    profiles: [observability]
+    volumes:
+      - ./.data/glitchtip-valkey:/data
+    healthcheck:
+      test: ["CMD", "valkey-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  glitchtip:
+    image: glitchtip/glitchtip:6
+    profiles: [observability]
+    depends_on:
+      glitchtip-postgres:
+        condition: service_healthy
+      glitchtip-valkey:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgres://glitchtip:${GLITCHTIP_DB_PASSWORD:-glitchtip-dev}@glitchtip-postgres:5432/glitchtip
+      VALKEY_URL: redis://glitchtip-valkey:6379
+      SECRET_KEY: ${GLITCHTIP_SECRET_KEY:-change-me-in-local-env}
+      EMAIL_URL: consolemail://
+      GLITCHTIP_DOMAIN: http://127.0.0.1:8000
+      DEFAULT_FROM_EMAIL: ${GLITCHTIP_FROM_EMAIL:-glitchtip@localhost}
+      ENABLE_ADMIN: "true"
+      GLITCHTIP_ENABLE_LOGS: "false"
+      GLITCHTIP_ENABLE_UPTIME: "false"
+      SERVER_ROLE: all_in_one
+    ports:
+      - "127.0.0.1:8000:8000"
+    volumes:
+      - ./.data/glitchtip-uploads:/code/uploads
 
   postgres:
     image: postgres:18-alpine

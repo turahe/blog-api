@@ -8,6 +8,7 @@ import (
 	"github.com/stretchr/testify/require"
 	commentdomain "github.com/turahe/blog-api/internal/core/comment/domain"
 	notificationdomain "github.com/turahe/blog-api/internal/core/notification/domain"
+	"github.com/turahe/blog-api/internal/shared/pagination"
 )
 
 func TestNotificationRepositoryInsertDedupeListRead(t *testing.T) {
@@ -49,10 +50,14 @@ func TestNotificationRepositoryInsertDedupeListRead(t *testing.T) {
 	require.NoError(t, err)
 	require.False(t, created, "unknown recipients are skipped")
 
-	page, err := repo.List(ctx, notificationdomain.ListFilter{UserUUID: user, Page: 1, PerPage: 10})
+	filter := notificationdomain.ListFilter{UserUUID: user}
+	filter.PageRequest = pagination.ParseLegacy(pagination.CursorConfig{}, 1, 10)
+	filter.PageRequest.IncludeTotal = true
+	page, err := repo.List(ctx, filter)
 	require.NoError(t, err)
-	require.Equal(t, int64(2), page.Total)
-	require.Equal(t, int64(2), page.Unread)
+	require.NotNil(t, page.Total)
+	require.Equal(t, int64(2), *page.Total)
+	require.Equal(t, int64(2), notificationdomain.UnreadTotalFrom(page))
 	require.Len(t, page.Items, 2)
 	require.Equal(t, second.UUID, page.Items[0].UUID, "newest first")
 	require.Equal(t, first.UUID, page.Items[1].UUID)
@@ -74,10 +79,14 @@ func TestNotificationRepositoryInsertDedupeListRead(t *testing.T) {
 	require.NoError(t, err)
 	require.True(t, readAt.Equal(got.ReadAt.UTC()), "marking again keeps the first read time")
 
-	unread, err := repo.List(ctx, notificationdomain.ListFilter{UserUUID: user, UnreadOnly: true, Page: 1, PerPage: 10})
+	unreadFilter := notificationdomain.ListFilter{UserUUID: user, UnreadOnly: true}
+	unreadFilter.PageRequest = pagination.ParseLegacy(pagination.CursorConfig{}, 1, 10)
+	unreadFilter.PageRequest.IncludeTotal = true
+	unread, err := repo.List(ctx, unreadFilter)
 	require.NoError(t, err)
-	require.Equal(t, int64(1), unread.Total)
-	require.Equal(t, int64(1), unread.Unread)
+	require.NotNil(t, unread.Total)
+	require.Equal(t, int64(1), *unread.Total)
+	require.Equal(t, int64(1), notificationdomain.UnreadTotalFrom(unread))
 	require.Len(t, unread.Items, 1)
 	require.Equal(t, second.UUID, unread.Items[0].UUID)
 

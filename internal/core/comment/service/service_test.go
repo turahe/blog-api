@@ -84,7 +84,86 @@ func (r *fakeRepo) List(_ context.Context, filter commentdomain.ListFilter) (com
 		return commentdomain.ListResult{}, r.listErr
 	}
 
-	return commentdomain.ListResult{Page: filter.Page, PerPage: filter.PerPage}, nil
+	var totalPtr *int64
+	if filter.IncludeTotal {
+		var t int64 = 0
+		totalPtr = &t
+	}
+	page := filter.Page
+	if page < 1 {
+		page = 1
+	}
+	limit := filter.Limit
+	if limit < 1 {
+		limit = 20
+	}
+	return commentdomain.ListResult{OffsetPage: page, OffsetPerPage: limit, Total: totalPtr, Limit: limit}, nil
+}
+
+func (r *fakeRepo) ListPublic(_ context.Context, filter commentdomain.ListFilter) (commentdomain.ListResult, error) {
+	r.lastFilter = filter
+	if r.listErr != nil {
+		return commentdomain.ListResult{}, r.listErr
+	}
+
+	var totalPtr *int64
+	if filter.IncludeTotal {
+		var t int64 = 0
+		totalPtr = &t
+	}
+	page := filter.Page
+	if page < 1 {
+		page = 1
+	}
+	limit := filter.Limit
+	if limit < 1 {
+		limit = 20
+	}
+	return commentdomain.ListResult{OffsetPage: page, OffsetPerPage: limit, Total: totalPtr, Limit: limit}, nil
+}
+
+func (r *fakeRepo) ListForMe(_ context.Context, filter commentdomain.ListFilter) (commentdomain.ListResult, error) {
+	r.lastFilter = filter
+	if r.listErr != nil {
+		return commentdomain.ListResult{}, r.listErr
+	}
+
+	var totalPtr *int64
+	if filter.IncludeTotal {
+		var t int64 = 0
+		totalPtr = &t
+	}
+	page := filter.Page
+	if page < 1 {
+		page = 1
+	}
+	limit := filter.Limit
+	if limit < 1 {
+		limit = 20
+	}
+	return commentdomain.ListResult{OffsetPage: page, OffsetPerPage: limit, Total: totalPtr, Limit: limit}, nil
+}
+
+func (r *fakeRepo) ListAdmin(_ context.Context, filter commentdomain.ListFilter) (commentdomain.ListResult, error) {
+	r.lastFilter = filter
+	if r.listErr != nil {
+		return commentdomain.ListResult{}, r.listErr
+	}
+
+	var totalPtr *int64
+	if filter.IncludeTotal {
+		var t int64 = 0
+		totalPtr = &t
+	}
+	page := filter.Page
+	if page < 1 {
+		page = 1
+	}
+	limit := filter.Limit
+	if limit < 1 {
+		limit = 20
+	}
+	return commentdomain.ListResult{OffsetPage: page, OffsetPerPage: limit, Total: totalPtr, Limit: limit}, nil
 }
 
 func (r *fakeRepo) Create(_ context.Context, c commentdomain.Comment) (commentdomain.Comment, error) {
@@ -701,13 +780,16 @@ func TestListForPostDefaultsToRoots(t *testing.T) {
 
 	f := newFixture(Config{})
 
-	_, err := f.svc.ListForPost(context.Background(), f.post, nil, 0, 500)
+	filter := commentdomain.ListFilter{PostUUID: &f.post}
+	_, err := f.svc.ListForPost(context.Background(), filter)
 	require.NoError(t, err)
 	require.True(t, f.repo.lastFilter.RootsOnly)
 	require.Equal(t, 1, f.repo.lastFilter.Page)
-	require.Equal(t, 20, f.repo.lastFilter.PerPage)
+	require.Equal(t, 20, f.repo.lastFilter.Limit)
 
-	_, err = f.svc.ListForPost(context.Background(), uuid.New(), nil, 1, 20)
+	postID := uuid.New()
+	filter2 := commentdomain.ListFilter{PostUUID: &postID}
+	_, err = f.svc.ListForPost(context.Background(), filter2)
 	require.ErrorIs(t, err, commentdomain.ErrPostNotFound)
 }
 
@@ -750,10 +832,11 @@ func TestListMineShowsEveryLiveStatusNewestFirst(t *testing.T) {
 
 	f := newFixture(Config{})
 
-	got, err := f.svc.ListMine(t.Context(), f.user, 0, 0)
+	filter := commentdomain.ListFilter{AuthorUUID: &f.user}
+	got, err := f.svc.ListMine(t.Context(), filter)
 	require.NoError(t, err)
-	require.Equal(t, 1, got.Page)
-	require.Equal(t, 20, got.PerPage)
+	require.Equal(t, 1, got.OffsetPage)
+	require.Equal(t, 20, got.OffsetPerPage)
 	require.Equal(t, &f.user, f.repo.lastFilter.AuthorUUID)
 	require.True(t, f.repo.lastFilter.NewestFirst)
 	require.ElementsMatch(t, []commentdomain.Status{

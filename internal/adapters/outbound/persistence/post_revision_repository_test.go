@@ -14,6 +14,7 @@ import (
 	postservice "github.com/turahe/blog-api/internal/core/post/service"
 	tagservice "github.com/turahe/blog-api/internal/core/tag/service"
 	"github.com/turahe/blog-api/internal/platform/system"
+	"github.com/turahe/blog-api/internal/shared/pagination"
 	"gorm.io/gorm"
 )
 
@@ -102,7 +103,9 @@ func TestPostRevisionsCaptureRestoreAndPrune(t *testing.T) {
 	require.Empty(t, restored.Snapshot.Media, "revision 1 had no media, so the restore cleared it")
 
 	from := time.Now().Add(-time.Hour)
-	page, err := revs.List(ctx, postdomain.RevisionFilter{PostUUID: post.UUID, AuthorUUID: &author, From: &from, Page: 1, PerPage: 2})
+	revFilter1 := postdomain.RevisionFilter{PostUUID: post.UUID, AuthorUUID: &author, From: &from}
+	revFilter1.PageRequest = pagination.ParseLegacy(revisionsCfg, 1, 2)
+	page, err := revs.List(ctx, revFilter1)
 	require.NoError(t, err)
 	require.EqualValues(t, 4, page.Total)
 	require.Len(t, page.Items, 2)
@@ -121,7 +124,9 @@ func TestPostRevisionsCaptureRestoreAndPrune(t *testing.T) {
 	require.NoError(t, err)
 	require.GreaterOrEqual(t, deleted, int64(2))
 
-	page, err = revs.List(ctx, postdomain.RevisionFilter{PostUUID: post.UUID, Page: 1, PerPage: 10})
+	revFilter2 := postdomain.RevisionFilter{PostUUID: post.UUID}
+	revFilter2.PageRequest = pagination.ParseLegacy(revisionsCfg, 1, 10)
+	page, err = revs.List(ctx, revFilter2)
 	require.NoError(t, err)
 	require.EqualValues(t, 2, page.Total)
 	require.Nil(t, page.Items[0].RestoreFromNumber, "pruning the source clears the restore link")

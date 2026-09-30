@@ -11,6 +11,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	settingsdomain "github.com/turahe/blog-api/internal/core/settings/domain"
+	"github.com/turahe/blog-api/internal/shared/pagination"
 )
 
 func settingsWrite(key, previous, value string, expected int64, by *uuid.UUID, at time.Time) settingsdomain.Write {
@@ -62,9 +63,9 @@ func TestSettingsRepositoryVersionedSaveAndHistory(t *testing.T) {
 	require.Len(t, locked, 1)
 	assert.Equal(t, key, locked[0].Key)
 
-	page, err := repo.History(ctx, settingsdomain.HistoryFilter{Key: key, Page: 1, PerPage: 10})
+	page, err := repo.History(ctx, settingsdomain.HistoryFilter{Key: key, PageRequest: pagination.PageRequest{Page: 1, Limit: 10}})
 	require.NoError(t, err)
-	assert.EqualValues(t, 2, page.Total, "failed saves leave no history")
+	assert.EqualValues(t, 2, *page.Total, "failed saves leave no history")
 	require.Len(t, page.Items, 2)
 
 	newest, oldest := page.Items[0], page.Items[1]
@@ -76,7 +77,7 @@ func TestSettingsRepositoryVersionedSaveAndHistory(t *testing.T) {
 	assert.Equal(t, &user, oldest.ChangedBy)
 	assert.Equal(t, "req-"+key, oldest.RequestID)
 
-	page, err = repo.History(ctx, settingsdomain.HistoryFilter{Key: key, Page: 2, PerPage: 1})
+	page, err = repo.History(ctx, settingsdomain.HistoryFilter{Key: key, PageRequest: pagination.PageRequest{Page: 2, Limit: 1}})
 	require.NoError(t, err)
 	require.Len(t, page.Items, 1)
 	assert.EqualValues(t, 1, page.Items[0].Version)
@@ -111,7 +112,7 @@ func TestSettingsRepositorySeedDefaultsKeepsStoredValues(t *testing.T) {
 	assert.EqualValues(t, 1, locked[1].Version)
 	assert.Nil(t, locked[1].UpdatedBy)
 
-	page, err := repo.History(ctx, settingsdomain.HistoryFilter{Key: fresh, Page: 1, PerPage: 10})
+	page, err := repo.History(ctx, settingsdomain.HistoryFilter{Key: fresh, PageRequest: pagination.PageRequest{Page: 1, Limit: 10}})
 	require.NoError(t, err)
 	require.Len(t, page.Items, 1, "only the first seed writes history")
 	assert.EqualValues(t, 1, page.Items[0].Version)
@@ -121,7 +122,7 @@ func TestSettingsRepositorySeedDefaultsKeepsStoredValues(t *testing.T) {
 	assert.Equal(t, "seed", page.Items[0].RequestID)
 	assert.True(t, page.Items[0].CreatedAt.Equal(at))
 
-	page, err = repo.History(ctx, settingsdomain.HistoryFilter{Key: changed, Page: 1, PerPage: 10})
+	page, err = repo.History(ctx, settingsdomain.HistoryFilter{Key: changed, PageRequest: pagination.PageRequest{Page: 1, Limit: 10}})
 	require.NoError(t, err)
 	require.Len(t, page.Items, 1)
 	assert.Equal(t, "req-"+changed, page.Items[0].RequestID)
@@ -145,7 +146,7 @@ func TestSettingsRepositoryRollsBackWithTransaction(t *testing.T) {
 	require.NoError(t, err)
 	assert.Empty(t, locked)
 
-	page, err := repo.History(t.Context(), settingsdomain.HistoryFilter{Key: key, Page: 1, PerPage: 10})
+	page, err := repo.History(t.Context(), settingsdomain.HistoryFilter{Key: key, PageRequest: pagination.PageRequest{Page: 1, Limit: 10}})
 	require.NoError(t, err)
-	assert.Zero(t, page.Total)
+	assert.Zero(t, *page.Total)
 }

@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/turahe/blog-api/internal/shared/pagination"
 )
 
 // MaxDepth is the deepest reply level; roots are depth 0. The database enforces the same bound.
@@ -147,23 +148,17 @@ type Flag struct {
 
 // ListFilter selects and pages comments.
 type ListFilter struct {
+	pagination.PageRequest
 	PostUUID    *uuid.UUID
 	ParentUUID  *uuid.UUID
 	RootsOnly   bool
 	AuthorUUID  *uuid.UUID
 	Statuses    []Status
 	NewestFirst bool
-	Page        int
-	PerPage     int
 }
 
 // ListResult is a page of comments.
-type ListResult struct {
-	Items   []Comment
-	Total   int64
-	Page    int
-	PerPage int
-}
+type ListResult = pagination.PageResult[Comment]
 
 // Thread is a comment with the first page of its direct replies.
 type Thread struct {

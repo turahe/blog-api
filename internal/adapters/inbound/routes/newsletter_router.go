@@ -4,12 +4,14 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
-// registerNewsletter binds public double opt-in, self-service, and admin newsletter routes.
-func registerNewsletter(v1 *gin.RouterGroup, auth AuthMiddleware, c Controllers) {
+// RegisterNewsletterRouter mounts public double opt-in, self-service, and admin
+// newsletter routes. Public routes accept anonymous callers; self-service and
+// admin routes require auth.
+func RegisterNewsletterRouter(router *gin.RouterGroup, auth AuthMiddleware, c Controllers) {
 	pub, n := GroupPublic, AuthNone
 	nl := c.Newsletter
 
-	none := v1.Group("")
+	none := router.Group("")
 	post(none, "/newsletter/subscribe", "public.newsletter.subscribe", pub, n, c, nl.Subscribe)
 	post(none, "/newsletter/confirm", "public.newsletter.confirm", pub, n, c, nl.Confirm)
 	post(none, "/newsletter/confirm/resend", "public.newsletter.confirm_resend", pub, n, c, nl.ConfirmResend)
@@ -19,14 +21,14 @@ func registerNewsletter(v1 *gin.RouterGroup, auth AuthMiddleware, c Controllers)
 	post(none, "/newsletter/webhooks/provider", "public.newsletter.provider_webhook", pub, n, c, nl.ProviderWebhook)
 
 	self, req := GroupSelfService, AuthRequired
-	me := v1.Group("")
+	me := router.Group("")
 	me.Use(auth.Required...)
 	get(me, "/me/newsletter/subscriptions", "me.newsletter.subscriptions.list", self, req, c, nl.MeSubscriptions)
 	post(me, "/me/newsletter/subscribe", "me.newsletter.subscribe", self, req, c, nl.MeSubscribe)
 	post(me, "/me/newsletter/unsubscribe", "me.newsletter.unsubscribe", self, req, c, nl.MeUnsubscribe)
 
 	ag, ar := GroupAdmin, AuthRequired
-	admin := v1.Group("/admin")
+	admin := router.Group("/admin")
 	admin.Use(auth.Required...)
 	get(admin, "/newsletter/subscribers", "admin.newsletter.subscribers.list", ag, ar, c, nl.AdminSubscribersList)
 	get(admin, "/newsletter/subscribers/:param1", "admin.newsletter.subscribers.get", ag, ar, c, nl.AdminSubscriberGet)

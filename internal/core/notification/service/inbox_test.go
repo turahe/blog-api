@@ -14,6 +14,7 @@ import (
 	"github.com/turahe/blog-api/internal/core/notification/ports"
 	"github.com/turahe/blog-api/internal/core/notification/template"
 	postdomain "github.com/turahe/blog-api/internal/core/post/domain"
+	"github.com/turahe/blog-api/internal/shared/pagination"
 )
 
 type fixedClock struct{ now time.Time }
@@ -51,7 +52,13 @@ func (m *memoryInbox) List(_ context.Context, filter notificationdomain.ListFilt
 
 	m.listFilter = filter
 
-	return notificationdomain.ListResult{Total: int64(len(m.rows))}, nil
+	total := int64(len(m.rows))
+	return notificationdomain.ListResult{
+		Total:         &total,
+		OffsetPage:    filter.PageRequest.Page,
+		OffsetPerPage: filter.PageRequest.Limit,
+		Limit:         filter.PageRequest.Limit,
+	}, nil
 }
 
 func (m *memoryInbox) MarkRead(_ context.Context, userID, id uuid.UUID, at time.Time) (notificationdomain.Notification, error) {
@@ -220,15 +227,14 @@ func TestInboxList(t *testing.T) {
 
 	tests := []struct {
 		name        string
-		page        int
-		perPage     int
+		pr          pagination.PageRequest
 		listErr     error
 		wantPage    int
 		wantPerPage int
 	}{
-		{name: "defaults", wantPage: 1, wantPerPage: defaultInboxPerPage},
-		{name: "explicit page", page: 3, perPage: 10, wantPage: 3, wantPerPage: 10},
-		{name: "store fails", listErr: errors.New("db down")},
+		{name: "defaults", pr: pagination.PageRequest{Limit: defaultInboxPerPage, Mode: pagination.ModeOffset, Page: 1, Offset: 0, IncludeTotal: true}, wantPage: 1, wantPerPage: defaultInboxPerPage},
+		{name: "explicit page", pr: pagination.PageRequest{Limit: 10, Mode: pagination.ModeOffset, Page: 3, Offset: 20, IncludeTotal: true}, wantPage: 3, wantPerPage: 10},
+		{name: "store fails", pr: pagination.PageRequest{Limit: defaultInboxPerPage, Mode: pagination.ModeOffset, Page: 1, Offset: 0}, listErr: errors.New("db down")},
 	}
 
 	for _, tt := range tests {
@@ -238,18 +244,21 @@ func TestInboxList(t *testing.T) {
 			f := newInboxFixture()
 			f.repo.listErr = tt.listErr
 
-			got, err := f.inbox.List(t.Context(), f.author, true, tt.page, tt.perPage)
+			got, err := f.inbox.List(t.Context(), f.author, true, tt.pr)
 			if tt.listErr != nil {
 				require.ErrorIs(t, err, tt.listErr)
 				return
 			}
 
 			require.NoError(t, err)
-			require.Equal(t, tt.wantPage, got.Page)
-			require.Equal(t, tt.wantPerPage, got.PerPage)
-			require.Equal(t, notificationdomain.ListFilter{
-				UserUUID: f.author, UnreadOnly: true, Page: tt.wantPage, PerPage: tt.wantPerPage,
-			}, f.repo.listFilter)
+			require.Equal(t, tt.wantPage, got.OffsetPage)
+			require.Equal(t, tt.wantPerPage, got.OffsetPerPage)
+			expectedFilter := notificationdomain.ListFilter{
+				UserUUID:   f.author,
+				UnreadOnly: true,
+			}
+			expectedFilter.PageRequest = tt.pr
+			require.Equal(t, expectedFilter, f.repo.listFilter)
 		})
 	}
 }
@@ -537,10 +546,11 @@ func TestInboxListAndMarkRead(t *testing.T) {
 	reply := commentdomain.Comment{UUID: uuid.New(), PostUUID: f.post.UUID, AuthorUUID: &f.replier, Content: "hi"}
 	f.inbox.CommentReplied(context.Background(), reply, parent)
 
-	result, err := f.inbox.List(context.Background(), f.author, false, 0, 500)
+	pr := pagination.ParseLegacy(pagination.CursorConfig{MaxPerPage: maxInboxPerPage, DefaultPerPage: defaultInboxPerPage}, 0, 500)
+	result, err := f.inbox.List(context.Background(), f.author, false, pr)
 	require.NoError(t, err)
-	require.Equal(t, 1, result.Page)
-	require.Equal(t, maxInboxPerPage, result.PerPage)
+	require.Equal(t, 1, result.OffsetPage)
+	require.Equal(t, maxInboxPerPage, result.OffsetPerPage)
 
 	id := f.repo.rows[0].UUID
 

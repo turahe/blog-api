@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	nethttp "net/http"
-	"strconv"
 	"strings"
 
 	"github.com/gin-gonic/gin"
@@ -14,13 +13,36 @@ import (
 	"github.com/turahe/blog-api/internal/adapters/inbound/http/responses"
 	commentdomain "github.com/turahe/blog-api/internal/core/comment/domain"
 	commentservice "github.com/turahe/blog-api/internal/core/comment/service"
+	"github.com/turahe/blog-api/internal/shared/pagination"
 )
+
+var commentsPublicCfg = pagination.CursorConfig{
+	Kind: "comments_public",
+	Sort: []pagination.SortField{
+		{Name: "created_at", Dir: pagination.Asc, Type: pagination.TypeTime},
+		{Name: "id", Dir: pagination.Asc, Type: pagination.TypeInt64},
+	},
+	TTL:            pagination.DefaultTTL,
+	MaxPerPage:     pagination.DefaultMaxPerPage,
+	DefaultPerPage: pagination.DefaultPerPage,
+}
+
+var commentsMeCfg = pagination.CursorConfig{
+	Kind: "comments_me",
+	Sort: []pagination.SortField{
+		{Name: "created_at", Dir: pagination.Desc, Type: pagination.TypeTime},
+		{Name: "id", Dir: pagination.Desc, Type: pagination.TypeInt64},
+	},
+	TTL:            pagination.DefaultTTL,
+	MaxPerPage:     pagination.DefaultMaxPerPage,
+	DefaultPerPage: pagination.DefaultPerPage,
+}
 
 type commentAPI interface {
 	Create(ctx context.Context, in commentservice.CreateInput) (commentdomain.Comment, error)
-	ListForPost(ctx context.Context, postID uuid.UUID, parentID *uuid.UUID, page, perPage int) (commentdomain.ListResult, error)
+	ListForPost(ctx context.Context, filter commentdomain.ListFilter) (commentdomain.ListResult, error)
 	GetThread(ctx context.Context, id uuid.UUID) (commentdomain.Thread, error)
-	ListMine(ctx context.Context, userID uuid.UUID, page, perPage int) (commentdomain.ListResult, error)
+	ListMine(ctx context.Context, filter commentdomain.ListFilter) (commentdomain.ListResult, error)
 	Update(ctx context.Context, actorID, id uuid.UUID, content string) (commentdomain.Comment, error)
 	Delete(ctx context.Context, actorID, id uuid.UUID) error
 	Flag(ctx context.Context, in commentservice.FlagInput) error
@@ -31,16 +53,21 @@ type commentAPI interface {
 //
 //	@Summary		List comments on a post
 //	@Description	Top-level comments by default; pass parentId to list the direct replies of a comment.
+//	@Description	Supports both legacy offset pagination (page/perPage) and cursor-based keyset pagination (after/before/limit).
 //	@Tags			public
 //	@Produce		json
-//	@Param			param1		path		string	true	"post UUID"
-//	@Param			parentId	query		string	false	"parent comment UUID"
-//	@Param			page		query		int		false	"page"		default(1)
-//	@Param			perPage		query		int		false	"per page"	default(20)
-//	@Success		200			{object}	responses.Envelope
-//	@Failure		400			{object}	responses.Envelope
-//	@Failure		403			{object}	responses.Envelope
-//	@Failure		404			{object}	responses.Envelope
+//	@Param			param1			path		string	true	"post UUID"
+//	@Param			parentId		query		string	false	"parent comment UUID"
+//	@Param			page			query		int		false	"page (legacy offset mode)"			default(1)
+//	@Param			perPage			query		int		false	"per page (legacy offset mode, alias limit)"	default(20)
+//	@Param			limit			query		int		false	"page size (cursor or offset)"		default(20)
+//	@Param			after			query		string	false	"opaque cursor: return items after this point"
+//	@Param			before			query		string	false	"opaque cursor: return items before this point"
+//	@Param			includeTotal	query		bool	false	"when false, skip COUNT(*) to reduce DB load"	default(true)
+//	@Success		200				{object}	responses.Envelope
+//	@Failure		400				{object}	responses.Envelope
+//	@Failure		403				{object}	responses.Envelope
+//	@Failure		404				{object}	responses.Envelope
 //	@Router			/api/v1/posts/{param1}/comments [get]
 func listPostCommentsHandler(comments commentAPI) gin.HandlerFunc {
 	return func(c *gin.Context) {
@@ -61,14 +88,44 @@ func listPostCommentsHandler(comments commentAPI) gin.HandlerFunc {
 			parentID = &parsed
 		}
 
-		page, perPage := pageParams(c)
-
-		result, err := comments.ListForPost(c.Request.Context(), postID, parentID, page, perPage)
-		if mapCommentError(c, err) {
+		pr, err := pagination.ParseRequest(c, commentsPublicCfg)
+		if err != nil {
+			responses.Failure(c, nethttp.StatusBadRequest, pagination.ErrorCode(err), pagination.ErrorCause(err))
 			return
 		}
 
-		writeCommentPage(c, result)
+		filter := commentdomain.ListFilter{PostUUID: &postID, ParentUUID: parentID}
+		filter.PageRequest = pr
+
+		result, err := comments.ListForPost(c.Request.Context(), filter)
+		if err != nil {
+			switch {
+			case errors.Is(err, pagination.ErrCursorMalformed),
+				errors.Is(err, pagination.ErrCursorInvalidSignature),
+				errors.Is(err, pagination.ErrCursorExpired),
+				errors.Is(err, pagination.ErrCursorWrongKind),
+				errors.Is(err, pagination.ErrCursorMissingField),
+				errors.Is(err, pagination.ErrCursorFieldType),
+				errors.Is(err, pagination.ErrCursorUnsupported):
+				responses.Failure(c, nethttp.StatusBadRequest, pagination.ErrorCode(err), pagination.ErrorCause(err))
+			default:
+				if mapCommentError(c, err) {
+					return
+				}
+			}
+			return
+		}
+
+		items := make([]gin.H, 0, len(result.Items))
+		for _, comment := range result.Items {
+			items = append(items, responses.Comment(comment))
+		}
+
+		responses.SuccessPaginatedResult[commentdomain.Comment](c, nethttp.StatusOK, responses.CursorPageOpts[commentdomain.Comment]{
+			Service: responses.ServiceComments,
+			Result:  result,
+			Data:    items,
+		})
 	}
 }
 
@@ -217,12 +274,17 @@ func flagCommentHandler(comments commentAPI) gin.HandlerFunc {
 //
 //	@Summary		List my comments
 //	@Description	All of the caller's comments except deleted ones, newest first, including pending and rejected.
+//	@Description	Supports both legacy offset pagination (page/perPage) and cursor-based keyset pagination (after/before/limit).
 //	@Tags			self-service
 //	@Produce		json
-//	@Param			page	query		int	false	"page"		default(1)
-//	@Param			perPage	query		int	false	"per page"	default(20)
-//	@Success		200		{object}	responses.Envelope
-//	@Failure		401		{object}	responses.Envelope
+//	@Param			page			query		int		false	"page (legacy offset mode)"			default(1)
+//	@Param			perPage			query		int		false	"per page (legacy offset mode, alias limit)"	default(20)
+//	@Param			limit			query		int		false	"page size (cursor or offset)"		default(20)
+//	@Param			after			query		string	false	"opaque cursor: return items after this point"
+//	@Param			before			query		string	false	"opaque cursor: return items before this point"
+//	@Param			includeTotal	query		bool	false	"when false, skip COUNT(*) to reduce DB load"	default(true)
+//	@Success		200				{object}	responses.Envelope
+//	@Failure		401				{object}	responses.Envelope
 //	@Security		Bearer
 //	@Router			/api/v1/me/comments [get]
 func listMyCommentsHandler(comments commentAPI) gin.HandlerFunc {
@@ -232,14 +294,44 @@ func listMyCommentsHandler(comments commentAPI) gin.HandlerFunc {
 			return
 		}
 
-		page, perPage := pageParams(c)
-
-		result, err := comments.ListMine(c.Request.Context(), userID, page, perPage)
-		if mapCommentError(c, err) {
+		pr, err := pagination.ParseRequest(c, commentsMeCfg)
+		if err != nil {
+			responses.Failure(c, nethttp.StatusBadRequest, pagination.ErrorCode(err), pagination.ErrorCause(err))
 			return
 		}
 
-		writeCommentPage(c, result)
+		filter := commentdomain.ListFilter{AuthorUUID: &userID}
+		filter.PageRequest = pr
+
+		result, err := comments.ListMine(c.Request.Context(), filter)
+		if err != nil {
+			switch {
+			case errors.Is(err, pagination.ErrCursorMalformed),
+				errors.Is(err, pagination.ErrCursorInvalidSignature),
+				errors.Is(err, pagination.ErrCursorExpired),
+				errors.Is(err, pagination.ErrCursorWrongKind),
+				errors.Is(err, pagination.ErrCursorMissingField),
+				errors.Is(err, pagination.ErrCursorFieldType),
+				errors.Is(err, pagination.ErrCursorUnsupported):
+				responses.Failure(c, nethttp.StatusBadRequest, pagination.ErrorCode(err), pagination.ErrorCause(err))
+			default:
+				if mapCommentError(c, err) {
+					return
+				}
+			}
+			return
+		}
+
+		items := make([]gin.H, 0, len(result.Items))
+		for _, comment := range result.Items {
+			items = append(items, responses.Comment(comment))
+		}
+
+		responses.SuccessPaginatedResult[commentdomain.Comment](c, nethttp.StatusOK, responses.CursorPageOpts[commentdomain.Comment]{
+			Service: responses.ServiceComments,
+			Result:  result,
+			Data:    items,
+		})
 	}
 }
 
@@ -375,28 +467,6 @@ func requireCommentUser(c *gin.Context) (uuid.UUID, bool) {
 	}
 
 	return userID, ok
-}
-
-func pageParams(c *gin.Context) (int, int) {
-	page, _ := strconv.Atoi(c.DefaultQuery("page", "1"))
-	perPage, _ := strconv.Atoi(c.DefaultQuery("perPage", "20"))
-
-	return page, perPage
-}
-
-func writeCommentPage(c *gin.Context, result commentdomain.ListResult) {
-	items := make([]gin.H, 0, len(result.Items))
-	for _, comment := range result.Items {
-		items = append(items, responses.Comment(comment))
-	}
-
-	responses.SuccessPaginatedFor(c, nethttp.StatusOK, responses.PageOpts{
-		Service: responses.ServiceComments,
-		Data:    items,
-		Page:    result.Page,
-		PerPage: result.PerPage,
-		Total:   result.Total,
-	})
 }
 
 func failCommentValidation(c *gin.Context, message string) {

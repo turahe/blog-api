@@ -5,12 +5,12 @@ import (
 	"encoding/json"
 	"errors"
 	nethttp "net/http"
-	"strconv"
 	"strings"
 
 	"github.com/turahe/blog-api/internal/adapters/inbound/http/middleware"
 	"github.com/turahe/blog-api/internal/adapters/inbound/http/requests"
 	"github.com/turahe/blog-api/internal/adapters/inbound/http/responses"
+	"github.com/turahe/blog-api/internal/shared/pagination"
 
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
@@ -85,21 +85,43 @@ func adminCreatePostHandler(posts postAdminAPI) gin.HandlerFunc {
 
 // adminListPostsHandler godoc
 //
-//	@Summary	List admin posts
-//	@Tags		admin
-//	@Produce	json
-//	@Param		page		query		int		false	"page"		default(1)
-//	@Param		perPage		query		int		false	"per page"	default(20)
-//	@Param		status		query		string	false	"status filter"
-//	@Param		authorId	query		string	false	"author UUID"
-//	@Param		categoryId	query		string	false	"category UUID"
-//	@Param		q			query		string	false	"search"
-//	@Param		trashed		query		bool	false	"list only soft-deleted posts"	default(false)
-//	@Success	200			{object}	responses.Envelope
-//	@Security	Bearer
-//	@Router		/api/v1/admin/posts [get]
+//	@Summary		List admin posts
+//	@Description	Supports both legacy offset pagination (page/perPage) and cursor-based keyset pagination (after/before/limit).
+//	@Tags			admin
+//	@Produce		json
+//	@Param			page			query		int		false	"page (legacy offset mode)"					default(1)
+//	@Param			perPage			query		int		false	"per page (legacy offset mode, alias limit)"	default(20)
+//	@Param			limit			query		int		false	"page size (cursor or offset)"				default(20)
+//	@Param			after			query		string	false	"opaque cursor: return items after this point"
+//	@Param			before			query		string	false	"opaque cursor: return items before this point"
+//	@Param			includeTotal	query		bool	false	"when false, skip COUNT(*) to reduce DB load"	default(false)
+//	@Param			status			query		string	false	"status filter"
+//	@Param			authorId		query		string	false	"author UUID"
+//	@Param			categoryId		query		string	false	"category UUID"
+//	@Param			q				query		string	false	"search"
+//	@Param			trashed			query		bool	false	"list only soft-deleted posts"	default(false)
+//	@Success		200				{object}	responses.Envelope
+//	@Failure		400				{object}	responses.Envelope
+//	@Failure		401				{object}	responses.Envelope
+//	@Failure		403				{object}	responses.Envelope
+//	@Security		Bearer
+//	@Router			/api/v1/admin/posts [get]
 func adminListPostsHandler(posts *postservice.PostService, roles RoleLookup) gin.HandlerFunc {
 	return adminListPostsHandlerWithDeps(posts, roles)
+}
+
+// postAdminCfg declares the pagination contract used by the admin post list.
+// Duplicated here (from repo) rather than exported from the persistence
+// package to keep HTTP wiring free of repository-specific imports.
+var postAdminCfg = pagination.CursorConfig{
+	Kind: "posts_admin",
+	Sort: []pagination.SortField{
+		{Name: "created_at", Dir: pagination.Desc, Type: pagination.TypeTime},
+		{Name: "id", Dir: pagination.Desc, Type: pagination.TypeInt64},
+	},
+	TTL:            pagination.DefaultTTL,
+	MaxPerPage:     pagination.DefaultMaxPerPage,
+	DefaultPerPage: pagination.DefaultPerPage,
 }
 
 func adminListPostsHandlerWithDeps(posts postAdminAPI, roles RoleLookup) gin.HandlerFunc {
@@ -110,8 +132,11 @@ func adminListPostsHandlerWithDeps(posts postAdminAPI, roles RoleLookup) gin.Han
 			return
 		}
 
-		page, _ := strconv.Atoi(c.DefaultQuery("page", "1"))
-		perPage, _ := strconv.Atoi(c.DefaultQuery("perPage", "20"))
+		pr, err := pagination.ParseRequest(c, postAdminCfg)
+		if err != nil {
+			responses.Failure(c, nethttp.StatusBadRequest, pagination.ErrorCode(err), pagination.ErrorCause(err))
+			return
+		}
 
 		authorID, err := postservice.ParseOptionalUUID(c.Query("authorId"))
 		if err != nil {
@@ -131,21 +156,20 @@ func adminListPostsHandlerWithDeps(posts postAdminAPI, roles RoleLookup) gin.Han
 			return
 		}
 
-		trashed, err := strconv.ParseBool(c.DefaultQuery("trashed", "false"))
+		trashed, err := parseBoolQuery(c, "trashed", false)
 		if err != nil {
 			responses.Failure(c, nethttp.StatusBadRequest, responses.ErrorCodeValidation, "Invalid trashed")
 			return
 		}
 
 		filter := postdomain.AdminListFilter{
-			Page:         page,
-			PerPage:      perPage,
 			Status:       c.Query("status"),
 			AuthorUUID:   authorID,
 			CategoryUUID: categoryID,
 			Query:        c.Query("q"),
 			Trashed:      trashed,
 		}
+		filter.PageRequest = pr
 		if !unrestricted {
 			filter.ScopeAuthorUUID = &userID
 		}
@@ -160,14 +184,27 @@ func adminListPostsHandlerWithDeps(posts postAdminAPI, roles RoleLookup) gin.Han
 			items = append(items, responses.Post(post))
 		}
 
-		responses.SuccessPaginatedFor(c, nethttp.StatusOK, responses.PageOpts{
+		responses.SuccessPaginatedResult[postdomain.Post](c, nethttp.StatusOK, responses.CursorPageOpts[postdomain.Post]{
 			Service: responses.ServicePosts,
+			Result:  result,
 			Data:    items,
-			Page:    result.Page,
-			PerPage: result.PerPage,
-			Total:   result.Total,
 		})
 	}
+}
+
+// parseBoolQuery returns the boolean value of query param name or def when empty.
+func parseBoolQuery(c *gin.Context, name string, def bool) (bool, error) {
+	v := strings.TrimSpace(c.Query(name))
+	if v == "" {
+		return def, nil
+	}
+	switch strings.ToLower(v) {
+	case "1", "true", "yes", "on":
+		return true, nil
+	case "0", "false", "no", "off":
+		return false, nil
+	}
+	return def, errors.New("invalid bool")
 }
 
 // adminUpdatePostHandler godoc

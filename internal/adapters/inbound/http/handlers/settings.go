@@ -12,7 +12,18 @@ import (
 	"github.com/turahe/blog-api/internal/adapters/inbound/http/responses"
 	settingsdomain "github.com/turahe/blog-api/internal/core/settings/domain"
 	settingsservice "github.com/turahe/blog-api/internal/core/settings/service"
+	"github.com/turahe/blog-api/internal/shared/pagination"
 )
+
+var settingsHistoryCfg = pagination.CursorConfig{
+	Kind: "settings_history",
+	Sort: []pagination.SortField{
+		{Name: "created_at", Dir: pagination.Desc, Type: pagination.TypeTime},
+		{Name: "id", Dir: pagination.Desc, Type: pagination.TypeInt64},
+	},
+	DefaultPerPage: 20,
+	MaxPerPage:     100,
+}
 
 const errorCodeSettingsVersionConflict = "settings.version_conflict"
 
@@ -147,23 +158,48 @@ func adminUpdateSettingsHandler(settings settingsAPI) gin.HandlerFunc {
 
 // adminSettingsHistoryHandler godoc
 //
-//	@Summary	List settings history
-//	@Tags		admin
-//	@Produce	json
-//	@Param		key		query		string	false	"only changes of this key"
-//	@Param		page	query		int		false	"page (default 1)"
-//	@Param		perPage	query		int		false	"page size (default 20, max 100)"
-//	@Success	200		{object}	responses.Envelope
-//	@Failure	403		{object}	responses.Envelope
-//	@Security	Bearer
-//	@Router		/api/v1/admin/settings/history [get]
+//	@Summary		List settings history
+//	@Tags			admin
+//	@Produce		json
+//	@Param			key				query		string	false	"only changes of this key"
+//	@Param			after			query		string	false	"cursor for next page"
+//	@Param			before			query		string	false	"cursor for previous page"
+//	@Param			limit			query		int		false	"page size alias (default 20, max 100)"
+//	@Param			perPage			query		int		false	"page size (default 20, max 100)"
+//	@Param			includeTotal	query		bool	false	"include total count (default true)"
+//	@Param			page			query		int		false	"legacy page number (offset mode fallback)"
+//	@Success		200				{object}	responses.Envelope
+//	@Failure		400				{object}	responses.Envelope
+//	@Failure		403				{object}	responses.Envelope
+//	@Security		Bearer
+//	@Router			/api/v1/admin/settings/history [get]
 func adminSettingsHistoryHandler(settings settingsAPI) gin.HandlerFunc {
 	return func(c *gin.Context) {
+		pr, err := pagination.ParseRequest(c, settingsHistoryCfg)
+		if err != nil {
+			responses.Failure(c, nethttp.StatusBadRequest, pagination.ErrorCode(err), pagination.ErrorCause(err))
+			return
+		}
+
 		filter := settingsdomain.HistoryFilter{Key: c.Query("key")}
-		filter.Page, filter.PerPage = pageParams(c)
+		filter.PageRequest = pr
 
 		page, err := settings.History(c.Request.Context(), filter)
-		if mapSettingsError(c, err) {
+		if err != nil {
+			switch {
+			case errors.Is(err, pagination.ErrCursorMalformed),
+				errors.Is(err, pagination.ErrCursorInvalidSignature),
+				errors.Is(err, pagination.ErrCursorExpired),
+				errors.Is(err, pagination.ErrCursorWrongKind),
+				errors.Is(err, pagination.ErrCursorMissingField),
+				errors.Is(err, pagination.ErrCursorFieldType),
+				errors.Is(err, pagination.ErrCursorUnsupported):
+				responses.Failure(c, nethttp.StatusBadRequest, pagination.ErrorCode(err), pagination.ErrorCause(err))
+			default:
+				if mapSettingsError(c, err) {
+					return
+				}
+			}
 			return
 		}
 
@@ -172,12 +208,10 @@ func adminSettingsHistoryHandler(settings settingsAPI) gin.HandlerFunc {
 			items = append(items, responses.SettingHistory(entry))
 		}
 
-		responses.SuccessPaginatedFor(c, nethttp.StatusOK, responses.PageOpts{
+		responses.SuccessPaginatedResult[settingsdomain.HistoryEntry](c, nethttp.StatusOK, responses.CursorPageOpts[settingsdomain.HistoryEntry]{
 			Service: responses.ServiceSettings,
+			Result:  page,
 			Data:    items,
-			Page:    page.Page,
-			PerPage: page.PerPage,
-			Total:   page.Total,
 		})
 	}
 }

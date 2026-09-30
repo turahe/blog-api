@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/turahe/blog-api/internal/shared/pagination"
 )
 
 // ErrRevisionNotFound is returned for a revision that does not exist on the post.
@@ -149,22 +150,18 @@ func ParseRevisionRef(raw string) (RevisionRef, error) {
 }
 
 // RevisionFilter selects and pages one post's revisions, newest first.
+// Page/PerPage legacy fields are dropped; the embedded pagination.PageRequest
+// (set by handlers via ParseRequest) carries the pagination parameters.
 type RevisionFilter struct {
+	pagination.PageRequest
 	PostUUID   uuid.UUID
 	AuthorUUID *uuid.UUID
 	From       *time.Time
 	To         *time.Time
-	Page       int
-	PerPage    int
 }
 
 // RevisionPage is a page of revisions.
-type RevisionPage struct {
-	Items   []Revision
-	Total   int64
-	Page    int
-	PerPage int
-}
+type RevisionPage = pagination.PageResult[Revision]
 
 // Editor identifies who is changing posts in ctx, for revision attribution.
 type Editor struct {

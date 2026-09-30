@@ -12,22 +12,34 @@ type AuthMiddleware struct {
 	Required gin.HandlersChain
 }
 
-// Register mounts health probes and /api/v1 routes.
+// Register mounts health probes (via RegisterCommonRouter on a root group) and
+// all /api/v1 routes by composing the area Register*Router functions. It is
+// the main entrypoint described in docs/backend/router.md.
+//
+// `NewRouter` (which also wires global middleware, Swagger, and error handlers)
+// delegates to this function so the two entrypoints always share one route list.
 func Register(router gin.IRouter, c Controllers, auth AuthMiddleware) {
 	if c.Stub == nil {
 		c.Stub = NotImplemented
 	}
 
-	registerHealth(router, c)
+	root, ok := router.(*gin.Engine)
+	if !ok {
+		// Caller passed a RouterGroup; still attach health probes relative to it.
+		RegisterCommonRouter(router.Group(""), c)
+	} else {
+		RegisterCommonRouter(root.Group(""), c)
+	}
 
 	v1 := router.Group("/api/v1")
-	registerPublic(v1, c)
-	registerAuth(v1, auth, c)
-	registerMe(v1, auth, c)
-	registerComments(v1, auth, c)
-	registerAdmin(v1, auth, c)
-	registerAnalytics(v1, auth, c)
-	registerNewsletter(v1, auth, c)
+
+	RegisterPublicContentRouter(v1, c)
+	RegisterUserAuthRouter(v1, auth, c)
+	RegisterMeRouter(v1, auth, c)
+	RegisterCommentsRouter(v1, auth, c)
+	RegisterAdminAuthRouter(v1, auth, c)
+	RegisterAnalyticsRouter(v1, auth, c)
+	RegisterNewsletterRouter(v1, auth, c)
 }
 
 type routeSpec struct {

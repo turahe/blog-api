@@ -15,6 +15,7 @@ import (
 	mediadomain "github.com/turahe/blog-api/internal/core/media/domain"
 	"github.com/turahe/blog-api/internal/core/media/ports"
 	"github.com/turahe/blog-api/internal/core/readcache"
+	"github.com/turahe/blog-api/internal/shared/pagination"
 )
 
 // Media service errors.
@@ -244,12 +245,16 @@ func (s *Service) inspectObject(ctx context.Context, key string) (int64, string,
 
 // List returns a page of media assets.
 func (s *Service) List(ctx context.Context, filter mediadomain.ListFilter) (mediadomain.ListResult, error) {
-	if filter.Page < 1 {
-		filter.Page = 1
+	pr := &filter.PageRequest
+	if pr.Limit < 1 || pr.Limit > pagination.DefaultMaxPerPage {
+		pr.Limit = pagination.DefaultPerPage
 	}
-
-	if filter.PerPage < 1 || filter.PerPage > 100 {
-		filter.PerPage = 20
+	if pr.Page < 1 {
+		pr.Page = 1
+	}
+	if pr.Mode == pagination.ModeOffset {
+		pr.Offset = (pr.Page - 1) * pr.Limit
+		pr.Forward = true
 	}
 
 	filter.Query = strings.TrimSpace(filter.Query)

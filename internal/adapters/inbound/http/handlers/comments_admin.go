@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"context"
+	"errors"
 	nethttp "net/http"
 	"strings"
 
@@ -11,7 +12,30 @@ import (
 	"github.com/turahe/blog-api/internal/adapters/inbound/http/responses"
 	commentdomain "github.com/turahe/blog-api/internal/core/comment/domain"
 	commentservice "github.com/turahe/blog-api/internal/core/comment/service"
+	"github.com/turahe/blog-api/internal/shared/pagination"
 )
+
+var commentsAdminCfg = pagination.CursorConfig{
+	Kind: "comments_admin",
+	Sort: []pagination.SortField{
+		{Name: "created_at", Dir: pagination.Asc, Type: pagination.TypeTime},
+		{Name: "id", Dir: pagination.Asc, Type: pagination.TypeInt64},
+	},
+	TTL:            pagination.DefaultTTL,
+	MaxPerPage:     pagination.DefaultMaxPerPage,
+	DefaultPerPage: pagination.DefaultPerPage,
+}
+
+var commentsAdminNewestCfg = pagination.CursorConfig{
+	Kind: "comments_admin_newest",
+	Sort: []pagination.SortField{
+		{Name: "created_at", Dir: pagination.Desc, Type: pagination.TypeTime},
+		{Name: "id", Dir: pagination.Desc, Type: pagination.TypeInt64},
+	},
+	TTL:            pagination.DefaultTTL,
+	MaxPerPage:     pagination.DefaultMaxPerPage,
+	DefaultPerPage: pagination.DefaultPerPage,
+}
 
 type commentModerationAPI interface {
 	AdminList(ctx context.Context, in commentservice.AdminListInput) (commentdomain.ListResult, error)
@@ -26,17 +50,22 @@ type commentModerationAPI interface {
 //
 //	@Summary		List comments for moderation
 //	@Description	Comments in any status across posts. Defaults to the moderation queue (pending and flagged), oldest first.
+//	@Description	Supports both legacy offset pagination (page/perPage) and cursor-based keyset pagination (after/before/limit).
 //	@Tags			admin
 //	@Produce		json
-//	@Param			status	query		string	false	"comma-separated statuses: pending, approved, flagged, spam, rejected, deleted"
-//	@Param			postId	query		string	false	"post UUID"
-//	@Param			sort	query		string	false	"oldest or newest"	Enums(oldest, newest)	default(oldest)
-//	@Param			page	query		int		false	"page"				default(1)
-//	@Param			perPage	query		int		false	"per page"			default(20)
-//	@Success		200		{object}	responses.Envelope
-//	@Failure		400		{object}	responses.Envelope
-//	@Failure		401		{object}	responses.Envelope
-//	@Failure		403		{object}	responses.Envelope
+//	@Param			status			query		string	false	"comma-separated statuses: pending, approved, flagged, spam, rejected, deleted"
+//	@Param			postId			query		string	false	"post UUID"
+//	@Param			sort			query		string	false	"oldest or newest"	Enums(oldest, newest)	default(oldest)
+//	@Param			page			query		int		false	"page (legacy offset mode)"			default(1)
+//	@Param			perPage			query		int		false	"per page (legacy offset mode, alias limit)"	default(20)
+//	@Param			limit			query		int		false	"page size (cursor or offset)"		default(20)
+//	@Param			after			query		string	false	"opaque cursor: return items after this point"
+//	@Param			before			query		string	false	"opaque cursor: return items before this point"
+//	@Param			includeTotal	query		bool	false	"when false, skip COUNT(*) to reduce DB load"	default(true)
+//	@Success		200				{object}	responses.Envelope
+//	@Failure		400				{object}	responses.Envelope
+//	@Failure		401				{object}	responses.Envelope
+//	@Failure		403				{object}	responses.Envelope
 //	@Security		Bearer
 //	@Router			/api/v1/admin/comments [get]
 func adminListCommentsHandler(comments commentModerationAPI) gin.HandlerFunc {
@@ -70,10 +99,33 @@ func adminListCommentsHandler(comments commentModerationAPI) gin.HandlerFunc {
 			return
 		}
 
-		in.Page, in.PerPage = pageParams(c)
+		cfg := commentsAdminCfg
+		if in.NewestFirst {
+			cfg = commentsAdminNewestCfg
+		}
+		pr, err := pagination.ParseRequest(c, cfg)
+		if err != nil {
+			responses.Failure(c, nethttp.StatusBadRequest, pagination.ErrorCode(err), pagination.ErrorCause(err))
+			return
+		}
+		in.PageRequest = pr
 
 		result, err := comments.AdminList(c.Request.Context(), in)
-		if mapCommentError(c, err) {
+		if err != nil {
+			switch {
+			case errors.Is(err, pagination.ErrCursorMalformed),
+				errors.Is(err, pagination.ErrCursorInvalidSignature),
+				errors.Is(err, pagination.ErrCursorExpired),
+				errors.Is(err, pagination.ErrCursorWrongKind),
+				errors.Is(err, pagination.ErrCursorMissingField),
+				errors.Is(err, pagination.ErrCursorFieldType),
+				errors.Is(err, pagination.ErrCursorUnsupported):
+				responses.Failure(c, nethttp.StatusBadRequest, pagination.ErrorCode(err), pagination.ErrorCause(err))
+			default:
+				if mapCommentError(c, err) {
+					return
+				}
+			}
 			return
 		}
 
@@ -82,12 +134,10 @@ func adminListCommentsHandler(comments commentModerationAPI) gin.HandlerFunc {
 			items = append(items, responses.AdminComment(comment))
 		}
 
-		responses.SuccessPaginatedFor(c, nethttp.StatusOK, responses.PageOpts{
+		responses.SuccessPaginatedResult[commentdomain.Comment](c, nethttp.StatusOK, responses.CursorPageOpts[commentdomain.Comment]{
 			Service: responses.ServiceComments,
+			Result:  result,
 			Data:    items,
-			Page:    result.Page,
-			PerPage: result.PerPage,
-			Total:   result.Total,
 		})
 	}
 }

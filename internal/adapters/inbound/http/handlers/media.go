@@ -14,7 +14,19 @@ import (
 	mediadomain "github.com/turahe/blog-api/internal/core/media/domain"
 	mediaports "github.com/turahe/blog-api/internal/core/media/ports"
 	mediaservice "github.com/turahe/blog-api/internal/core/media/service"
+	"github.com/turahe/blog-api/internal/shared/pagination"
 )
+
+var mediaAdminCfg = pagination.CursorConfig{
+	Kind: "media_admin",
+	Sort: []pagination.SortField{
+		{Name: "created_at", Dir: pagination.Desc, Type: pagination.TypeTime},
+		{Name: "id", Dir: pagination.Desc, Type: pagination.TypeInt64},
+	},
+	TTL:            pagination.DefaultTTL,
+	MaxPerPage:     pagination.DefaultMaxPerPage,
+	DefaultPerPage: pagination.DefaultPerPage,
+}
 
 // adminPresignMediaHandler godoc
 //
@@ -88,32 +100,54 @@ func adminCompleteMediaHandler(media mediaports.Service) gin.HandlerFunc {
 
 // adminListMediaHandler godoc
 //
-//	@Summary	List media assets
-//	@Tags		admin
-//	@Produce	json
-//	@Param		page	query		int		false	"page"		default(1)
-//	@Param		perPage	query		int		false	"per page"	default(20)
-//	@Param		q		query		string	false	"search"
-//	@Param		disk	query		string	false	"disk filter"
-//	@Param		status	query		string	false	"status filter"	Enums(pending, ready, failed)
-//	@Param		unused	query		bool	false	"only ready assets no avatar, category, post cover, attachment, or SEO image references"
-//	@Success	200		{object}	responses.Envelope
-//	@Security	Bearer
-//	@Router		/api/v1/admin/media [get]
+//	@Summary		List media assets
+//	@Description	Supports both legacy offset pagination (page/perPage) and cursor-based keyset pagination (after/before/limit).
+//	@Tags			admin
+//	@Produce		json
+//	@Param			page			query		int		false	"page (legacy offset mode)"			default(1)
+//	@Param			perPage			query		int		false	"per page (legacy offset mode, alias limit)"	default(20)
+//	@Param			limit			query		int		false	"page size (cursor or offset)"		default(20)
+//	@Param			q				query		string	false	"search"
+//	@Param			disk			query		string	false	"disk filter"
+//	@Param			status			query		string	false	"status filter"	Enums(pending, ready, failed)
+//	@Param			unused			query		bool	false	"only ready assets no avatar, category, post cover, attachment, or SEO image references"
+//	@Param			after			query		string	false	"opaque cursor: return items after this point"
+//	@Param			before			query		string	false	"opaque cursor: return items before this point"
+//	@Param			includeTotal	query		bool	false	"when false, skip COUNT(*) to reduce DB load"	default(true)
+//	@Success		200				{object}	responses.Envelope
+//	@Security		Bearer
+//	@Router			/api/v1/admin/media [get]
 func adminListMediaHandler(media mediaports.Service) gin.HandlerFunc {
 	return func(c *gin.Context) {
-		page := parsePositiveInt(c.Query("page"), 1)
-		perPage := parsePositiveInt(c.Query("perPage"), 20)
+		pr, err := pagination.ParseRequest(c, mediaAdminCfg)
+		if err != nil {
+			responses.Failure(c, nethttp.StatusBadRequest, pagination.ErrorCode(err), pagination.ErrorCause(err))
+			return
+		}
 
-		result, err := media.List(c.Request.Context(), mediadomain.ListFilter{
-			Page:    page,
-			PerPage: perPage,
-			Query:   c.Query("q"),
-			Disk:    c.Query("disk"),
-			Status:  c.Query("status"),
-			Unused:  c.Query("unused") == "true",
-		})
-		if mapMediaError(c, err) {
+		unused, _ := parseBoolQuery(c, "unused", false)
+		filter := mediadomain.ListFilter{
+			PageRequest: pr,
+			Query:       c.Query("q"),
+			Disk:        c.Query("disk"),
+			Status:      c.Query("status"),
+			Unused:      unused,
+		}
+
+		result, err := media.List(c.Request.Context(), filter)
+		if err != nil {
+			switch {
+			case errors.Is(err, pagination.ErrCursorMalformed),
+				errors.Is(err, pagination.ErrCursorInvalidSignature),
+				errors.Is(err, pagination.ErrCursorExpired),
+				errors.Is(err, pagination.ErrCursorWrongKind),
+				errors.Is(err, pagination.ErrCursorMissingField),
+				errors.Is(err, pagination.ErrCursorFieldType),
+				errors.Is(err, pagination.ErrCursorUnsupported):
+				responses.Failure(c, nethttp.StatusBadRequest, pagination.ErrorCode(err), pagination.ErrorCause(err))
+			default:
+				mapMediaError(c, err)
+			}
 			return
 		}
 
@@ -122,12 +156,10 @@ func adminListMediaHandler(media mediaports.Service) gin.HandlerFunc {
 			return
 		}
 
-		responses.SuccessPaginatedFor(c, nethttp.StatusOK, responses.PageOpts{
+		responses.SuccessPaginatedResult[mediadomain.MediaAsset](c, nethttp.StatusOK, responses.CursorPageOpts[mediadomain.MediaAsset]{
 			Service: responses.ServiceMedia,
+			Result:  result,
 			Data:    items,
-			Page:    result.Page,
-			PerPage: result.PerPage,
-			Total:   result.Total,
 		})
 	}
 }
@@ -278,7 +310,13 @@ func publicTransformMediaHandler(media mediaports.Service) gin.HandlerFunc {
 //	@Router			/api/v1/admin/media/usage [get]
 func adminMediaUsageHandler(media mediaports.Service) gin.HandlerFunc {
 	return func(c *gin.Context) {
-		filter := mediadomain.UsageFilter{TopLimit: parsePositiveInt(c.Query("top"), 0)}
+		var topLimit int
+		if raw := strings.TrimSpace(c.Query("top")); raw != "" {
+			if n, err := strconv.Atoi(raw); err == nil && n >= 1 {
+				topLimit = n
+			}
+		}
+		filter := mediadomain.UsageFilter{TopLimit: topLimit}
 
 		if raw := strings.TrimSpace(c.Query("userId")); raw != "" {
 			id, err := uuid.Parse(raw)
@@ -329,15 +367,6 @@ func writeMediaAsset(c *gin.Context, media mediaports.Service, asset mediadomain
 	if items, ok := renderMedia(c, media, asset); ok {
 		responses.Success(c, nethttp.StatusOK, items[0])
 	}
-}
-
-func parsePositiveInt(raw string, fallback int) int {
-	n, err := strconv.Atoi(strings.TrimSpace(raw))
-	if err != nil || n < 1 {
-		return fallback
-	}
-
-	return n
 }
 
 func mapMediaError(c *gin.Context, err error) bool {

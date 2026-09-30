@@ -50,7 +50,11 @@ func CommentThread(thread commentdomain.Thread) gin.H {
 	}
 
 	payload["replies"] = replies
-	payload["repliesTotal"] = thread.Replies.Total
+	if thread.Replies.Total != nil {
+		payload["repliesTotal"] = *thread.Replies.Total
+	} else {
+		payload["repliesTotal"] = int64(0)
+	}
 
 	return payload
 }

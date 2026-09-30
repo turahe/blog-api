@@ -9,6 +9,7 @@ import (
 	"github.com/stretchr/testify/require"
 	commentdomain "github.com/turahe/blog-api/internal/core/comment/domain"
 	privacydomain "github.com/turahe/blog-api/internal/core/privacy/domain"
+	"github.com/turahe/blog-api/internal/shared/pagination"
 	"gorm.io/gorm"
 )
 
@@ -145,7 +146,9 @@ func TestPrivacyDataExportAndErase(t *testing.T) {
 	require.Zero(t, firstSeen)
 	require.Equal(t, int64(1), anonymousRows, "unlinked events are not the user's")
 
-	comments, err := NewCommentRepository(tx).List(ctx, commentdomain.ListFilter{AuthorUUID: &userID, Page: 1, PerPage: 10})
+	commentsFilter := commentdomain.ListFilter{AuthorUUID: &userID}
+	commentsFilter.PageRequest = pagination.ParseLegacy(commentsMeCfg, 1, 10)
+	comments, err := NewCommentRepository(tx).List(ctx, commentsFilter)
 	require.NoError(t, err)
 	require.Len(t, comments.Items, 1)
 	require.Equal(t, ErasedFullName, comments.Items[0].AuthorUsername, "erased authors show as Deleted user")
