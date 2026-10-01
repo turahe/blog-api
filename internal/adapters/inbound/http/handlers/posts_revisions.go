@@ -48,7 +48,7 @@ type allPosts func(c *gin.Context) bool
 //	@Produce		json
 //	@Param			param1			path		string	true	"post UUID"
 //	@Param			page			query		int		false	"page (legacy offset mode)"						default(1)
-//	@Param			perPage			query		int		false	"per page (legacy offset mode, alias limit)"		default(20)
+//	@Param			perPage			query		int		false	"per page (legacy offset mode, alias limit)"	default(20)
 //	@Param			limit			query		int		false	"page size (cursor or offset)"					default(20)
 //	@Param			after			query		string	false	"opaque cursor: return items after this point"
 //	@Param			before			query		string	false	"opaque cursor: return items before this point"

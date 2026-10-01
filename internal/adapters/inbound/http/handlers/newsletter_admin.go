@@ -85,20 +85,20 @@ func wireNewsletterAdmin(c *routes.Newsletter, deps Deps, nl newsletterAdminAPI)
 //	@Tags			admin
 //	@Produce		json
 //	@Produce		text/csv
-//	@Param			status		query		string	false	"pending_confirm, active, unsubscribed, bounced, complained, erased"
-//	@Param			list		query		string	false	"list slug"
-//	@Param			q			query		string	false	"email prefix"
-//	@Param			format		query		string	false	"json or csv"	Enums(json, csv)	default(json)
-//	@Param			after		query		string	false	"opaque forward cursor"
-//	@Param			before		query		string	false	"opaque backward cursor"
-//	@Param			limit		query		int		false	"items per page (alias: perPage)"	default(20)
-//	@Param			perPage		query		int		false	"items per page"					default(20)
-//	@Param			includeTotal query	bool	false	"include total item count (slow)"	default(false)
-//	@Param			page		query		int		false	"page number (legacy offset mode)"	default(1)
-//	@Success		200			{object}	responses.Envelope
-//	@Failure		400			{object}	responses.Envelope
-//	@Failure		401			{object}	responses.Envelope
-//	@Failure		403			{object}	responses.Envelope
+//	@Param			status			query		string	false	"pending_confirm, active, unsubscribed, bounced, complained, erased"
+//	@Param			list			query		string	false	"list slug"
+//	@Param			q				query		string	false	"email prefix"
+//	@Param			format			query		string	false	"json or csv"	Enums(json, csv)	default(json)
+//	@Param			after			query		string	false	"opaque forward cursor"
+//	@Param			before			query		string	false	"opaque backward cursor"
+//	@Param			limit			query		int		false	"items per page (alias: perPage)"	default(20)
+//	@Param			perPage			query		int		false	"items per page"					default(20)
+//	@Param			includeTotal	query		bool	false	"include total item count (slow)"	default(false)
+//	@Param			page			query		int		false	"page number (legacy offset mode)"	default(1)
+//	@Success		200				{object}	responses.Envelope
+//	@Failure		400				{object}	responses.Envelope
+//	@Failure		401				{object}	responses.Envelope
+//	@Failure		403				{object}	responses.Envelope
 //	@Security		Bearer
 //	@Router			/api/v1/admin/newsletter/subscribers [get]
 func adminNewsletterSubscribersHandler(nl newsletterAdminAPI, canExport func(*gin.Context) bool) gin.HandlerFunc {
@@ -292,19 +292,19 @@ func adminNewsletterDeleteSubscriberHandler(nl newsletterAdminAPI) gin.HandlerFu
 //	@Summary	List newsletter issues
 //	@Tags		admin
 //	@Produce	json
-//	@Param			status		 query	string	false	"draft, scheduled, queued, sending, sent, cancelled"
-//	@Param			after		 query	string	false	"opaque forward cursor"
-//	@Param			before		 query	string	false	"opaque backward cursor"
-//	@Param			limit		 query	int		false	"items per page (alias: perPage)"	default(20)
-//	@Param			perPage		 query	int		false	"items per page"					default(20)
-//	@Param			includeTotal query	bool	false	"include total item count (slow)"	default(false)
-//	@Param			page		 query	int		false	"page number (legacy offset mode)"	default(1)
-//	@Success		200			{object}	responses.Envelope
-//	@Failure		400			{object}	responses.Envelope
-//	@Failure		401			{object}	responses.Envelope
-//	@Failure		403			{object}	responses.Envelope
-//	@Security		Bearer
-//	@Router			/api/v1/admin/newsletter/issues [get]
+//	@Param		status			query		string	false	"draft, scheduled, queued, sending, sent, cancelled"
+//	@Param		after			query		string	false	"opaque forward cursor"
+//	@Param		before			query		string	false	"opaque backward cursor"
+//	@Param		limit			query		int		false	"items per page (alias: perPage)"	default(20)
+//	@Param		perPage			query		int		false	"items per page"					default(20)
+//	@Param		includeTotal	query		bool	false	"include total item count (slow)"	default(false)
+//	@Param		page			query		int		false	"page number (legacy offset mode)"	default(1)
+//	@Success	200				{object}	responses.Envelope
+//	@Failure	400				{object}	responses.Envelope
+//	@Failure	401				{object}	responses.Envelope
+//	@Failure	403				{object}	responses.Envelope
+//	@Security	Bearer
+//	@Router		/api/v1/admin/newsletter/issues [get]
 func adminNewsletterIssuesHandler(nl newsletterAdminAPI) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		filter := nldomain.IssueFilter{Status: nldomain.IssueStatus(strings.TrimSpace(c.Query("status")))}

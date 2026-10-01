@@ -52,17 +52,17 @@ func notificationControllers(deps Deps) routes.Notifications {
 //	@Description	In-app notices (replies, moderation outcomes, publications), newest first. The X-Unread-Count header holds the unread total across all pages.
 //	@Tags			me
 //	@Produce		json
-//	@Param			unread		 query	bool	false	"only unread notifications"
-//	@Param			after		 query	string	false	"opaque forward cursor"
-//	@Param			before		 query	string	false	"opaque backward cursor"
-//	@Param			limit		 query	int		false	"items per page (alias: perPage)"	default(20)
-//	@Param			perPage		 query	int		false	"items per page"					default(20)
-//	@Param			includeTotal query	bool	false	"include total item count (slow)"	default(false)
-//	@Param			page		 query	int		false	"page number (legacy offset mode)"	default(1)
-//	@Success		200			{object}	responses.Envelope
-//	@Header			200			{integer}	X-Unread-Count	"unread notifications"
-//	@Failure		400			{object}	responses.Envelope
-//	@Failure		401			{object}	responses.Envelope
+//	@Param			unread			query		bool	false	"only unread notifications"
+//	@Param			after			query		string	false	"opaque forward cursor"
+//	@Param			before			query		string	false	"opaque backward cursor"
+//	@Param			limit			query		int		false	"items per page (alias: perPage)"	default(20)
+//	@Param			perPage			query		int		false	"items per page"					default(20)
+//	@Param			includeTotal	query		bool	false	"include total item count (slow)"	default(false)
+//	@Param			page			query		int		false	"page number (legacy offset mode)"	default(1)
+//	@Success		200				{object}	responses.Envelope
+//	@Header			200				{integer}	X-Unread-Count	"unread notifications"
+//	@Failure		400				{object}	responses.Envelope
+//	@Failure		401				{object}	responses.Envelope
 //	@Security		Bearer
 //	@Router			/api/v1/me/notifications [get]
 func meNotificationsListHandler(inbox notificationAPI) gin.HandlerFunc {

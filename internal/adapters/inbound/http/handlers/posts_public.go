@@ -52,18 +52,18 @@ var postSearchCfg = pagination.CursorConfig{
 //	@Description	q uses web search syntax: "quoted phrase", or, -excluded.
 //	@Tags			public
 //	@Produce		json
-//	@Param			q			query		string	false	"full-text search query (max 200 characters)"
-//	@Param			page		query		int		false	"page (legacy offset mode)"			default(1)
-//	@Param			perPage		query		int		false	"per page (legacy offset mode, alias limit)"	default(20)
-//	@Param			limit		query		int		false	"page size (cursor or offset)"		default(20)
-//	@Param			after		query		string	false	"opaque cursor: return items after this point"
-//	@Param			before		query		string	false	"opaque cursor: return items before this point"
+//	@Param			q				query		string	false	"full-text search query (max 200 characters)"
+//	@Param			page			query		int		false	"page (legacy offset mode)"						default(1)
+//	@Param			perPage			query		int		false	"per page (legacy offset mode, alias limit)"	default(20)
+//	@Param			limit			query		int		false	"page size (cursor or offset)"					default(20)
+//	@Param			after			query		string	false	"opaque cursor: return items after this point"
+//	@Param			before			query		string	false	"opaque cursor: return items before this point"
 //	@Param			includeTotal	query		bool	false	"when false, skip COUNT(*) to reduce DB load"	default(true)
-//	@Param			categoryId	query		string	false	"category UUID"
-//	@Param			tagId		query		string	false	"tag UUID"
-//	@Success		200			{object}	responses.Envelope
-//	@Failure		400			{object}	responses.Envelope
-//	@Failure		503			{object}	responses.Envelope	"search.unavailable"
+//	@Param			categoryId		query		string	false	"category UUID"
+//	@Param			tagId			query		string	false	"tag UUID"
+//	@Success		200				{object}	responses.Envelope
+//	@Failure		400				{object}	responses.Envelope
+//	@Failure		503				{object}	responses.Envelope	"search.unavailable"
 //	@Router			/api/v1/posts [get]
 func listPublishedPostsHandler(posts *postservice.PostService) gin.HandlerFunc {
 	return func(c *gin.Context) {

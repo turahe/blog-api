@@ -58,9 +58,9 @@ type commentAPI interface {
 //	@Produce		json
 //	@Param			param1			path		string	true	"post UUID"
 //	@Param			parentId		query		string	false	"parent comment UUID"
-//	@Param			page			query		int		false	"page (legacy offset mode)"			default(1)
+//	@Param			page			query		int		false	"page (legacy offset mode)"						default(1)
 //	@Param			perPage			query		int		false	"per page (legacy offset mode, alias limit)"	default(20)
-//	@Param			limit			query		int		false	"page size (cursor or offset)"		default(20)
+//	@Param			limit			query		int		false	"page size (cursor or offset)"					default(20)
 //	@Param			after			query		string	false	"opaque cursor: return items after this point"
 //	@Param			before			query		string	false	"opaque cursor: return items before this point"
 //	@Param			includeTotal	query		bool	false	"when false, skip COUNT(*) to reduce DB load"	default(true)
@@ -277,9 +277,9 @@ func flagCommentHandler(comments commentAPI) gin.HandlerFunc {
 //	@Description	Supports both legacy offset pagination (page/perPage) and cursor-based keyset pagination (after/before/limit).
 //	@Tags			self-service
 //	@Produce		json
-//	@Param			page			query		int		false	"page (legacy offset mode)"			default(1)
+//	@Param			page			query		int		false	"page (legacy offset mode)"						default(1)
 //	@Param			perPage			query		int		false	"per page (legacy offset mode, alias limit)"	default(20)
-//	@Param			limit			query		int		false	"page size (cursor or offset)"		default(20)
+//	@Param			limit			query		int		false	"page size (cursor or offset)"					default(20)
 //	@Param			after			query		string	false	"opaque cursor: return items after this point"
 //	@Param			before			query		string	false	"opaque cursor: return items before this point"
 //	@Param			includeTotal	query		bool	false	"when false, skip COUNT(*) to reduce DB load"	default(true)

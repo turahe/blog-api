@@ -158,21 +158,21 @@ func adminUpdateSettingsHandler(settings settingsAPI) gin.HandlerFunc {
 
 // adminSettingsHistoryHandler godoc
 //
-//	@Summary		List settings history
-//	@Tags			admin
-//	@Produce		json
-//	@Param			key				query		string	false	"only changes of this key"
-//	@Param			after			query		string	false	"cursor for next page"
-//	@Param			before			query		string	false	"cursor for previous page"
-//	@Param			limit			query		int		false	"page size alias (default 20, max 100)"
-//	@Param			perPage			query		int		false	"page size (default 20, max 100)"
-//	@Param			includeTotal	query		bool	false	"include total count (default true)"
-//	@Param			page			query		int		false	"legacy page number (offset mode fallback)"
-//	@Success		200				{object}	responses.Envelope
-//	@Failure		400				{object}	responses.Envelope
-//	@Failure		403				{object}	responses.Envelope
-//	@Security		Bearer
-//	@Router			/api/v1/admin/settings/history [get]
+//	@Summary	List settings history
+//	@Tags		admin
+//	@Produce	json
+//	@Param		key				query		string	false	"only changes of this key"
+//	@Param		after			query		string	false	"cursor for next page"
+//	@Param		before			query		string	false	"cursor for previous page"
+//	@Param		limit			query		int		false	"page size alias (default 20, max 100)"
+//	@Param		perPage			query		int		false	"page size (default 20, max 100)"
+//	@Param		includeTotal	query		bool	false	"include total count (default true)"
+//	@Param		page			query		int		false	"legacy page number (offset mode fallback)"
+//	@Success	200				{object}	responses.Envelope
+//	@Failure	400				{object}	responses.Envelope
+//	@Failure	403				{object}	responses.Envelope
+//	@Security	Bearer
+//	@Router		/api/v1/admin/settings/history [get]
 func adminSettingsHistoryHandler(settings settingsAPI) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		pr, err := pagination.ParseRequest(c, settingsHistoryCfg)

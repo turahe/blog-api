@@ -55,10 +55,10 @@ type commentModerationAPI interface {
 //	@Produce		json
 //	@Param			status			query		string	false	"comma-separated statuses: pending, approved, flagged, spam, rejected, deleted"
 //	@Param			postId			query		string	false	"post UUID"
-//	@Param			sort			query		string	false	"oldest or newest"	Enums(oldest, newest)	default(oldest)
-//	@Param			page			query		int		false	"page (legacy offset mode)"			default(1)
+//	@Param			sort			query		string	false	"oldest or newest"								Enums(oldest, newest)	default(oldest)
+//	@Param			page			query		int		false	"page (legacy offset mode)"						default(1)
 //	@Param			perPage			query		int		false	"per page (legacy offset mode, alias limit)"	default(20)
-//	@Param			limit			query		int		false	"page size (cursor or offset)"		default(20)
+//	@Param			limit			query		int		false	"page size (cursor or offset)"					default(20)
 //	@Param			after			query		string	false	"opaque cursor: return items after this point"
 //	@Param			before			query		string	false	"opaque cursor: return items before this point"
 //	@Param			includeTotal	query		bool	false	"when false, skip COUNT(*) to reduce DB load"	default(true)

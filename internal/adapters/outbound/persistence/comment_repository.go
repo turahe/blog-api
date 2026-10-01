@@ -358,7 +358,7 @@ func (r *CommentRepository) ListAdmin(ctx context.Context, filter commentdomain.
 	cfg := commentsAdminCfg
 	if filter.NewestFirst {
 		cfg = pagination.CursorConfig{
-			Kind:           "comments_admin_newest",
+			Kind: "comments_admin_newest",
 			Sort: []pagination.SortField{
 				{Name: "created_at", Column: "comments.created_at", Dir: pagination.Desc, Type: pagination.TypeTime},
 				{Name: "id", Column: "comments.id", Dir: pagination.Desc, Type: pagination.TypeInt64},
