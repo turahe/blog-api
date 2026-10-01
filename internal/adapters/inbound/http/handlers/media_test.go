@@ -414,14 +414,14 @@ func TestAdminListMediaHandler(t *testing.T) {
 			name: "passes filters", query: "?page=2&perPage=5&q=cat&disk=s3&status=ready&unused=true", status: nethttp.StatusOK,
 			wantFilter: mediadomain.ListFilter{
 				PageRequest: pagination.PageRequest{Mode: pagination.ModeOffset, Forward: true, Page: 2, Limit: 5, Offset: 0, IncludeTotal: true},
-				Query:       "cat", Disk: "s3", Status: "ready", Unused: true,
+				Query: "cat", Disk: "s3", Status: "ready", Unused: true,
 			},
 		},
 		{
 			name: "invalid paging falls back", query: "?page=-1&perPage=x&unused=true", status: nethttp.StatusOK,
 			wantFilter: mediadomain.ListFilter{
 				PageRequest: pagination.PageRequest{Mode: pagination.ModeOffset, Forward: true, Page: 1, Limit: 20, IncludeTotal: true},
-				Unused:      true,
+				Unused: true,
 			},
 		},
 		{
