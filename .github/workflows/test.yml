@@ -10,14 +10,8 @@ permissions:
 
 jobs:
   test:
-    name: Test (Go ${{ matrix.go }})
+    name: Test (Go 1.27)
     runs-on: ubuntu-latest
-    strategy:
-      fail-fast: false
-      matrix:
-        go:
-          - "1.27"
-          - "stable"
 
     services:
       postgres:
@@ -80,7 +74,8 @@ jobs:
       - name: Set up Go
         uses: actions/setup-go@v7
         with:
-          go-version: ${{ matrix.go }}
+          go-version: "1.27"
+          cache: true
 
       - name: Verify dependencies
         run: |
@@ -99,7 +94,6 @@ jobs:
         run: go test -race -shuffle=on -run=^$$ -coverprofile=coverage.out ./cmd/... ./internal/...
 
       - name: Upload coverage
-        if: matrix.go == 'stable'
         uses: codecov/codecov-action@v7
         with:
           files: ./coverage.out
