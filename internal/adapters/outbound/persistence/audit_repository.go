@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"maps"
+	"strings"
 	"time"
 
 	"github.com/google/uuid"
@@ -199,7 +200,7 @@ func (r *AuditRepository) Activity(ctx context.Context, filter auditdomain.Activ
 	}
 
 	var models []AuditLogModel
-	db := query.Select(auditLogColumns).Order(seek.OrderClause).Limit(seek.LimitFetch)
+	db := query.Select(auditLogColumns).Order(strings.TrimPrefix(seek.OrderClause, "ORDER BY ")).Limit(seek.LimitFetch)
 	if pr.Mode == pagination.ModeOffset {
 		db = db.Offset(pr.Offset)
 	}

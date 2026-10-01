@@ -110,7 +110,7 @@ func (r *PostRepository) ListPublished(ctx context.Context, filter postdomain.Li
 	}
 
 	var models []PostModel
-	db := q.Select(postColumns).Order(seek.OrderClause).Limit(seek.LimitFetch)
+	db := q.Select(postColumns).Order(strings.TrimPrefix(seek.OrderClause, "ORDER BY ")).Limit(seek.LimitFetch)
 	if pr.Mode == pagination.ModeOffset {
 		db = db.Offset(pr.Offset)
 	}
@@ -235,7 +235,7 @@ func (r *PostRepository) ListAdmin(ctx context.Context, filter postdomain.AdminL
 	}
 
 	var models []PostModel
-	db := q.Select(postColumns).Order(seek.OrderClause).Limit(seek.LimitFetch)
+	db := q.Select(postColumns).Order(strings.TrimPrefix(seek.OrderClause, "ORDER BY ")).Limit(seek.LimitFetch)
 	if pr.Mode == pagination.ModeOffset {
 		db = db.Offset(pr.Offset)
 	}
@@ -262,7 +262,7 @@ func (r *PostRepository) ListAdmin(ctx context.Context, filter postdomain.AdminL
 	}
 	if len(page) > 0 {
 		if out.HasNextPage {
-			fields := pagination.SortValues[postdomain.Post](postAdminCfg, page[len(page)-1],
+			fields := pagination.SortValues[postdomain.Post](postListPublishedCfg, page[len(page)-1],
 				func(row postdomain.Post, i int) any {
 					switch i {
 					case 0:

@@ -163,6 +163,7 @@ func TestNewsletterRepositoryListIssues(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			page, err := repo.ListIssues(t.Context(), tt.filter)
 			require.NoError(t, err)
+			require.NotNil(t, page.Total)
 			require.GreaterOrEqual(t, *page.Total, tt.wantTotal)
 			require.Equal(t, tt.want, issueIDs(page.Items)[:len(tt.want)])
 			require.Equal(t, tt.filter.PageRequest.Page, page.OffsetPage)

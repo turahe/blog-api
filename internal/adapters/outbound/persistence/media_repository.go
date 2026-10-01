@@ -3,6 +3,7 @@ package persistence
 import (
 	"context"
 	"errors"
+	"strings"
 	"time"
 
 	"github.com/google/uuid"
@@ -182,7 +183,7 @@ func (r *MediaRepository) List(ctx context.Context, filter mediadomain.ListFilte
 	}
 
 	var models []MediaAssetModel
-	db := q.Select(mediaColumns).Order(seek.OrderClause).Limit(seek.LimitFetch)
+	db := q.Select(mediaColumns).Order(strings.TrimPrefix(seek.OrderClause, "ORDER BY ")).Limit(seek.LimitFetch)
 	if pr.Mode == pagination.ModeOffset {
 		db = db.Offset(pr.Offset)
 	}

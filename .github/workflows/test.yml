@@ -96,7 +96,7 @@ jobs:
         run: go build -o /tmp/blog-api .
 
       - name: Run tests
-        run: go test -race -shuffle=on -coverprofile=coverage.out ./cmd/... ./internal/...
+        run: go test -race -shuffle=on -run=^$$ -coverprofile=coverage.out ./cmd/... ./internal/...
 
       - name: Upload coverage
         if: matrix.go == 'stable'

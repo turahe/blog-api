@@ -1,4 +1,4 @@
-.PHONY: test test-race test-integration test-brokers asyncapi-validate coverage lint routes-check swagger dev-keys infra-up infra-down docker-up docker-dev docker-down docker-push docker-build docker-logs docker-seed docker-migrate trivy
+.PHONY: test test-race test-integration test-brokers asyncapi-validate coverage lint routes-check swagger dev-keys infra-up infra-down docker-up docker-dev docker-down docker-push docker-build docker-logs docker-seed docker-migrate trivy bench bench-cursor bench-post
 
 MODULE := github.com/turahe/blog-api
 TEST_PKGS := ./cmd/... ./internal/... ./docs/...
@@ -54,6 +54,31 @@ test-brokers:
 		-e TEST_KAFKA_BROKERS=127.0.0.1:9092 \
 		-e TEST_RABBITMQ_URL="amqp://$$($(RABBIT_ENV) RABBITMQ_DEFAULT_USER):$$($(RABBIT_ENV) RABBITMQ_DEFAULT_PASS)@127.0.0.1:5672/" \
 		$(GO_IMAGE) go test -count=1 -run TestBroker ./internal/platform/messaging/...
+
+# Benchmark cursor pagination operations (no database required, runs in 5-10 minutes).
+# Pass BENCH_ARGS to customize, e.g. `make bench-cursor BENCH_ARGS="-benchtime=10s -count=5"`
+bench-cursor:
+	$(DOCKER_GO) $(GO_IMAGE) sh -c '\
+		go test -bench=BenchmarkEncodeCursor -benchmem $(BENCH_ARGS) ./internal/shared/pagination/... && \
+		go test -bench=BenchmarkDecodeCursor -benchmem $(BENCH_ARGS) ./internal/shared/pagination/... && \
+		go test -bench=BenchmarkCursorRoundTrip -benchmem $(BENCH_ARGS) ./internal/shared/pagination/... && \
+		chown $(HOST_UID_GID) *_bench_test.go 2>/dev/null; true'
+
+# Benchmark post listing and search operations against Compose Postgres (run `make infra-up` first).
+# Requires TEST_DATABASE_URL; runs full 100k-record benchmarks (15-30 minutes).
+# Pass BENCH_ARGS to customize, e.g. `make bench-post BENCH_ARGS="-benchtime=5s -count=3"`
+bench-post:
+	docker compose exec -T postgres sh -c 'dropdb -U "$$POSTGRES_USER" --if-exists $(TEST_DB) && createdb -U "$$POSTGRES_USER" $(TEST_DB)'
+	$(DOCKER_GO) --network container:$$(docker compose ps -q postgres) \
+		-e TEST_DATABASE_URL="host=127.0.0.1 port=5432 sslmode=disable dbname=$(TEST_DB) user=$$($(PG_ENV) POSTGRES_USER) password=$$($(PG_ENV) POSTGRES_PASSWORD)" \
+		$(GO_IMAGE) go test -bench=BenchmarkListPublished -run=^$$ -benchmem $(BENCH_ARGS) -timeout=60m ./internal/adapters/outbound/persistence/...
+	$(DOCKER_GO) --network container:$$(docker compose ps -q postgres) \
+		-e TEST_DATABASE_URL="host=127.0.0.1 port=5432 sslmode=disable dbname=$(TEST_DB) user=$$($(PG_ENV) POSTGRES_USER) password=$$($(PG_ENV) POSTGRES_PASSWORD)" \
+		$(GO_IMAGE) go test -bench=BenchmarkSearchPublished -run=^$$ -benchmem $(BENCH_ARGS) -timeout=60m ./internal/adapters/outbound/persistence/...
+
+# Run all benchmarks: cursor operations + post list/search (requires `make infra-up` first).
+# Full run takes 30-45 minutes. Pass BENCH_ARGS to customize both targets.
+bench: bench-cursor bench-post
 
 # Validate the event contract; warnings are printed, schema errors fail.
 asyncapi-validate:

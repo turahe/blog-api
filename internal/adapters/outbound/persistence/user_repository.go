@@ -167,7 +167,7 @@ func (r *UserRepository) List(ctx context.Context, filter userdomain.ListFilter)
 	}
 
 	var models []UserModel
-	db := q.Order(seek.OrderClause).Limit(seek.LimitFetch)
+	db := q.Order(strings.TrimPrefix(seek.OrderClause, "ORDER BY ")).Limit(seek.LimitFetch)
 	if pr.Mode == pagination.ModeOffset {
 		db = db.Offset(pr.Offset)
 	}
