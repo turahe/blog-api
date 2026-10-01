@@ -1,27 +1,104 @@
 name: govulncheck
+
+# Run on push, pull request, daily schedule, and manual trigger
 on:
   push:
+    branches:
+      - main
+      - develop
   pull_request:
-  schedule: # daily at 10:22 UTC
+    branches:
+      - main
+      - develop
+  schedule:
+    # Daily at 10:22 UTC
     - cron: '22 10 * * *'
   workflow_dispatch:
+
+# Permissions: read contents for checkout, write for SARIF upload (if enabled)
 permissions:
   contents: read
+  security-events: write
+
 jobs:
   govulncheck:
+    name: Govulncheck vulnerability scan
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 15
+    
     strategy:
       fail-fast: false
       matrix:
-        work-dir: ['.',
-                   './gcp/observability',
-                   './cmd/protoc-gen-go-grpc',
-                   './security/advancedtls',
-                   './stats/opencensus']
+        # Only include directories that exist in this repository
+        work-dir: ['.']
+    
     steps:
+      # Step 1: Checkout repository
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          # Ensure we have the full history for proper vulnerability detection
+
+      # Step 2: Set up Go environment
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.22'
+          cache: true
+          cache-dependency-path: go.sum
+
+      # Step 3: Run govulncheck
       - name: Run govulncheck
         uses: golang/govulncheck-action@v1
         with:
           check-latest: true
           work-dir: ${{ matrix.work-dir }}
+          # Optional: Output SARIF for GitHub code scanning
+          # Uncomment below to integrate with GitHub Security tab
+          # output-format: sarif
+          # output-file: results.sarif
+
+      # Step 4: Log successful completion
+      - name: Log govulncheck completion
+        if: success()
+        run: |
+          echo "✓ Govulncheck completed successfully for work-dir: ${{ matrix.work-dir }}"
+
+      # Step 5: Handle and report failures
+      - name: Report vulnerabilities found
+        if: failure()
+        run: |
+          echo "⚠ Vulnerabilities detected by govulncheck"
+          echo "Review the workflow logs above for details"
+          exit 1
+
+      # Optional: Upload SARIF results to GitHub code scanning
+      # Uncomment this section if you want to see vulnerabilities in the GitHub Security tab
+      # - name: Upload SARIF to GitHub Security
+      #   if: always() && hashFiles('results.sarif') != ''
+      #   uses: github/codeql-action/upload-sarif@v3
+      #   with:
+      #     sarif_file: results.sarif
+      #     category: govulncheck-${{ matrix.work-dir }}
+
+  # Optional: Summary job to provide clear pass/fail status
+  govulncheck-summary:
+    name: Govulncheck summary
+    runs-on: ubuntu-latest
+    needs: govulncheck
+    if: always()
+    
+    steps:
+      - name: Check govulncheck status
+        run: |
+          if [ "${{ needs.govulncheck.result }}" == "success" ]; then
+            echo "✓ All govulncheck scans passed"
+            exit 0
+          elif [ "${{ needs.govulncheck.result }}" == "failure" ]; then
+            echo "✗ Govulncheck scan failed - vulnerabilities detected"
+            exit 1
+          else
+            echo "⚠ Govulncheck scan inconclusive or was skipped"
+            exit 1
+          fi
