@@ -483,22 +483,16 @@ events is the build version.
 | `SENTRY_DSN` | empty | No | Enables Sentry for `serve`, `worker`, `scheduler`, and `doctor`. Empty disables it entirely. |
 | `SENTRY_ENVIRONMENT` | `APP_ENV` | No | Environment tag on events and transactions. |
 | `SENTRY_TRACES_SAMPLE_RATE` | `0.1` | No | Fraction (`0`–`1`) of requests and consumed messages recorded as performance transactions. |
-| `SENTRY_LOGS_LEVEL` | `info` | No | Minimum level (`debug`, `info`, `warn`, `error`) of log records sent to Sentry Logs; `off` sends none. Independent of the stdout log level. |
+| `SENTRY_LOGS_LEVEL` | `info` | No | Parsed and validated (`off`, `debug`, `info`, `warn`, `error`). `github.com/turahe/pkg/sentryx` does not forward log records, so this value does not change what Sentry receives. |
 
-Every Error-level log record becomes a Sentry event: recovered panics, 5xx responses, and
-worker handler failures. Attributes go through the same redaction as the JSON logs, and a
-panic is reported once (not again by the resulting 500 access log). HTTP transactions are
-named after the route template (e.g. `GET /api/v1/posts/:slug`), never the raw path. The
-release is the build version. Default PII collection is off, and the query string,
-cookies, request body, and credential-bearing headers are stripped before sending.
+`github.com/turahe/pkg/sentryx` initializes the client from `SentryConfiguration`. An empty
+`SENTRY_DSN` leaves Sentry off. An invalid DSN is logged and Sentry stays off; startup
+continues. The release is the build version. HTTP transactions are named after the route
+template (e.g. `GET /api/v1/posts/:slug`), never the raw path.
 
-Records at `SENTRY_LOGS_LEVEL` and above are also sent to Sentry Logs, with the same
-redacted attributes and linked to the request or message trace. The default `info` includes
-one access-log record per request; set `warn` to cut volume on busy deployments.
-
-Inside a sampled transaction, each GORM statement becomes a `db.sql.query` span whose
-description is the SQL with placeholders (bound values are never sent). Statements outside
-a transaction (startup, migrations, scheduler jobs) are not traced.
+`sentryx` does not turn log records into Sentry events, does not send Sentry Logs, does not
+record GORM statement spans, and does not strip the query string, cookies, body, or
+credential headers from events. Do not log secrets.
 
 Each `app scheduler` job reports Sentry cron check-ins to a monitor named after the job
 (e.g. `audit-prune`), created on the first check-in with an interval schedule matching the

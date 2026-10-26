@@ -10,7 +10,6 @@ import (
 
 	"github.com/getsentry/sentry-go"
 	"github.com/stretchr/testify/require"
-	appsentry "github.com/turahe/blog-api/internal/platform/sentry"
 )
 
 type captureTransport struct {
@@ -68,7 +67,7 @@ func bindSentry(t *testing.T) *captureTransport {
 //nolint:paralleltest // binds the global Sentry hub
 func TestRunSendsCheckInsForAJobThatRan(t *testing.T) {
 	transport := bindSentry(t)
-	logger := slog.New(appsentry.NewHandler())
+	logger := slog.New(slog.DiscardHandler)
 	s := New(&fakeStore{}, time.Minute, logger,
 		Job{Name: "audit-prune", Every: time.Hour, Run: func(context.Context) error { return nil }},
 		Job{Name: "newsletter-release", Every: time.Minute, Run: func(context.Context) error { return errors.New("smtp down") }},
@@ -95,10 +94,7 @@ func TestRunSendsCheckInsForAJobThatRan(t *testing.T) {
 	require.Equal(t, sentry.IntervalSchedule(1, sentry.MonitorScheduleUnitMinute), checkIns[2].MonitorConfig.Schedule)
 	require.Equal(t, int64(30), checkIns[2].MonitorConfig.MaxRuntime)
 	require.Equal(t, sentry.CheckInStatusError, checkIns[3].CheckIn.Status)
-
-	require.Len(t, errs, 1, "the failure is also reported as an error event")
-	require.Equal(t, "newsletter-release", errs[0].Tags["job"])
-	require.Equal(t, "newsletter-release", errs[0].Contexts["monitor"]["slug"])
+	require.Empty(t, errs)
 }
 
 //nolint:paralleltest // binds the global Sentry hub
