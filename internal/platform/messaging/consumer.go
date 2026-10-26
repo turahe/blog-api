@@ -8,7 +8,7 @@ import (
 
 	"github.com/ThreeDotsLabs/watermill/message"
 	"github.com/ThreeDotsLabs/watermill/message/router/middleware"
-	"github.com/turahe/blog-api/internal/platform/logging"
+	pklogger "github.com/turahe/pkg/logger"
 )
 
 // DeadLetterTopic receives messages whose handler still fails after every retry.
@@ -62,11 +62,11 @@ func NewRouter(bus *Bus, cfg ConsumerConfig) (*message.Router, error) {
 }
 
 // Correlation copies the correlation_id metadata into the message context, so handler logs
-// carry the request_id of the API call that produced the event.
+// carry the correlation id of the API call that produced the event.
 func Correlation(h message.HandlerFunc) message.HandlerFunc {
 	return func(msg *message.Message) ([]*message.Message, error) {
 		if id := msg.Metadata.Get(CorrelationIDKey); id != "" {
-			msg.SetContext(logging.WithRequestID(msg.Context(), id))
+			msg.SetContext(pklogger.WithCorrelationID(msg.Context(), id))
 		}
 
 		return h(msg)

@@ -12,10 +12,11 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	pklogger "github.com/turahe/pkg/logger"
+
 	"github.com/turahe/blog-api/internal/adapters/inbound/http/responses"
 	"github.com/turahe/blog-api/internal/adapters/inbound/http/swagger"
 	"github.com/turahe/blog-api/internal/adapters/inbound/routes"
-	"github.com/turahe/blog-api/internal/platform/logging"
 )
 
 func accessLoggedRouter(logs *bytes.Buffer) *gin.Engine {
@@ -55,13 +56,12 @@ func TestRequestIDPropagatesToRequestContext(t *testing.T) {
 
 	gin.SetMode(gin.TestMode)
 
-	var logs bytes.Buffer
+	var got string
 
-	logger := logging.NewTo(&logs, "production")
 	router := gin.New()
 	router.Use(RequestID())
 	router.GET("/work", func(c *gin.Context) {
-		logger.InfoContext(c.Request.Context(), "core work")
+		got = pklogger.GetCorrelationID(c.Request.Context())
 		c.Status(nethttp.StatusNoContent)
 	})
 
@@ -74,10 +74,7 @@ func TestRequestIDPropagatesToRequestContext(t *testing.T) {
 	router.ServeHTTP(recorder, req)
 
 	require.Equal(t, id, recorder.Header().Get("X-Request-ID"))
-
-	var entry map[string]any
-	require.NoError(t, json.Unmarshal(logs.Bytes(), &entry))
-	require.Equal(t, id, entry["request_id"])
+	require.Equal(t, id, got)
 }
 
 func TestAccessLogUnmatchedRouteLogsPathAtInfo(t *testing.T) {

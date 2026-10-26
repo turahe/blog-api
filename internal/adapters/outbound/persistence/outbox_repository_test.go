@@ -9,11 +9,12 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/require"
+	pklogger "github.com/turahe/pkg/logger"
+	"gorm.io/gorm"
+
 	"github.com/turahe/blog-api/internal/core/event"
 	postservice "github.com/turahe/blog-api/internal/core/post/service"
-	"github.com/turahe/blog-api/internal/platform/logging"
 	"github.com/turahe/blog-api/internal/platform/system"
-	"gorm.io/gorm"
 )
 
 func outboxCount(t *testing.T, tx *gorm.DB, where string, args ...any) int64 {
@@ -70,7 +71,7 @@ func TestOutboxRecordWritesEnvelopeHeaders(t *testing.T) {
 	at := time.Date(2026, 9, 25, 10, 0, 0, 0, time.UTC)
 
 	e := event.New(event.PostPublished, event.AggregatePost, aggregate, &actor, at, map[string]any{"title": "Hello"})
-	ctx := logging.WithRequestID(t.Context(), "req-123")
+	ctx := pklogger.WithCorrelationID(t.Context(), "req-123")
 	require.NoError(t, repo.Record(ctx, e))
 
 	var row struct {

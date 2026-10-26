@@ -24,7 +24,7 @@ TOTP 2FA, OAuth sign-in, role administration, and per-user activity from the aud
 - [x] GitHub Actions workflow at `.github/workflows/go.yml`
 - [x] Request correlation IDs (`middleware.RequestID`, `X-Request-ID`) logged by `middleware.AccessLog`
 - [x] Propagate the request ID into `context.Context` so core services and outbound adapters log it
-      (`logging.WithRequestID`; the logger adds `request_id` to every `*Context` call)
+      (`logger.WithCorrelationID` from `github.com/turahe/pkg/logger`; records include `correlation_id`)
 - [x] Graceful-shutdown timeout driven by `APP_SHUTDOWN_TIMEOUT` (`cmd/serve.go`)
 
 ## Epic: persistence and cache

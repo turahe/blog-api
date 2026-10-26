@@ -3,7 +3,6 @@ package scheduler
 import (
 	"context"
 	"errors"
-	"io"
 	"log/slog"
 	"sync"
 	"testing"
@@ -11,7 +10,7 @@ import (
 
 	"github.com/getsentry/sentry-go"
 	"github.com/stretchr/testify/require"
-	"github.com/turahe/blog-api/internal/platform/logging"
+	appsentry "github.com/turahe/blog-api/internal/platform/sentry"
 )
 
 type captureTransport struct {
@@ -69,7 +68,7 @@ func bindSentry(t *testing.T) *captureTransport {
 //nolint:paralleltest // binds the global Sentry hub
 func TestRunSendsCheckInsForAJobThatRan(t *testing.T) {
 	transport := bindSentry(t)
-	logger := logging.NewTo(io.Discard, "production", logging.NewSentryHandler())
+	logger := slog.New(appsentry.NewHandler())
 	s := New(&fakeStore{}, time.Minute, logger,
 		Job{Name: "audit-prune", Every: time.Hour, Run: func(context.Context) error { return nil }},
 		Job{Name: "newsletter-release", Every: time.Minute, Run: func(context.Context) error { return errors.New("smtp down") }},

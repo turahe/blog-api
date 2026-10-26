@@ -2,7 +2,7 @@ package middleware
 
 import (
 	"context"
-	"io"
+	"log/slog"
 	nethttp "net/http"
 	"net/http/httptest"
 	"sync"
@@ -12,7 +12,7 @@ import (
 	"github.com/getsentry/sentry-go"
 	"github.com/gin-gonic/gin"
 	"github.com/stretchr/testify/require"
-	"github.com/turahe/blog-api/internal/platform/logging"
+	appsentry "github.com/turahe/blog-api/internal/platform/sentry"
 )
 
 type captureTransport struct {
@@ -60,7 +60,7 @@ func TestTracingReportsPanicOnceWithRouteTransaction(t *testing.T) {
 
 	gin.SetMode(gin.TestMode)
 
-	logger := logging.NewTo(io.Discard, "production", logging.NewSentryHandler())
+	logger := slog.New(appsentry.NewHandler())
 	router := gin.New()
 	router.Use(RequestID(), Tracing(), AccessLog(logger), Recovery(logger))
 	router.GET("/posts/:slug", func(*gin.Context) { panic("boom") })

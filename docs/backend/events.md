@@ -211,8 +211,8 @@ Metrics (on `METRICS_ADDR` in `app worker`): `blog_outbox_published_total`,
    `MESSAGE_TOPIC_PREFIX`) and acked, so it stops blocking the subscription. Watermill adds
    `reason_poisoned`, `topic_poisoned`, and `handler_poisoned` to the original headers, so
    handler errors must not contain secrets. Inspect or replay dead letters with broker tools.
-2. **Correlation.** The `correlation_id` header becomes the context request id, so handler
-   logs carry the `request_id` of the API call that produced the event.
+2. **Correlation.** The `correlation_id` header is stored on the message context with
+   `github.com/turahe/pkg/logger`, so handler logs include `correlation_id`.
 3. **Tracing**, then **retry**: `CONSUMER_MAX_RETRIES` attempts after the first, backing off
    from `CONSUMER_RETRY_INTERVAL` and doubling up to `CONSUMER_RETRY_MAX_INTERVAL`. Errors
    wrapping `messaging.ErrPermanent` skip the retries.

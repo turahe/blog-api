@@ -4,19 +4,21 @@ import (
 	"context"
 	"log/slog"
 
+	pklogger "github.com/turahe/pkg/logger"
+
 	"github.com/turahe/blog-api/internal/platform/config"
 	"github.com/turahe/blog-api/internal/platform/connect"
-	"github.com/turahe/blog-api/internal/platform/logging"
+	"github.com/turahe/blog-api/internal/platform/sentry"
 )
 
-// NewLogger initialises Sentry when SENTRY_DSN is set and returns the app
-// logger (reporting Error-level records to Sentry, and records at
-// SENTRY_LOGS_LEVEL to Sentry Logs) plus a flush func to defer until shutdown
-// so buffered events are delivered.
+// NewLogger installs github.com/turahe/pkg/logger, starts Sentry when SENTRY_DSN
+// is set, and returns that logger plus a flush func to defer until shutdown.
+// Error records are also sent to Sentry. Records at SENTRY_LOGS_LEVEL go to
+// Sentry Logs. The flush func delivers buffered events.
 func NewLogger(cfg config.Config, version string) (*slog.Logger, func(), error) {
 	connect.Install(cfg, version)
 
-	flush, err := logging.InitSentry(cfg, version)
+	flush, err := sentry.Init(cfg, version)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -29,14 +31,15 @@ func NewLogger(cfg config.Config, version string) (*slog.Logger, func(), error) 
 		_ = stopTracing(context.Background())
 	}
 
+	log := pklogger.GetLogger()
 	if !cfg.SentryEnabled() {
-		return logging.New(cfg.Environment), flush, nil
+		return log, flush, nil
 	}
 
-	handler := logging.NewSentryHandler()
+	handler := sentry.NewHandler()
 	if level, ok := cfg.SentryLogs(); ok {
 		handler = handler.WithLogs(level)
 	}
 
-	return logging.New(cfg.Environment, handler), flush, nil
+	return slog.New(slog.NewMultiHandler(log.Handler(), handler)), flush, nil
 }

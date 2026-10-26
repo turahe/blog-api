@@ -8,7 +8,7 @@ import (
 
 	"github.com/turahe/blog-api/internal/platform/config"
 	"github.com/turahe/blog-api/internal/platform/connect"
-	"github.com/turahe/blog-api/internal/platform/logging"
+	"github.com/turahe/blog-api/internal/platform/sentry"
 )
 
 // OpenDatabase opens Postgres or Cloud SQL through github.com/turahe/pkg/database
@@ -22,7 +22,7 @@ func OpenDatabase(ctx context.Context, cfg config.Config) (*pkgdb.Database, erro
 	gdb := db.DB()
 	gdb.Config.DisableForeignKeyConstraintWhenMigrating = true
 
-	if err := gdb.Use(logging.GORMTracing{}); err != nil {
+	if err := gdb.Use(sentry.GORMTracing{}); err != nil {
 		_ = db.Close()
 
 		return nil, fmt.Errorf("register gorm tracing: %w", err)
