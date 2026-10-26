@@ -17,6 +17,7 @@ import (
 	jwtlib "github.com/golang-jwt/jwt/v5"
 	"github.com/google/uuid"
 	authdomain "github.com/turahe/blog-api/internal/core/auth/domain"
+	"github.com/turahe/blog-api/internal/platform/connect"
 )
 
 // Service implements authports.TokenService.
@@ -59,6 +60,10 @@ func New(privatePEM, publicPEM, hashKey, issuer string) (*Service, error) {
 
 	if issuer == "" {
 		issuer = "blog-api"
+	}
+
+	if err := connect.LoadJWTKeys(privatePEM, publicPEM, issuer); err != nil {
+		return nil, fmt.Errorf("load JWT keys: %w", err)
 	}
 
 	return &Service{

@@ -1,9 +1,17 @@
 # Project Configuration
 
 The application is configured exclusively through process environment variables.
-`internal/platform/config/config.go` is the source of truth for variables consumed by the
-Go process. [.env.example](../../.env.example) is the local template and also supplies
-variable substitution for [compose.yaml](../../compose.yaml).
+Shared infrastructure comes from [`github.com/turahe/pkg/config`](https://pkg.go.dev/github.com/turahe/pkg/config).
+`internal/platform/config.Config` embeds that package's `Configuration`, and `Load` fills
+`Server`, `Database`, `Redis`, `Sentry`, `OpenTelemetry`, and `Timezone` from the variables
+in the sections below. `internal/platform/config` is the source of truth for every name the
+process reads.
+
+A package variable wins when it is set. The historical name in the Alias column is read
+only when the package variable is unset. [.env.example](../../.env.example) still uses those
+historical names, and it also supplies variable substitution for
+[compose.yaml](../../compose.yaml). Settings this API owns (HTTP limits, mail, messaging,
+media, and the rest) have no package equivalent and are unchanged.
 
 ## Loading configuration
 
@@ -48,8 +56,11 @@ docker run --rm --env-file .env -p 8080:8080 blog-api:local serve
 
 | Variable | Default | Required | Purpose |
 | --- | --- | --- | --- |
-| `APP_ENV` | `local` | No | Runtime environment. Use `production` to enable production safety checks. |
-| `APP_ADDR` | `0.0.0.0:8080` | Non-empty | HTTP listen address for `app serve`. |
+| `APP_ENV` | `local` | No | Runtime environment. Use `production` to enable production safety checks. Also the fallback for `SENTRY_ENVIRONMENT` and `OTEL_ENVIRONMENT`. |
+| `APP_ADDR` | `0.0.0.0:8080` | Non-empty | HTTP listen address for `app serve`. Wins over `SERVER_PORT`. |
+| `SERVER_PORT` | port of `APP_ADDR` | No | When `APP_ADDR` is unset, the process listens on `0.0.0.0:$SERVER_PORT` and that value is `Server.Port`. When `APP_ADDR` is set, it remains the listen address, and a set `SERVER_PORT` is only `Server.Port`. |
+| `SERVER_MODE` | `release` when `APP_ENV=production`, `test` when `APP_ENV=test`, otherwise `debug` | No | Embedded server mode: `debug`, `release`, or `test`. |
+| `SERVER_TIMEZONE` | `UTC` | No | IANA timezone on the embedded configuration. Database sessions use it when `DATABASE_TIMEZONE` is unset. |
 | `APP_SWAGGER_ENABLED` | `true` when `APP_ENV=local`, else `false` | No | Serve Swagger UI at `/swagger` and the OpenAPI document at `/openapi.yaml`. |
 | `APP_TRUSTED_PROXIES` | empty | No | Comma-separated proxies trusted by Gin. Leave empty unless the proxy addresses are known. |
 | `APP_SHUTDOWN_TIMEOUT` | `15s` | No | Graceful shutdown deadline. |
@@ -68,11 +79,12 @@ Do not use `0.0.0.0/0`, `*`, or arbitrary client-controlled addresses in
 | `APP_SESSION_KEY` | local development fallback | Yes in production | Pepper for opaque refresh/reset token hashes. Production requires at least 32 characters. |
 | `APP_CSRF_KEY` | empty | Not currently enforced | Reserved CSRF secret loaded into config; CSRF integration is not wired yet. |
 | `APP_PEPPER` | empty | Not currently enforced | Reserved server-side pepper loaded into config; current password hashing does not consume it. |
-| `APP_JWT_PRIVATE_KEY` / `APP_JWT_PRIVATE_KEY_PATH` | none | For `serve`, `seed`, `doctor` | P-256 private key PEM for ES256 access-token signing. Path wins when both are set. `worker`, `scheduler`, `migrate`, `outbox`, and `audit` never read it; do not deploy it there. |
-| `APP_JWT_PUBLIC_KEY` / `APP_JWT_PUBLIC_KEY_PATH` | none | For `serve`, `seed`, `doctor` | Matching P-256 public key PEM for ES256 verification. Path wins when both are set. |
-| `APP_JWT_ISSUER` | `blog-api` | No | JWT issuer claim. |
-| `APP_ACCESS_TOKEN_TTL` | `15m` | No | Access-token lifetime. |
-| `APP_REFRESH_TOKEN_TTL` | `720h` | No | Refresh-session lifetime for `"remember": true` logins, and the ceiling for all sessions. Other logins get `min(168h, APP_REFRESH_TOKEN_TTL)`. Each rotation renews the session for the lifetime it was issued with. |
+| `JWT_PRIVATE_KEY` | none | For `serve`, `seed`, `doctor` | P-256 private key for ES256 access tokens: a PEM (inline, with literal `\n` allowed) or a filesystem path. When unset, `APP_JWT_PRIVATE_KEY_PATH` then `APP_JWT_PRIVATE_KEY`. `worker`, `scheduler`, `migrate`, `outbox`, and `audit` never read it; do not deploy it there. |
+| `JWT_PUBLIC_KEY` | none | For `serve`, `seed`, `doctor` | Matching P-256 public key PEM or path. When unset, `APP_JWT_PUBLIC_KEY_PATH` then `APP_JWT_PUBLIC_KEY`. |
+| `JWT_ISSUER` | `blog-api` | No | JWT issuer claim (`iss`). `APP_JWT_ISSUER` is the alias. |
+| `JWT_SIGNING_ALGORITHM` | `ES256` | No | Access tokens are ES256. The embedded `Server.JWTSigningAlgorithm` is `ES256`. |
+| `APP_ACCESS_TOKEN_TTL` | `15m` | No | Access-token lifetime. When unset, `SERVER_ACCESS_TOKEN_EXPIRY` (whole hours) is used. The embedded `Server.AccessTokenExpiry` stores that lifetime in whole hours, so a value under one hour stays `0` there while issuance still uses this duration. |
+| `APP_REFRESH_TOKEN_TTL` | `720h` | No | Refresh-session lifetime for `"remember": true` logins, and the ceiling for all sessions. Other logins get `min(168h, APP_REFRESH_TOKEN_TTL)`. Each rotation renews the session for the lifetime it was issued with. When unset, `SERVER_REFRESH_TOKEN_EXPIRY` (whole days) is used. |
 | `AUTH_LOGIN_PER_MINUTE` | `10` | No | Per-IP request budget, per bucket, for each anonymous auth endpoint (login, admin login, refresh, password reset, 2FA challenge, OAuth); `0` disables it. |
 | `AUTH_LOGIN_MAX_FAILURES` | `5` | No | Failed logins per email (known or unknown) before a lockout; `0` disables lockout. |
 | `AUTH_LOGIN_LOCKOUT` | `15m` | No | Lockout length, and the window in which failures are counted. |
@@ -101,7 +113,7 @@ a correct password is refused until the lock expires; both limits are stored in 
 open when Redis is unavailable.
 
 Use independent random values for each secret. Never log or commit production PEMs.
-Local development can point at [`configs/dev/`](../../configs/dev/README.md). Rotating the ES256
+Local development can point `JWT_PRIVATE_KEY` and `JWT_PUBLIC_KEY` at [`configs/dev/`](../../configs/dev/README.md). Rotating the ES256
 private key invalidates existing access tokens; rotating `APP_SESSION_KEY` invalidates hashed
 refresh/reset tokens. Additional handling rules are in
 [secrets-and-headers.md](../security/secrets-and-headers.md).
@@ -143,51 +155,64 @@ port off the public load balancer. Series use the `blog_` prefix:
 
 ## Database
 
-The connection mode is selected by `DB_INSTANCE_CONNECTION_NAME`:
+Database settings are `github.com/turahe/pkg/config.DatabaseConfiguration`. The package
+variable wins when it is set; the alias is the historical name.
 
-- Empty: connect directly using split `DB_*` fields (`DB_DRIVER`, `DB_HOST`, `DB_PORT`, …).
-- Set: connect through the Google Cloud SQL connector using the Cloud SQL variables below.
-  `DB_HOST` / `DB_PORT` / `DB_SSLMODE` are ignored in Cloud SQL mode.
+The connection mode is selected by `DATABASE_CLOUD_SQL_INSTANCE` (alias
+`DB_INSTANCE_CONNECTION_NAME`):
+
+- Empty: connect directly with the `DATABASE_*` fields below.
+- Set: connect through the Google Cloud SQL connector. `DATABASE_HOST`, `DATABASE_PORT`,
+  and `DATABASE_SSLMODE` are ignored in Cloud SQL mode. The embedded driver is
+  `cloudsql-postgres`.
+
+`DATABASE_DRIVER` accepts `postgres` (aliases `pg`, `postgresql`) and `cloudsql-postgres`
+(treated as Postgres; Cloud SQL still requires the instance name). MySQL and SQL Server
+are not supported; the migrations are PostgreSQL-specific. The default is `postgres`.
 
 ### Direct connection
 
-| Variable | Default | Required | Purpose |
+| Variable | Default | Alias | Purpose |
 | --- | --- | --- | --- |
-| `DB_DRIVER` | `postgres` | No | Only `postgres` (aliases `pg`, `postgresql`). MySQL and SQL Server were dropped because the migrations are PostgreSQL-specific. |
-| `DB_HOST` | `127.0.0.1` | Non-empty | Database hostname or IP. |
-| `DB_PORT` | `5432` | No | Port. |
-| `DB_USER` | `blog` | Non-empty | Database user. |
-| `DB_PASSWORD` | `blog` | No | Database password. |
-| `DB_NAME` | `blog` | Non-empty | Database name. |
-| `DB_SSLMODE` | `disable` | No | PostgreSQL `sslmode` only (`disable`, `require`, `verify-full`, …). |
+| `DATABASE_DRIVER` | `postgres` | `DB_DRIVER` | Postgres driver. |
+| `DATABASE_HOST` | `127.0.0.1` | `DB_HOST` | Database hostname or IP. |
+| `DATABASE_PORT` | `5432` | `DB_PORT` | Port. |
+| `DATABASE_USERNAME` | `blog` | `DB_USER` | Database user. Required non-empty. |
+| `DATABASE_PASSWORD` | `blog` | `DB_PASSWORD` | Database password. |
+| `DATABASE_DBNAME` | `blog` | `DB_NAME` | Database name. Required non-empty. |
+| `DATABASE_SSLMODE` | `false` | `DB_SSLMODE` | Package boolean: `true` is libpq `require`, `false` is `disable`. |
+| `DATABASE_TIMEZONE` | `SERVER_TIMEZONE`, else `UTC` | — | IANA timezone of the database session for connections opened through turahe/pkg. |
+
+`DB_SSLMODE` is the libpq `sslmode` string. `github.com/turahe/pkg/database` accepts only
+`disable` and `require` (`DATABASE_SSLMODE` maps the same two values). Any other mode,
+including `verify-ca` and `verify-full`, is rejected at startup. When `APP_ENV=production`,
+`disable` is rejected. `DATABASE_URL` is not read.
 
 Examples:
 
 ```dotenv
-# PostgreSQL
-DB_DRIVER=postgres
-DB_HOST=db.example.com
-DB_PORT=5432
-DB_USER=blog
-DB_PASSWORD=secret
-DB_NAME=blog
-DB_SSLMODE=require
+# PostgreSQL, turahe/pkg names
+DATABASE_DRIVER=postgres
+DATABASE_HOST=db.example.com
+DATABASE_PORT=5432
+DATABASE_USERNAME=blog
+DATABASE_PASSWORD=secret
+DATABASE_DBNAME=blog
+DATABASE_SSLMODE=true
+DATABASE_TIMEZONE=UTC
 ```
-
-The application builds a PostgreSQL DSN from these fields. `DATABASE_URL` is no longer
-consumed. When `APP_ENV=production`, `DB_SSLMODE=disable` is rejected.
 
 ### Google Cloud SQL
 
-| Variable | Default | Required | Purpose |
+| Variable | Default | Alias | Purpose |
 | --- | --- | --- | --- |
-| `DB_INSTANCE_CONNECTION_NAME` | empty | To enable Cloud SQL | Instance name in `project:region:instance` form. |
-| `DB_USER` | empty | Yes | Database or IAM database user. |
-| `DB_PASSWORD` | empty | Conditional | Required when IAM DB authentication is off. |
-| `DB_NAME` | empty | Yes | Database name inside the instance. |
-| `DB_IAM_AUTH_ENABLED` | `false` | No | Enables IAM DB authentication. |
-| `DB_PRIVATE_IP_ENABLED` | `true` | No | Routes connector traffic through the instance's private IP. |
-| `DB_GOOGLE_CREDENTIALS_SOURCE` | `workload-identity` | No | `workload-identity`, `adc`, or `path:/absolute/key.json`. |
+| `DATABASE_CLOUD_SQL_INSTANCE` | empty | `DB_INSTANCE_CONNECTION_NAME` | Instance name in `project:region:instance` form. Set to enable Cloud SQL. |
+| `DATABASE_USERNAME` | empty | `DB_USER` | Database or IAM database user. |
+| `DATABASE_PASSWORD` | empty | `DB_PASSWORD` | Required when IAM DB authentication is off. |
+| `DATABASE_DBNAME` | empty | `DB_NAME` | Database name inside the instance. |
+| `DB_IAM_AUTH_ENABLED` | `false` | — | IAM DB authentication. Passed as a dial option; turahe/pkg has no env var for it. |
+| `DB_PRIVATE_IP_ENABLED` | `true` | — | Routes connector traffic through the instance's private IP. Dial option, not a package env var. |
+| `DB_GOOGLE_CREDENTIALS_SOURCE` | `workload-identity` | — | `workload-identity`, `adc`, or `path:/absolute/key.json`. |
 
 `workload-identity`, `adc`, and an empty credential source all use Application Default
 Credentials. Prefer workload identity or the runtime service account in production. Reserve
@@ -195,19 +220,25 @@ Credentials. Prefer workload identity or the runtime service account in producti
 
 ### Connection pool
 
-| Variable | Default | Constraint | Purpose |
-| --- | --- | --- | --- |
-| `DB_POOL_MAX_OPEN` | `25` | At least `1` | Maximum open connections. |
-| `DB_POOL_MAX_IDLE` | `10` | `0` through `DB_POOL_MAX_OPEN` | Maximum idle connections. |
-| `DB_POOL_MAX_LIFETIME` | `30m` | Go duration | Maximum connection lifetime. |
-| `DB_POOL_MAX_IDLE_TIME` | `10m` | Go duration | Maximum idle lifetime. |
-| `DB_POOL_MAX_LIFETIME_SECONDS` | unset | Positive integer | Legacy fallback used only when `DB_POOL_MAX_LIFETIME` is absent or invalid. |
-| `DB_POOL_MAX_IDLETIME_SECONDS` | unset | Positive integer | Legacy fallback used only when `DB_POOL_MAX_IDLE_TIME` is absent or invalid. |
+Pool settings are the package fields. The alias is accepted when the package variable is unset.
+`DB_POOL_MAX_IDLE_TIME` has no package equivalent (the package's lifetime field is minutes only).
 
-The duration-form variables take precedence over their legacy seconds equivalents. See
-[database.md](../backend/database.md) for dialect, IAM, networking, and pool guidance.
+| Variable | Default | Alias | Purpose |
+| --- | --- | --- | --- |
+| `DATABASE_MAX_OPEN_CONNS` | `25` | `DB_POOL_MAX_OPEN` | Maximum open connections. At least `1`. |
+| `DATABASE_MAX_IDLE_CONNS` | `10` | `DB_POOL_MAX_IDLE` | Maximum idle connections. `0` through the open limit. |
+| `DATABASE_CONN_MAX_LIFETIME` | `30` | `DB_POOL_MAX_LIFETIME` | Maximum connection lifetime in minutes. The alias is a Go duration (`30m`) and is used only when this variable is unset. |
+| `DB_POOL_MAX_IDLE_TIME` | `10m` | — | Maximum idle lifetime. |
+| `DB_POOL_MAX_LIFETIME_SECONDS` | unset | — | Legacy seconds fallback used only when both lifetime variables above are absent or invalid. |
+| `DB_POOL_MAX_IDLETIME_SECONDS` | unset | — | Legacy fallback used only when `DB_POOL_MAX_IDLE_TIME` is absent or invalid. |
+
+See [database.md](../backend/database.md) for dialect, IAM, networking, and pool guidance.
 
 ## Redis
+
+Redis settings are `github.com/turahe/pkg/config.RedisConfiguration`. This API always
+enables Redis (`Redis.Enabled` is true) and opens it from `REDIS_HOST`, `REDIS_PORT`,
+`REDIS_PASSWORD`, and `REDIS_DB`. `REDIS_DRIVER` is specific to this API.
 
 | Variable | Default | Required | Purpose |
 | --- | --- | --- | --- |
@@ -228,7 +259,7 @@ REDIS_DB=0
 ```
 
 The application builds an internal `redis://` connection URL from these fields (password
-escaping and IPv6 host formatting included). `REDIS_URL` is no longer consumed.
+escaping and IPv6 host formatting included). `REDIS_URL` is not read.
 
 Redis/Valkey is ephemeral infrastructure, not a source of truth. Restrict network access and
 use authentication outside local development.
@@ -247,6 +278,32 @@ generations, invalidation) is in [services.md](../backend/services.md#public-rea
 | `CACHE_TTL_TAGS` | `10m` | No | Public tag list. |
 | `CACHE_TTL_USERS` | `15m` | No | Public user profiles (`GET /api/v1/users/{username}`). |
 | `CACHE_TTL_SETTINGS` | `10m` | No | Stored admin settings, read by the settings endpoints and by services. Invalidated on every change. |
+
+## OpenTelemetry
+
+Tracing settings are `github.com/turahe/pkg/config.OpenTelemetryConfiguration` and are
+passed to `github.com/turahe/pkg/otelx`. Export starts when `OTEL_TRACES_EXPORTER` is `gcp`
+(or `google`, `cloudtrace`), or when the exporter is `otlp` / `otlp_grpc` and an endpoint
+is set. An empty exporter is treated as `otlp` and stays off until an endpoint is set.
+GORM tracing inside the package stays off for this API's pool; Sentry still records SQL
+spans inside a sampled transaction.
+
+| Variable | Default | Purpose |
+| --- | --- | --- |
+| `OTEL_TRACES_EXPORTER` | empty (`otlp`, disabled without an endpoint) | `otlp`, `otlp_grpc`, or `gcp`. |
+| `OTEL_EXPORTER_OTLP_PROTOCOL` | `http/protobuf` | `http/protobuf` or `grpc`. `OTEL_EXPORTER_OTLP_TRACES_PROTOCOL` overrides it. |
+| `OTEL_EXPORTER_OTLP_ENDPOINT` | empty | OTLP endpoint (`:4318` HTTP, `:4317` gRPC). |
+| `OTEL_EXPORTER_OTLP_TRACES_ENDPOINT` | empty | Traces endpoint override. |
+| `OTEL_EXPORTER_OTLP_INSECURE` | `true` | `false` verifies TLS. |
+| `OTEL_EXPORTER_OTLP_HEADERS` | empty | Comma-separated `key=value` headers. |
+| `OTEL_SERVICE_NAME` | `blog-api` | Resource service name. |
+| `OTEL_ENVIRONMENT` | `APP_ENV` | Resource environment. |
+| `OTEL_SERVICE_VERSION` | build version | Resource version. When set, it overrides the version passed at startup. |
+| `OTEL_TRACES_SAMPLER_ARG` | `1.0` | Trace sampler argument, `0`–`1`. |
+| `OTEL_SHUTDOWN_TIMEOUT` | `5s` | Tracer shutdown deadline. |
+| `OTEL_GORM_ENABLED` | `true` | Stored on the embedded configuration. SQL spans for this API's pool are the Sentry spans described under Sentry. |
+| `OTEL_GCP_PROJECT_ID` | `GOOGLE_CLOUD_PROJECT` | Cloud Trace project. |
+| `OTEL_GCP_PROPAGATOR` | `false` | Also on for the `gcp` exporter. Propagates `X-Cloud-Trace-Context`. |
 
 ## Messaging
 
@@ -416,6 +473,11 @@ before the worker's queue or subscription exists are discarded.
 
 ## Error tracking (Sentry)
 
+Sentry settings are `github.com/turahe/pkg/config.SentryConfiguration`. `SENTRY_LOGS_LEVEL`
+is specific to this API. The embedded configuration also sets server name `blog-api`,
+attaches stack traces, samples errors at `1`, and flushes for `2s`. The release sent with
+events is the build version.
+
 | Variable | Default | Required | Purpose |
 | --- | --- | --- | --- |
 | `SENTRY_DSN` | empty | No | Enables Sentry for `serve`, `worker`, `scheduler`, and `doctor`. Empty disables it entirely. |
@@ -450,14 +512,14 @@ it. An issue opens after two failed runs in a row, and job error events carry a 
 
 - `APP_ADDR` is empty;
 - the JWT keys are missing (`serve`, `seed`, and `doctor` only; background commands use
-  `config.LoadBackground`, which skips them);
+  `config.LoadBackground`, which skips them) — `JWT_PRIVATE_KEY` / `JWT_PUBLIC_KEY`, or the
+  `APP_JWT_*` aliases;
 - `APP_ENV=production` and `APP_SESSION_KEY` has fewer than 32 characters;
-- production direct database configuration uses the built-in local DSN or includes
-  `sslmode=disable`;
-- production Cloud SQL configuration omits `DB_INSTANCE_CONNECTION_NAME`, `DB_NAME`, or
-  `DB_USER`;
-- production direct PostgreSQL sets `DB_SSLMODE=disable`;
-- direct-mode `DB_HOST`, `DB_USER`, or `DB_NAME` is empty, or `DB_PORT` is out of range;
+- production direct database configuration uses `sslmode=disable` (`DATABASE_SSLMODE=false`
+  or `DB_SSLMODE=disable`);
+- production Cloud SQL configuration omits `DATABASE_CLOUD_SQL_INSTANCE`, `DATABASE_DBNAME`,
+  or `DATABASE_USERNAME` (or the `DB_*` aliases);
+- direct-mode host, user, or database name is empty, or the port is out of range;
 - database pool limits are inconsistent;
 - the Redis driver, host, port, or database number is invalid;
 - a selected message broker is unsupported or lacks its required variables;

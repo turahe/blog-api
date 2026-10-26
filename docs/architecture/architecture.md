@@ -152,7 +152,7 @@ Examples of outbound port types:
 
 ### Outbound Adapters
 
-- persistence: GORM on PostgreSQL (`DB_DRIVER=postgres`); production preferred plane is **Google Cloud SQL** via `cloud.google.com/go/cloudsqlconn` (Private Service Connect, IAM DB auth, ephemeral mTLS). Full config is in [backend/database.md Cloud SQL Connectivity](../backend/database.md#google-cloud-sql-connectivity-cloudgooglecomgocloudsqlconn). Bootstrap wiring lives in `internal/platform/database`.
+- persistence: GORM on PostgreSQL (`DB_DRIVER=postgres`); production preferred plane is **Google Cloud SQL** via `cloud.google.com/go/cloudsqlconn` (Private Service Connect, IAM DB auth, ephemeral mTLS). Full config is in [backend/database.md Cloud SQL Connectivity](../backend/database.md#google-cloud-sql-connectivity-cloudgooglecomgocloudsqlconn). Connections are opened with `github.com/turahe/pkg/database` from `internal/platform/connect`.
 - cache: Redis
 - events: Watermill (publishers + subscribers)
 - storage: Cloudflare R2 + S3-compatible providers (MinIO, DigitalOcean Spaces, AWS S3)

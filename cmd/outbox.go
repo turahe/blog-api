@@ -7,8 +7,8 @@ import (
 
 	"github.com/spf13/cobra"
 	"github.com/turahe/blog-api/internal/adapters/outbound/persistence"
+	"github.com/turahe/blog-api/internal/bootstrap"
 	"github.com/turahe/blog-api/internal/platform/config"
-	"github.com/turahe/blog-api/internal/platform/database"
 )
 
 func newOutboxCmd() *cobra.Command {
@@ -81,10 +81,10 @@ func openOutbox(cmd *cobra.Command) (*persistence.OutboxRepository, func() error
 		return nil, nil, err
 	}
 
-	db, err := database.Open(cmd.Context(), cfg)
+	db, err := bootstrap.OpenDatabase(cmd.Context(), cfg)
 	if err != nil {
 		return nil, nil, err
 	}
 
-	return persistence.NewOutboxRepository(db.GORM), db.Close, nil
+	return persistence.NewOutboxRepository(db.DB()), db.Close, nil
 }

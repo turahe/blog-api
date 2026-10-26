@@ -60,14 +60,15 @@ import (
 	userports "github.com/turahe/blog-api/internal/core/user/ports"
 	userservice "github.com/turahe/blog-api/internal/core/user/service"
 	"github.com/turahe/blog-api/internal/platform/config"
-	"github.com/turahe/blog-api/internal/platform/database"
+	"github.com/turahe/blog-api/internal/platform/connect"
 	"github.com/turahe/blog-api/internal/platform/messaging"
 	"github.com/turahe/blog-api/internal/platform/metrics"
-	redisplatform "github.com/turahe/blog-api/internal/platform/redis"
 	jwttoken "github.com/turahe/blog-api/internal/platform/security/jwt"
 	"github.com/turahe/blog-api/internal/platform/security/password"
 	"github.com/turahe/blog-api/internal/platform/security/secretbox"
 	"github.com/turahe/blog-api/internal/platform/system"
+	pkgdb "github.com/turahe/pkg/database"
+	pkgredis "github.com/turahe/pkg/redis"
 )
 
 // auditFlushTimeout bounds how long Close waits for queued audit entries.
@@ -79,7 +80,7 @@ const sseBufferPerConnection = 512
 // Runtime holds the opened infrastructure, core services, and HTTP server.
 type Runtime struct {
 	Config   config.Config
-	Database *database.Database
+	Database *pkgdb.Database
 	Redis    *redis.Client
 	Cache    *cache.Redis // nil when CACHE_ENABLED=false
 	Server   *nethttp.Server
@@ -114,16 +115,18 @@ func (c checker) Optional() bool                  { return c.optional }
 
 // NewRuntime opens the database and Redis, wires services, and builds the HTTP server.
 func NewRuntime(ctx context.Context, cfg config.Config, logger *slog.Logger, version string) (*Runtime, error) {
-	db, err := database.Open(ctx, cfg)
+	db, err := OpenDatabase(ctx, cfg)
 	if err != nil {
 		return nil, err
 	}
 
-	redisClient, err := redisplatform.Open(ctx, cfg.RedisURL())
-	if err != nil {
+	if err := connect.OpenRedis(ctx, cfg.RedisURL()); err != nil {
 		_ = db.Close()
+
 		return nil, err
 	}
+
+	redisClient := pkgredis.GetRedis()
 
 	fail := func(err error) (*Runtime, error) {
 		_ = redisClient.Close()
@@ -132,12 +135,12 @@ func NewRuntime(ctx context.Context, cfg config.Config, logger *slog.Logger, ver
 		return nil, err
 	}
 
-	users := persistence.NewUserRepository(db.GORM)
-	sessions := persistence.NewSessionRepository(db.GORM)
-	resets := persistence.NewResetTokenRepository(db.GORM)
-	postsRepo := persistence.NewPostRepository(db.GORM)
-	categoriesRepo := persistence.NewCategoryRepository(db.GORM)
-	tagsRepo := persistence.NewTagRepository(db.GORM)
+	users := persistence.NewUserRepository(db.DB())
+	sessions := persistence.NewSessionRepository(db.DB())
+	resets := persistence.NewResetTokenRepository(db.DB())
+	postsRepo := persistence.NewPostRepository(db.DB())
+	categoriesRepo := persistence.NewCategoryRepository(db.DB())
+	tagsRepo := persistence.NewTagRepository(db.DB())
 	clock := system.Clock{}
 	ids := system.UUIDGenerator{}
 
@@ -176,16 +179,19 @@ func NewRuntime(ctx context.Context, cfg config.Config, logger *slog.Logger, ver
 
 	profiles, avatarMaxBytes := newProfileService(cfg, db, clock, media, cacheOrNil, auth, events)
 
-	enforcer, err := outboundrbac.NewEnforcer(db.GORM)
+	enforcer, err := outboundrbac.NewEnforcer(db.DB())
 	if err != nil {
 		return fail(fmt.Errorf("create rbac enforcer: %w", err))
 	}
 
 	policySync := outboundrbac.NewPolicySync(enforcer, redisClient, cfg.RBACPolicyReloadInterval, logger)
-	roleStore := outboundrbac.NewRoleStore(db.GORM, enforcer).WithNotifier(policySync)
+	roleStore := outboundrbac.NewRoleStore(db.DB(), enforcer).WithNotifier(policySync)
 	auth.WithRoles(roleStore).WithAccessCheck(enforcer)
 
-	metricsServer, recorder, drops := newMetrics(cfg, db, version)
+	metricsServer, recorder, drops, err := newMetrics(cfg, db, version)
+	if err != nil {
+		return fail(err)
+	}
 	auditRecorder, activity := newAudit(cfg, db, broadcast, drops.audit, logger)
 	analyticsIngest, analyticsWriter := newAnalytics(cfg, db, drops.analytics, logger)
 	live, liveStreams := newAnalyticsLive(ctx, cfg, broadcast, analyticsIngest, logger)
@@ -211,7 +217,7 @@ func NewRuntime(ctx context.Context, cfg config.Config, logger *slog.Logger, ver
 		Comments: comments, Notifications: inbox, NotificationStream: hub, SSEPingInterval: cfg.SSEPingInterval,
 		Settings: settings, Newsletter: newsletter,
 		NewsletterProvider: NewsletterProvider(cfg),
-		Consent:            consentservice.New(persistence.NewConsentRepository(db.GORM), ids, clock).WithEvents(events),
+		Consent:            consentservice.New(persistence.NewConsentRepository(db.DB()), ids, clock).WithEvents(events),
 		AnalyticsIngest:    analyticsIngest, AnalyticsIngestPerMinute: cfg.AnalyticsIngestPerMinute, AnalyticsCountryHeader: cfg.AnalyticsCountryHeader,
 		AnalyticsReports: newAnalyticsReports(db, settings), AnalyticsLive: live, AnalyticsLiveStreams: liveStreams, AnalyticsExports: NewAnalyticsExports(ctx, cfg, db, auth, logger),
 		PrivacyRequests: NewPrivacyService(ctx, cfg, db, auth, events, cacheOrNil, logger).WithModuleErasers(newsletter),
@@ -319,7 +325,7 @@ func newNotificationStream(
 func newMediaService(
 	ctx context.Context,
 	cfg config.Config,
-	db *database.Database,
+	db *pkgdb.Database,
 	ids system.UUIDGenerator,
 	clock system.Clock,
 	posts *postservice.PostService,
@@ -336,8 +342,8 @@ func newMediaService(
 		return nil, fmt.Errorf("create media storage: %w", err)
 	}
 
-	mediaRepo := persistence.NewMediaRepository(db.GORM)
-	posts.WithMedia(persistence.NewPostMediaRepository(db.GORM), mediaRepo)
+	mediaRepo := persistence.NewMediaRepository(db.DB())
+	posts.WithMedia(persistence.NewPostMediaRepository(db.DB()), mediaRepo)
 
 	media := mediaservice.New(
 		mediaRepo,
@@ -371,7 +377,7 @@ func newMediaService(
 // newPostService wires posts with revisions and SEO; media and tags are attached later.
 func newPostService(
 	cfg config.Config,
-	db *database.Database,
+	db *pkgdb.Database,
 	repo *persistence.PostRepository,
 	ids system.UUIDGenerator,
 	clock system.Clock,
@@ -381,12 +387,12 @@ func newPostService(
 	settings *settingsservice.Service,
 ) *postservice.PostService {
 	return postservice.New(repo, ids, clock).WithCache(readCache).WithNotifier(notifier).WithEvents(events).
-		WithRevisions(persistence.NewPostRevisionRepository(db.GORM)).
-		WithSEO(persistence.NewPostSEORepository(db.GORM), postseo.NewDefaults(settings), newSEOImageURLs(cfg, db))
+		WithRevisions(persistence.NewPostRevisionRepository(db.DB())).
+		WithSEO(persistence.NewPostSEORepository(db.DB()), postseo.NewDefaults(settings), newSEOImageURLs(cfg, db))
 }
 
 // newSEOImageURLs resolves social card images; without media storage posts have no images.
-func newSEOImageURLs(cfg config.Config, db *database.Database) *postseo.ImageURLs {
+func newSEOImageURLs(cfg config.Config, db *pkgdb.Database) *postseo.ImageURLs {
 	if !cfg.MediaEnabled() {
 		return nil
 	}
@@ -396,20 +402,20 @@ func newSEOImageURLs(cfg config.Config, db *database.Database) *postseo.ImageURL
 		widths = cfg.MediaTransformWidths
 	}
 
-	return postseo.NewImageURLs(persistence.NewMediaRepository(db.GORM), cfg.AppPublicURL, widths, cfg.S3PublicBaseURL)
+	return postseo.NewImageURLs(persistence.NewMediaRepository(db.DB()), cfg.AppPublicURL, widths, cfg.S3PublicBaseURL)
 }
 
 // newProfileService wires profiles and privacy; avatars are enabled (non-zero max bytes) only with media storage.
 func newProfileService(
 	cfg config.Config,
-	db *database.Database,
+	db *pkgdb.Database,
 	clock system.Clock,
 	media mediaports.Service,
 	readCache readcache.Cache,
 	verifier userports.PasswordVerifier,
 	events event.Unit,
 ) (*userservice.ProfileService, int64) {
-	profiles := userservice.NewProfileService(persistence.NewProfileRepository(db.GORM), clock).
+	profiles := userservice.NewProfileService(persistence.NewProfileRepository(db.DB()), clock).
 		WithCache(readCache).WithPrivacy(verifier, events)
 	if media == nil {
 		return profiles, 0
@@ -420,16 +426,16 @@ func newProfileService(
 
 // newSettingsService serves the admin settings catalogue; updates record settings.updated in the outbox.
 func newSettingsService(
-	db *database.Database, ids system.UUIDGenerator, clock system.Clock, events event.Unit, readCache readcache.Cache,
+	db *pkgdb.Database, ids system.UUIDGenerator, clock system.Clock, events event.Unit, readCache readcache.Cache,
 ) *settingsservice.Service {
-	repo := persistence.NewSettingsRepository(db.GORM)
+	repo := persistence.NewSettingsRepository(db.DB())
 
 	return settingsservice.New(repo, settingsdomain.DefaultCatalogue(), ids, clock).WithEvents(events).WithCache(readCache)
 }
 
 func newCommentService(
 	cfg config.Config,
-	db *database.Database,
+	db *pkgdb.Database,
 	ids system.UUIDGenerator,
 	clock system.Clock,
 	notifier commentports.Notifier,
@@ -449,27 +455,27 @@ func newCommentService(
 		commentCfg.Captcha = captcha.NewTurnstile(cfg.TurnstileSecretKey, "", nil)
 	}
 
-	return commentservice.New(persistence.NewCommentRepository(db.GORM), ids, clock, commentCfg)
+	return commentservice.New(persistence.NewCommentRepository(db.DB()), ids, clock, commentCfg)
 }
 
 // NewEvents runs service writes in transactions and, when a message broker is configured,
 // stores their domain events in the outbox for app worker to relay. Without a broker the
 // events are dropped, so the outbox does not grow with nothing to drain it.
-func NewEvents(cfg config.Config, db *database.Database) event.Unit {
-	events := event.Unit{Tx: persistence.NewTransactor(db.GORM), Recorder: event.Discard{}}
+func NewEvents(cfg config.Config, db *pkgdb.Database) event.Unit {
+	events := event.Unit{Tx: persistence.NewTransactor(db.DB()), Recorder: event.Discard{}}
 	if cfg.MessagingEnabled() {
-		events.Recorder = persistence.NewOutboxRepository(db.GORM)
+		events.Recorder = persistence.NewOutboxRepository(db.DB())
 	}
 
 	return events
 }
 
 // newInbox stores in-app notifications for comment replies, moderation, and publications.
-func newInbox(cfg config.Config, db *database.Database, clock system.Clock, logger *slog.Logger) *notificationservice.Inbox {
-	repo := persistence.NewNotificationRepository(db.GORM)
+func newInbox(cfg config.Config, db *pkgdb.Database, clock system.Clock, logger *slog.Logger) *notificationservice.Inbox {
+	repo := persistence.NewNotificationRepository(db.DB())
 
 	return notificationservice.NewInbox(repo, repo, clock, logger, cfg.AppPublicURL).
-		WithTemplates(persistence.NewNotificationTemplateRepository(db.GORM))
+		WithTemplates(persistence.NewNotificationTemplateRepository(db.DB()))
 }
 
 // dropCounters count what the background writers lose; nil funcs when metrics are off.
@@ -480,22 +486,27 @@ type dropCounters struct {
 
 // newMetrics returns the Prometheus server, request recorder, and drop counters, or nils
 // when METRICS_ADDR is empty.
-func newMetrics(cfg config.Config, db *database.Database, version string) (*nethttp.Server, middleware.MetricsRecorder, dropCounters) {
+func newMetrics(cfg config.Config, db *pkgdb.Database, version string) (*nethttp.Server, middleware.MetricsRecorder, dropCounters, error) {
 	if cfg.MetricsAddr == "" {
-		return nil, nil, dropCounters{}
+		return nil, nil, dropCounters{}, nil
 	}
 
-	appMetrics := metrics.New(db.SQL, version)
+	sqlDB, err := db.DB().DB()
+	if err != nil {
+		return nil, nil, dropCounters{}, fmt.Errorf("get sql.DB: %w", err)
+	}
+
+	appMetrics := metrics.New(sqlDB, version)
 
 	return appMetrics.NewServer(cfg.MetricsAddr), appMetrics,
-		dropCounters{audit: appMetrics.AuditDropped, analytics: appMetrics.AnalyticsDropped}
+		dropCounters{audit: appMetrics.AuditDropped, analytics: appMetrics.AnalyticsDropped}, nil
 }
 
 // newAudit starts the background audit writer and the activity query service.
 func newAudit(
-	cfg config.Config, db *database.Database, bus *messaging.Bus, onDrop func(int), logger *slog.Logger,
+	cfg config.Config, db *pkgdb.Database, bus *messaging.Bus, onDrop func(int), logger *slog.Logger,
 ) (*auditservice.Recorder, *auditservice.Activity) {
-	repo := persistence.NewAuditRepository(db.GORM)
+	repo := persistence.NewAuditRepository(db.DB())
 	recorder := auditservice.NewRecorder(newAuditSink(cfg, repo, bus, logger), logger, auditservice.RecorderOptions{
 		QueueSize: cfg.AuditQueueSize,
 		OnDrop:    onDrop,
@@ -526,7 +537,7 @@ func newAuditSink(cfg config.Config, repo *persistence.AuditRepository, bus *mes
 // newNotifications returns the inbox and the notifier the comment and post services call: with
 // a broker it queues notices for app worker, otherwise the inbox delivers them in the request.
 func newNotifications(
-	cfg config.Config, db *database.Database, clock system.Clock, events event.Unit, logger *slog.Logger,
+	cfg config.Config, db *pkgdb.Database, clock system.Clock, events event.Unit, logger *slog.Logger,
 ) (*notificationservice.Inbox, notificationqueue.Inline) {
 	inbox := newInbox(cfg, db, clock, logger)
 	if !cfg.MessagingEnabled() {
@@ -540,14 +551,14 @@ func newNotifications(
 
 // NewNotificationInbox returns the inbox app worker delivers queued notices with. Each new
 // notification is announced on bus, so API replicas push it to their SSE streams.
-func NewNotificationInbox(cfg config.Config, db *database.Database, bus *messaging.Bus, logger *slog.Logger) *notificationservice.Inbox {
+func NewNotificationInbox(cfg config.Config, db *pkgdb.Database, bus *messaging.Bus, logger *slog.Logger) *notificationservice.Inbox {
 	return newInbox(cfg, db, system.Clock{}, logger).
 		OnCreated(notificationbus.NewPublisher(bus.Publisher, bus.Topic(notificationbus.Topic), logger).Publish)
 }
 
 // newAuthService builds the auth service with lockout, email change, and two-factor wired.
 func newAuthService(
-	cfg config.Config, db *database.Database, redisClient *redis.Client,
+	cfg config.Config, db *pkgdb.Database, redisClient *redis.Client,
 	users *persistence.UserRepository, sessions *persistence.SessionRepository, resets *persistence.ResetTokenRepository,
 	clock system.Clock, ids system.UUIDGenerator, cacheOrNil readcache.Cache, logger *slog.Logger,
 ) (*authservice.AuthService, error) {
@@ -567,14 +578,14 @@ func newAuthService(
 		AccessTTL:  cfg.AccessTokenTTL,
 		RefreshTTL: cfg.RefreshTokenTTL,
 	}, nil).WithEmailChange(notifier, cacheOrNil).
-		WithRegistration(persistence.NewRegistrationRepository(db.GORM), registrationPolicy{newSettingsReader(db)}, notifier)
+		WithRegistration(persistence.NewRegistrationRepository(db.DB()), registrationPolicy{newSettingsReader(db)}, notifier)
 	if cfg.AuthLoginMaxFailures > 0 {
 		auth.WithLoginAttempts(ratelimit.NewLoginLockout(redisClient, cfg.AuthLoginMaxFailures, cfg.AuthLoginLockout))
 	}
 
 	// Always wired, even without a key, so enrolled accounts fail closed.
-	auth.WithTwoFactor(persistence.NewTwoFactorRepository(db.GORM), box, challenge.New(redisClient), cfg.TwoFactorIssuer)
-	auth.WithOAuth(oauthProviders(cfg), persistence.NewOAuthIdentityRepository(db.GORM),
+	auth.WithTwoFactor(persistence.NewTwoFactorRepository(db.DB()), box, challenge.New(redisClient), cfg.TwoFactorIssuer)
+	auth.WithOAuth(oauthProviders(cfg), persistence.NewOAuthIdentityRepository(db.DB()),
 		challenge.NewOAuthStates(redisClient), cfg.OAuthRedirectURIs)
 
 	return auth, nil
@@ -683,7 +694,7 @@ func (p registrationPolicy) RegistrationOpen(ctx context.Context) (bool, error) 
 	return values.Bool("security.registration_enabled"), nil
 }
 
-func newNotifier(cfg config.Config, db *database.Database, box authports.SecretBox, logger *slog.Logger) accountNotifier {
+func newNotifier(cfg config.Config, db *pkgdb.Database, box authports.SecretBox, logger *slog.Logger) accountNotifier {
 	mailer := NewTransactionalMailer(cfg, db, box, logger)
 	if mailer == nil {
 		return notify.NewLog(logger)
@@ -699,13 +710,13 @@ func newNotifier(cfg config.Config, db *database.Database, box authports.SecretB
 	}
 
 	return notificationservice.New(mailer, logger, cfg.AppPublicURL).
-		WithTemplates(persistence.NewNotificationTemplateRepository(db.GORM))
+		WithTemplates(persistence.NewNotificationTemplateRepository(db.DB()))
 }
 
 // NewTransactionalMailer returns the MAIL_DRIVER mailer for account and confirmation emails,
 // wrapped to queue encrypted commands through the outbox when a broker and box are available.
 // It returns nil when no mailer is configured or its settings are invalid.
-func NewTransactionalMailer(cfg config.Config, db *database.Database, box mailqueue.Box, logger *slog.Logger) notificationports.Mailer {
+func NewTransactionalMailer(cfg config.Config, db *pkgdb.Database, box mailqueue.Box, logger *slog.Logger) notificationports.Mailer {
 	mailer, err := NewMailer(cfg)
 	if err != nil {
 		logger.Error("mailer disabled", "driver", cfg.MailDriver, "error", err)
@@ -716,7 +727,7 @@ func NewTransactionalMailer(cfg config.Config, db *database.Database, box mailqu
 	}
 
 	if cfg.MessagingEnabled() && box != nil {
-		return mailqueue.New(persistence.NewOutboxRepository(db.GORM), box, mailer, logger)
+		return mailqueue.New(persistence.NewOutboxRepository(db.DB()), box, mailer, logger)
 	}
 
 	return mailer
@@ -773,13 +784,13 @@ func mailLogAttrs(cfg config.Config) []any {
 }
 
 // WorkerHealthCheckers probes what the worker cannot run without: the database and the broker.
-func WorkerHealthCheckers(cfg config.Config, db *database.Database) []healthports.Checker {
+func WorkerHealthCheckers(cfg config.Config, db *pkgdb.Database) []healthports.Checker {
 	return []healthports.Checker{
 		checker{name: "database", check: func(ctx context.Context) error {
 			checkCtx, cancel := context.WithTimeout(ctx, 2*time.Second)
 			defer cancel()
 
-			return db.SQL.PingContext(checkCtx)
+			return db.Health(checkCtx)
 		}},
 		checker{name: "messaging", check: func(ctx context.Context) error {
 			checkCtx, cancel := context.WithTimeout(ctx, 2*time.Second)
@@ -790,13 +801,13 @@ func WorkerHealthCheckers(cfg config.Config, db *database.Database) []healthport
 	}
 }
 
-func healthCheckers(cfg config.Config, db *database.Database, redisClient *redis.Client) []healthports.Checker {
+func healthCheckers(cfg config.Config, db *pkgdb.Database, redisClient *redis.Client) []healthports.Checker {
 	checkers := []healthports.Checker{
 		checker{name: "database", check: func(ctx context.Context) error {
 			checkCtx, cancel := context.WithTimeout(ctx, 2*time.Second)
 			defer cancel()
 
-			return db.SQL.PingContext(checkCtx)
+			return db.Health(checkCtx)
 		}},
 		checker{name: "redis", check: func(ctx context.Context) error {
 			checkCtx, cancel := context.WithTimeout(ctx, 2*time.Second)

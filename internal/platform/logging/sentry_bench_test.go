@@ -1,4 +1,4 @@
-package sentry
+package logging
 
 import (
 	"errors"
@@ -13,7 +13,6 @@ import (
 	sentrygo "github.com/getsentry/sentry-go"
 	"github.com/stretchr/testify/require"
 	"github.com/turahe/blog-api/internal/platform/config"
-	"github.com/turahe/blog-api/internal/platform/logging"
 )
 
 // accessAttrs mirrors the attributes of one middleware.AccessLog record.
@@ -44,7 +43,7 @@ func benchSentry(b *testing.B, cfg config.Config) {
 	cfg.SentryDSN = "http://public@" + u.Host + "/1"
 	cfg.SentryEnvironment = "bench"
 
-	flush, err := Init(cfg, "bench")
+	flush, err := InitSentry(cfg, "bench")
 	require.NoError(b, err)
 	b.Cleanup(func() {
 		flush()
@@ -68,14 +67,14 @@ func BenchmarkHandle(b *testing.B) {
 				case "events":
 					benchSentry(b, config.Config{SentryLogsLevel: "off"})
 
-					extra = append(extra, NewHandler())
+					extra = append(extra, NewSentryHandler())
 				case "logs":
 					benchSentry(b, config.Config{SentryLogsLevel: "info"})
 
-					extra = append(extra, NewHandler().WithLogs(slog.LevelInfo))
+					extra = append(extra, NewSentryHandler().WithLogs(slog.LevelInfo))
 				}
 
-				logger := logging.NewTo(io.Discard, "production", extra...)
+				logger := NewTo(io.Discard, "production", extra...)
 				ctx := sentrygo.SetHubOnContext(b.Context(), sentrygo.CurrentHub().Clone())
 
 				attrs := accessAttrs

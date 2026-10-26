@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"github.com/turahe/blog-api/internal/platform/security/secretbox"
+	pkgconfig "github.com/turahe/pkg/config"
 )
 
 // DBDriverPostgres is the only supported DB_DRIVER; the migrations use
@@ -27,8 +28,12 @@ const (
 	defaultDBDriver = DBDriverPostgres
 )
 
-// Config is the runtime configuration; see docs/deployment/config.md for variables.
+// Config is the runtime configuration. It extends github.com/turahe/pkg/config
+// with this API's own settings. The embedded configuration is filled by Load
+// from the same DB_*, REDIS_*, SENTRY_*, and JWT values; see docs/deployment/config.md.
 type Config struct {
+	pkgconfig.Configuration
+
 	Environment                   string
 	Address                       string
 	DBDriver                      string
@@ -587,24 +592,28 @@ func Load() (Config, error) { return load(true) }
 func LoadBackground() (Config, error) { return load(false) }
 
 func load(withJWTKeys bool) (Config, error) {
-	driver := env("DB_DRIVER", defaultDBDriver)
+	driver := envFirst(defaultDBDriver, "DATABASE_DRIVER", "DB_DRIVER")
+	switch strings.ToLower(strings.TrimSpace(driver)) {
+	case "cloudsql-postgres", "cloudsql-postgresql":
+		driver = DBDriverPostgres
+	}
 
-	port := integer("DB_PORT", 0)
+	port := integerFirst(0, "DATABASE_PORT", "DB_PORT")
 	if port == 0 {
 		port = defaultDBPort
 	}
 
 	cfg := Config{
 		Environment:                   env("APP_ENV", "local"),
-		Address:                       env("APP_ADDR", defaultAddress),
+		Address:                       listenAddress(),
 		DBDriver:                      driver,
-		DBHost:                        env("DB_HOST", "127.0.0.1"),
+		DBHost:                        envFirst("127.0.0.1", "DATABASE_HOST", "DB_HOST"),
 		DBPort:                        port,
-		DBUser:                        env("DB_USER", "blog"),
-		DBPassword:                    env("DB_PASSWORD", "blog"),
-		DBName:                        env("DB_NAME", "blog"),
-		DBSSLMode:                     env("DB_SSLMODE", "disable"),
-		DBInstanceConnectionName:      env("DB_INSTANCE_CONNECTION_NAME", ""),
+		DBUser:                        envFirst("blog", "DATABASE_USERNAME", "DB_USER"),
+		DBPassword:                    envFirst("blog", "DATABASE_PASSWORD", "DB_PASSWORD"),
+		DBName:                        envFirst("blog", "DATABASE_DBNAME", "DB_NAME"),
+		DBSSLMode:                     dbSSLMode(),
+		DBInstanceConnectionName:      envFirst("", "DATABASE_CLOUD_SQL_INSTANCE", "DB_INSTANCE_CONNECTION_NAME"),
 		DBIAMAuthEnabled:              boolEnv("DB_IAM_AUTH_ENABLED", false),
 		DBPrivateIPEnabled:            boolEnv("DB_PRIVATE_IP_ENABLED", true),
 		DBGoogleCredentialsSource:     env("DB_GOOGLE_CREDENTIALS_SOURCE", "workload-identity"),
@@ -618,16 +627,16 @@ func load(withJWTKeys bool) (Config, error) {
 		ReadTimeout:                   duration("APP_READ_TIMEOUT", 15*time.Second),
 		ReadHeaderTimeout:             duration("APP_READ_HEADER_TIMEOUT", 5*time.Second),
 		IdleTimeout:                   duration("APP_IDLE_TIMEOUT", 60*time.Second),
-		DBMaxOpen:                     integer("DB_POOL_MAX_OPEN", 25),
-		DBMaxIdle:                     integer("DB_POOL_MAX_IDLE", 10),
-		DBMaxLifetime:                 durationOrSeconds("DB_POOL_MAX_LIFETIME", "DB_POOL_MAX_LIFETIME_SECONDS", 30*time.Minute),
+		DBMaxOpen:                     integerFirst(25, "DATABASE_MAX_OPEN_CONNS", "DB_POOL_MAX_OPEN"),
+		DBMaxIdle:                     integerFirst(10, "DATABASE_MAX_IDLE_CONNS", "DB_POOL_MAX_IDLE"),
+		DBMaxLifetime:                 dbMaxLifetime(),
 		DBMaxIdleTime:                 durationOrSeconds("DB_POOL_MAX_IDLE_TIME", "DB_POOL_MAX_IDLETIME_SECONDS", 10*time.Minute),
 		SessionKey:                    env("APP_SESSION_KEY", ""),
 		CSRFKey:                       env("APP_CSRF_KEY", ""),
 		Pepper:                        env("APP_PEPPER", ""),
-		JWTIssuer:                     env("APP_JWT_ISSUER", "blog-api"),
-		AccessTokenTTL:                duration("APP_ACCESS_TOKEN_TTL", 15*time.Minute),
-		RefreshTokenTTL:               duration("APP_REFRESH_TOKEN_TTL", 30*24*time.Hour),
+		JWTIssuer:                     envFirst("blog-api", "JWT_ISSUER", "APP_JWT_ISSUER"),
+		AccessTokenTTL:                accessTokenTTL(),
+		RefreshTokenTTL:               refreshTokenTTL(),
 		AuthLoginPerMinute:            integer("AUTH_LOGIN_PER_MINUTE", 10),
 		AuthLoginMaxFailures:          integer("AUTH_LOGIN_MAX_FAILURES", 5),
 		AuthLoginLockout:              duration("AUTH_LOGIN_LOCKOUT", 15*time.Minute),
@@ -701,6 +710,8 @@ func load(withJWTKeys bool) (Config, error) {
 		return Config{}, err
 	}
 
+	cfg.Configuration = cfg.PkgConfig("")
+
 	return cfg, nil
 }
 
@@ -753,12 +764,12 @@ func (c *Config) loadWorker() {
 }
 
 func (c *Config) loadJWTKeys() error {
-	privateKey, err := pemFromEnvOrFile("APP_JWT_PRIVATE_KEY", "APP_JWT_PRIVATE_KEY_PATH")
+	privateKey, err := pemFromPkgOrApp("JWT_PRIVATE_KEY", "APP_JWT_PRIVATE_KEY", "APP_JWT_PRIVATE_KEY_PATH")
 	if err != nil {
 		return fmt.Errorf("load JWT private key: %w", err)
 	}
 
-	publicKey, err := pemFromEnvOrFile("APP_JWT_PUBLIC_KEY", "APP_JWT_PUBLIC_KEY_PATH")
+	publicKey, err := pemFromPkgOrApp("JWT_PUBLIC_KEY", "APP_JWT_PUBLIC_KEY", "APP_JWT_PUBLIC_KEY_PATH")
 	if err != nil {
 		return fmt.Errorf("load JWT public key: %w", err)
 	}
@@ -823,12 +834,115 @@ func (c *Config) validateSecrets() error {
 	return nil
 }
 
+func listenAddress() string {
+	if strings.TrimSpace(os.Getenv("APP_ADDR")) != "" {
+		return env("APP_ADDR", defaultAddress)
+	}
+
+	if port := strings.TrimSpace(os.Getenv("SERVER_PORT")); port != "" {
+		return net.JoinHostPort("0.0.0.0", port)
+	}
+
+	return defaultAddress
+}
+
+func accessTokenTTL() time.Duration {
+	if strings.TrimSpace(os.Getenv("APP_ACCESS_TOKEN_TTL")) != "" {
+		return duration("APP_ACCESS_TOKEN_TTL", 15*time.Minute)
+	}
+
+	if hours := integerFirst(0, "SERVER_ACCESS_TOKEN_EXPIRY"); hours > 0 {
+		return time.Duration(hours) * time.Hour
+	}
+
+	return 15 * time.Minute
+}
+
+func refreshTokenTTL() time.Duration {
+	if strings.TrimSpace(os.Getenv("APP_REFRESH_TOKEN_TTL")) != "" {
+		return duration("APP_REFRESH_TOKEN_TTL", 30*24*time.Hour)
+	}
+
+	if days := integerFirst(0, "SERVER_REFRESH_TOKEN_EXPIRY"); days > 0 {
+		return time.Duration(days) * 24 * time.Hour
+	}
+
+	return 30 * 24 * time.Hour
+}
+
 func env(key, fallback string) string {
-	if value := strings.TrimSpace(os.Getenv(key)); value != "" {
-		return value
+	return envFirst(fallback, key)
+}
+
+// envFirst returns the first non-empty environment variable. keys are in priority order.
+func envFirst(fallback string, keys ...string) string {
+	for _, key := range keys {
+		if value := strings.TrimSpace(os.Getenv(key)); value != "" {
+			return value
+		}
 	}
 
 	return fallback
+}
+
+func integerFirst(fallback int, keys ...string) int {
+	for _, key := range keys {
+		value := strings.TrimSpace(os.Getenv(key))
+		if value == "" {
+			continue
+		}
+
+		parsed, err := strconv.Atoi(value)
+		if err != nil {
+			continue
+		}
+
+		return parsed
+	}
+
+	return fallback
+}
+
+// dbSSLMode reads turahe/pkg DATABASE_SSLMODE (boolean) and otherwise DB_SSLMODE.
+func dbSSLMode() string {
+	raw := strings.TrimSpace(os.Getenv("DATABASE_SSLMODE"))
+	if raw != "" {
+		parsed, err := strconv.ParseBool(raw)
+		if err == nil {
+			if parsed {
+				return "require"
+			}
+
+			return "disable"
+		}
+	}
+
+	return env("DB_SSLMODE", "disable")
+}
+
+// dbMaxLifetime prefers DATABASE_CONN_MAX_LIFETIME (minutes) over the duration form.
+func dbMaxLifetime() time.Duration {
+	if minutes := integerFirst(0, "DATABASE_CONN_MAX_LIFETIME"); minutes > 0 {
+		return time.Duration(minutes) * time.Minute
+	}
+
+	return durationOrSeconds("DB_POOL_MAX_LIFETIME", "DB_POOL_MAX_LIFETIME_SECONDS", 30*time.Minute)
+}
+
+// pemFromPkgOrApp loads a PEM from turahe/pkg's JWT_PRIVATE_KEY / JWT_PUBLIC_KEY
+// (inline PEM or a file path), then from this API's path and inline variables.
+// Path wins when both app variables are set. Inline values may use literal "\n".
+func pemFromPkgOrApp(pkgKey, inlineKey, pathKey string) (string, error) {
+	raw := strings.TrimSpace(os.Getenv(pkgKey))
+	if raw == "" {
+		return pemFromEnvOrFile(inlineKey, pathKey)
+	}
+
+	if strings.Contains(raw, "-----BEGIN") {
+		return strings.ReplaceAll(raw, `\n`, "\n"), nil
+	}
+
+	return readPEMFile(pkgKey, raw)
 }
 
 // pemFromEnvOrFile loads a PEM from an inline env var or a path env var.
@@ -836,18 +950,7 @@ func env(key, fallback string) string {
 func pemFromEnvOrFile(inlineKey, pathKey string) (string, error) {
 	path := strings.TrimSpace(os.Getenv(pathKey))
 	if path != "" {
-		// bearer:disable go_gosec_filesystem_filereadtaint
-		raw, err := os.ReadFile(path) //nolint:gosec // G304: path comes from operator-controlled *_PATH env config
-		if err != nil {
-			return "", fmt.Errorf("read %s (%s): %w", pathKey, path, err)
-		}
-
-		pem := strings.TrimSpace(string(raw))
-		if pem == "" {
-			return "", fmt.Errorf("%s (%s) is empty", pathKey, path)
-		}
-
-		return pem, nil
+		return readPEMFile(pathKey, path)
 	}
 
 	inline := strings.TrimSpace(os.Getenv(inlineKey))
@@ -856,6 +959,21 @@ func pemFromEnvOrFile(inlineKey, pathKey string) (string, error) {
 	}
 
 	return strings.ReplaceAll(inline, `\n`, "\n"), nil
+}
+
+func readPEMFile(key, path string) (string, error) {
+	// bearer:disable go_gosec_filesystem_filereadtaint
+	raw, err := os.ReadFile(path) //nolint:gosec // G304: path comes from operator-controlled env config
+	if err != nil {
+		return "", fmt.Errorf("read %s (%s): %w", key, path, err)
+	}
+
+	pem := strings.TrimSpace(string(raw))
+	if pem == "" {
+		return "", fmt.Errorf("%s (%s) is empty", key, path)
+	}
+
+	return pem, nil
 }
 
 func boolEnv(key string, fallback bool) bool {

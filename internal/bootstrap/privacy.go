@@ -11,8 +11,8 @@ import (
 	privacyservice "github.com/turahe/blog-api/internal/core/privacy/service"
 	"github.com/turahe/blog-api/internal/core/readcache"
 	"github.com/turahe/blog-api/internal/platform/config"
-	"github.com/turahe/blog-api/internal/platform/database"
 	"github.com/turahe/blog-api/internal/platform/system"
+	pkgdb "github.com/turahe/pkg/database"
 )
 
 // NewPrivacyService wires personal data exports and erasures. Exports are stored in the media
@@ -21,14 +21,14 @@ import (
 func NewPrivacyService(
 	ctx context.Context,
 	cfg config.Config,
-	db *database.Database,
+	db *pkgdb.Database,
 	verifier privacyports.PasswordVerifier,
 	events event.Unit,
 	readCache readcache.Cache,
 	logger *slog.Logger,
 ) *privacyservice.Service {
-	data := persistence.NewPrivacyData(db.GORM)
-	svc := privacyservice.New(persistence.NewPrivacyRepository(db.GORM), data, data, verifier,
+	data := persistence.NewPrivacyData(db.DB())
+	svc := privacyservice.New(persistence.NewPrivacyRepository(db.DB()), data, data, verifier,
 		system.UUIDGenerator{}, system.Clock{}, privacyservice.Config{
 			ExportRetention: cfg.PrivacyExportRetention,
 			DownloadTTL:     cfg.PrivacyExportURLTTL,

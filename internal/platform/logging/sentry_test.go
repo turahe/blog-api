@@ -1,4 +1,4 @@
-package sentry
+package logging
 
 import (
 	"context"
@@ -12,7 +12,6 @@ import (
 	sentrygo "github.com/getsentry/sentry-go"
 	"github.com/stretchr/testify/require"
 	"github.com/turahe/blog-api/internal/platform/config"
-	"github.com/turahe/blog-api/internal/platform/logging"
 )
 
 type fakeTransport struct {
@@ -86,7 +85,7 @@ func enableWith(t *testing.T, cfg config.Config) (*fakeTransport, func()) {
 
 //nolint:paralleltest // binds the global Sentry hub
 func TestInitDisabledIsNoop(t *testing.T) {
-	flush, err := Init(config.Config{}, "v1")
+	flush, err := InitSentry(config.Config{}, "v1")
 	require.NoError(t, err)
 	require.NotNil(t, flush)
 	flush()
@@ -95,7 +94,7 @@ func TestInitDisabledIsNoop(t *testing.T) {
 
 //nolint:paralleltest // binds the global Sentry hub
 func TestInitReportsInvalidDSN(t *testing.T) {
-	flush, err := Init(config.Config{SentryDSN: "not a dsn"}, "v1")
+	flush, err := InitSentry(config.Config{SentryDSN: "not a dsn"}, "v1")
 	require.ErrorContains(t, err, "init sentry")
 	require.Nil(t, flush)
 	require.Nil(t, sentrygo.CurrentHub().Client())
@@ -104,7 +103,7 @@ func TestInitReportsInvalidDSN(t *testing.T) {
 //nolint:paralleltest // binds the global Sentry hub
 func TestHandlerReportsErrorRecordsWithRedaction(t *testing.T) {
 	transport := enable(t)
-	logger := logging.NewTo(io.Discard, "production", NewHandler())
+	logger := NewTo(io.Discard, "production", NewSentryHandler())
 
 	logger.Info("request ok")
 	logger.Warn("slow request")
@@ -134,21 +133,21 @@ func TestHandlerReportsErrorRecordsWithRedaction(t *testing.T) {
 //nolint:paralleltest // binds the global Sentry hub
 func TestHandlerSkipsReportedContext(t *testing.T) {
 	transport := enable(t)
-	logger := logging.NewTo(io.Discard, "production", NewHandler())
+	logger := NewTo(io.Discard, "production", NewSentryHandler())
 
-	logger.ErrorContext(logging.MarkReported(context.Background()), "already reported")
+	logger.ErrorContext(MarkReported(context.Background()), "already reported")
 	require.Empty(t, transport.Events())
 }
 
 //nolint:paralleltest // binds the global Sentry hub
 func TestHandlerWithLogsSendsRecordsAtLevel(t *testing.T) {
 	transport, flush := enableWith(t, config.Config{SentryLogsLevel: "info"})
-	logger := logging.NewTo(io.Discard, "local", NewHandler().WithLogs(slog.LevelInfo))
+	logger := NewTo(io.Discard, "local", NewSentryHandler().WithLogs(slog.LevelInfo))
 
 	logger.Debug("cache miss")
 	logger.With("component", "http").Info("request ok",
 		"status", 200, "cached", true, "access_token", "raw")
-	logger.ErrorContext(logging.MarkReported(context.Background()), "panic recovered")
+	logger.ErrorContext(MarkReported(context.Background()), "panic recovered")
 	flush()
 
 	var logs []sentrygo.Log
@@ -174,7 +173,7 @@ func TestHandlerWithLogsSendsRecordsAtLevel(t *testing.T) {
 //nolint:paralleltest // binds the global Sentry hub
 func TestHandlerWithoutLogsSendsNoLogs(t *testing.T) {
 	transport, flush := enableWith(t, config.Config{SentryLogsLevel: "off"})
-	logger := logging.NewTo(io.Discard, "production", NewHandler())
+	logger := NewTo(io.Discard, "production", NewSentryHandler())
 
 	logger.Info("request ok")
 	flush()
@@ -187,13 +186,13 @@ func TestHandlerWithoutClientCapturesNothing(t *testing.T) {
 	require.Nil(t, sentrygo.CurrentHub().Client())
 
 	record := slog.NewRecord(time.Now(), slog.LevelError, "boom", 0)
-	require.NoError(t, NewHandler().Handle(context.Background(), record))
+	require.NoError(t, NewSentryHandler().Handle(context.Background(), record))
 }
 
 //nolint:paralleltest // binds the global Sentry hub
 func TestHandlerWithGroupPrefixesKeys(t *testing.T) {
 	transport := enable(t)
-	handler := NewHandler()
+	handler := NewSentryHandler()
 
 	require.Same(t, handler, handler.WithGroup(""), "an empty group is a no-op")
 
@@ -217,7 +216,7 @@ func TestHandlerSkipsAttributesWithoutKey(t *testing.T) {
 
 	record := slog.NewRecord(time.Now(), slog.LevelError, "boom", 0)
 	record.AddAttrs(slog.String("", "orphan"), slog.String("kept", "yes"))
-	require.NoError(t, NewHandler().Handle(context.Background(), record))
+	require.NoError(t, NewSentryHandler().Handle(context.Background(), record))
 
 	events := transport.Events()
 	require.Len(t, events, 1)
@@ -227,7 +226,7 @@ func TestHandlerSkipsAttributesWithoutKey(t *testing.T) {
 //nolint:paralleltest // binds the global Sentry hub
 func TestHandlerWithLogsMapsLevelsAndFloats(t *testing.T) {
 	transport, flush := enableWith(t, config.Config{SentryLogsLevel: "debug"})
-	logger := slog.New(NewHandler().WithLogs(slog.LevelDebug))
+	logger := slog.New(NewSentryHandler().WithLogs(slog.LevelDebug))
 
 	logger.Debug("cache miss", "ratio", 0.25)
 	logger.Warn("slow query")

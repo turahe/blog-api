@@ -9,14 +9,14 @@ import (
 	impservice "github.com/turahe/blog-api/internal/core/impersonation/service"
 	rbacdomain "github.com/turahe/blog-api/internal/core/rbac/domain"
 	"github.com/turahe/blog-api/internal/platform/config"
-	"github.com/turahe/blog-api/internal/platform/database"
 	"github.com/turahe/blog-api/internal/platform/system"
+	pkgdb "github.com/turahe/pkg/database"
 )
 
 // NewImpersonationService wires staff impersonation. perms and auth may be nil where sessions
 // are only expired (app scheduler).
 func NewImpersonationService(
-	cfg config.Config, db *database.Database, events event.Unit, perms impports.Permissions, auth *authservice.AuthService,
+	cfg config.Config, db *pkgdb.Database, events event.Unit, perms impports.Permissions, auth *authservice.AuthService,
 ) *impservice.Service {
 	var (
 		stepUp impports.StepUp
@@ -27,7 +27,7 @@ func NewImpersonationService(
 		stepUp, tokens = auth, auth
 	}
 
-	return impservice.New(persistence.NewImpersonationRepository(db.GORM), persistence.NewUserRepository(db.GORM),
+	return impservice.New(persistence.NewImpersonationRepository(db.DB()), persistence.NewUserRepository(db.DB()),
 		perms, stepUp, tokens, system.UUIDGenerator{}, system.Clock{},
 		impservice.Config{TTL: cfg.ImpersonationTTL, AdminRole: rbacdomain.ProtectedRole}).WithEvents(events)
 }

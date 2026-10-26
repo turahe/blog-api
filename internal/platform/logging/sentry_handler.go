@@ -1,4 +1,4 @@
-package sentry
+package logging
 
 import (
 	"context"
@@ -7,15 +7,14 @@ import (
 	"strings"
 
 	sentrygo "github.com/getsentry/sentry-go"
-	"github.com/turahe/blog-api/internal/platform/logging"
 )
 
 // Handler is a slog.Handler that reports Error-level records as Sentry events
 // and, when built WithLogs, sends records to Sentry Logs.
 // It uses the hub on the record's context (set per request/message by the
 // tracing middleware) so events carry request data and link to the transaction.
-// Attributes pass through logging.Redact; records logged with a context marked
-// by logging.MarkReported are not reported as events again.
+// Attributes pass through Redact; records logged with a context marked
+// by MarkReported are not reported as events again.
 type Handler struct {
 	attrs  []slog.Attr
 	groups []string
@@ -30,8 +29,8 @@ type logSink struct {
 
 var _ slog.Handler = (*Handler)(nil)
 
-// NewHandler returns a Handler; pass it to logging.New as an extra handler.
-func NewHandler() *Handler {
+// NewSentryHandler returns a Handler; pass it to New as an extra handler.
+func NewSentryHandler() *Handler {
 	return &Handler{}
 }
 
@@ -58,7 +57,7 @@ func (h *Handler) Handle(ctx context.Context, record slog.Record) error {
 		h.logs.emit(ctx, record, attrs)
 	}
 
-	if record.Level < slog.LevelError || logging.Reported(ctx) {
+	if record.Level < slog.LevelError || Reported(ctx) {
 		return nil
 	}
 
@@ -197,7 +196,7 @@ func (s *logSink) entry(level slog.Level) sentrygo.LogEntry {
 // flatten appends a (possibly grouped) attribute to out with dotted keys,
 // redacting sensitive keys.
 func flatten(prefix string, a slog.Attr, out []slog.Attr) []slog.Attr {
-	a = logging.Redact(nil, a)
+	a = Redact(nil, a)
 	a.Value = a.Value.Resolve()
 
 	if a.Value.Kind() == slog.KindGroup {

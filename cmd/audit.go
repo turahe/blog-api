@@ -7,9 +7,9 @@ import (
 
 	"github.com/spf13/cobra"
 	"github.com/turahe/blog-api/internal/adapters/outbound/persistence"
+	"github.com/turahe/blog-api/internal/bootstrap"
 	auditservice "github.com/turahe/blog-api/internal/core/audit/service"
 	"github.com/turahe/blog-api/internal/platform/config"
-	"github.com/turahe/blog-api/internal/platform/database"
 )
 
 func newAuditCmd() *cobra.Command {
@@ -40,14 +40,14 @@ func newAuditPruneCmd() *cobra.Command {
 				retention = time.Duration(days) * 24 * time.Hour
 			}
 
-			db, err := database.Open(cmd.Context(), cfg)
+			db, err := bootstrap.OpenDatabase(cmd.Context(), cfg)
 			if err != nil {
 				return err
 			}
 
 			defer func() { err = errors.Join(err, db.Close()) }()
 
-			deleted, err := auditservice.NewActivity(persistence.NewAuditRepository(db.GORM)).Prune(cmd.Context(), retention)
+			deleted, err := auditservice.NewActivity(persistence.NewAuditRepository(db.DB())).Prune(cmd.Context(), retention)
 			if err != nil {
 				return err
 			}

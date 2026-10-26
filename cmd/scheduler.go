@@ -21,8 +21,9 @@ import (
 	mediaservice "github.com/turahe/blog-api/internal/core/media/service"
 	"github.com/turahe/blog-api/internal/core/readcache"
 	"github.com/turahe/blog-api/internal/platform/config"
-	"github.com/turahe/blog-api/internal/platform/database"
-	redisplatform "github.com/turahe/blog-api/internal/platform/redis"
+	"github.com/turahe/blog-api/internal/platform/connect"
+	pkgdb "github.com/turahe/pkg/database"
+	pkgredis "github.com/turahe/pkg/redis"
 )
 
 const (
@@ -159,7 +160,7 @@ func withScheduler(
 	}
 	defer flush()
 
-	db, err := database.Open(ctx, cfg)
+	db, err := bootstrap.OpenDatabase(ctx, cfg)
 	if err != nil {
 		return err
 	}
@@ -168,7 +169,7 @@ func withScheduler(
 	readCache, closeCache := schedulerCache(ctx, cfg, logger)
 	defer closeCache()
 
-	repo := persistence.NewJobRunRepository(db.GORM)
+	repo := persistence.NewJobRunRepository(db.DB())
 	jobs := scheduledJobs(ctx, cfg, db, readCache, logger)
 
 	return fn(scheduler.New(repo, schedulerTick, logger, jobs...), repo, logger)
@@ -181,27 +182,28 @@ func schedulerCache(ctx context.Context, cfg config.Config, logger *slog.Logger)
 		return nil, func() {}
 	}
 
-	client, err := redisplatform.Open(ctx, cfg.RedisURL())
-	if err != nil {
+	if err := connect.OpenRedis(ctx, cfg.RedisURL()); err != nil {
 		logger.Warn("read cache unavailable; erasures will not invalidate cached reads", "error", err)
 		return nil, func() {}
 	}
+
+	client := pkgredis.GetRedis()
 
 	return cache.NewRedis(client, bootstrap.CacheTTLs(cfg), logger), func() { _ = client.Close() }
 }
 
 // scheduledJobs lists the recurring jobs. Names are stable: they key locks and run history.
 func scheduledJobs(
-	ctx context.Context, cfg config.Config, db *database.Database, readCache readcache.Cache, logger *slog.Logger,
+	ctx context.Context, cfg config.Config, db *pkgdb.Database, readCache readcache.Cache, logger *slog.Logger,
 ) []scheduler.Job {
-	activity := auditservice.NewActivity(persistence.NewAuditRepository(db.GORM))
-	processed := persistence.NewProcessedMessageRepository(db.GORM)
-	sessions := persistence.NewSessionRepository(db.GORM)
-	resets := persistence.NewResetTokenRepository(db.GORM)
-	registrations := persistence.NewRegistrationRepository(db.GORM)
+	activity := auditservice.NewActivity(persistence.NewAuditRepository(db.DB()))
+	processed := persistence.NewProcessedMessageRepository(db.DB())
+	sessions := persistence.NewSessionRepository(db.DB())
+	resets := persistence.NewResetTokenRepository(db.DB())
+	registrations := persistence.NewRegistrationRepository(db.DB())
 	newsletter := bootstrap.NewNewsletterService(cfg, db, bootstrap.NewEvents(cfg, db), nil, logger)
 	privacy := bootstrap.NewPrivacyService(ctx, cfg, db, nil,
-		event.Unit{Tx: persistence.NewTransactor(db.GORM)}, readCache, logger).WithModuleErasers(newsletter)
+		event.Unit{Tx: persistence.NewTransactor(db.DB())}, readCache, logger).WithModuleErasers(newsletter)
 	impersonation := bootstrap.NewImpersonationService(cfg, db, bootstrap.NewEvents(cfg, db), nil, nil)
 
 	jobs := []scheduler.Job{
@@ -256,7 +258,7 @@ func scheduledJobs(
 }
 
 // analyticsJobs returns the rollup builder, the export builder, and analytics retention.
-func analyticsJobs(ctx context.Context, cfg config.Config, db *database.Database, logger *slog.Logger) []scheduler.Job {
+func analyticsJobs(ctx context.Context, cfg config.Config, db *pkgdb.Database, logger *slog.Logger) []scheduler.Job {
 	aggregator := bootstrap.NewAnalyticsAggregator(db)
 	exports := bootstrap.NewAnalyticsExports(ctx, cfg, db, nil, logger)
 	retention := bootstrap.NewAnalyticsRetention(db)
@@ -293,7 +295,7 @@ func analyticsJobs(ctx context.Context, cfg config.Config, db *database.Database
 }
 
 // mediaJobs returns the media orphan cleanup when media storage is configured.
-func mediaJobs(ctx context.Context, cfg config.Config, db *database.Database, logger *slog.Logger) []scheduler.Job {
+func mediaJobs(ctx context.Context, cfg config.Config, db *pkgdb.Database, logger *slog.Logger) []scheduler.Job {
 	janitor, err := bootstrap.NewMediaJanitor(ctx, cfg, db)
 	if err != nil {
 		logger.Warn("media orphan cleanup disabled", "error", err)

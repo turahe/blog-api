@@ -5,7 +5,8 @@ TEST_PKGS := ./cmd/... ./internal/... ./docs/...
 
 # Every target runs in Docker; only Docker (with Compose) is required on the host.
 # Go module and build caches live in named volumes so repeat runs stay fast.
-GO_IMAGE ?= golang:1.27.1-alpine
+# github.com/turahe/pkg/database imports mattn/go-sqlite3, so every compile needs cgo and gcc.
+GO_IMAGE ?= golang:1.27.1
 # -race needs cgo and a C toolchain; the Debian image ships gcc, alpine does not.
 GO_RACE_IMAGE ?= golang:1.27.1
 GOLANGCI_LINT_IMAGE ?= golangci/golangci-lint:v2.14.0
@@ -15,7 +16,7 @@ ASYNCAPI_CLI_VERSION ?= 6.2.0
 HOST_UID_GID := $(shell id -u):$(shell id -g)
 # Keep root-run git (VCS stamping, --new-from-rev) from rewriting .git/index as root.
 DOCKER_GIT_ENV = -e GIT_OPTIONAL_LOCKS=0 -e GOFLAGS=-buildvcs=false
-DOCKER_GO = docker run --rm $(DOCKER_GIT_ENV) \
+DOCKER_GO = docker run --rm $(DOCKER_GIT_ENV) -e CGO_ENABLED=1 \
 	-v "$(CURDIR)":/app -w /app \
 	-v blog-api-go-mod-cache:/go/pkg/mod \
 	-v blog-api-go-build-cache:/root/.cache/go-build

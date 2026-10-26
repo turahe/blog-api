@@ -46,8 +46,7 @@ The package layout aligns with hexagonal (ports-and-adapters) principles, isolat
 /internal/adapters/outbound/cache
 /internal/adapters/outbound/events
 /internal/platform/config
-/internal/platform/database
-/internal/platform/redis
+/internal/platform/connect
 /internal/platform/logger
 /internal/platform/watermill
 /pkg

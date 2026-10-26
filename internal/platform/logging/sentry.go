@@ -1,5 +1,6 @@
-// Package sentry configures the Sentry SDK and reports error logs as Sentry events.
-package sentry
+// Sentry client setup. Request scrubbing stays here because github.com/turahe/pkg/sentryx
+// cannot install a BeforeSend hook.
+package logging
 
 import (
 	"fmt"
@@ -7,14 +8,23 @@ import (
 	"time"
 
 	sentrygo "github.com/getsentry/sentry-go"
+	"github.com/turahe/pkg/sentryx"
+
 	"github.com/turahe/blog-api/internal/platform/config"
+	"github.com/turahe/blog-api/internal/platform/connect"
 )
 
 const flushTimeout = 2 * time.Second
 
-// Init configures the global Sentry client. It is a no-op when SENTRY_DSN is
+// InitSentry configures the global Sentry client. It is a no-op when SENTRY_DSN is
 // unset. The returned flush func is always non-nil and delivers buffered events.
-func Init(cfg config.Config, release string) (func(), error) {
+func InitSentry(cfg config.Config, release string) (func(), error) {
+	if cfg.SentryEnabled() {
+		// sentryx cannot install a BeforeSend hook. Start it, then replace the
+		// client with one that scrubs credentials. Shutdown still uses sentryx.Flush.
+		_ = sentryx.Init(connect.SentryConfig(cfg, release))
+	}
+
 	return initWithTransport(cfg, release, nil)
 }
 
@@ -43,7 +53,7 @@ func initWithTransport(cfg config.Config, release string, transport sentrygo.Tra
 		return nil, fmt.Errorf("init sentry: %w", err)
 	}
 
-	return func() { sentrygo.Flush(flushTimeout) }, nil
+	return func() { sentryx.Flush(flushTimeout) }, nil
 }
 
 // scrub drops request data that can carry credentials or reset tokens.

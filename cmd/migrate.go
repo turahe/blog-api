@@ -3,10 +3,11 @@ package cmd
 import (
 	"database/sql"
 	"errors"
+	"fmt"
 
 	"github.com/spf13/cobra"
+	"github.com/turahe/blog-api/internal/bootstrap"
 	"github.com/turahe/blog-api/internal/platform/config"
-	"github.com/turahe/blog-api/internal/platform/database"
 	"github.com/turahe/blog-api/internal/platform/migrations"
 )
 
@@ -35,14 +36,19 @@ func newMigrateActionCmd(name string, action func(*sql.DB) error) *cobra.Command
 				return err
 			}
 
-			db, err := database.Open(cmd.Context(), cfg)
+			db, err := bootstrap.OpenDatabase(cmd.Context(), cfg)
 			if err != nil {
 				return err
 			}
 
 			defer func() { err = errors.Join(err, db.Close()) }()
 
-			return action(db.SQL)
+			sqlDB, err := db.DB().DB()
+			if err != nil {
+				return fmt.Errorf("get sql.DB: %w", err)
+			}
+
+			return action(sqlDB)
 		},
 	}
 }

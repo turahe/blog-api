@@ -5,8 +5,8 @@ import (
 	"fmt"
 
 	"github.com/spf13/cobra"
+	"github.com/turahe/blog-api/internal/bootstrap"
 	"github.com/turahe/blog-api/internal/platform/config"
-	"github.com/turahe/blog-api/internal/platform/database"
 	"github.com/turahe/blog-api/internal/platform/seed"
 )
 
@@ -28,14 +28,14 @@ func newSeedCmd() *cobra.Command {
 				return err
 			}
 
-			db, err := database.Open(cmd.Context(), cfg)
+			db, err := bootstrap.OpenDatabase(cmd.Context(), cfg)
 			if err != nil {
 				return err
 			}
 
 			defer func() { err = errors.Join(err, db.Close()) }()
 
-			if err := seed.Run(cmd.Context(), db.GORM, seed.Options{
+			if err := seed.Run(cmd.Context(), db.DB(), seed.Options{
 				AdminEmail:    email,
 				AdminUsername: username,
 				AdminPassword: password,
