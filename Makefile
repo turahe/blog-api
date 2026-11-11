@@ -1,4 +1,4 @@
-.PHONY: test test-race test-integration test-brokers asyncapi-validate coverage lint vuln routes-check swagger dev-keys infra-up infra-down docker-up docker-dev docker-down docker-push docker-build docker-logs docker-seed docker-migrate trivy bench bench-cursor bench-post
+.PHONY: test test-race test-integration test-brokers asyncapi-validate coverage lint vuln routes-check swagger dev-keys infra-up infra-down docker-up docker-dev docker-down docker-push docker-build docker-logs docker-seed docker-migrate trivy bench bench-cursor bench-post husky
 
 MODULE := github.com/turahe/blog-api
 TEST_PKGS := ./cmd/... ./internal/... ./docs/...
@@ -169,3 +169,8 @@ infra-up:
 
 infra-down:
 	docker compose down
+
+# Install automation-co/husky and link .husky/hooks into .git/hooks.
+husky:
+	go install github.com/automation-co/husky@latest
+	husky install
