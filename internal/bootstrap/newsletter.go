@@ -17,31 +17,31 @@ import (
 	settingsdomain "github.com/turahe/blog-api/internal/core/settings/domain"
 	settingsservice "github.com/turahe/blog-api/internal/core/settings/service"
 	"github.com/turahe/blog-api/internal/platform/config"
-	"github.com/turahe/blog-api/internal/platform/database"
 	"github.com/turahe/blog-api/internal/platform/system"
+	pkgdb "github.com/turahe/pkg/database"
 )
 
 // NewNewsletterService wires newsletter subscriptions, issues, and dispatch. settings may be
 // nil (app worker and scheduler); links then read the stored settings directly. A missing
 // mailer disables confirmation emails, and a provider without credentials disables dispatch.
 func NewNewsletterService(
-	cfg config.Config, db *database.Database, events event.Unit, settings newslettermail.SettingsReader, logger *slog.Logger,
+	cfg config.Config, db *pkgdb.Database, events event.Unit, settings newslettermail.SettingsReader, logger *slog.Logger,
 ) *newsletterservice.Service {
 	if settings == nil {
-		settings = settingsservice.New(persistence.NewSettingsRepository(db.GORM), settingsdomain.DefaultCatalogue(),
+		settings = settingsservice.New(persistence.NewSettingsRepository(db.DB()), settingsdomain.DefaultCatalogue(),
 			system.UUIDGenerator{}, system.Clock{})
 	}
 
 	links := newslettermail.NewLinks(settings, cfg.AppPublicURL)
 	deps := newsletterservice.Deps{
-		Repo: persistence.NewNewsletterRepository(db.GORM), IDs: system.UUIDGenerator{}, Clock: system.Clock{},
+		Repo: persistence.NewNewsletterRepository(db.DB()), IDs: system.UUIDGenerator{}, Clock: system.Clock{},
 		Links: links, Markdown: markdown.NewNewsletter(), Events: events, Logger: logger,
-		Accounts:       newslettermail.NewAccounts(persistence.NewUserRepository(db.GORM)),
+		Accounts:       newslettermail.NewAccounts(persistence.NewUserRepository(db.DB())),
 		IdentityHasher: identityHasher(cfg),
 	}
 
 	if mailer := NewTransactionalMailer(cfg, db, newsletterBox(cfg, logger), logger); mailer != nil {
-		renderer := notificationtemplate.NewRenderer(persistence.NewNotificationTemplateRepository(db.GORM), logger)
+		renderer := notificationtemplate.NewRenderer(persistence.NewNotificationTemplateRepository(db.DB()), logger)
 		deps.Mailer = newslettermail.NewMailer(renderer, mailer, links)
 	}
 

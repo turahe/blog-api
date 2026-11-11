@@ -19,11 +19,13 @@ import (
 	commentservice "github.com/turahe/blog-api/internal/core/comment/service"
 )
 
+func intPtr(v int64) *int64 { return &v }
+
 type fakeCommentService struct {
 	createFn func(context.Context, commentservice.CreateInput) (commentdomain.Comment, error)
-	listFn   func(context.Context, uuid.UUID, *uuid.UUID, int, int) (commentdomain.ListResult, error)
+	listFn   func(context.Context, commentdomain.ListFilter) (commentdomain.ListResult, error)
 	threadFn func(context.Context, uuid.UUID) (commentdomain.Thread, error)
-	mineFn   func(context.Context, uuid.UUID, int, int) (commentdomain.ListResult, error)
+	mineFn   func(context.Context, commentdomain.ListFilter) (commentdomain.ListResult, error)
 	updateFn func(context.Context, uuid.UUID, uuid.UUID, string) (commentdomain.Comment, error)
 	deleteFn func(context.Context, uuid.UUID, uuid.UUID) error
 	flagFn   func(context.Context, commentservice.FlagInput) error
@@ -34,16 +36,16 @@ func (f *fakeCommentService) Create(ctx context.Context, in commentservice.Creat
 	return f.createFn(ctx, in)
 }
 
-func (f *fakeCommentService) ListForPost(ctx context.Context, postID uuid.UUID, parentID *uuid.UUID, page, perPage int) (commentdomain.ListResult, error) {
-	return f.listFn(ctx, postID, parentID, page, perPage)
+func (f *fakeCommentService) ListForPost(ctx context.Context, filter commentdomain.ListFilter) (commentdomain.ListResult, error) {
+	return f.listFn(ctx, filter)
 }
 
 func (f *fakeCommentService) GetThread(ctx context.Context, id uuid.UUID) (commentdomain.Thread, error) {
 	return f.threadFn(ctx, id)
 }
 
-func (f *fakeCommentService) ListMine(ctx context.Context, userID uuid.UUID, page, perPage int) (commentdomain.ListResult, error) {
-	return f.mineFn(ctx, userID, page, perPage)
+func (f *fakeCommentService) ListMine(ctx context.Context, filter commentdomain.ListFilter) (commentdomain.ListResult, error) {
+	return f.mineFn(ctx, filter)
 }
 
 func (f *fakeCommentService) Update(ctx context.Context, actorID, id uuid.UUID, content string) (commentdomain.Comment, error) {
@@ -201,7 +203,7 @@ func TestCommentPolicyErrors(t *testing.T) {
 		"comment.disabled": commentdomain.ErrCommentsDisabled,
 		"comment.closed":   commentdomain.ErrCommentsClosed,
 	} {
-		svc := &fakeCommentService{listFn: func(context.Context, uuid.UUID, *uuid.UUID, int, int) (commentdomain.ListResult, error) {
+		svc := &fakeCommentService{listFn: func(context.Context, commentdomain.ListFilter) (commentdomain.ListResult, error) {
 			return commentdomain.ListResult{}, policyErr
 		}}
 		c, w := commentContext(nethttp.MethodGet, "/api/v1/posts/x/comments", "", nil, testPostID.String())
@@ -282,7 +284,7 @@ func TestGetCommentHidesDeletedContentAndAuthor(t *testing.T) {
 				UUID: uuid.New(), PostUUID: testPostID, ParentUUID: &testCommentID, AuthorName: "Guest",
 				AuthorEmail: "guest@example.com", Content: "reply", ContentHTML: "<p>reply</p>", Status: commentdomain.StatusApproved, Depth: 1,
 				CreatedAt: testTime, UpdatedAt: testTime,
-			}}, Total: 1},
+			}}, Total: intPtr(1)},
 		}, nil
 	}}
 	c, w := commentContext(nethttp.MethodGet, "/api/v1/comments/x", "", nil, testCommentID.String())
@@ -311,13 +313,15 @@ func TestListPostCommentsPaginatesAndParsesParent(t *testing.T) {
 	t.Parallel()
 
 	parent := uuid.New()
-	svc := &fakeCommentService{listFn: func(_ context.Context, postID uuid.UUID, parentID *uuid.UUID, page, perPage int) (commentdomain.ListResult, error) {
-		require.Equal(t, testPostID, postID)
-		require.Equal(t, parent, *parentID)
-		require.Equal(t, 2, page)
-		require.Equal(t, 5, perPage)
+	svc := &fakeCommentService{listFn: func(_ context.Context, filter commentdomain.ListFilter) (commentdomain.ListResult, error) {
+		require.Equal(t, &testPostID, filter.PostUUID)
+		require.NotNil(t, filter.ParentUUID)
+		require.Equal(t, parent, *filter.ParentUUID)
+		require.Equal(t, 2, filter.Page)
+		require.Equal(t, 5, filter.Limit)
 
-		return commentdomain.ListResult{Page: 2, PerPage: 5, Total: 7}, nil
+		total := int64(7)
+		return commentdomain.ListResult{OffsetPage: 2, OffsetPerPage: 5, Total: &total}, nil
 	}}
 	c, w := commentContext(nethttp.MethodGet, "/api/v1/posts/x/comments?page=2&perPage=5&parentId="+parent.String(), "", nil, testPostID.String())
 
@@ -332,7 +336,7 @@ func TestListPostCommentsPaginatesAndParsesParent(t *testing.T) {
 func TestListPostCommentsUnknownPost(t *testing.T) {
 	t.Parallel()
 
-	svc := &fakeCommentService{listFn: func(context.Context, uuid.UUID, *uuid.UUID, int, int) (commentdomain.ListResult, error) {
+	svc := &fakeCommentService{listFn: func(context.Context, commentdomain.ListFilter) (commentdomain.ListResult, error) {
 		return commentdomain.ListResult{}, commentdomain.ErrPostNotFound
 	}}
 	c, w := commentContext(nethttp.MethodGet, "/api/v1/posts/x/comments", "", nil, testPostID.String())
@@ -417,17 +421,18 @@ func erroringComments(err error) *fakeCommentService {
 		UUID: testCommentID, PostUUID: testPostID, Content: "hi", Status: commentdomain.StatusApproved,
 		CreatedAt: testTime, UpdatedAt: testTime,
 	}
-	page := commentdomain.ListResult{Items: []commentdomain.Comment{comment}, Page: 1, PerPage: 20, Total: 1}
+	total := int64(1)
+	page := commentdomain.ListResult{Items: []commentdomain.Comment{comment}, OffsetPage: 1, OffsetPerPage: 20, Total: &total}
 
 	return &fakeCommentService{
 		createFn: func(context.Context, commentservice.CreateInput) (commentdomain.Comment, error) { return comment, err },
-		listFn: func(context.Context, uuid.UUID, *uuid.UUID, int, int) (commentdomain.ListResult, error) {
+		listFn: func(context.Context, commentdomain.ListFilter) (commentdomain.ListResult, error) {
 			return page, err
 		},
 		threadFn: func(context.Context, uuid.UUID) (commentdomain.Thread, error) {
 			return commentdomain.Thread{Comment: comment}, err
 		},
-		mineFn: func(context.Context, uuid.UUID, int, int) (commentdomain.ListResult, error) { return page, err },
+		mineFn: func(context.Context, commentdomain.ListFilter) (commentdomain.ListResult, error) { return page, err },
 		updateFn: func(context.Context, uuid.UUID, uuid.UUID, string) (commentdomain.Comment, error) {
 			return comment, err
 		},

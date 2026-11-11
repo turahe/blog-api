@@ -17,6 +17,7 @@ import (
 	"github.com/turahe/blog-api/internal/core/post/ports"
 	"github.com/turahe/blog-api/internal/core/readcache"
 	tagdomain "github.com/turahe/blog-api/internal/core/tag/domain"
+	"github.com/turahe/blog-api/internal/shared/pagination"
 )
 
 // Post service errors.
@@ -91,17 +92,35 @@ func (s *PostService) WithTags(tags ports.TagLinker) *PostService {
 	return s
 }
 
+// postListCfg is shared with handlers and repo for parameter validation and
+// cursor encoding. The service layer keeps the cache key space stable by
+// always normalising legacy Page/Limit values before consulting readcache.
+var postListCfg = pagination.CursorConfig{
+	Kind:           "posts_public",
+	Sort:           []pagination.SortField{{Name: "published_at", Dir: pagination.Desc, Nulls: pagination.NullsLast, Type: pagination.TypeTime}, {Name: "created_at", Dir: pagination.Desc, Type: pagination.TypeTime}, {Name: "id", Dir: pagination.Desc, Type: pagination.TypeInt64}},
+	TTL:            pagination.DefaultTTL,
+	MaxPerPage:     pagination.DefaultMaxPerPage,
+	DefaultPerPage: pagination.DefaultPerPage,
+}
+
+// postAdminListCfg is the CursorConfig used for normalising legacy offset
+// params in the admin post list. Must match the repo and handler configs.
+var postAdminListCfg = pagination.CursorConfig{
+	Kind:           "posts_admin",
+	Sort:           []pagination.SortField{{Name: "created_at", Dir: pagination.Desc, Type: pagination.TypeTime}, {Name: "id", Dir: pagination.Desc, Type: pagination.TypeInt64}},
+	TTL:            pagination.DefaultTTL,
+	MaxPerPage:     pagination.DefaultMaxPerPage,
+	DefaultPerPage: pagination.DefaultPerPage,
+}
+
 // ListPublished returns a page of published posts.
 func (s *PostService) ListPublished(ctx context.Context, filter postdomain.ListFilter) (postdomain.ListResult, error) {
-	if filter.Page < 1 {
-		filter.Page = 1
+	if filter.Mode == pagination.ModeOffset || filter.Page > 0 || filter.Page < 1 || filter.Limit < 1 {
+		norm := pagination.ParseLegacy(postListCfg, filter.Page, filter.Limit)
+		filter.PageRequest = norm
 	}
 
-	if filter.PerPage < 1 || filter.PerPage > 100 {
-		filter.PerPage = 20
-	}
-
-	key := readcache.Key("list", "page", filter.Page, "per_page", filter.PerPage,
+	key := readcache.Key("list", "cursor", filter.Cursor, "mode", filter.Mode, "page", filter.Page, "per_page", filter.Limit, "include_total", filter.IncludeTotal,
 		"category", filter.CategoryUUID, "tag", filter.TagUUID)
 
 	return readcache.Through(ctx, s.cache, readcache.Posts, key, func() (postdomain.ListResult, error) {
@@ -111,13 +130,8 @@ func (s *PostService) ListPublished(ctx context.Context, filter postdomain.ListF
 
 // ListAdmin returns a page of posts for the admin list.
 func (s *PostService) ListAdmin(ctx context.Context, filter postdomain.AdminListFilter) (postdomain.ListResult, error) {
-	if filter.Page < 1 {
-		filter.Page = 1
-	}
-
-	if filter.PerPage < 1 || filter.PerPage > 100 {
-		filter.PerPage = 20
-	}
+	norm := pagination.ParseLegacy(postAdminListCfg, filter.Page, filter.Limit)
+	filter.PageRequest = norm
 
 	if filter.ScopeAuthorUUID != nil {
 		filter.AuthorUUID = filter.ScopeAuthorUUID

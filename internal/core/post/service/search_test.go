@@ -7,6 +7,7 @@ import (
 
 	"github.com/stretchr/testify/require"
 	postdomain "github.com/turahe/blog-api/internal/core/post/domain"
+	"github.com/turahe/blog-api/internal/shared/pagination"
 )
 
 type fakeSearcher struct {
@@ -18,7 +19,11 @@ func (f *fakeSearcher) SearchPublished(_ context.Context, filter postdomain.Sear
 	f.calls++
 	f.filter = filter
 
-	return postdomain.SearchResult{Page: filter.Page, PerPage: filter.PerPage}, nil
+	return postdomain.SearchResult{
+		Limit:         filter.Limit,
+		OffsetPage:    filter.Page,
+		OffsetPerPage: filter.Limit,
+	}, nil
 }
 
 func TestSearchNormalizesTheFilter(t *testing.T) {
@@ -27,11 +32,14 @@ func TestSearchNormalizesTheFilter(t *testing.T) {
 	searcher := &fakeSearcher{}
 	svc := New(nil, nil, nil).WithSearch(searcher)
 
-	got, err := svc.Search(t.Context(), postdomain.SearchFilter{Query: "  go \t generics\n", Page: 0, PerPage: 500})
+	got, err := svc.Search(t.Context(), postdomain.SearchFilter{
+		Query:       "  go \t generics\n",
+		PageRequest: pagination.PageRequest{Page: 0, Limit: 0},
+	})
 	require.NoError(t, err)
 	require.Equal(t, "go generics", searcher.filter.Query)
-	require.Equal(t, 1, got.Page)
-	require.Equal(t, 20, got.PerPage)
+	require.Equal(t, 1, got.OffsetPage)
+	require.Equal(t, 20, got.OffsetPerPage)
 }
 
 func TestSearchRejectsEmptyAndOverlongQueries(t *testing.T) {

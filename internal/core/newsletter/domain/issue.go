@@ -7,6 +7,7 @@ import (
 	"unicode/utf8"
 
 	"github.com/google/uuid"
+	"github.com/turahe/blog-api/internal/shared/pagination"
 )
 
 // IssueStatus is where an issue is in its lifecycle.
@@ -47,6 +48,7 @@ func (s IssueStatus) Editable() bool {
 
 // Issue is one newsletter send.
 type Issue struct {
+	ID           int64
 	UUID         uuid.UUID
 	Subject      string
 	Preheader    string
@@ -94,19 +96,18 @@ func (i Issue) Validate() error {
 }
 
 // IssueFilter selects issues for the admin list.
+// Page and PerPage are kept for older call sites; they shadow the promoted
+// PageRequest.Page field. The service layer converts these via ParseLegacy
+// into the embedded PageRequest when PageRequest.Limit is still zero.
 type IssueFilter struct {
+	pagination.PageRequest
 	Status  IssueStatus
 	Page    int
 	PerPage int
 }
 
 // IssuePage is one page of issues.
-type IssuePage struct {
-	Items   []Issue
-	Page    int
-	PerPage int
-	Total   int64
-}
+type IssuePage = pagination.PageResult[Issue]
 
 // Claim selects recipients: up to Limit subscribers with no sent delivery and no permanent
 // failure, fewer than MaxAttempts attempts, no claim newer than StaleBefore, and no failure

@@ -84,12 +84,12 @@ migrations use identity columns, `gen_random_uuid()`, and partial indexes.
 
 | Dialect (`DB_DRIVER`) | Driver | GORM driver package | Cloud SQL connector integration |
 |-----------------------|--------|---------------------|---------------------------------|
-| `postgres` — PostgreSQL 18 (source of truth) | `github.com/jackc/pgx/v5/stdlib` | `gorm.io/driver/postgres` | `cloud.google.com/go/cloudsqlconn/postgres/pgxv5` — `RegisterDriver("cloudsql-postgres", WithIAMAuthN(), WithPrivateIP())` then `sql.Open` + GORM `Conn`. |
+| `postgres` — PostgreSQL 18 (source of truth) | `github.com/jackc/pgx/v5` via `github.com/turahe/pkg/database` | `gorm.io/driver/postgres` | Cloud SQL Postgres dialer in `github.com/turahe/pkg/database` |
 
 Local / non-Cloud-SQL: set split `DB_*` fields (`DB_DRIVER`, `DB_HOST`, `DB_PORT`, `DB_USER`,
 `DB_PASSWORD`, `DB_NAME`, and for PostgreSQL `DB_SSLMODE`). Cloud SQL: set
-`DB_INSTANCE_CONNECTION_NAME` (and related `DB_*` vars); `internal/platform/database` opens via
-the connector and wraps `*sql.DB` for GORM.
+`DB_INSTANCE_CONNECTION_NAME` (and related `DB_*` vars); `github.com/turahe/pkg/database` opens
+the connector and exposes GORM through `Database.DB()`.
 
 Reference docs:
 
@@ -148,11 +148,11 @@ secrets or passwords.
 
 #### Private IP connection process step-by-step
 
-1. **Startup**: `app serve` / `app migrate up` entrypoint invokes
-   `internal/platform/database.Open`, which:
+1. **Startup**: `app serve` / `app migrate up` opens the pool with
+   `github.com/turahe/pkg/database` (`internal/platform/connect.OpenDatabase`), which:
    1. Resolves `DB_DRIVER` and either split direct `DB_*` fields or Cloud SQL env (`DB_INSTANCE_CONNECTION_NAME`, …).
-   2. For Cloud SQL: registers the driver via the `cloudsqlconn` `pgxv5` helper with `WithIAMAuthN()` and `WithDefaultDialOptions(WithPrivateIP())` when private IP is enabled.
-   3. Hands `*sql.DB` to the matching GORM dialector.
+   2. For Cloud SQL: dials with the Cloud SQL connector, `WithIAMAuthN()` when IAM auth is enabled, and private IP when `DB_PRIVATE_IP_ENABLED` is set.
+   3. Hands the GORM handle (`Database.DB()`) to repositories. The `*sql.DB` pool is `Database.DB().DB()`.
 2. **IAM token acquisition**: On the first `Dial()`, cloudsqlconn exchanges the workload
    service account token for a short-lived (1 hour) X.509 ephemeral client certificate,
    signed by Google's CA, bound to the Cloud SQL instance identity. Certificates are

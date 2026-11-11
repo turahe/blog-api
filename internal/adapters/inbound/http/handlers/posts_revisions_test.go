@@ -27,7 +27,8 @@ type fakeRevisions struct {
 func (f *fakeRevisions) ListRevisions(_ context.Context, _ uuid.UUID, unrestricted bool, filter postdomain.RevisionFilter) (postdomain.RevisionPage, error) {
 	f.filter, f.unrestricted = filter, unrestricted
 
-	return postdomain.RevisionPage{Items: []postdomain.Revision{sampleRevision()}, Total: 1, Page: 1, PerPage: 20}, f.err
+	total := int64(1)
+	return postdomain.RevisionPage{Items: []postdomain.Revision{sampleRevision()}, Total: &total, OffsetPage: 1, OffsetPerPage: 20}, f.err
 }
 
 func (f *fakeRevisions) GetRevision(_ context.Context, _ uuid.UUID, ref postdomain.RevisionRef, _ uuid.UUID, unrestricted bool) (postdomain.Revision, error) {
@@ -97,7 +98,7 @@ func TestListRevisionsParsesFilters(t *testing.T) {
 	assert.Equal(t, time.Date(2026, 9, 1, 0, 0, 0, 0, time.UTC), *svc.filter.From)
 	assert.Equal(t, time.Date(2026, 9, 2, 23, 59, 59, 999999999, time.UTC), *svc.filter.To, "a toDate covers the whole day")
 	assert.Equal(t, 2, svc.filter.Page)
-	assert.Equal(t, 5, svc.filter.PerPage)
+	assert.Equal(t, 5, svc.filter.Limit)
 	assert.True(t, svc.unrestricted)
 
 	items, _ := body["data"].([]any)

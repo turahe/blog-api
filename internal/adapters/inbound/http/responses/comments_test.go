@@ -137,7 +137,10 @@ func TestCommentThread(t *testing.T) {
 			name: "first page of replies",
 			thread: commentdomain.Thread{
 				Comment: memberComment(),
-				Replies: commentdomain.ListResult{Items: []commentdomain.Comment{reply}, Total: 5, Page: 1, PerPage: 1},
+				Replies: func() commentdomain.ListResult {
+					total := int64(5)
+					return commentdomain.ListResult{Items: []commentdomain.Comment{reply}, Total: &total, OffsetPage: 1, OffsetPerPage: 1}
+				}(),
 			},
 			want: `{` + parentJSON + `, "repliesTotal": 5, "replies": [{
 				"id": "0198a1b2-0000-7000-8000-0000000c0005", "postId": "0198a1b2-0000-7000-8000-0000000c0002",

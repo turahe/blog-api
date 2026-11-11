@@ -38,7 +38,7 @@ func newDoctorCmd() *cobra.Command {
 			defer func() { err = errors.Join(err, app.Close()) }()
 
 			out := cmd.OutOrStdout()
-			if _, err := fmt.Fprintf(out, "database (%s): ok\nredis: ok\n", app.Database.Driver); err != nil {
+			if _, err := fmt.Fprintf(out, "database (%s): ok\nredis: ok\n", app.Config.PkgConfig("").Database.Driver); err != nil {
 				return err
 			}
 

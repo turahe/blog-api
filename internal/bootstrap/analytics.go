@@ -13,24 +13,24 @@ import (
 	settingsdomain "github.com/turahe/blog-api/internal/core/settings/domain"
 	settingsservice "github.com/turahe/blog-api/internal/core/settings/service"
 	"github.com/turahe/blog-api/internal/platform/config"
-	"github.com/turahe/blog-api/internal/platform/database"
 	"github.com/turahe/blog-api/internal/platform/messaging"
 	"github.com/turahe/blog-api/internal/platform/system"
+	pkgdb "github.com/turahe/pkg/database"
 )
 
 // newAnalytics starts the background writer for raw analytics events and returns the ingest
 // service that feeds it. Visitor hashes are keyed with APP_ENCRYPTION_KEY when it is set, and
 // anonymous ones also with the day's salt shared through PostgreSQL.
 func newAnalytics(
-	cfg config.Config, db *database.Database, onDrop func(int), logger *slog.Logger,
+	cfg config.Config, db *pkgdb.Database, onDrop func(int), logger *slog.Logger,
 ) (*analyticsservice.Ingest, *analyticsservice.Writer) {
-	writer := analyticsservice.NewWriter(persistence.NewAnalyticsRepository(db.GORM), logger, analyticsservice.WriterOptions{
+	writer := analyticsservice.NewWriter(persistence.NewAnalyticsRepository(db.DB()), logger, analyticsservice.WriterOptions{
 		QueueSize: cfg.AnalyticsQueueSize,
 		OnDrop:    onDrop,
 	})
 
 	ingest := analyticsservice.NewIngest(writer, identityHasher(cfg), system.UUIDGenerator{}, system.Clock{}).
-		WithSalts(persistence.NewAnalyticsSaltRepository(db.GORM), logger)
+		WithSalts(persistence.NewAnalyticsSaltRepository(db.DB()), logger)
 
 	return ingest, writer
 }
@@ -63,8 +63,8 @@ func newAnalyticsLive(
 
 // NewAnalyticsAggregator returns the rollup builder used by app scheduler and app analytics.
 // Rollups are bucketed in the site.timezone setting.
-func NewAnalyticsAggregator(db *database.Database) *analyticsservice.Aggregator {
-	return analyticsservice.NewAggregator(persistence.NewAnalyticsRollupRepository(db.GORM), siteTimezone{newSettingsReader(db)},
+func NewAnalyticsAggregator(db *pkgdb.Database) *analyticsservice.Aggregator {
+	return analyticsservice.NewAggregator(persistence.NewAnalyticsRollupRepository(db.DB()), siteTimezone{newSettingsReader(db)},
 		system.Clock{})
 }
 
@@ -72,9 +72,9 @@ func NewAnalyticsAggregator(db *database.Database) *analyticsservice.Aggregator 
 // media storage, or when its client cannot be built, requests answer 503. stepUp may be nil
 // where exports are only built (app scheduler).
 func NewAnalyticsExports(
-	ctx context.Context, cfg config.Config, db *database.Database, stepUp analyticsports.StepUp, logger *slog.Logger,
+	ctx context.Context, cfg config.Config, db *pkgdb.Database, stepUp analyticsports.StepUp, logger *slog.Logger,
 ) *analyticsservice.Exports {
-	repo := persistence.NewAnalyticsExportRepository(db.GORM)
+	repo := persistence.NewAnalyticsExportRepository(db.DB())
 
 	svc := analyticsservice.NewExports(repo, repo, siteTimezone{newSettingsReader(db)}, system.UUIDGenerator{}, system.Clock{},
 		analyticsservice.ExportConfig{Retention: cfg.AnalyticsExportRetention, DownloadTTL: cfg.AnalyticsExportURLTTL})
@@ -97,21 +97,21 @@ func NewAnalyticsExports(
 
 // NewAnalyticsRetention returns the pruning job of raw events and daily rollups, configured by
 // the analytics.raw_retention_days and analytics.rollup_day_retention_months settings.
-func NewAnalyticsRetention(db *database.Database) *analyticsservice.Retention {
+func NewAnalyticsRetention(db *pkgdb.Database) *analyticsservice.Retention {
 	settings := newSettingsReader(db)
 
-	return analyticsservice.NewRetention(persistence.NewAnalyticsRetentionRepository(db.GORM), retentionSettings{settings},
+	return analyticsservice.NewRetention(persistence.NewAnalyticsRetentionRepository(db.DB()), retentionSettings{settings},
 		siteTimezone{settings}, system.Clock{})
 }
 
-func newSettingsReader(db *database.Database) *settingsservice.Service {
-	return settingsservice.New(persistence.NewSettingsRepository(db.GORM), settingsdomain.DefaultCatalogue(),
+func newSettingsReader(db *pkgdb.Database) *settingsservice.Service {
+	return settingsservice.New(persistence.NewSettingsRepository(db.DB()), settingsdomain.DefaultCatalogue(),
 		system.UUIDGenerator{}, system.Clock{})
 }
 
 // newAnalyticsReports returns the admin dashboard reports, read from rollups in the site time zone.
-func newAnalyticsReports(db *database.Database, settings *settingsservice.Service) *analyticsservice.Reports {
-	return analyticsservice.NewReports(persistence.NewAnalyticsReportRepository(db.GORM), siteTimezone{settings}, system.Clock{})
+func newAnalyticsReports(db *pkgdb.Database, settings *settingsservice.Service) *analyticsservice.Reports {
+	return analyticsservice.NewReports(persistence.NewAnalyticsReportRepository(db.DB()), siteTimezone{settings}, system.Clock{})
 }
 
 type siteTimezone struct {

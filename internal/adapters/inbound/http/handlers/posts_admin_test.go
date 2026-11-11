@@ -60,7 +60,7 @@ func TestAdminListPostsHandlerReturnsMetaTotalAndScopesRestrictedAuthors(t *test
 	svc := &fakePostAdminService{
 		listAdminFn: func(_ context.Context, filter postdomain.AdminListFilter) (postdomain.ListResult, error) {
 			require.Equal(t, 2, filter.Page)
-			require.Equal(t, 10, filter.PerPage)
+			require.Equal(t, 10, filter.Limit)
 			require.Equal(t, "draft", filter.Status)
 			require.Equal(t, "hello", filter.Query)
 			require.NotNil(t, filter.ScopeAuthorUUID)
@@ -80,9 +80,9 @@ func TestAdminListPostsHandlerReturnsMetaTotalAndScopesRestrictedAuthors(t *test
 					CreatedAt:    now,
 					UpdatedAt:    now,
 				}},
-				Total:   7,
-				Page:    2,
-				PerPage: 10,
+				Total:         int64Ptr(7),
+				OffsetPage:    2,
+				OffsetPerPage: 10,
 			}, nil
 		},
 		createFn: func(context.Context, uuid.UUID, string, string, string, string, *uuid.UUID, *[]string) (postdomain.Post, []tagdomain.Tag, error) {
@@ -114,7 +114,8 @@ func TestAdminListPostsHandlerReturnsMetaTotalAndScopesRestrictedAuthors(t *test
 
 	var meta responses.PaginationMeta
 	require.NoError(t, json.Unmarshal(metaBytes, &meta))
-	require.Equal(t, int64(7), meta.Total)
+	require.NotNil(t, meta.Total)
+	require.Equal(t, int64(7), *meta.Total)
 	require.Equal(t, 2, meta.CurrentPage)
 	require.Equal(t, 10, meta.PerPage)
 

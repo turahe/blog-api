@@ -6,8 +6,8 @@ import (
 
 	"github.com/spf13/cobra"
 	"github.com/turahe/blog-api/internal/adapters/outbound/persistence"
+	"github.com/turahe/blog-api/internal/bootstrap"
 	"github.com/turahe/blog-api/internal/platform/config"
-	"github.com/turahe/blog-api/internal/platform/database"
 )
 
 func newRevisionsCmd() *cobra.Command {
@@ -38,14 +38,14 @@ func newRevisionsPruneCmd() *cobra.Command {
 				return err
 			}
 
-			db, err := database.Open(cmd.Context(), cfg)
+			db, err := bootstrap.OpenDatabase(cmd.Context(), cfg)
 			if err != nil {
 				return err
 			}
 
 			defer func() { err = errors.Join(err, db.Close()) }()
 
-			deleted, err := persistence.NewPostRevisionRepository(db.GORM).Prune(cmd.Context(), keep)
+			deleted, err := persistence.NewPostRevisionRepository(db.DB()).Prune(cmd.Context(), keep)
 			if err != nil {
 				return err
 			}

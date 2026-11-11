@@ -14,6 +14,7 @@ import (
 	postdomain "github.com/turahe/blog-api/internal/core/post/domain"
 	"github.com/turahe/blog-api/internal/core/post/ports"
 	tagdomain "github.com/turahe/blog-api/internal/core/tag/domain"
+	"github.com/turahe/blog-api/internal/shared/pagination"
 )
 
 // MaxRestoreNoteLength caps the note stored with a restore revision.
@@ -49,6 +50,16 @@ func (s *PostService) WithRevisions(revisions ports.RevisionRepository) *PostSer
 	return s
 }
 
+// revisionsListCfg is the CursorConfig used for normalising legacy offset
+// params in the post revisions list. Must match the repo and handler configs.
+var revisionsListCfg = pagination.CursorConfig{
+	Kind:           "post_revisions",
+	Sort:           []pagination.SortField{{Name: "revision_number", Dir: pagination.Desc, Type: pagination.TypeInt64}},
+	TTL:            pagination.DefaultTTL,
+	MaxPerPage:     pagination.DefaultMaxPerPage,
+	DefaultPerPage: pagination.DefaultPerPage,
+}
+
 // ListRevisions returns a page of the post's revisions, newest first. Callers without
 // unrestricted access only see revisions of their own posts.
 func (s *PostService) ListRevisions(
@@ -62,13 +73,8 @@ func (s *PostService) ListRevisions(
 		return postdomain.RevisionPage{}, err
 	}
 
-	if filter.Page < 1 {
-		filter.Page = 1
-	}
-
-	if filter.PerPage < 1 || filter.PerPage > 100 {
-		filter.PerPage = 20
-	}
+	norm := pagination.ParseLegacy(revisionsListCfg, filter.Page, filter.Limit)
+	filter.PageRequest = norm
 
 	if filter.From != nil && filter.To != nil && filter.From.After(*filter.To) {
 		return postdomain.RevisionPage{}, fmt.Errorf("%w: from_date must not be after to_date", ErrValidation)

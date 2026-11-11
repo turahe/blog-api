@@ -24,9 +24,9 @@ import (
 	"github.com/turahe/blog-api/internal/core/event"
 	healthservice "github.com/turahe/blog-api/internal/core/health/service"
 	"github.com/turahe/blog-api/internal/platform/config"
-	"github.com/turahe/blog-api/internal/platform/database"
 	"github.com/turahe/blog-api/internal/platform/messaging"
 	"github.com/turahe/blog-api/internal/platform/metrics"
+	pkgdb "github.com/turahe/pkg/database"
 )
 
 // Consumer handler names; each is also the dedupe key of its consumer.
@@ -78,13 +78,13 @@ func newWorkerCmd() *cobra.Command {
 			}
 			defer func() { err = errors.Join(err, router.Close()) }()
 
-			db, err := database.Open(ctx, cfg)
+			db, err := bootstrap.OpenDatabase(ctx, cfg)
 			if err != nil {
 				return err
 			}
 			defer func() { err = errors.Join(err, db.Close()) }()
 
-			dedupe := persistence.NewProcessedMessageRepository(db.GORM)
+			dedupe := persistence.NewProcessedMessageRepository(db.DB())
 
 			consumers, err := addConsumers(router, bus, cfg, db, dedupe, logger)
 			if err != nil {
@@ -93,7 +93,7 @@ func newWorkerCmd() *cobra.Command {
 
 			consumers = append(consumers, addNewsletterConsumers(router, bus, cfg, db, dedupe, logger)...)
 
-			relay := outbox.New(persistence.NewOutboxRepository(db.GORM), bus.Publisher, bus.Topic, outbox.Config{
+			relay := outbox.New(persistence.NewOutboxRepository(db.DB()), bus.Publisher, bus.Topic, outbox.Config{
 				BatchSize:    cfg.OutboxBatchSize,
 				PollInterval: cfg.OutboxPollInterval,
 				MaxAttempts:  cfg.OutboxMaxAttempts,
@@ -101,7 +101,12 @@ func newWorkerCmd() *cobra.Command {
 			}, logger)
 
 			if cfg.MetricsAddr != "" {
-				defer serveWorkerProbes(cfg, db, relay, logger)()
+				stop, err := serveWorkerProbes(cfg, db, relay, logger)
+				if err != nil {
+					return err
+				}
+
+				defer stop()
 			}
 
 			routerDone, err := startRouter(ctx, router, len(consumers) > 0)
@@ -168,7 +173,7 @@ func startRouter(ctx context.Context, router *message.Router, hasConsumers bool)
 
 // addConsumers registers the worker's message handlers and returns their names.
 func addConsumers(
-	router *message.Router, bus *messaging.Bus, cfg config.Config, db *database.Database, dedupe messaging.Deduper,
+	router *message.Router, bus *messaging.Bus, cfg config.Config, db *pkgdb.Database, dedupe messaging.Deduper,
 	logger *slog.Logger,
 ) ([]string, error) {
 	var names []string
@@ -195,7 +200,7 @@ func addConsumers(
 	if box != nil {
 		// Inserts skip entries whose UUID is stored, so redeliveries need no dedupe record.
 		addConsumer(router, bus, cfg, auditConsumer, bus.Topic(event.AuditEntriesRecorded),
-			auditqueue.Handler(box, persistence.NewAuditRepository(db.GORM), logger), logger)
+			auditqueue.Handler(box, persistence.NewAuditRepository(db.DB()), logger), logger)
 
 		names = append(names, auditConsumer)
 	} else {
@@ -212,7 +217,7 @@ func addConsumers(
 // addNewsletterConsumers registers issue dispatch when a delivery provider is configured, and
 // contact sync for providers with a contact store (custom_http).
 func addNewsletterConsumers(
-	router *message.Router, bus *messaging.Bus, cfg config.Config, db *database.Database, dedupe messaging.Deduper,
+	router *message.Router, bus *messaging.Bus, cfg config.Config, db *pkgdb.Database, dedupe messaging.Deduper,
 	logger *slog.Logger,
 ) []string {
 	nl := bootstrap.NewNewsletterService(cfg, db, bootstrap.NewEvents(cfg, db), nil, logger)
@@ -259,8 +264,13 @@ func addConsumer(
 
 // serveWorkerProbes serves /metrics, /healthz and /readyz on METRICS_ADDR and returns a func
 // that shuts the server down. Readiness fails while the database or the broker is down.
-func serveWorkerProbes(cfg config.Config, db *database.Database, relay *outbox.Relay, logger *slog.Logger) func() {
-	workerMetrics := metrics.New(db.SQL, version)
+func serveWorkerProbes(cfg config.Config, db *pkgdb.Database, relay *outbox.Relay, logger *slog.Logger) (func(), error) {
+	sqlDB, err := db.DB().DB()
+	if err != nil {
+		return nil, fmt.Errorf("get sql.DB: %w", err)
+	}
+
+	workerMetrics := metrics.New(sqlDB, version)
 	relay.WithObserver(workerMetrics)
 
 	health := healthservice.New(version, bootstrap.WorkerHealthCheckers(cfg, db)...)
@@ -268,7 +278,7 @@ func serveWorkerProbes(cfg config.Config, db *database.Database, relay *outbox.R
 	return serveMetrics(workerMetrics.NewServer(cfg.MetricsAddr,
 		metrics.Route{Pattern: "GET /healthz", Handler: probe.Live(health)},
 		metrics.Route{Pattern: "GET /readyz", Handler: probe.Ready(health, logger)},
-	), logger)
+	), logger), nil
 }
 
 // serveMetrics serves /metrics in the background and returns a func that shuts it down.

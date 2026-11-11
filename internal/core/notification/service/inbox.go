@@ -18,6 +18,7 @@ import (
 	"github.com/turahe/blog-api/internal/core/notification/template"
 	postdomain "github.com/turahe/blog-api/internal/core/post/domain"
 	postports "github.com/turahe/blog-api/internal/core/post/ports"
+	"github.com/turahe/blog-api/internal/shared/pagination"
 )
 
 const (
@@ -79,27 +80,13 @@ func (i *Inbox) OnCreated(fn func(context.Context, notificationdomain.Notificati
 }
 
 // List returns a page of the user's notifications, newest first.
-func (i *Inbox) List(ctx context.Context, userID uuid.UUID, unreadOnly bool, page, perPage int) (notificationdomain.ListResult, error) {
-	if page < 1 {
-		page = 1
+func (i *Inbox) List(ctx context.Context, userID uuid.UUID, unreadOnly bool, pr pagination.PageRequest) (notificationdomain.ListResult, error) {
+	filter := notificationdomain.ListFilter{
+		UserUUID:   userID,
+		UnreadOnly: unreadOnly,
 	}
-
-	if perPage < 1 {
-		perPage = defaultInboxPerPage
-	}
-
-	perPage = min(perPage, maxInboxPerPage)
-
-	result, err := i.repo.List(ctx, notificationdomain.ListFilter{
-		UserUUID: userID, UnreadOnly: unreadOnly, Page: page, PerPage: perPage,
-	})
-	if err != nil {
-		return notificationdomain.ListResult{}, err
-	}
-
-	result.Page, result.PerPage = page, perPage
-
-	return result, nil
+	filter.PageRequest = pr
+	return i.repo.List(ctx, filter)
 }
 
 // MarkRead marks one of the user's notifications read; repeating it keeps the first read time.

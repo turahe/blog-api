@@ -46,6 +46,10 @@ func TestLoadSentryFromEnv(t *testing.T) {
 	if !cfg.SentryEnabled() || cfg.SentryEnvironment != "prod-eu" || cfg.SentryTracesSampleRate != 0.25 {
 		t.Fatalf("unexpected sentry config: %+v", cfg)
 	}
+
+	if cfg.Sentry.DSN != cfg.SentryDSN || cfg.Sentry.Environment != "prod-eu" || cfg.Sentry.TracesSampleRate != 0.25 {
+		t.Fatalf("embedded sentry=%+v", cfg.Sentry)
+	}
 }
 
 func TestSentryLogsLevel(t *testing.T) {

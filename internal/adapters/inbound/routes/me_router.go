@@ -1,0 +1,39 @@
+package routes
+
+import (
+	"github.com/gin-gonic/gin"
+)
+
+// RegisterMeRouter mounts the authenticated self-service routes and the public
+// profile lookup under /api/v1. The public profile accepts an optional token
+// so owners/admins can read private fields.
+func RegisterMeRouter(router *gin.RouterGroup, auth AuthMiddleware, c Controllers) {
+	g := GroupSelfService
+	me := router.Group("")
+	me.Use(auth.Required...)
+
+	get(me, "/me", "me.get", g, AuthRequired, c, c.Users.MeGet)
+	put(me, "/me/password", "me.password.update", g, AuthRequired, c, c.Auth.MePasswordUpdate)
+	patch(me, "/me/profile", "me.profile.patch", g, AuthRequired, c, c.Users.MeProfilePatch)
+	post(me, "/me/avatar", "me.avatar.upload", g, AuthRequired, c, c.Users.MeAvatarUpload)
+	del(me, "/me/avatar", "me.avatar.delete", g, AuthRequired, c, c.Users.MeAvatarDelete)
+	post(me, "/me/email/request-change", "me.email.request_change", g, AuthRequired, c, c.Users.MeEmailRequestChange)
+	post(me, "/me/email/confirm-change", "me.email.confirm_change", g, AuthRequired, c, c.Users.MeEmailConfirmChange)
+	get(me, "/me/privacy", "me.privacy.get", g, AuthRequired, c, c.Users.MePrivacyGet)
+	put(me, "/me/privacy", "me.privacy.update", g, AuthRequired, c, c.Users.MePrivacyUpdate)
+	get(me, "/me/2fa", "me.2fa.get", g, AuthRequired, c, c.Auth.MeTwoFactorGet)
+	del(me, "/me/2fa", "me.2fa.disable", g, AuthRequired, c, c.Auth.MeTwoFactorDisable)
+	post(me, "/me/2fa/setup", "me.2fa.setup", g, AuthRequired, c, c.Auth.MeTwoFactorSetup)
+	post(me, "/me/2fa/confirm", "me.2fa.confirm", g, AuthRequired, c, c.Auth.MeTwoFactorConfirm)
+	post(me, "/me/2fa/backup-codes", "me.2fa.backup_codes", g, AuthRequired, c, c.Auth.MeTwoFactorBackupCodes)
+	get(me, "/me/activity", "me.activity.list", g, AuthRequired, c, c.Activity.MeList)
+	get(me, "/me/activity/export", "me.activity.export", g, AuthRequired, c, c.Activity.MeExport)
+	post(me, "/me/activity/erase", "me.activity.erase", g, AuthRequired, c, c.Activity.MeErase)
+	get(me, "/me/notifications", "me.notifications.list", g, AuthRequired, c, c.Notifications.List)
+	get(me, "/me/notifications/stream", "me.notifications.stream", g, AuthRequired, c, c.Notifications.Stream)
+	post(me, "/me/notifications/:param1/read", "me.notifications.read", g, AuthRequired, c, c.Notifications.Read)
+
+	optional := router.Group("")
+	optional.Use(auth.Optional...)
+	get(optional, "/users/:param1", "public.users.profile", GroupPublic, AuthOptional, c, c.Users.PublicProfile)
+}

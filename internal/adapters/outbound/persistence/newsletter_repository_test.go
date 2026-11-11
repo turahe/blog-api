@@ -11,6 +11,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/require"
 	"github.com/turahe/blog-api/internal/core/newsletter/domain"
+	"github.com/turahe/blog-api/internal/shared/pagination"
 	"gorm.io/gorm"
 )
 
@@ -373,7 +374,7 @@ func TestNewsletterRepositoryListSubscribers(t *testing.T) {
 		{name: "email prefix treats underscore literally", filter: domain.SubscriberFilter{Query: prefix + "_"}, want: []uuid.UUID{underscore.UUID}, wantTotal: 1},
 		{name: "percent is literal", filter: domain.SubscriberFilter{Query: prefix + "%"}, want: []uuid.UUID{}},
 		{name: "display name prefix ignores case", filter: domain.SubscriberFilter{Query: " " + strings.ToUpper(prefix) + " CAR "}, want: []uuid.UUID{named.UUID}, wantTotal: 1},
-		{name: "second page", filter: domain.SubscriberFilter{Page: 2, PerPage: 2}, want: []uuid.UUID{underscore.UUID}, wantTotal: 3},
+		{name: "second page", filter: domain.SubscriberFilter{PageRequest: pagination.PageRequest{Page: 2, Limit: 2}}, want: []uuid.UUID{underscore.UUID}, wantTotal: 3},
 	}
 
 	for _, tt := range tests {
@@ -381,20 +382,20 @@ func TestNewsletterRepositoryListSubscribers(t *testing.T) {
 			filter := tt.filter
 			filter.List = list
 
-			if filter.Page == 0 {
-				filter.Page, filter.PerPage = 1, 10
+			if filter.PageRequest.Page == 0 {
+				filter.PageRequest.Page, filter.PageRequest.Limit = 1, 10
 			}
 
 			page, err := repo.ListSubscribers(t.Context(), filter)
 			require.NoError(t, err)
-			require.Equal(t, tt.wantTotal, page.Total)
+			require.Equal(t, tt.wantTotal, *page.Total)
 			require.Equal(t, tt.want, subscriberIDs(page.Items))
-			require.Equal(t, filter.Page, page.Page)
-			require.Equal(t, filter.PerPage, page.PerPage)
+			require.Equal(t, filter.PageRequest.Page, page.OffsetPage)
+			require.Equal(t, filter.PageRequest.Limit, page.OffsetPerPage)
 		})
 	}
 
-	_, err := repo.ListSubscribers(canceledContext(t), domain.SubscriberFilter{Page: 1, PerPage: 10})
+	_, err := repo.ListSubscribers(canceledContext(t), domain.SubscriberFilter{PageRequest: pagination.PageRequest{Page: 1, Limit: 10}})
 	require.ErrorIs(t, err, context.Canceled)
 }
 

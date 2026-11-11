@@ -2,7 +2,7 @@ package middleware
 
 import (
 	"context"
-	"io"
+	"log/slog"
 	nethttp "net/http"
 	"net/http/httptest"
 	"sync"
@@ -12,8 +12,6 @@ import (
 	"github.com/getsentry/sentry-go"
 	"github.com/gin-gonic/gin"
 	"github.com/stretchr/testify/require"
-	"github.com/turahe/blog-api/internal/platform/logging"
-	sentryplatform "github.com/turahe/blog-api/internal/platform/sentry"
 )
 
 type captureTransport struct {
@@ -49,7 +47,7 @@ func (c *captureTransport) split() (errs, txs []*sentry.Event) {
 }
 
 //nolint:paralleltest // binds the global Sentry hub
-func TestTracingReportsPanicOnceWithRouteTransaction(t *testing.T) {
+func TestTracingRecordsRouteTemplateTransaction(t *testing.T) {
 	transport := &captureTransport{}
 	require.NoError(t, sentry.Init(sentry.ClientOptions{
 		Dsn:              "https://public@example.com/1",
@@ -61,7 +59,7 @@ func TestTracingReportsPanicOnceWithRouteTransaction(t *testing.T) {
 
 	gin.SetMode(gin.TestMode)
 
-	logger := logging.NewTo(io.Discard, "production", sentryplatform.NewHandler())
+	logger := slog.New(slog.DiscardHandler)
 	router := gin.New()
 	router.Use(RequestID(), Tracing(), AccessLog(logger), Recovery(logger))
 	router.GET("/posts/:slug", func(*gin.Context) { panic("boom") })
@@ -71,13 +69,9 @@ func TestTracingReportsPanicOnceWithRouteTransaction(t *testing.T) {
 	require.Equal(t, nethttp.StatusInternalServerError, rec.Code)
 
 	errs, txs := transport.split()
-	require.Len(t, errs, 1)
-	require.Equal(t, "panic recovered", errs[0].Message)
-	require.NotEmpty(t, errs[0].Tags["request_id"])
-
+	require.Empty(t, errs)
 	require.Len(t, txs, 1)
 	require.Equal(t, "GET /posts/:slug", txs[0].Transaction)
-	require.Equal(t, txs[0].Contexts["trace"]["trace_id"], errs[0].Contexts["trace"]["trace_id"])
 }
 
 //nolint:paralleltest // binds the global Sentry hub

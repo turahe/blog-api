@@ -8,6 +8,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/require"
 	mediadomain "github.com/turahe/blog-api/internal/core/media/domain"
+	"github.com/turahe/blog-api/internal/shared/pagination"
 	"gorm.io/gorm"
 )
 
@@ -270,7 +271,7 @@ func TestMediaRepositoryOrphansPurgeAndUsage(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, []uuid.UUID{trashed}, ids(gotTrashed))
 
-	unusedPage, err := repo.List(ctx, mediadomain.ListFilter{Query: name, Unused: true, Page: 1, PerPage: 10})
+	unusedPage, err := repo.List(ctx, mediadomain.ListFilter{Query: name, Unused: true, PageRequest: pagination.PageRequest{Page: 1, Limit: 10}})
 	require.NoError(t, err)
 	require.Equal(t, []uuid.UUID{unused}, ids(unusedPage.Items))
 

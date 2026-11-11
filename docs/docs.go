@@ -922,7 +922,7 @@ const docTemplate = `{
                         "Bearer": []
                     }
                 ],
-                "description": "Comments in any status across posts. Defaults to the moderation queue (pending and flagged), oldest first.",
+                "description": "Comments in any status across posts. Defaults to the moderation queue (pending and flagged), oldest first.\nSupports both legacy offset pagination (page/perPage) and cursor-based keyset pagination (after/before/limit).",
                 "produces": [
                     "application/json"
                 ],
@@ -957,15 +957,41 @@ const docTemplate = `{
                     {
                         "type": "integer",
                         "default": 1,
-                        "description": "page",
+                        "description": "page (legacy offset mode)",
                         "name": "page",
                         "in": "query"
                     },
                     {
                         "type": "integer",
                         "default": 20,
-                        "description": "per page",
+                        "description": "per page (legacy offset mode, alias limit)",
                         "name": "perPage",
+                        "in": "query"
+                    },
+                    {
+                        "type": "integer",
+                        "default": 20,
+                        "description": "page size (cursor or offset)",
+                        "name": "limit",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "opaque cursor: return items after this point",
+                        "name": "after",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "opaque cursor: return items before this point",
+                        "name": "before",
+                        "in": "query"
+                    },
+                    {
+                        "type": "boolean",
+                        "default": true,
+                        "description": "when false, skip COUNT(*) to reduce DB load",
+                        "name": "includeTotal",
                         "in": "query"
                     }
                 ],
@@ -1448,6 +1474,7 @@ const docTemplate = `{
                         "Bearer": []
                     }
                 ],
+                "description": "Supports both legacy offset pagination (page/perPage) and cursor-based keyset pagination (after/before/limit).",
                 "produces": [
                     "application/json"
                 ],
@@ -1459,15 +1486,22 @@ const docTemplate = `{
                     {
                         "type": "integer",
                         "default": 1,
-                        "description": "page",
+                        "description": "page (legacy offset mode)",
                         "name": "page",
                         "in": "query"
                     },
                     {
                         "type": "integer",
                         "default": 20,
-                        "description": "per page",
+                        "description": "per page (legacy offset mode, alias limit)",
                         "name": "perPage",
+                        "in": "query"
+                    },
+                    {
+                        "type": "integer",
+                        "default": 20,
+                        "description": "page size (cursor or offset)",
+                        "name": "limit",
                         "in": "query"
                     },
                     {
@@ -1497,6 +1531,25 @@ const docTemplate = `{
                         "type": "boolean",
                         "description": "only ready assets no avatar, category, post cover, attachment, or SEO image references",
                         "name": "unused",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "opaque cursor: return items after this point",
+                        "name": "after",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "opaque cursor: return items before this point",
+                        "name": "before",
+                        "in": "query"
+                    },
+                    {
+                        "type": "boolean",
+                        "default": true,
+                        "description": "when false, skip COUNT(*) to reduce DB load",
+                        "name": "includeTotal",
                         "in": "query"
                     }
                 ],
@@ -1740,17 +1793,43 @@ const docTemplate = `{
                         "in": "query"
                     },
                     {
-                        "type": "integer",
-                        "default": 1,
-                        "description": "page",
-                        "name": "page",
+                        "type": "string",
+                        "description": "opaque forward cursor",
+                        "name": "after",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "opaque backward cursor",
+                        "name": "before",
                         "in": "query"
                     },
                     {
                         "type": "integer",
                         "default": 20,
-                        "description": "per page",
+                        "description": "items per page (alias: perPage)",
+                        "name": "limit",
+                        "in": "query"
+                    },
+                    {
+                        "type": "integer",
+                        "default": 20,
+                        "description": "items per page",
                         "name": "perPage",
+                        "in": "query"
+                    },
+                    {
+                        "type": "boolean",
+                        "default": false,
+                        "description": "include total item count (slow)",
+                        "name": "includeTotal",
+                        "in": "query"
+                    },
+                    {
+                        "type": "integer",
+                        "default": 1,
+                        "description": "page number (legacy offset mode)",
+                        "name": "page",
                         "in": "query"
                     }
                 ],
@@ -2126,17 +2205,43 @@ const docTemplate = `{
                         "in": "query"
                     },
                     {
-                        "type": "integer",
-                        "default": 1,
-                        "description": "page",
-                        "name": "page",
+                        "type": "string",
+                        "description": "opaque forward cursor",
+                        "name": "after",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "opaque backward cursor",
+                        "name": "before",
                         "in": "query"
                     },
                     {
                         "type": "integer",
                         "default": 20,
-                        "description": "per page",
+                        "description": "items per page (alias: perPage)",
+                        "name": "limit",
+                        "in": "query"
+                    },
+                    {
+                        "type": "integer",
+                        "default": 20,
+                        "description": "items per page",
                         "name": "perPage",
+                        "in": "query"
+                    },
+                    {
+                        "type": "boolean",
+                        "default": false,
+                        "description": "include total item count (slow)",
+                        "name": "includeTotal",
+                        "in": "query"
+                    },
+                    {
+                        "type": "integer",
+                        "default": 1,
+                        "description": "page number (legacy offset mode)",
+                        "name": "page",
                         "in": "query"
                     }
                 ],
@@ -2324,6 +2429,7 @@ const docTemplate = `{
                         "Bearer": []
                     }
                 ],
+                "description": "Supports both legacy offset pagination (page/perPage) and cursor-based keyset pagination (after/before/limit).",
                 "produces": [
                     "application/json"
                 ],
@@ -2335,15 +2441,41 @@ const docTemplate = `{
                     {
                         "type": "integer",
                         "default": 1,
-                        "description": "page",
+                        "description": "page (legacy offset mode)",
                         "name": "page",
                         "in": "query"
                     },
                     {
                         "type": "integer",
                         "default": 20,
-                        "description": "per page",
+                        "description": "per page (legacy offset mode, alias limit)",
                         "name": "perPage",
+                        "in": "query"
+                    },
+                    {
+                        "type": "integer",
+                        "default": 20,
+                        "description": "page size (cursor or offset)",
+                        "name": "limit",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "opaque cursor: return items after this point",
+                        "name": "after",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "opaque cursor: return items before this point",
+                        "name": "before",
+                        "in": "query"
+                    },
+                    {
+                        "type": "boolean",
+                        "default": false,
+                        "description": "when false, skip COUNT(*) to reduce DB load",
+                        "name": "includeTotal",
                         "in": "query"
                     },
                     {
@@ -2381,6 +2513,24 @@ const docTemplate = `{
                 "responses": {
                     "200": {
                         "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/responses.Envelope"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/responses.Envelope"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/responses.Envelope"
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden",
                         "schema": {
                             "$ref": "#/definitions/responses.Envelope"
                         }
@@ -2763,7 +2913,7 @@ const docTemplate = `{
                         "Bearer": []
                     }
                 ],
-                "description": "Newest first. Authors see only their own posts' history; editors and admins (post.revisions.view_all) see every post's.",
+                "description": "Newest first. Authors see only their own posts' history; editors and admins (post.revisions.view_all) see every post's.\nSupports both legacy offset pagination (page/perPage) and cursor-based keyset pagination (after/before/limit).",
                 "produces": [
                     "application/json"
                 ],
@@ -2781,14 +2931,42 @@ const docTemplate = `{
                     },
                     {
                         "type": "integer",
-                        "description": "page (default 1)",
+                        "default": 1,
+                        "description": "page (legacy offset mode)",
                         "name": "page",
                         "in": "query"
                     },
                     {
                         "type": "integer",
-                        "description": "page size (default 20, max 100)",
+                        "default": 20,
+                        "description": "per page (legacy offset mode, alias limit)",
                         "name": "perPage",
+                        "in": "query"
+                    },
+                    {
+                        "type": "integer",
+                        "default": 20,
+                        "description": "page size (cursor or offset)",
+                        "name": "limit",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "opaque cursor: return items after this point",
+                        "name": "after",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "opaque cursor: return items before this point",
+                        "name": "before",
+                        "in": "query"
+                    },
+                    {
+                        "type": "boolean",
+                        "default": false,
+                        "description": "when false, skip COUNT(*) to reduce DB load",
+                        "name": "includeTotal",
                         "in": "query"
                     },
                     {
@@ -2825,6 +3003,12 @@ const docTemplate = `{
                     },
                     "400": {
                         "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/responses.Envelope"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
                         "schema": {
                             "$ref": "#/definitions/responses.Envelope"
                         }
@@ -3653,9 +3837,21 @@ const docTemplate = `{
                         "in": "query"
                     },
                     {
+                        "type": "string",
+                        "description": "cursor for next page",
+                        "name": "after",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "cursor for previous page",
+                        "name": "before",
+                        "in": "query"
+                    },
+                    {
                         "type": "integer",
-                        "description": "page (default 1)",
-                        "name": "page",
+                        "description": "page size alias (default 20, max 100)",
+                        "name": "limit",
                         "in": "query"
                     },
                     {
@@ -3663,11 +3859,29 @@ const docTemplate = `{
                         "description": "page size (default 20, max 100)",
                         "name": "perPage",
                         "in": "query"
+                    },
+                    {
+                        "type": "boolean",
+                        "description": "include total count (default true)",
+                        "name": "includeTotal",
+                        "in": "query"
+                    },
+                    {
+                        "type": "integer",
+                        "description": "legacy page number (offset mode fallback)",
+                        "name": "page",
+                        "in": "query"
                     }
                 ],
                 "responses": {
                     "200": {
                         "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/responses.Envelope"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
                         "schema": {
                             "$ref": "#/definitions/responses.Envelope"
                         }
@@ -3850,6 +4064,7 @@ const docTemplate = `{
                         "Bearer": []
                     }
                 ],
+                "description": "Supports both legacy offset pagination (page/perPage) and cursor-based keyset pagination (after/before/limit).",
                 "produces": [
                     "application/json"
                 ],
@@ -3861,15 +4076,41 @@ const docTemplate = `{
                     {
                         "type": "integer",
                         "default": 1,
-                        "description": "page",
+                        "description": "page (legacy offset mode)",
                         "name": "page",
                         "in": "query"
                     },
                     {
                         "type": "integer",
                         "default": 20,
-                        "description": "per page",
+                        "description": "per page (legacy offset mode, alias limit)",
                         "name": "perPage",
+                        "in": "query"
+                    },
+                    {
+                        "type": "integer",
+                        "default": 20,
+                        "description": "page size (cursor or offset)",
+                        "name": "limit",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "opaque cursor: return items after this point",
+                        "name": "after",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "opaque cursor: return items before this point",
+                        "name": "before",
+                        "in": "query"
+                    },
+                    {
+                        "type": "boolean",
+                        "default": true,
+                        "description": "when false, skip COUNT(*) to reduce DB load",
+                        "name": "includeTotal",
                         "in": "query"
                     }
                 ],
@@ -3998,17 +4239,39 @@ const docTemplate = `{
                         "in": "query"
                     },
                     {
-                        "type": "integer",
-                        "default": 1,
-                        "description": "page",
-                        "name": "page",
+                        "type": "string",
+                        "description": "cursor for next page",
+                        "name": "after",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "cursor for previous page",
+                        "name": "before",
                         "in": "query"
                     },
                     {
                         "type": "integer",
-                        "default": 20,
-                        "description": "per page",
+                        "description": "page size alias (default 20, max 100)",
+                        "name": "limit",
+                        "in": "query"
+                    },
+                    {
+                        "type": "integer",
+                        "description": "page size (default 20, max 100)",
                         "name": "perPage",
+                        "in": "query"
+                    },
+                    {
+                        "type": "boolean",
+                        "description": "include total count (default true)",
+                        "name": "includeTotal",
+                        "in": "query"
+                    },
+                    {
+                        "type": "integer",
+                        "description": "legacy page number (offset mode fallback)",
+                        "name": "page",
                         "in": "query"
                     }
                 ],
@@ -6059,17 +6322,39 @@ const docTemplate = `{
                         "in": "query"
                     },
                     {
-                        "type": "integer",
-                        "default": 1,
-                        "description": "page",
-                        "name": "page",
+                        "type": "string",
+                        "description": "cursor for next page",
+                        "name": "after",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "cursor for previous page",
+                        "name": "before",
                         "in": "query"
                     },
                     {
                         "type": "integer",
-                        "default": 20,
-                        "description": "per page",
+                        "description": "page size alias (default 20, max 100)",
+                        "name": "limit",
+                        "in": "query"
+                    },
+                    {
+                        "type": "integer",
+                        "description": "page size (default 20, max 100)",
                         "name": "perPage",
+                        "in": "query"
+                    },
+                    {
+                        "type": "boolean",
+                        "description": "include total count (default true)",
+                        "name": "includeTotal",
+                        "in": "query"
+                    },
+                    {
+                        "type": "integer",
+                        "description": "legacy page number (offset mode fallback)",
+                        "name": "page",
                         "in": "query"
                     }
                 ],
@@ -6315,7 +6600,7 @@ const docTemplate = `{
                         "Bearer": []
                     }
                 ],
-                "description": "All of the caller's comments except deleted ones, newest first, including pending and rejected.",
+                "description": "All of the caller's comments except deleted ones, newest first, including pending and rejected.\nSupports both legacy offset pagination (page/perPage) and cursor-based keyset pagination (after/before/limit).",
                 "produces": [
                     "application/json"
                 ],
@@ -6327,15 +6612,41 @@ const docTemplate = `{
                     {
                         "type": "integer",
                         "default": 1,
-                        "description": "page",
+                        "description": "page (legacy offset mode)",
                         "name": "page",
                         "in": "query"
                     },
                     {
                         "type": "integer",
                         "default": 20,
-                        "description": "per page",
+                        "description": "per page (legacy offset mode, alias limit)",
                         "name": "perPage",
+                        "in": "query"
+                    },
+                    {
+                        "type": "integer",
+                        "default": 20,
+                        "description": "page size (cursor or offset)",
+                        "name": "limit",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "opaque cursor: return items after this point",
+                        "name": "after",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "opaque cursor: return items before this point",
+                        "name": "before",
+                        "in": "query"
+                    },
+                    {
+                        "type": "boolean",
+                        "default": true,
+                        "description": "when false, skip COUNT(*) to reduce DB load",
+                        "name": "includeTotal",
                         "in": "query"
                     }
                 ],
@@ -6649,17 +6960,43 @@ const docTemplate = `{
                         "in": "query"
                     },
                     {
-                        "type": "integer",
-                        "default": 1,
-                        "description": "page",
-                        "name": "page",
+                        "type": "string",
+                        "description": "opaque forward cursor",
+                        "name": "after",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "opaque backward cursor",
+                        "name": "before",
                         "in": "query"
                     },
                     {
                         "type": "integer",
                         "default": 20,
-                        "description": "per page",
+                        "description": "items per page (alias: perPage)",
+                        "name": "limit",
+                        "in": "query"
+                    },
+                    {
+                        "type": "integer",
+                        "default": 20,
+                        "description": "items per page",
                         "name": "perPage",
+                        "in": "query"
+                    },
+                    {
+                        "type": "boolean",
+                        "default": false,
+                        "description": "include total item count (slow)",
+                        "name": "includeTotal",
+                        "in": "query"
+                    },
+                    {
+                        "type": "integer",
+                        "default": 1,
+                        "description": "page number (legacy offset mode)",
+                        "name": "page",
                         "in": "query"
                     }
                 ],
@@ -7491,7 +7828,7 @@ const docTemplate = `{
         },
         "/api/v1/posts": {
             "get": {
-                "description": "Newest first. With q, runs a full-text search instead: best match first, and each item\ngains search.rank, search.title, and search.snippet (HTML-escaped, matches in \u003cmark\u003e).\nq uses web search syntax: \"quoted phrase\", or, -excluded.",
+                "description": "Newest first (published_at DESC, created_at DESC, id DESC). Supports both legacy offset\npagination (page/perPage) and cursor-based keyset pagination (after/before/limit).\nWith q, runs a full-text search instead: best match first, and each item\ngains search.rank, search.title, and search.snippet (HTML-escaped, matches in \u003cmark\u003e).\nq uses web search syntax: \"quoted phrase\", or, -excluded.",
                 "produces": [
                     "application/json"
                 ],
@@ -7509,15 +7846,41 @@ const docTemplate = `{
                     {
                         "type": "integer",
                         "default": 1,
-                        "description": "page",
+                        "description": "page (legacy offset mode)",
                         "name": "page",
                         "in": "query"
                     },
                     {
                         "type": "integer",
                         "default": 20,
-                        "description": "per page",
+                        "description": "per page (legacy offset mode, alias limit)",
                         "name": "perPage",
+                        "in": "query"
+                    },
+                    {
+                        "type": "integer",
+                        "default": 20,
+                        "description": "page size (cursor or offset)",
+                        "name": "limit",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "opaque cursor: return items after this point",
+                        "name": "after",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "opaque cursor: return items before this point",
+                        "name": "before",
+                        "in": "query"
+                    },
+                    {
+                        "type": "boolean",
+                        "default": true,
+                        "description": "when false, skip COUNT(*) to reduce DB load",
+                        "name": "includeTotal",
                         "in": "query"
                     },
                     {
@@ -7591,7 +7954,7 @@ const docTemplate = `{
         },
         "/api/v1/posts/{param1}/comments": {
             "get": {
-                "description": "Top-level comments by default; pass parentId to list the direct replies of a comment.",
+                "description": "Top-level comments by default; pass parentId to list the direct replies of a comment.\nSupports both legacy offset pagination (page/perPage) and cursor-based keyset pagination (after/before/limit).",
                 "produces": [
                     "application/json"
                 ],
@@ -7616,15 +7979,41 @@ const docTemplate = `{
                     {
                         "type": "integer",
                         "default": 1,
-                        "description": "page",
+                        "description": "page (legacy offset mode)",
                         "name": "page",
                         "in": "query"
                     },
                     {
                         "type": "integer",
                         "default": 20,
-                        "description": "per page",
+                        "description": "per page (legacy offset mode, alias limit)",
                         "name": "perPage",
+                        "in": "query"
+                    },
+                    {
+                        "type": "integer",
+                        "default": 20,
+                        "description": "page size (cursor or offset)",
+                        "name": "limit",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "opaque cursor: return items after this point",
+                        "name": "after",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "opaque cursor: return items before this point",
+                        "name": "before",
+                        "in": "query"
+                    },
+                    {
+                        "type": "boolean",
+                        "default": true,
+                        "description": "when false, skip COUNT(*) to reduce DB load",
+                        "name": "includeTotal",
                         "in": "query"
                     }
                 ],
@@ -9464,8 +9853,14 @@ const docTemplate = `{
                 "error": {
                     "$ref": "#/definitions/responses.ErrorBody"
                 },
+                "errors": {
+                    "type": "object"
+                },
                 "links": {
                     "$ref": "#/definitions/responses.PageLinks"
+                },
+                "message": {
+                    "type": "string"
                 },
                 "meta": {
                     "type": "object"

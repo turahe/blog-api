@@ -8,6 +8,7 @@ import (
 	"github.com/stretchr/testify/require"
 	commentdomain "github.com/turahe/blog-api/internal/core/comment/domain"
 	postdomain "github.com/turahe/blog-api/internal/core/post/domain"
+	"github.com/turahe/blog-api/internal/shared/pagination"
 	"gorm.io/gorm"
 )
 
@@ -61,9 +62,9 @@ func TestCommentRepositoryPersistsContentHTML(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, "<p><em>edited</em></p>", updated.ContentHTML)
 
-	list, err := repo.List(t.Context(), commentdomain.ListFilter{
-		PostUUID: &post, Statuses: commentdomain.PublicStatuses, Page: 1, PerPage: 10,
-	})
+	listFilter := commentdomain.ListFilter{PostUUID: &post, Statuses: commentdomain.PublicStatuses}
+	listFilter.PageRequest = pagination.ParseLegacy(commentsPublicCfg, 1, 10)
+	list, err := repo.List(t.Context(), listFilter)
 	require.NoError(t, err)
 	require.Len(t, list.Items, 1)
 	require.Equal(t, "<p><em>edited</em></p>", list.Items[0].ContentHTML)
@@ -267,9 +268,9 @@ func TestCommentRepositoryReplyCountsOnlyPublicReplies(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, 3, got.ReplyCount, "approved and deleted placeholders only")
 
-	roots, err := repo.List(t.Context(), commentdomain.ListFilter{
-		PostUUID: &post, RootsOnly: true, Statuses: commentdomain.PublicStatuses, Page: 1, PerPage: 10,
-	})
+	rootsFilter := commentdomain.ListFilter{PostUUID: &post, RootsOnly: true, Statuses: commentdomain.PublicStatuses}
+	rootsFilter.PageRequest = pagination.ParseLegacy(commentsPublicCfg, 1, 10)
+	roots, err := repo.List(t.Context(), rootsFilter)
 	require.NoError(t, err)
 	require.Len(t, roots.Items, 1)
 	require.Equal(t, 3, roots.Items[0].ReplyCount)

@@ -11,20 +11,20 @@ import (
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/require"
 	notificationdomain "github.com/turahe/blog-api/internal/core/notification/domain"
+	"github.com/turahe/blog-api/internal/shared/pagination"
 )
 
 type fakeInbox struct {
 	userID     uuid.UUID
 	unreadOnly bool
-	page       int
-	perPage    int
+	pr         pagination.PageRequest
 	result     notificationdomain.ListResult
 	read       notificationdomain.Notification
 	err        error
 }
 
-func (f *fakeInbox) List(_ context.Context, userID uuid.UUID, unreadOnly bool, page, perPage int) (notificationdomain.ListResult, error) {
-	f.userID, f.unreadOnly, f.page, f.perPage = userID, unreadOnly, page, perPage
+func (f *fakeInbox) List(_ context.Context, userID uuid.UUID, unreadOnly bool, pr pagination.PageRequest) (notificationdomain.ListResult, error) {
+	f.userID, f.unreadOnly, f.pr = userID, unreadOnly, pr
 	return f.result, f.err
 }
 
@@ -49,8 +49,15 @@ func TestMeNotificationsList(t *testing.T) {
 	t.Parallel()
 
 	user := uuid.New()
+	total := int64(1)
+	unread := int64(4)
 	inbox := &fakeInbox{result: notificationdomain.ListResult{
-		Items: []notificationdomain.Notification{sampleNotification()}, Total: 1, Unread: 4, Page: 2, PerPage: 5,
+		Items:         []notificationdomain.Notification{sampleNotification()},
+		Total:         &total,
+		UnreadTotal:   &unread,
+		OffsetPage:    2,
+		OffsetPerPage: 5,
+		Limit:         5,
 	}}
 
 	w, body := runProfile(t, meNotificationsListHandler(inbox), profileRequest{
@@ -61,8 +68,8 @@ func TestMeNotificationsList(t *testing.T) {
 	require.Equal(t, "4", w.Header().Get(headerUnreadCount))
 	require.Equal(t, user, inbox.userID)
 	require.True(t, inbox.unreadOnly)
-	require.Equal(t, 2, inbox.page)
-	require.Equal(t, 5, inbox.perPage)
+	require.Equal(t, 2, inbox.pr.Page)
+	require.Equal(t, 5, inbox.pr.Limit)
 
 	items, _ := body["data"].([]any)
 	require.Len(t, items, 1)

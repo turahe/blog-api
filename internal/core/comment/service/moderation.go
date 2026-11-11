@@ -12,15 +12,23 @@ import (
 	"github.com/google/uuid"
 	"github.com/turahe/blog-api/internal/core/audit"
 	commentdomain "github.com/turahe/blog-api/internal/core/comment/domain"
+	"github.com/turahe/blog-api/internal/shared/pagination"
 )
+
+var commentsAdminListCfg = pagination.CursorConfig{
+	Kind:           "comments_admin",
+	Sort:           []pagination.SortField{{Name: "created_at", Dir: pagination.Asc, Type: pagination.TypeTime}, {Name: "id", Dir: pagination.Asc, Type: pagination.TypeInt64}},
+	TTL:            pagination.DefaultTTL,
+	MaxPerPage:     pagination.DefaultMaxPerPage,
+	DefaultPerPage: pagination.DefaultPerPage,
+}
 
 // AdminListInput filters the moderation list; empty Statuses means the queue (pending, flagged).
 type AdminListInput struct {
+	pagination.PageRequest
 	PostUUID    *uuid.UUID
 	Statuses    []commentdomain.Status
 	NewestFirst bool
-	Page        int
-	PerPage     int
 }
 
 // AdminList lists comments in any status for moderators, oldest first unless NewestFirst.
@@ -36,15 +44,25 @@ func (s *Service) AdminList(ctx context.Context, in AdminListInput) (commentdoma
 		}
 	}
 
-	page, perPage := normalizePage(in.Page, in.PerPage)
+	if in.Mode == pagination.ModeOffset || in.Page > 0 || in.Page < 1 || in.Limit < 1 {
+		norm := pagination.ParseLegacy(commentsAdminListCfg, in.Page, in.Limit)
+		in.PageRequest = norm
+	}
+	if in.Limit <= 0 {
+		in.Limit = commentsAdminListCfg.DefaultPerPage
+	}
+	if in.Page <= 0 {
+		in.Page = 1
+	}
 
-	return s.repo.List(ctx, commentdomain.ListFilter{
+	filter := commentdomain.ListFilter{
 		PostUUID:    in.PostUUID,
 		Statuses:    statuses,
 		NewestFirst: in.NewestFirst,
-		Page:        page,
-		PerPage:     perPage,
-	})
+	}
+	filter.PageRequest = in.PageRequest
+
+	return s.repo.ListAdmin(ctx, filter)
 }
 
 // AdminGet returns a comment in any status with its flags and moderation history.

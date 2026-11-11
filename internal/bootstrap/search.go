@@ -7,14 +7,14 @@ import (
 	"github.com/turahe/blog-api/internal/adapters/outbound/persistence"
 	postports "github.com/turahe/blog-api/internal/core/post/ports"
 	"github.com/turahe/blog-api/internal/platform/config"
-	"github.com/turahe/blog-api/internal/platform/database"
+	pkgdb "github.com/turahe/pkg/database"
 )
 
 // newPostSearch queries with the language posts.search_vector was built with, so results
 // stay correct when SEARCH_LANGUAGE changed but the index was not rebuilt yet. It returns nil,
 // leaving search disabled, when the column is missing.
-func newPostSearch(ctx context.Context, cfg config.Config, db *database.Database, logger *slog.Logger) postports.Searcher {
-	language, err := persistence.IndexedSearchLanguage(ctx, db.GORM)
+func newPostSearch(ctx context.Context, cfg config.Config, db *pkgdb.Database, logger *slog.Logger) postports.Searcher {
+	language, err := persistence.IndexedSearchLanguage(ctx, db.DB())
 	if err != nil {
 		logger.Warn("post search disabled", "error", err)
 		return nil
@@ -25,5 +25,5 @@ func newPostSearch(ctx context.Context, cfg config.Config, db *database.Database
 			"indexed", language, "configured", cfg.SearchLanguage)
 	}
 
-	return persistence.NewPostSearch(db.GORM, language)
+	return persistence.NewPostSearch(db.DB(), language)
 }

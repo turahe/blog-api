@@ -32,9 +32,9 @@ func (f *fakeActivity) ForAdmin(_ context.Context, filter auditdomain.ActivityFi
 
 func sampleActivity() auditdomain.ActivityPage {
 	actor, target := uuid.New(), uuid.New()
-
+	total := int64(1)
 	return auditdomain.ActivityPage{
-		Page: 1, PerPage: 20, Total: 1,
+		OffsetPage: 1, OffsetPerPage: 20, Total: &total, Limit: 20,
 		Items: []auditdomain.Entry{{
 			UUID:         uuid.New(),
 			Action:       "admin.users.roles.assign",
@@ -71,8 +71,8 @@ func TestMeActivityShowsCoarseOwnerView(t *testing.T) {
 	require.Equal(t, []string{"login", "role_change"}, activity.filter.Categories)
 	require.Equal(t, time.Date(2026, 9, 1, 0, 0, 0, 0, time.UTC), *activity.filter.From)
 	require.Equal(t, time.Date(2026, 9, 25, 23, 59, 59, 999999999, time.UTC), *activity.filter.To)
-	require.Equal(t, 2, activity.filter.Page)
-	require.Equal(t, 5, activity.filter.PerPage)
+	require.Equal(t, 2, activity.filter.PageRequest.Page)
+	require.Equal(t, 5, activity.filter.PageRequest.Limit)
 
 	items, _ := body["data"].([]any)
 	require.Len(t, items, 1)

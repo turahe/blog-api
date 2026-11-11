@@ -82,16 +82,48 @@ func (f *fakeNewsletter) MyUnsubscribe(context.Context, uuid.UUID, []string, str
 }
 
 func (f *fakeNewsletter) ListSubscribers(_ context.Context, filter nldomain.SubscriberFilter) (nldomain.SubscriberPage, error) {
-	if f.failPage != 0 && filter.Page == f.failPage {
+	var page, perPage int
+	if filter.PageRequest.Limit > 0 {
+		perPage = filter.PageRequest.Limit
+		if filter.PageRequest.Mode == 0 || filter.PageRequest.Mode == 1 {
+			page = filter.PageRequest.Page
+		}
+		if page < 1 {
+			page = 1
+		}
+	} else {
+		page, perPage = filter.Page, filter.PerPage
+		if page < 1 {
+			page = 1
+		}
+		if perPage < 1 {
+			perPage = 20
+		}
+	}
+
+	if f.failPage != 0 && page == f.failPage {
 		return nldomain.SubscriberPage{}, errors.New("db down")
 	}
 
-	start := min((filter.Page-1)*filter.PerPage, len(f.subscribers))
-	end := min(start+filter.PerPage, len(f.subscribers))
+	start := min((page-1)*perPage, len(f.subscribers))
+	end := min(start+perPage, len(f.subscribers))
+	total := int64(len(f.subscribers))
+	items := f.subscribers[start:end]
 
-	return nldomain.SubscriberPage{
-		Items: f.subscribers[start:end], Page: filter.Page, PerPage: filter.PerPage, Total: int64(len(f.subscribers)),
-	}, f.err
+	out := nldomain.SubscriberPage{
+		Items:         items,
+		Total:         &total,
+		Limit:         perPage,
+		OffsetPage:    page,
+		OffsetPerPage: perPage,
+	}
+	if end < len(f.subscribers) {
+		out.HasNextPage = true
+	}
+	if page > 1 {
+		out.HasPreviousPage = true
+	}
+	return out, f.err
 }
 
 func (f *fakeNewsletter) Subscriber(context.Context, uuid.UUID) (nlservice.SubscriberDetail, error) {
@@ -117,7 +149,42 @@ func (f *fakeNewsletter) Issue(_ context.Context, id uuid.UUID) (nldomain.Issue,
 }
 
 func (f *fakeNewsletter) ListIssues(_ context.Context, filter nldomain.IssueFilter) (nldomain.IssuePage, error) {
-	return nldomain.IssuePage{Items: f.issues, Page: filter.Page, PerPage: filter.PerPage, Total: int64(len(f.issues))}, f.err
+	var page, perPage int
+	if filter.PageRequest.Limit > 0 {
+		perPage = filter.PageRequest.Limit
+		page = filter.PageRequest.Page
+		if page < 1 {
+			page = 1
+		}
+	} else {
+		page, perPage = filter.Page, filter.PerPage
+		if page < 1 {
+			page = 1
+		}
+		if perPage < 1 {
+			perPage = 20
+		}
+	}
+
+	start := min((page-1)*perPage, len(f.issues))
+	end := min(start+perPage, len(f.issues))
+	total := int64(len(f.issues))
+	items := f.issues[start:end]
+
+	out := nldomain.IssuePage{
+		Items:         items,
+		Total:         &total,
+		Limit:         perPage,
+		OffsetPage:    page,
+		OffsetPerPage: perPage,
+	}
+	if end < len(f.issues) {
+		out.HasNextPage = true
+	}
+	if page > 1 {
+		out.HasPreviousPage = true
+	}
+	return out, f.err
 }
 
 func (f *fakeNewsletter) Preview(context.Context, nldomain.Issue) (string, string, error) {

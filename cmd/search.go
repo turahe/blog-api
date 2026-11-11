@@ -6,8 +6,8 @@ import (
 
 	"github.com/spf13/cobra"
 	"github.com/turahe/blog-api/internal/adapters/outbound/persistence"
+	"github.com/turahe/blog-api/internal/bootstrap"
 	"github.com/turahe/blog-api/internal/platform/config"
-	"github.com/turahe/blog-api/internal/platform/database"
 )
 
 func newSearchCmd() *cobra.Command {
@@ -34,14 +34,14 @@ func newSearchReindexCmd() *cobra.Command {
 				return err
 			}
 
-			db, err := database.Open(cmd.Context(), cfg)
+			db, err := bootstrap.OpenDatabase(cmd.Context(), cfg)
 			if err != nil {
 				return err
 			}
 
 			defer func() { err = errors.Join(err, db.Close()) }()
 
-			if err := persistence.RebuildPostSearchIndex(cmd.Context(), db.GORM, cfg.SearchLanguage); err != nil {
+			if err := persistence.RebuildPostSearchIndex(cmd.Context(), db.DB(), cfg.SearchLanguage); err != nil {
 				return err
 			}
 

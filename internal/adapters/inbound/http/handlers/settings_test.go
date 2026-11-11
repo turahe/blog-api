@@ -16,6 +16,7 @@ import (
 	"github.com/turahe/blog-api/internal/adapters/inbound/http/responses"
 	settingsdomain "github.com/turahe/blog-api/internal/core/settings/domain"
 	settingsservice "github.com/turahe/blog-api/internal/core/settings/service"
+	"github.com/turahe/blog-api/internal/shared/pagination"
 )
 
 type fakeSettings struct {
@@ -66,12 +67,16 @@ func (f *fakeSettings) History(_ context.Context, filter settingsdomain.HistoryF
 		return settingsdomain.HistoryPage{}, f.historyErr
 	}
 
+	total := int64(2)
 	return settingsdomain.HistoryPage{
 		Items: []settingsdomain.HistoryEntry{
 			{UUID: uuid.New(), Key: "site.name", Previous: json.RawMessage(`"Blog"`), New: json.RawMessage(`"Mine"`), Version: 1, CreatedAt: testTime},
 			{UUID: uuid.New(), Key: "retired.key", Version: 3, Redacted: true, CreatedAt: testTime},
 		},
-		Page: 1, PerPage: 20, Total: 2,
+		Total:         &total,
+		Limit:         20,
+		OffsetPage:    1,
+		OffsetPerPage: 20,
 	}, nil
 }
 
@@ -272,7 +277,17 @@ func TestSettingsHistoryPaginatesAndShowsRedaction(t *testing.T) {
 
 	w, body := runProfile(t, h.history, profileRequest{method: nethttp.MethodGet, target: "/?key=site.name&page=2&perPage=5", user: &testUserID})
 	require.Equal(t, nethttp.StatusOK, w.Code, w.Body.String())
-	assert.Equal(t, settingsdomain.HistoryFilter{Key: "site.name", Page: 2, PerPage: 5}, svc.historyFilter)
+	assert.Equal(t, settingsdomain.HistoryFilter{
+		Key: "site.name",
+		PageRequest: pagination.PageRequest{
+			Mode:         pagination.ModeOffset,
+			Forward:      true,
+			Page:         2,
+			Limit:        5,
+			Offset:       0,
+			IncludeTotal: true,
+		},
+	}, svc.historyFilter)
 
 	items, _ := body["data"].([]any)
 	require.Len(t, items, 2)

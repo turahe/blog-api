@@ -42,7 +42,7 @@ func TestListPublishedPostsHandler(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 
-			repo := &fakePostRepo{err: tc.repoErr, published: postdomain.ListResult{Items: []postdomain.Post{post}, Total: 11, Page: 2, PerPage: 5}}
+			repo := &fakePostRepo{err: tc.repoErr, published: postdomain.ListResult{Items: []postdomain.Post{post}, Total: int64Ptr(11), OffsetPage: 2, OffsetPerPage: 5}}
 			code, body := getPosts(t, postservice.New(repo, nil, nil), tc.query)
 			require.Equal(t, tc.status, code)
 			require.Equal(t, tc.code, errorCode(body))
@@ -53,7 +53,7 @@ func TestListPublishedPostsHandler(t *testing.T) {
 			}
 
 			require.Equal(t, 2, repo.listFilter.Page)
-			require.Equal(t, 5, repo.listFilter.PerPage)
+			require.Equal(t, 5, repo.listFilter.Limit)
 			require.Equal(t, &tagID, repo.listFilter.TagUUID)
 
 			data, ok := body["data"].([]any)

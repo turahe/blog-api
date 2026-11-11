@@ -11,8 +11,23 @@ import (
 	"github.com/google/uuid"
 	postdomain "github.com/turahe/blog-api/internal/core/post/domain"
 	"github.com/turahe/blog-api/internal/core/post/ports"
+	"github.com/turahe/blog-api/internal/shared/pagination"
 	"gorm.io/gorm"
 )
+
+// revisionsCfg declares the sort order for post revision listings.
+// ORDER BY revision_number DESC matches the historical ordering;
+// revision_number is unique per-post and provides the deterministic
+// key required for keyset (cursor) pagination.
+var revisionsCfg = pagination.CursorConfig{
+	Kind: "post_revisions",
+	Sort: []pagination.SortField{
+		{Name: "revision_number", Column: "r.revision_number", Dir: pagination.Desc, Type: pagination.TypeInt64},
+	},
+	TTL:            pagination.DefaultTTL,
+	MaxPerPage:     pagination.DefaultMaxPerPage,
+	DefaultPerPage: pagination.DefaultPerPage,
+}
 
 // PostRevisionRepository stores post revisions in PostgreSQL.
 type PostRevisionRepository struct {
@@ -148,7 +163,25 @@ func (r *PostRevisionRepository) Create(ctx context.Context, rev postdomain.Revi
 
 // List implements ports.RevisionRepository.
 func (r *PostRevisionRepository) List(ctx context.Context, filter postdomain.RevisionFilter) (postdomain.RevisionPage, error) {
-	page := postdomain.RevisionPage{Items: []postdomain.Revision{}, Page: filter.Page, PerPage: filter.PerPage}
+	pr := filter.PageRequest
+	if pr.Limit <= 0 {
+		pr.Limit = revisionsCfg.DefaultPerPage
+	}
+	var cursorFields map[string]any
+	if pr.Mode == pagination.ModeCursor && pr.Cursor != "" {
+		decoded, _, err := pagination.DecodeCursor(revisionsCfg, pr.Cursor)
+		if err != nil {
+			return postdomain.RevisionPage{}, err
+		}
+		if err := pagination.ValidateCursor(revisionsCfg, decoded); err != nil {
+			return postdomain.RevisionPage{}, err
+		}
+		cursorFields = decoded
+	}
+	seek, err := pagination.BuildSeek(revisionsCfg, pr, cursorFields)
+	if err != nil {
+		return postdomain.RevisionPage{}, err
+	}
 
 	conds := []string{"p.uuid = ?"}
 	args := []any{filter.PostUUID}
@@ -169,29 +202,96 @@ func (r *PostRevisionRepository) List(ctx context.Context, filter postdomain.Rev
 	}
 
 	where := " WHERE " + strings.Join(conds, " AND ")
+	seekArgs := make([]any, 0)
+	if seek.WhereClause != "" {
+		where += " AND " + seek.WhereClause
+		seekArgs = seek.BindVars
+	}
+
+	countWhere := " WHERE " + strings.Join(conds, " AND ")
 	c := conn(ctx, r.db)
 
-	if err := c.Raw(`SELECT count(*) FROM post_revisions r JOIN posts p ON p.id = r.post_id
-		LEFT JOIN users u ON u.id = r.author_id`+where, args...).Scan(&page.Total).Error; err != nil {
-		return page, fmt.Errorf("count post revisions: %w", err)
+	var out postdomain.RevisionPage
+	if pr.IncludeTotal {
+		var total int64
+		if err := c.Raw(`SELECT count(*) FROM post_revisions r JOIN posts p ON p.id = r.post_id
+			LEFT JOIN users u ON u.id = r.author_id`+countWhere, args...).Scan(&total).Error; err != nil {
+			return postdomain.RevisionPage{}, fmt.Errorf("count post revisions: %w", err)
+		}
+		out.Total = &total
+	}
+
+	baseSQL := fmt.Sprintf(revisionSelect, "''") + where + " " + seek.OrderClause
+	queryArgs := append(append([]any{}, args...), seekArgs...)
+	queryArgs = append(queryArgs, seek.LimitFetch)
+	if pr.Mode == pagination.ModeOffset {
+		baseSQL += " OFFSET ?"
+		queryArgs = append(queryArgs, pr.Offset)
 	}
 
 	var rows []revisionRow
-	if err := c.Raw(fmt.Sprintf(revisionSelect, "''")+where+` ORDER BY r.revision_number DESC LIMIT ? OFFSET ?`,
-		append(args, filter.PerPage, (filter.Page-1)*filter.PerPage)...).Scan(&rows).Error; err != nil {
-		return page, fmt.Errorf("list post revisions: %w", err)
+	if err := c.Raw(baseSQL, queryArgs...).Scan(&rows).Error; err != nil {
+		return postdomain.RevisionPage{}, fmt.Errorf("list post revisions: %w", err)
 	}
 
+	if seek.ReverseDisplay {
+		for i, j := 0, len(rows)-1; i < j; i, j = i+1, j-1 {
+			rows[i], rows[j] = rows[j], rows[i]
+		}
+	}
+
+	items := make([]postdomain.Revision, 0, len(rows))
 	for _, row := range rows {
 		rev, err := mapRevision(row)
 		if err != nil {
-			return page, err
+			return postdomain.RevisionPage{}, err
 		}
-
-		page.Items = append(page.Items, rev)
+		items = append(items, rev)
 	}
 
-	return page, nil
+	page, hasNext, hasPrev := pagination.TruncatePage(items, pr.Limit, pr.Forward, pr.Cursor != "")
+	out.Items = page
+	out.HasNextPage = hasNext
+	out.HasPreviousPage = hasPrev
+	out.Limit = pr.Limit
+	if pr.Mode == pagination.ModeOffset {
+		out.OffsetPage = pr.Page
+		out.OffsetPerPage = pr.Limit
+	}
+	if len(page) > 0 {
+		if out.HasNextPage {
+			fields := pagination.SortValues[postdomain.Revision](revisionsCfg, page[len(page)-1],
+				func(row postdomain.Revision, i int) any {
+					switch i {
+					case 0:
+						return row.Number
+					}
+					return nil
+				})
+			cur, err := pagination.EncodeCursor(revisionsCfg, fields)
+			if err != nil {
+				return postdomain.RevisionPage{}, err
+			}
+			out.NextCursor = cur
+		}
+		if out.HasPreviousPage {
+			fields := pagination.SortValues[postdomain.Revision](revisionsCfg, page[0],
+				func(row postdomain.Revision, i int) any {
+					switch i {
+					case 0:
+						return row.Number
+					}
+					return nil
+				})
+			cur, err := pagination.EncodeCursor(revisionsCfg, fields)
+			if err != nil {
+				return postdomain.RevisionPage{}, err
+			}
+			out.PreviousCursor = cur
+		}
+	}
+
+	return out, nil
 }
 
 // Existing implements ports.RevisionRepository.

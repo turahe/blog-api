@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/turahe/blog-api/internal/shared/pagination"
 )
 
 // ErrNotFound is returned when a notification does not exist or belongs to another user.
@@ -37,17 +38,22 @@ func (n Notification) Read() bool {
 
 // ListFilter selects a page of one user's notifications, newest first.
 type ListFilter struct {
+	pagination.PageRequest
 	UserUUID   uuid.UUID
 	UnreadOnly bool
-	Page       int
-	PerPage    int
 }
 
 // ListResult is one page of notifications with the unread count across all pages.
-type ListResult struct {
-	Items   []Notification
-	Total   int64
-	Unread  int64
-	Page    int
-	PerPage int
+type ListResult = pagination.PageResult[Notification]
+
+// NotificationPage is an alias for clarity when callers need a named type.
+type NotificationPage = pagination.PageResult[Notification]
+
+// UnreadTotalFrom extracts the unread count from a PageResult's UnreadTotal field.
+// Returns 0 when UnreadTotal is nil.
+func UnreadTotalFrom(r pagination.PageResult[Notification]) int64 {
+	if r.UnreadTotal == nil {
+		return 0
+	}
+	return *r.UnreadTotal
 }

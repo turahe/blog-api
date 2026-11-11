@@ -35,7 +35,7 @@
   - managed connectivity via **`cloud.google.com/go/cloudsqlconn`** for **PostgreSQL**
   - IAM Database Authentication, ephemeral mTLS certificate auto-rotation, Private Service Connect private IP (`DB_PRIVATE_IP_ENABLED=true`)
   - instance targeting via `DB_INSTANCE_CONNECTION_NAME` (`project:region:instance`); see [backend/database.md Cloud SQL Connectivity](../backend/database.md#google-cloud-sql-connectivity-cloudgooglecomgocloudsqlconn)
-  - platform wiring: `internal/platform/database` (replaces dialect-specific open packages)
+  - connections: `github.com/turahe/pkg/database` via `internal/platform/connect`
 - Redis stores cache entries, rate-limit counters, and short-lived session/security state
 - object storage stores original media files and optionally hot transformed variants
 - Watermill publishes domain events (post, auth, notification, …) through a broker selected by `MESSAGE_BROKER`:

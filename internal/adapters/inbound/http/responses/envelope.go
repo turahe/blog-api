@@ -6,6 +6,7 @@ import (
 	"strconv"
 
 	"github.com/gin-gonic/gin"
+	"github.com/turahe/blog-api/internal/shared/pagination"
 )
 
 // ContextRequestIDKey stores the correlation id on the Gin context.
@@ -41,6 +42,7 @@ type Meta struct {
 }
 
 // PageLinks is Laravel-style pagination link URLs (null when unavailable).
+// First/Last are nil for cursor-mode includeTotal=false.
 type PageLinks struct {
 	First *string `json:"first"`
 	Last  *string `json:"last"`
@@ -48,16 +50,27 @@ type PageLinks struct {
 	Next  *string `json:"next"`
 }
 
-// PaginationMeta is Laravel-style length-aware pagination meta.
+// PaginationMeta is Laravel-style length-aware pagination meta, extended with
+// optional cursor-mode fields (omitempty). When a caller uses offset mode and
+// a total count is provided the JSON shape is byte-identical to the original
+// envelope: currentPage, from, lastPage, path, perPage, to, total, requestId.
+//
+// In cursor mode the extra fields are additionally emitted:
+// hasNextPage, hasPreviousPage, nextCursor, previousCursor, limit.
 type PaginationMeta struct {
-	RequestID   string `json:"requestId,omitempty"`
-	CurrentPage int    `json:"currentPage"`
-	From        *int   `json:"from"`
-	LastPage    int    `json:"lastPage"`
-	Path        string `json:"path"`
-	PerPage     int    `json:"perPage"`
-	To          *int   `json:"to"`
-	Total       int64  `json:"total"`
+	RequestID       string  `json:"requestId,omitempty"`
+	CurrentPage     int     `json:"currentPage,omitempty"`
+	From            *int    `json:"from"`
+	LastPage        int     `json:"lastPage,omitempty"`
+	Path            string  `json:"path"`
+	PerPage         int     `json:"perPage"`
+	To              *int    `json:"to"`
+	Total           *int64  `json:"total,omitempty"`
+	Limit           int     `json:"limit,omitempty"`
+	HasNextPage     *bool   `json:"hasNextPage,omitempty"`
+	HasPreviousPage *bool   `json:"hasPreviousPage,omitempty"`
+	NextCursor      *string `json:"nextCursor,omitempty"`
+	PreviousCursor  *string `json:"previousCursor,omitempty"`
 }
 
 // Shared machine-readable ErrorBody.Code values; service-specific codes are
@@ -165,6 +178,7 @@ func SuccessPaginatedFor(c *gin.Context, status int, opts PageOpts) {
 		next = &u
 	}
 
+	totalPtr := total
 	service := opts.Service
 	if service == 0 {
 		service = ServicePlatform
@@ -188,8 +202,68 @@ func SuccessPaginatedFor(c *gin.Context, status int, opts PageOpts) {
 			Path:        path,
 			PerPage:     perPage,
 			To:          to,
-			Total:       total,
+			Total:       &totalPtr,
 		},
+	})
+}
+
+// CursorPageOpts wraps a generic PageResult and optional service override so
+// repositories can return PageResult[T] directly. When Data is non-nil it is
+// used as the envelope body instead of r.Items (handlers use this when they
+// must map domain entities onto DTO shapes like gin.H).
+type CursorPageOpts[T any] struct {
+	Service int
+	Result  pagination.PageResult[T]
+	Data    any
+}
+
+// SuccessPaginatedResult writes the generic PageResult as the standard
+// paginated envelope, merging cursor-mode fields when applicable and emitting
+// legacy offset fields otherwise. Links are generated from the current Gin
+// context URL (filters preserved) so next/prev links are stable.
+func SuccessPaginatedResult[T any](c *gin.Context, status int, opts CursorPageOpts[T]) {
+	r := opts.Result
+	service := opts.Service
+	if service == 0 {
+		service = ServicePlatform
+	}
+	body := opts.Data
+	if body == nil {
+		body = r.Items
+	}
+	legacy, cursor := pagination.BuildMeta[T](c, r)
+	links := pagination.BuildLinks[T](c, r, legacy)
+	meta := PaginationMeta{
+		RequestID:       cursor.RequestID,
+		Limit:           cursor.Limit,
+		HasNextPage:     cursor.HasNextPage,
+		HasPreviousPage: cursor.HasPreviousPage,
+		NextCursor:      cursor.NextCursor,
+		PreviousCursor:  cursor.PreviousCursor,
+		CurrentPage:     legacy.CurrentPage,
+		From:            legacy.From,
+		LastPage:        legacy.LastPage,
+		Path:            legacy.Path,
+		PerPage:         legacy.PerPage,
+		To:              legacy.To,
+		Total:           legacy.Total,
+	}
+	if meta.RequestID == "" {
+		meta.RequestID = RequestID(c)
+	}
+	// PageLinks for pagination package: pagination.PageLinks maps 1:1.
+	envLinks := PageLinks{
+		First: links.First,
+		Last:  links.Last,
+		Prev:  links.Prev,
+		Next:  links.Next,
+	}
+	c.JSON(status, Envelope{
+		OK:    true,
+		Code:  BuildResponseCode(status, service, CaseSuccess),
+		Data:  body,
+		Links: &envLinks,
+		Meta:  &meta,
 	})
 }
 

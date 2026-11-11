@@ -11,6 +11,7 @@ import (
 	"github.com/turahe/blog-api/internal/adapters/inbound/http/responses"
 	auditdomain "github.com/turahe/blog-api/internal/core/audit/domain"
 	auditservice "github.com/turahe/blog-api/internal/core/audit/service"
+	"github.com/turahe/blog-api/internal/shared/pagination"
 )
 
 const (
@@ -21,6 +22,17 @@ const (
 type activityAPI interface {
 	ForOwner(ctx context.Context, filter auditdomain.ActivityFilter) (auditdomain.ActivityPage, error)
 	ForAdmin(ctx context.Context, filter auditdomain.ActivityFilter) (auditdomain.ActivityPage, error)
+}
+
+var activityCfg = pagination.CursorConfig{
+	Kind: "activity_logs",
+	Sort: []pagination.SortField{
+		{Name: "occurred_at", Column: "audit_logs.occurred_at", Dir: pagination.Desc, Type: pagination.TypeTime},
+		{Name: "id", Column: "audit_logs.id", Dir: pagination.Desc, Type: pagination.TypeInt64},
+	},
+	TTL:            pagination.DefaultTTL,
+	MaxPerPage:     pagination.DefaultMaxPerPage,
+	DefaultPerPage: pagination.DefaultPerPage,
 }
 
 func activityControllers(deps Deps) (me, admin gin.HandlerFunc) {
@@ -38,14 +50,18 @@ func activityControllers(deps Deps) (me, admin gin.HandlerFunc) {
 //	@Description	Sign-ins, security changes, and content actions on or by the caller's account, newest first. IP addresses are reduced to their network and user agents to "browser on OS".
 //	@Tags			me
 //	@Produce		json
-//	@Param			category	query		string	false	"comma-separated categories, for example login,password_change"
-//	@Param			from		query		string	false	"RFC 3339 timestamp or YYYY-MM-DD"
-//	@Param			to			query		string	false	"RFC 3339 timestamp or YYYY-MM-DD (inclusive)"
-//	@Param			page		query		int		false	"page"		default(1)
-//	@Param			perPage		query		int		false	"per page"	default(20)
-//	@Success		200			{object}	responses.Envelope
-//	@Failure		400			{object}	responses.Envelope
-//	@Failure		401			{object}	responses.Envelope
+//	@Param			category		query		string	false	"comma-separated categories, for example login,password_change"
+//	@Param			from			query		string	false	"RFC 3339 timestamp or YYYY-MM-DD"
+//	@Param			to				query		string	false	"RFC 3339 timestamp or YYYY-MM-DD (inclusive)"
+//	@Param			after			query		string	false	"cursor for next page"
+//	@Param			before			query		string	false	"cursor for previous page"
+//	@Param			limit			query		int		false	"page size alias (default 20, max 100)"
+//	@Param			perPage			query		int		false	"page size (default 20, max 100)"
+//	@Param			includeTotal	query		bool	false	"include total count (default true)"
+//	@Param			page			query		int		false	"legacy page number (offset mode fallback)"
+//	@Success		200				{object}	responses.Envelope
+//	@Failure		400				{object}	responses.Envelope
+//	@Failure		401				{object}	responses.Envelope
 //	@Security		Bearer
 //	@Router			/api/v1/me/activity [get]
 func meActivityHandler(activity activityAPI) gin.HandlerFunc {
@@ -73,16 +89,20 @@ func meActivityHandler(activity activityAPI) gin.HandlerFunc {
 //	@Description	Every audit entry the user performed or that targets the user's account, with IP, user agent, request id, and before/after changes. Requires user.activity.read_all.
 //	@Tags			admin
 //	@Produce		json
-//	@Param			param1		path		string	true	"user UUID"
-//	@Param			category	query		string	false	"comma-separated categories"
-//	@Param			from		query		string	false	"RFC 3339 timestamp or YYYY-MM-DD"
-//	@Param			to			query		string	false	"RFC 3339 timestamp or YYYY-MM-DD (inclusive)"
-//	@Param			page		query		int		false	"page"		default(1)
-//	@Param			perPage		query		int		false	"per page"	default(20)
-//	@Success		200			{object}	responses.Envelope
-//	@Failure		400			{object}	responses.Envelope
-//	@Failure		401			{object}	responses.Envelope
-//	@Failure		403			{object}	responses.Envelope
+//	@Param			param1			path		string	true	"user UUID"
+//	@Param			category		query		string	false	"comma-separated categories"
+//	@Param			from			query		string	false	"RFC 3339 timestamp or YYYY-MM-DD"
+//	@Param			to				query		string	false	"RFC 3339 timestamp or YYYY-MM-DD (inclusive)"
+//	@Param			after			query		string	false	"cursor for next page"
+//	@Param			before			query		string	false	"cursor for previous page"
+//	@Param			limit			query		int		false	"page size alias (default 20, max 100)"
+//	@Param			perPage			query		int		false	"page size (default 20, max 100)"
+//	@Param			includeTotal	query		bool	false	"include total count (default true)"
+//	@Param			page			query		int		false	"legacy page number (offset mode fallback)"
+//	@Success		200				{object}	responses.Envelope
+//	@Failure		400				{object}	responses.Envelope
+//	@Failure		401				{object}	responses.Envelope
+//	@Failure		403				{object}	responses.Envelope
 //	@Security		Bearer
 //	@Router			/api/v1/admin/users/{param1}/activity [get]
 func adminUserActivityHandler(activity activityAPI) gin.HandlerFunc {
@@ -127,7 +147,12 @@ func activityFilter(c *gin.Context) (auditdomain.ActivityFilter, bool) {
 		return filter, false
 	}
 
-	filter.Page, filter.PerPage = pageParams(c)
+	pr, err := pagination.ParseRequest(c, activityCfg)
+	if err != nil {
+		responses.Failure(c, nethttp.StatusBadRequest, pagination.ErrorCode(err), pagination.ErrorCause(err))
+		return filter, false
+	}
+	filter.PageRequest = pr
 
 	return filter, true
 }
@@ -161,14 +186,23 @@ func writeActivityPage(c *gin.Context, page auditdomain.ActivityPage, err error,
 		return
 	}
 
-	if err != nil {
+	switch {
+	case errors.Is(err, pagination.ErrCursorMalformed),
+		errors.Is(err, pagination.ErrCursorInvalidSignature),
+		errors.Is(err, pagination.ErrCursorExpired),
+		errors.Is(err, pagination.ErrCursorWrongKind),
+		errors.Is(err, pagination.ErrCursorMissingField),
+		errors.Is(err, pagination.ErrCursorFieldType),
+		errors.Is(err, pagination.ErrCursorUnsupported):
+		responses.Failure(c, nethttp.StatusBadRequest, pagination.ErrorCode(err), pagination.ErrorCause(err))
+		return
+	case err != nil:
 		responses.RecordError(c, err)
 		responses.FailureFor(c, nethttp.StatusInternalServerError, responses.FailureOpts{
 			Service: responses.ServiceUsers,
 			Code:    responses.ErrorCodeInternal,
 			Message: "An unexpected error occurred",
 		})
-
 		return
 	}
 
@@ -177,12 +211,10 @@ func writeActivityPage(c *gin.Context, page auditdomain.ActivityPage, err error,
 		items = append(items, view(entry))
 	}
 
-	responses.SuccessPaginatedFor(c, nethttp.StatusOK, responses.PageOpts{
+	responses.SuccessPaginatedResult[auditdomain.Entry](c, nethttp.StatusOK, responses.CursorPageOpts[auditdomain.Entry]{
 		Service: responses.ServiceUsers,
+		Result:  page,
 		Data:    items,
-		Page:    page.Page,
-		PerPage: page.PerPage,
-		Total:   page.Total,
 	})
 }
 

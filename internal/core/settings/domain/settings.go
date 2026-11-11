@@ -17,6 +17,7 @@ import (
 	"unicode/utf8"
 
 	"github.com/google/uuid"
+	"github.com/turahe/blog-api/internal/shared/pagination"
 )
 
 // ValueType is the JSON type a setting holds.
@@ -342,15 +343,9 @@ type HistoryEntry struct {
 
 // HistoryFilter selects history rows, newest first.
 type HistoryFilter struct {
-	Key     string
-	Page    int
-	PerPage int
+	pagination.PageRequest
+	Key string
 }
 
 // HistoryPage is one page of history.
-type HistoryPage struct {
-	Items   []HistoryEntry
-	Page    int
-	PerPage int
-	Total   int64
-}
+type HistoryPage = pagination.PageResult[HistoryEntry]

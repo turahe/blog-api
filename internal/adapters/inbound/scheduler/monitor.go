@@ -10,8 +10,7 @@ import (
 // minMaxRuntime is the shortest time a run may take before Sentry marks it timed out.
 const minMaxRuntime = 30 * time.Minute
 
-// withJobHub gives the run its own Sentry hub tagged with the job, so error
-// events logged with ctx are linked to the job's cron monitor.
+// withJobHub gives the run its own Sentry hub tagged with the job.
 func withJobHub(ctx context.Context, job string) context.Context {
 	if sentry.CurrentHub().Client() == nil {
 		return ctx

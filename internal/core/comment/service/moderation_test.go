@@ -9,6 +9,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/require"
 	commentdomain "github.com/turahe/blog-api/internal/core/comment/domain"
+	"github.com/turahe/blog-api/internal/shared/pagination"
 )
 
 func TestTransitionTable(t *testing.T) {
@@ -378,11 +379,16 @@ func TestAdminListDefaultsToQueue(t *testing.T) {
 
 	f := newFixture(Config{})
 
-	_, err := f.svc.AdminList(context.Background(), AdminListInput{Page: 0, PerPage: 500})
+	_, err := f.svc.AdminList(context.Background(), AdminListInput{PageRequest: pagination.PageRequest{Page: 0, Limit: 0}})
 	require.NoError(t, err)
 	require.Equal(t, commentdomain.QueueStatuses, f.repo.lastFilter.Statuses)
 	require.Equal(t, 1, f.repo.lastFilter.Page)
-	require.Equal(t, 20, f.repo.lastFilter.PerPage)
+	require.Equal(t, 20, f.repo.lastFilter.Limit)
+
+	_, err = f.svc.AdminList(context.Background(), AdminListInput{PageRequest: pagination.PageRequest{Page: 0, Limit: 500}})
+	require.NoError(t, err)
+	require.Equal(t, 1, f.repo.lastFilter.Page)
+	require.Equal(t, 100, f.repo.lastFilter.Limit, "perPage is clamped to MaxPerPage=100 when caller overflows")
 
 	_, err = f.svc.AdminList(context.Background(), AdminListInput{
 		Statuses: []commentdomain.Status{commentdomain.StatusDeleted}, PostUUID: &f.post, NewestFirst: true,

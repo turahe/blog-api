@@ -1095,8 +1095,12 @@ definitions:
         type: object
       error:
         $ref: '#/definitions/responses.ErrorBody'
+      errors:
+        type: object
       links:
         $ref: '#/definitions/responses.PageLinks'
+      message:
+        type: string
       meta:
         type: object
       ok:
@@ -1758,8 +1762,9 @@ paths:
       - admin
   /api/v1/admin/comments:
     get:
-      description: Comments in any status across posts. Defaults to the moderation
-        queue (pending and flagged), oldest first.
+      description: |-
+        Comments in any status across posts. Defaults to the moderation queue (pending and flagged), oldest first.
+        Supports both legacy offset pagination (page/perPage) and cursor-based keyset pagination (after/before/limit).
       parameters:
       - description: 'comma-separated statuses: pending, approved, flagged, spam,
           rejected, deleted'
@@ -1779,15 +1784,33 @@ paths:
         name: sort
         type: string
       - default: 1
-        description: page
+        description: page (legacy offset mode)
         in: query
         name: page
         type: integer
       - default: 20
-        description: per page
+        description: per page (legacy offset mode, alias limit)
         in: query
         name: perPage
         type: integer
+      - default: 20
+        description: page size (cursor or offset)
+        in: query
+        name: limit
+        type: integer
+      - description: 'opaque cursor: return items after this point'
+        in: query
+        name: after
+        type: string
+      - description: 'opaque cursor: return items before this point'
+        in: query
+        name: before
+        type: string
+      - default: true
+        description: when false, skip COUNT(*) to reduce DB load
+        in: query
+        name: includeTotal
+        type: boolean
       produces:
       - application/json
       responses:
@@ -2116,16 +2139,23 @@ paths:
       - admin
   /api/v1/admin/media:
     get:
+      description: Supports both legacy offset pagination (page/perPage) and cursor-based
+        keyset pagination (after/before/limit).
       parameters:
       - default: 1
-        description: page
+        description: page (legacy offset mode)
         in: query
         name: page
         type: integer
       - default: 20
-        description: per page
+        description: per page (legacy offset mode, alias limit)
         in: query
         name: perPage
+        type: integer
+      - default: 20
+        description: page size (cursor or offset)
+        in: query
+        name: limit
         type: integer
       - description: search
         in: query
@@ -2147,6 +2177,19 @@ paths:
           or SEO image references
         in: query
         name: unused
+        type: boolean
+      - description: 'opaque cursor: return items after this point'
+        in: query
+        name: after
+        type: string
+      - description: 'opaque cursor: return items before this point'
+        in: query
+        name: before
+        type: string
+      - default: true
+        description: when false, skip COUNT(*) to reduce DB load
+        in: query
+        name: includeTotal
         type: boolean
       produces:
       - application/json
@@ -2298,15 +2341,33 @@ paths:
         in: query
         name: status
         type: string
-      - default: 1
-        description: page
+      - description: opaque forward cursor
         in: query
-        name: page
+        name: after
+        type: string
+      - description: opaque backward cursor
+        in: query
+        name: before
+        type: string
+      - default: 20
+        description: 'items per page (alias: perPage)'
+        in: query
+        name: limit
         type: integer
       - default: 20
-        description: per page
+        description: items per page
         in: query
         name: perPage
+        type: integer
+      - default: false
+        description: include total item count (slow)
+        in: query
+        name: includeTotal
+        type: boolean
+      - default: 1
+        description: page number (legacy offset mode)
+        in: query
+        name: page
         type: integer
       produces:
       - application/json
@@ -2562,15 +2623,33 @@ paths:
         in: query
         name: format
         type: string
-      - default: 1
-        description: page
+      - description: opaque forward cursor
         in: query
-        name: page
+        name: after
+        type: string
+      - description: opaque backward cursor
+        in: query
+        name: before
+        type: string
+      - default: 20
+        description: 'items per page (alias: perPage)'
+        in: query
+        name: limit
         type: integer
       - default: 20
-        description: per page
+        description: items per page
         in: query
         name: perPage
+        type: integer
+      - default: false
+        description: include total item count (slow)
+        in: query
+        name: includeTotal
+        type: boolean
+      - default: 1
+        description: page number (legacy offset mode)
+        in: query
+        name: page
         type: integer
       produces:
       - application/json
@@ -2697,17 +2776,37 @@ paths:
       - admin
   /api/v1/admin/posts:
     get:
+      description: Supports both legacy offset pagination (page/perPage) and cursor-based
+        keyset pagination (after/before/limit).
       parameters:
       - default: 1
-        description: page
+        description: page (legacy offset mode)
         in: query
         name: page
         type: integer
       - default: 20
-        description: per page
+        description: per page (legacy offset mode, alias limit)
         in: query
         name: perPage
         type: integer
+      - default: 20
+        description: page size (cursor or offset)
+        in: query
+        name: limit
+        type: integer
+      - description: 'opaque cursor: return items after this point'
+        in: query
+        name: after
+        type: string
+      - description: 'opaque cursor: return items before this point'
+        in: query
+        name: before
+        type: string
+      - default: false
+        description: when false, skip COUNT(*) to reduce DB load
+        in: query
+        name: includeTotal
+        type: boolean
       - description: status filter
         in: query
         name: status
@@ -2734,6 +2833,18 @@ paths:
       responses:
         "200":
           description: OK
+          schema:
+            $ref: '#/definitions/responses.Envelope'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/responses.Envelope'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/responses.Envelope'
+        "403":
+          description: Forbidden
           schema:
             $ref: '#/definitions/responses.Envelope'
       security:
@@ -2981,22 +3092,43 @@ paths:
       - admin
   /api/v1/admin/posts/{param1}/revisions:
     get:
-      description: Newest first. Authors see only their own posts' history; editors
-        and admins (post.revisions.view_all) see every post's.
+      description: |-
+        Newest first. Authors see only their own posts' history; editors and admins (post.revisions.view_all) see every post's.
+        Supports both legacy offset pagination (page/perPage) and cursor-based keyset pagination (after/before/limit).
       parameters:
       - description: post UUID
         in: path
         name: param1
         required: true
         type: string
-      - description: page (default 1)
+      - default: 1
+        description: page (legacy offset mode)
         in: query
         name: page
         type: integer
-      - description: page size (default 20, max 100)
+      - default: 20
+        description: per page (legacy offset mode, alias limit)
         in: query
         name: perPage
         type: integer
+      - default: 20
+        description: page size (cursor or offset)
+        in: query
+        name: limit
+        type: integer
+      - description: 'opaque cursor: return items after this point'
+        in: query
+        name: after
+        type: string
+      - description: 'opaque cursor: return items before this point'
+        in: query
+        name: before
+        type: string
+      - default: false
+        description: when false, skip COUNT(*) to reduce DB load
+        in: query
+        name: includeTotal
+        type: boolean
       - description: only revisions by this user UUID
         in: query
         name: authorId
@@ -3022,6 +3154,10 @@ paths:
             $ref: '#/definitions/responses.Envelope'
         "400":
           description: Bad Request
+          schema:
+            $ref: '#/definitions/responses.Envelope'
+        "401":
+          description: Unauthorized
           schema:
             $ref: '#/definitions/responses.Envelope'
         "403":
@@ -3566,19 +3702,39 @@ paths:
         in: query
         name: key
         type: string
-      - description: page (default 1)
+      - description: cursor for next page
         in: query
-        name: page
+        name: after
+        type: string
+      - description: cursor for previous page
+        in: query
+        name: before
+        type: string
+      - description: page size alias (default 20, max 100)
+        in: query
+        name: limit
         type: integer
       - description: page size (default 20, max 100)
         in: query
         name: perPage
+        type: integer
+      - description: include total count (default true)
+        in: query
+        name: includeTotal
+        type: boolean
+      - description: legacy page number (offset mode fallback)
+        in: query
+        name: page
         type: integer
       produces:
       - application/json
       responses:
         "200":
           description: OK
+          schema:
+            $ref: '#/definitions/responses.Envelope'
+        "400":
+          description: Bad Request
           schema:
             $ref: '#/definitions/responses.Envelope'
         "403":
@@ -3692,17 +3848,37 @@ paths:
       - admin
   /api/v1/admin/users:
     get:
+      description: Supports both legacy offset pagination (page/perPage) and cursor-based
+        keyset pagination (after/before/limit).
       parameters:
       - default: 1
-        description: page
+        description: page (legacy offset mode)
         in: query
         name: page
         type: integer
       - default: 20
-        description: per page
+        description: per page (legacy offset mode, alias limit)
         in: query
         name: perPage
         type: integer
+      - default: 20
+        description: page size (cursor or offset)
+        in: query
+        name: limit
+        type: integer
+      - description: 'opaque cursor: return items after this point'
+        in: query
+        name: after
+        type: string
+      - description: 'opaque cursor: return items before this point'
+        in: query
+        name: before
+        type: string
+      - default: true
+        description: when false, skip COUNT(*) to reduce DB load
+        in: query
+        name: includeTotal
+        type: boolean
       produces:
       - application/json
       responses:
@@ -3785,15 +3961,29 @@ paths:
         in: query
         name: to
         type: string
-      - default: 1
-        description: page
+      - description: cursor for next page
         in: query
-        name: page
+        name: after
+        type: string
+      - description: cursor for previous page
+        in: query
+        name: before
+        type: string
+      - description: page size alias (default 20, max 100)
+        in: query
+        name: limit
         type: integer
-      - default: 20
-        description: per page
+      - description: page size (default 20, max 100)
         in: query
         name: perPage
+        type: integer
+      - description: include total count (default true)
+        in: query
+        name: includeTotal
+        type: boolean
+      - description: legacy page number (offset mode fallback)
+        in: query
+        name: page
         type: integer
       produces:
       - application/json
@@ -5177,15 +5367,29 @@ paths:
         in: query
         name: to
         type: string
-      - default: 1
-        description: page
+      - description: cursor for next page
         in: query
-        name: page
+        name: after
+        type: string
+      - description: cursor for previous page
+        in: query
+        name: before
+        type: string
+      - description: page size alias (default 20, max 100)
+        in: query
+        name: limit
         type: integer
-      - default: 20
-        description: per page
+      - description: page size (default 20, max 100)
         in: query
         name: perPage
+        type: integer
+      - description: include total count (default true)
+        in: query
+        name: includeTotal
+        type: boolean
+      - description: legacy page number (offset mode fallback)
+        in: query
+        name: page
         type: integer
       produces:
       - application/json
@@ -5352,19 +5556,38 @@ paths:
       - self-service
   /api/v1/me/comments:
     get:
-      description: All of the caller's comments except deleted ones, newest first,
-        including pending and rejected.
+      description: |-
+        All of the caller's comments except deleted ones, newest first, including pending and rejected.
+        Supports both legacy offset pagination (page/perPage) and cursor-based keyset pagination (after/before/limit).
       parameters:
       - default: 1
-        description: page
+        description: page (legacy offset mode)
         in: query
         name: page
         type: integer
       - default: 20
-        description: per page
+        description: per page (legacy offset mode, alias limit)
         in: query
         name: perPage
         type: integer
+      - default: 20
+        description: page size (cursor or offset)
+        in: query
+        name: limit
+        type: integer
+      - description: 'opaque cursor: return items after this point'
+        in: query
+        name: after
+        type: string
+      - description: 'opaque cursor: return items before this point'
+        in: query
+        name: before
+        type: string
+      - default: true
+        description: when false, skip COUNT(*) to reduce DB load
+        in: query
+        name: includeTotal
+        type: boolean
       produces:
       - application/json
       responses:
@@ -5569,15 +5792,33 @@ paths:
         in: query
         name: unread
         type: boolean
-      - default: 1
-        description: page
+      - description: opaque forward cursor
         in: query
-        name: page
+        name: after
+        type: string
+      - description: opaque backward cursor
+        in: query
+        name: before
+        type: string
+      - default: 20
+        description: 'items per page (alias: perPage)'
+        in: query
+        name: limit
         type: integer
       - default: 20
-        description: per page
+        description: items per page
         in: query
         name: perPage
+        type: integer
+      - default: false
+        description: include total item count (slow)
+        in: query
+        name: includeTotal
+        type: boolean
+      - default: 1
+        description: page number (legacy offset mode)
+        in: query
+        name: page
         type: integer
       produces:
       - application/json
@@ -6160,7 +6401,9 @@ paths:
   /api/v1/posts:
     get:
       description: |-
-        Newest first. With q, runs a full-text search instead: best match first, and each item
+        Newest first (published_at DESC, created_at DESC, id DESC). Supports both legacy offset
+        pagination (page/perPage) and cursor-based keyset pagination (after/before/limit).
+        With q, runs a full-text search instead: best match first, and each item
         gains search.rank, search.title, and search.snippet (HTML-escaped, matches in <mark>).
         q uses web search syntax: "quoted phrase", or, -excluded.
       parameters:
@@ -6169,15 +6412,33 @@ paths:
         name: q
         type: string
       - default: 1
-        description: page
+        description: page (legacy offset mode)
         in: query
         name: page
         type: integer
       - default: 20
-        description: per page
+        description: per page (legacy offset mode, alias limit)
         in: query
         name: perPage
         type: integer
+      - default: 20
+        description: page size (cursor or offset)
+        in: query
+        name: limit
+        type: integer
+      - description: 'opaque cursor: return items after this point'
+        in: query
+        name: after
+        type: string
+      - description: 'opaque cursor: return items before this point'
+        in: query
+        name: before
+        type: string
+      - default: true
+        description: when false, skip COUNT(*) to reduce DB load
+        in: query
+        name: includeTotal
+        type: boolean
       - description: category UUID
         in: query
         name: categoryId
@@ -6228,8 +6489,9 @@ paths:
       - public
   /api/v1/posts/{param1}/comments:
     get:
-      description: Top-level comments by default; pass parentId to list the direct
-        replies of a comment.
+      description: |-
+        Top-level comments by default; pass parentId to list the direct replies of a comment.
+        Supports both legacy offset pagination (page/perPage) and cursor-based keyset pagination (after/before/limit).
       parameters:
       - description: post UUID
         in: path
@@ -6241,15 +6503,33 @@ paths:
         name: parentId
         type: string
       - default: 1
-        description: page
+        description: page (legacy offset mode)
         in: query
         name: page
         type: integer
       - default: 20
-        description: per page
+        description: per page (legacy offset mode, alias limit)
         in: query
         name: perPage
         type: integer
+      - default: 20
+        description: page size (cursor or offset)
+        in: query
+        name: limit
+        type: integer
+      - description: 'opaque cursor: return items after this point'
+        in: query
+        name: after
+        type: string
+      - description: 'opaque cursor: return items before this point'
+        in: query
+        name: before
+        type: string
+      - default: true
+        description: when false, skip COUNT(*) to reduce DB load
+        in: query
+        name: includeTotal
+        type: boolean
       produces:
       - application/json
       responses:

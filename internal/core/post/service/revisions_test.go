@@ -17,6 +17,7 @@ import (
 	postdomain "github.com/turahe/blog-api/internal/core/post/domain"
 	"github.com/turahe/blog-api/internal/core/post/ports"
 	tagdomain "github.com/turahe/blog-api/internal/core/tag/domain"
+	"github.com/turahe/blog-api/internal/shared/pagination"
 )
 
 type randomIDs struct{}
@@ -60,10 +61,39 @@ func (m *memRevisions) Create(_ context.Context, rev postdomain.Revision) (postd
 }
 
 func (m *memRevisions) List(_ context.Context, filter postdomain.RevisionFilter) (postdomain.RevisionPage, error) {
+	pr := filter.PageRequest
 	items := slices.Clone(m.byPost[filter.PostUUID])
 	slices.Reverse(items)
 
-	return postdomain.RevisionPage{Items: items, Total: int64(len(items)), Page: filter.Page, PerPage: filter.PerPage}, nil
+	total := int64(len(items))
+	offset := 0
+	limit := pr.Limit
+	if limit <= 0 {
+		limit = 20
+	}
+	if pr.Mode == pagination.ModeOffset {
+		offset = pr.Offset
+		if offset > len(items) {
+			offset = len(items)
+		}
+	}
+	end := offset + limit
+	if end > len(items) {
+		end = len(items)
+	}
+	paged := items[offset:end]
+	out := postdomain.RevisionPage{
+		Items:         paged,
+		Total:         &total,
+		Limit:         limit,
+		HasNextPage:   end < len(items),
+		OffsetPage:    pr.Page,
+		OffsetPerPage: limit,
+	}
+	if out.OffsetPage <= 0 {
+		out.OffsetPage = 1
+	}
+	return out, nil
 }
 
 func (m *memRevisions) Get(_ context.Context, postID uuid.UUID, ref postdomain.RevisionRef) (postdomain.Revision, error) {
@@ -291,10 +321,10 @@ func TestPostRevisionsHideOtherAuthorsPosts(t *testing.T) {
 	_, err = svc.RestoreRevision(t.Context(), postID, postdomain.RevisionRef{Number: &one}, stranger, false, "")
 	require.ErrorIs(t, err, postdomain.ErrNotFound)
 
-	page, err := svc.ListRevisions(t.Context(), stranger, true, postdomain.RevisionFilter{PostUUID: postID, PerPage: 500})
+	page, err := svc.ListRevisions(t.Context(), stranger, true, postdomain.RevisionFilter{PostUUID: postID, PageRequest: pagination.PageRequest{Limit: 0}})
 	require.NoError(t, err)
 	require.Len(t, page.Items, 1)
-	require.Equal(t, 20, page.PerPage)
+	require.Equal(t, 20, page.OffsetPerPage)
 }
 
 func TestPostListRevisionsRejectsInvertedDateRange(t *testing.T) {

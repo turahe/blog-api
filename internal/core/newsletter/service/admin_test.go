@@ -11,6 +11,7 @@ import (
 	auditdomain "github.com/turahe/blog-api/internal/core/audit/domain"
 	"github.com/turahe/blog-api/internal/core/event"
 	"github.com/turahe/blog-api/internal/core/newsletter/domain"
+	"github.com/turahe/blog-api/internal/shared/pagination"
 )
 
 var testActor = uuid.MustParse("0b6c3a52-7e1f-4d2a-8c9b-5e4f3a2b1c0d")
@@ -140,21 +141,28 @@ func TestListSubscribers(t *testing.T) {
 	t.Parallel()
 
 	tests := []struct {
-		name    string
-		filter  domain.SubscriberFilter
-		setup   func(f *fixture)
-		want    domain.SubscriberFilter
-		wantErr error
+		name        string
+		filter      domain.SubscriberFilter
+		setup       func(f *fixture)
+		wantStatus  domain.Status
+		wantQuery   string
+		wantPage    int
+		wantPerPage int
+		wantErr     error
 	}{
 		{
-			name:   "defaults the page",
-			filter: domain.SubscriberFilter{Query: "reader"},
-			want:   domain.SubscriberFilter{Query: "reader", Page: 1, PerPage: defaultPerPage},
+			name:        "defaults the page",
+			filter:      domain.SubscriberFilter{Query: "reader"},
+			wantQuery:   "reader",
+			wantPage:    1,
+			wantPerPage: defaultPerPage,
 		},
 		{
-			name:   "caps the page size",
-			filter: domain.SubscriberFilter{Status: domain.StatusActive, Page: 3, PerPage: 500},
-			want:   domain.SubscriberFilter{Status: domain.StatusActive, Page: 3, PerPage: maxPerPage},
+			name:        "caps the page size",
+			filter:      domain.SubscriberFilter{Status: domain.StatusActive, PageRequest: pagination.PageRequest{Page: 3, Limit: 500}},
+			wantStatus:  domain.StatusActive,
+			wantPage:    3,
+			wantPerPage: maxPerPage,
 		},
 		{name: "unknown status", filter: domain.SubscriberFilter{Status: "gone"}, wantErr: domain.ErrValidation},
 		{name: "store fails", setup: func(f *fixture) { f.repo.failOn("ListSubscribers", errBoom) }, wantErr: errBoom},
@@ -176,8 +184,12 @@ func TestListSubscribers(t *testing.T) {
 			}
 
 			require.NoError(t, err)
-			require.Equal(t, tt.want, f.repo.subscriberFilter)
-			require.Equal(t, tt.want.PerPage, got.PerPage)
+			require.Equal(t, tt.wantStatus, f.repo.subscriberFilter.Status)
+			require.Equal(t, tt.wantQuery, f.repo.subscriberFilter.Query)
+			require.Equal(t, tt.wantPage, f.repo.subscriberFilter.PageRequest.Page)
+			require.Equal(t, tt.wantPerPage, f.repo.subscriberFilter.PageRequest.Limit)
+			require.Equal(t, tt.wantPerPage, got.OffsetPerPage)
+			require.Equal(t, tt.wantPerPage, got.Limit)
 		})
 	}
 }
@@ -749,17 +761,21 @@ func TestListIssues(t *testing.T) {
 	t.Parallel()
 
 	tests := []struct {
-		name    string
-		filter  domain.IssueFilter
-		setup   func(f *fixture)
-		want    domain.IssueFilter
-		wantErr error
+		name        string
+		filter      domain.IssueFilter
+		setup       func(f *fixture)
+		wantStatus  domain.IssueStatus
+		wantPage    int
+		wantPerPage int
+		wantErr     error
 	}{
-		{name: "defaults the page", want: domain.IssueFilter{Page: 1, PerPage: defaultPerPage}},
+		{name: "defaults the page", wantPage: 1, wantPerPage: defaultPerPage},
 		{
-			name:   "caps the page size",
-			filter: domain.IssueFilter{Status: domain.IssueSent, Page: 2, PerPage: 1000},
-			want:   domain.IssueFilter{Status: domain.IssueSent, Page: 2, PerPage: maxPerPage},
+			name:        "caps the page size",
+			filter:      domain.IssueFilter{Status: domain.IssueSent, Page: 2, PerPage: 1000},
+			wantStatus:  domain.IssueSent,
+			wantPage:    2,
+			wantPerPage: maxPerPage,
 		},
 		{name: "unknown status", filter: domain.IssueFilter{Status: "lost"}, wantErr: domain.ErrValidation},
 		{name: "store fails", setup: func(f *fixture) { f.repo.failOn("ListIssues", errBoom) }, wantErr: errBoom},
@@ -774,14 +790,18 @@ func TestListIssues(t *testing.T) {
 				tt.setup(f)
 			}
 
-			_, err := f.svc.ListIssues(t.Context(), tt.filter)
+			got, err := f.svc.ListIssues(t.Context(), tt.filter)
 			if tt.wantErr != nil {
 				require.ErrorIs(t, err, tt.wantErr)
 				return
 			}
 
 			require.NoError(t, err)
-			require.Equal(t, tt.want, f.repo.issueFilter)
+			require.Equal(t, tt.wantStatus, f.repo.issueFilter.Status)
+			require.Equal(t, tt.wantPage, f.repo.issueFilter.Page)
+			require.Equal(t, tt.wantPerPage, f.repo.issueFilter.PerPage)
+			require.Equal(t, tt.wantPerPage, got.OffsetPerPage)
+			require.Equal(t, tt.wantPerPage, got.Limit)
 		})
 	}
 }

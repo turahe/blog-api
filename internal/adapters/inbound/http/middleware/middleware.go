@@ -9,14 +9,15 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
+	pklogger "github.com/turahe/pkg/logger"
+
 	"github.com/turahe/blog-api/internal/adapters/inbound/http/responses"
 	"github.com/turahe/blog-api/internal/adapters/inbound/http/swagger"
 	"github.com/turahe/blog-api/internal/adapters/inbound/routes"
-	"github.com/turahe/blog-api/internal/platform/logging"
 )
 
 // RequestID attaches a correlation id to the Gin context, the request's
-// context.Context (see logging.WithRequestID), and the response headers.
+// context.Context (see logger.WithCorrelationID), and the response headers.
 func RequestID() gin.HandlerFunc {
 	return func(c *gin.Context) {
 		id := c.GetHeader("X-Request-ID")
@@ -25,7 +26,7 @@ func RequestID() gin.HandlerFunc {
 		}
 
 		c.Set(responses.ContextRequestIDKey, id)
-		c.Request = c.Request.WithContext(logging.WithRequestID(c.Request.Context(), id))
+		c.Request = c.Request.WithContext(pklogger.WithCorrelationID(c.Request.Context(), id))
 		c.Header("X-Request-ID", id)
 		c.Next()
 	}
@@ -100,8 +101,6 @@ func Recovery(logger *slog.Logger) gin.HandlerFunc {
 				"panic", recovered,
 				"stack", string(debug.Stack()),
 			)
-			// The resulting 500 access log must not report this panic a second time.
-			c.Request = c.Request.WithContext(logging.MarkReported(c.Request.Context()))
 
 			if c.Writer.Written() {
 				c.Abort()

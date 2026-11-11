@@ -8,9 +8,10 @@ import (
 	"time"
 
 	"github.com/google/uuid"
-	"github.com/turahe/blog-api/internal/core/event"
-	"github.com/turahe/blog-api/internal/platform/logging"
+	pklogger "github.com/turahe/pkg/logger"
 	"gorm.io/gorm"
+
+	"github.com/turahe/blog-api/internal/core/event"
 )
 
 // Envelope header names, matching the EventEnvelope trait in docs/architecture/asyncapi.yaml.
@@ -113,7 +114,7 @@ func envelopeHeaders(ctx context.Context, e event.Event) map[string]string {
 		headers[HeaderActorID] = e.ActorID.String()
 	}
 
-	if id := logging.RequestID(ctx); id != "" {
+	if id := pklogger.GetCorrelationID(ctx); id != "" {
 		headers[HeaderCorrelationID] = id
 	}
 

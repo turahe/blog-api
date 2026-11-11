@@ -259,10 +259,11 @@ func TestAdminListCommentsParsesFilters(t *testing.T) {
 	svc := &fakeModerationService{listFn: func(_ context.Context, in commentservice.AdminListInput) (commentdomain.ListResult, error) {
 		got = in
 
+		total := int64(1)
 		return commentdomain.ListResult{Items: []commentdomain.Comment{{
 			UUID: testCommentID, PostUUID: testPostID, Content: "kept", Status: commentdomain.StatusDeleted,
 			CreatedAt: testTime, UpdatedAt: testTime,
-		}}, Page: 1, PerPage: 20, Total: 1}, nil
+		}}, OffsetPage: 1, OffsetPerPage: 20, Total: &total}, nil
 	}}
 	c, w := commentContext(nethttp.MethodGet,
 		"/?status=spam,+rejected&status=deleted&sort=newest&postId="+testPostID.String(), "", &testUserID, "")

@@ -24,7 +24,9 @@ type stubSearcher struct {
 
 func (s *stubSearcher) SearchPublished(_ context.Context, filter postdomain.SearchFilter) (postdomain.SearchResult, error) {
 	s.filter = filter
-	s.result.Page, s.result.PerPage = filter.Page, filter.PerPage
+	s.result.OffsetPage = filter.Page
+	s.result.OffsetPerPage = filter.Limit
+	s.result.Limit = filter.Limit
 
 	return s.result, nil
 }
@@ -49,7 +51,8 @@ func TestListPublishedPostsSearch(t *testing.T) {
 
 	category := uuid.New()
 	post := postdomain.Post{UUID: uuid.New(), AuthorUUID: uuid.New(), Title: "Go <generics>", Status: postdomain.StatusPublished}
-	searcher := &stubSearcher{result: postdomain.SearchResult{Total: 1, Items: []postdomain.SearchHit{{
+	total := int64(1)
+	searcher := &stubSearcher{result: postdomain.SearchResult{Total: &total, Items: []postdomain.SearchHit{{
 		Post: post, Rank: 0.5, Title: "Go &lt;<mark>generics</mark>&gt;", Snippet: "about <mark>generics</mark>",
 	}}}}
 	posts := postservice.New(nil, nil, nil).WithSearch(searcher)
@@ -60,7 +63,7 @@ func TestListPublishedPostsSearch(t *testing.T) {
 	require.Equal(t, nethttp.StatusOK, code)
 	assert.Equal(t, "generics", searcher.filter.Query)
 	assert.Equal(t, 2, searcher.filter.Page)
-	assert.Equal(t, 5, searcher.filter.PerPage)
+	assert.Equal(t, 5, searcher.filter.Limit)
 	require.NotNil(t, searcher.filter.CategoryUUID)
 	assert.Equal(t, category, *searcher.filter.CategoryUUID)
 

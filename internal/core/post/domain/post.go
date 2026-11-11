@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/turahe/blog-api/internal/shared/pagination"
 )
 
 // Post errors.
@@ -108,17 +109,17 @@ type Post struct {
 }
 
 // ListFilter pages public post listings.
+// Page/PerPage legacy fields are kept for backward compat but services and
+// repositories now read the embedded pagination.PageRequest set by handlers.
 type ListFilter struct {
-	Page         int
-	PerPage      int
+	pagination.PageRequest
 	CategoryUUID *uuid.UUID
 	TagUUID      *uuid.UUID
 }
 
 // AdminListFilter selects and pages posts in the admin list.
 type AdminListFilter struct {
-	Page            int
-	PerPage         int
+	pagination.PageRequest
 	Status          string
 	AuthorUUID      *uuid.UUID
 	CategoryUUID    *uuid.UUID
@@ -147,9 +148,4 @@ type UpdateInput struct {
 }
 
 // ListResult is a page of posts.
-type ListResult struct {
-	Items   []Post
-	Total   int64
-	Page    int
-	PerPage int
-}
+type ListResult = pagination.PageResult[Post]

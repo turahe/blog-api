@@ -3,12 +3,25 @@ package persistence
 import (
 	"context"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/google/uuid"
 	"github.com/turahe/blog-api/internal/core/newsletter/domain"
+	"github.com/turahe/blog-api/internal/shared/pagination"
 	"gorm.io/gorm"
 )
+
+var newsletterIssuesCfg = pagination.CursorConfig{
+	Kind: "newsletter_issues_admin",
+	Sort: []pagination.SortField{
+		{Name: "published_at", Column: "i.created_at", Dir: pagination.Desc, Type: pagination.TypeTime},
+		{Name: "id", Column: "i.id", Dir: pagination.Desc, Type: pagination.TypeInt64},
+	},
+	TTL:            pagination.DefaultTTL,
+	MaxPerPage:     pagination.DefaultMaxPerPage,
+	DefaultPerPage: pagination.DefaultPerPage,
+}
 
 type newsletterIssueRow struct {
 	ID            int64
@@ -101,25 +114,119 @@ func (r *NewsletterRepository) Issue(ctx context.Context, id uuid.UUID) (domain.
 	return issues[0], nil
 }
 
-// ListIssues returns one page of issues, newest first.
+// ListIssues returns one page of issues, newest first. Uses cursor-based keyset
+// pagination when after/before cursors are present, and offset pagination when
+// the caller provides only page/perPage via ModeOffset.
 func (r *NewsletterRepository) ListIssues(ctx context.Context, filter domain.IssueFilter) (domain.IssuePage, error) {
-	clause, args := "", []any{}
-	if filter.Status != "" {
-		clause, args = ` WHERE i.status = ?`, append(args, string(filter.Status))
+	pr := filter.PageRequest
+	if pr.Limit <= 0 {
+		pr.Limit = newsletterIssuesCfg.DefaultPerPage
 	}
 
-	var total int64
-	if err := conn(ctx, r.db).Raw(`SELECT count(*) FROM newsletter_issues i`+clause, args...).Scan(&total).Error; err != nil {
-		return domain.IssuePage{}, fmt.Errorf("count newsletter issues: %w", err)
+	var cursorFields map[string]any
+	if pr.Mode == pagination.ModeCursor && pr.Cursor != "" {
+		decoded, _, err := pagination.DecodeCursor(newsletterIssuesCfg, pr.Cursor)
+		if err != nil {
+			return domain.IssuePage{}, err
+		}
+		if err := pagination.ValidateCursor(newsletterIssuesCfg, decoded); err != nil {
+			return domain.IssuePage{}, err
+		}
+		cursorFields = decoded
 	}
-
-	items, err := r.issues(ctx, newsletterIssueSelect+clause+` ORDER BY i.created_at DESC, i.id DESC LIMIT ? OFFSET ?`,
-		append(args, filter.PerPage, (filter.Page-1)*filter.PerPage)...)
+	seek, err := pagination.BuildSeek(newsletterIssuesCfg, pr, cursorFields)
 	if err != nil {
 		return domain.IssuePage{}, err
 	}
 
-	return domain.IssuePage{Items: items, Page: filter.Page, PerPage: filter.PerPage, Total: total}, nil
+	where, args := []string{"TRUE"}, []any{}
+	if filter.Status != "" {
+		where, args = append(where, "i.status = ?"), append(args, string(filter.Status))
+	}
+
+	if seek.WhereClause != "" {
+		where = append(where, seek.WhereClause)
+		args = append(args, seek.BindVars...)
+	}
+
+	clause := " WHERE " + strings.Join(where, " AND ")
+
+	var out domain.IssuePage
+	if pr.IncludeTotal {
+		var total int64
+		if err := conn(ctx, r.db).Raw(`SELECT count(*) FROM newsletter_issues i`+clause, args...).Scan(&total).Error; err != nil {
+			return domain.IssuePage{}, fmt.Errorf("count newsletter issues: %w", err)
+		}
+		out.Total = &total
+	}
+
+	query := newsletterIssueSelect + clause + " " + seek.OrderClause + " LIMIT ?"
+	queryArgs := append([]any{}, args...)
+	queryArgs = append(queryArgs, seek.LimitFetch)
+	if pr.Mode == pagination.ModeOffset {
+		query += " OFFSET ?"
+		queryArgs = append(queryArgs, pr.Offset)
+	}
+
+	items, err := r.issues(ctx, query, queryArgs...)
+	if err != nil {
+		return domain.IssuePage{}, err
+	}
+
+	if seek.ReverseDisplay {
+		for i, j := 0, len(items)-1; i < j; i, j = i+1, j-1 {
+			items[i], items[j] = items[j], items[i]
+		}
+	}
+
+	page, hasNext, hasPrev := pagination.TruncatePage(items, pr.Limit, pr.Forward, pr.Cursor != "")
+	out.Items = page
+	out.HasNextPage = hasNext
+	out.HasPreviousPage = hasPrev
+	out.Limit = pr.Limit
+	if pr.Mode == pagination.ModeOffset {
+		out.OffsetPage = pr.Page
+		out.OffsetPerPage = pr.Limit
+	}
+
+	if len(page) > 0 {
+		if out.HasNextPage {
+			fields := pagination.SortValues[domain.Issue](newsletterIssuesCfg, page[len(page)-1],
+				func(row domain.Issue, i int) any {
+					switch i {
+					case 0:
+						return row.CreatedAt
+					case 1:
+						return row.ID
+					}
+					return nil
+				})
+			cur, err := pagination.EncodeCursor(newsletterIssuesCfg, fields)
+			if err != nil {
+				return domain.IssuePage{}, err
+			}
+			out.NextCursor = cur
+		}
+		if out.HasPreviousPage {
+			fields := pagination.SortValues[domain.Issue](newsletterIssuesCfg, page[0],
+				func(row domain.Issue, i int) any {
+					switch i {
+					case 0:
+						return row.CreatedAt
+					case 1:
+						return row.ID
+					}
+					return nil
+				})
+			cur, err := pagination.EncodeCursor(newsletterIssuesCfg, fields)
+			if err != nil {
+				return domain.IssuePage{}, err
+			}
+			out.PreviousCursor = cur
+		}
+	}
+
+	return out, nil
 }
 
 // DueIssues returns scheduled issues due at now, oldest first.
@@ -183,7 +290,7 @@ func (r *NewsletterRepository) issues(ctx context.Context, query string, args ..
 	out := make([]domain.Issue, 0, len(rows))
 	for _, row := range rows {
 		out = append(out, domain.Issue{
-			UUID: row.UUID, Subject: row.Subject, Preheader: row.Preheader, BodyMarkdown: row.BodyMarkdown,
+			ID: row.ID, UUID: row.UUID, Subject: row.Subject, Preheader: row.Preheader, BodyMarkdown: row.BodyMarkdown,
 			Lists: byIssue[row.ID], Status: domain.IssueStatus(row.Status), SendAt: row.SendAt, QueuedAt: row.QueuedAt,
 			StartedAt: row.StartedAt, CompletedAt: row.CompletedAt, SentCount: row.SentCount, FailedCount: row.FailedCount,
 			CreatedBy: row.CreatedByUUID, UpdatedBy: row.UpdatedByUUID, CreatedAt: row.CreatedAt, UpdatedAt: row.UpdatedAt,

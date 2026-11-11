@@ -2,13 +2,16 @@
 
 # Targets:
 #   dev         live-reload toolchain image; expects the repo bind-mounted at /src (compose.dev.yaml)
-#   production  static binary on distroless (default: `docker build .` builds this)
+#   production  cgo binary on distroless (default: `docker build .` builds this)
+#
+# CGO is required because github.com/turahe/pkg/database imports mattn/go-sqlite3.
+# The runtime image is distroless/base (glibc), not distroless/static.
 
 ARG GO_VERSION=1.27
 
-FROM --platform=$BUILDPLATFORM golang:${GO_VERSION}-alpine AS deps
+FROM golang:${GO_VERSION}-bookworm AS deps
 WORKDIR /src
-ENV CGO_ENABLED=0
+ENV CGO_ENABLED=1
 COPY go.mod go.sum ./
 RUN go mod download
 
@@ -22,17 +25,15 @@ CMD ["air", "-c", ".air.toml", "--", "serve"]
 
 FROM deps AS build
 COPY . .
-ARG TARGETOS
-ARG TARGETARCH
 ARG VERSION=dev
 ARG COMMIT=unknown
 ARG BUILD_TIME=unknown
 RUN --mount=type=cache,target=/root/.cache/go-build \
-    GOOS=${TARGETOS:-linux} GOARCH=${TARGETARCH} go build -trimpath \
+    go build -trimpath \
     -ldflags="-s -w -X github.com/turahe/blog-api/cmd.version=${VERSION} -X github.com/turahe/blog-api/cmd.commit=${COMMIT} -X github.com/turahe/blog-api/cmd.buildTime=${BUILD_TIME}" \
     -o /out/app .
 
-FROM gcr.io/distroless/static-debian12:nonroot AS production
+FROM gcr.io/distroless/base-debian12:nonroot AS production
 COPY --from=build /out/app /bin/app
 EXPOSE 8080
 USER nonroot:nonroot

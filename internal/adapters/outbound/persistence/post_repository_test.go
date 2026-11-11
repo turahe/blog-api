@@ -2,13 +2,23 @@ package persistence
 
 import (
 	"context"
+	"os"
 	"testing"
 	"time"
 
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/require"
 	postdomain "github.com/turahe/blog-api/internal/core/post/domain"
+	"github.com/turahe/blog-api/internal/shared/pagination"
 )
+
+const repoTestKey = "repo-test-pagination-key-do-not-use-production-000000"
+
+func TestMain(m *testing.M) {
+	pagination.ResetGlobalSigner()
+	os.Setenv("APP_KEY", repoTestKey)
+	os.Exit(m.Run())
+}
 
 type postFixture struct {
 	author, category uuid.UUID
@@ -97,18 +107,26 @@ func TestPostRepositoryListPublishedPaginatesStablyAndFilters(t *testing.T) {
 	var seen []uuid.UUID
 
 	for page := 1; page <= 3; page++ {
-		result, err := repo.ListPublished(ctx, postdomain.ListFilter{Page: page, PerPage: 2, CategoryUUID: &category})
+		result, err := repo.ListPublished(ctx, postdomain.ListFilter{
+			PageRequest:  pagination.ParseLegacy(postListPublishedCfg, page, 2),
+			CategoryUUID: &category,
+		})
 		require.NoError(t, err)
-		require.Equal(t, int64(5), result.Total)
+		require.NotNil(t, result.Total)
+		require.Equal(t, int64(5), *result.Total)
 		seen = append(seen, postIDs(result.Items)...)
 	}
 
 	require.ElementsMatch(t, published, seen, "identical timestamps must not repeat or skip rows across pages")
 
 	tag := insertTag(t, tx, published[0], published[3])
-	result, err := repo.ListPublished(ctx, postdomain.ListFilter{Page: 1, PerPage: 10, TagUUID: &tag})
+	result, err := repo.ListPublished(ctx, postdomain.ListFilter{
+		PageRequest: pagination.ParseLegacy(postListPublishedCfg, 1, 10),
+		TagUUID:     &tag,
+	})
 	require.NoError(t, err)
-	require.Equal(t, int64(2), result.Total)
+	require.NotNil(t, result.Total)
+	require.Equal(t, int64(2), *result.Total)
 	require.ElementsMatch(t, []uuid.UUID{published[0], published[3]}, postIDs(result.Items))
 }
 
@@ -129,7 +147,7 @@ func TestPostRepositoryListAdminFilters(t *testing.T) {
 		t.Helper()
 
 		filter.AuthorUUID = &author
-		filter.Page, filter.PerPage = 1, 10
+		filter.PageRequest = pagination.ParseLegacy(postListPublishedCfg, 1, 10)
 		result, err := repo.ListAdmin(ctx, filter)
 		require.NoError(t, err)
 
@@ -144,7 +162,8 @@ func TestPostRepositoryListAdminFilters(t *testing.T) {
 	require.Equal(t, []uuid.UUID{gamma.UUID}, postIDs(list(postdomain.AdminListFilter{Trashed: true}).Items))
 
 	page := list(postdomain.AdminListFilter{})
-	require.Equal(t, int64(2), page.Total)
+	require.NotNil(t, page.Total)
+	require.Equal(t, int64(2), *page.Total)
 }
 
 func TestPostRepositoryGetPublishedBySlug(t *testing.T) {

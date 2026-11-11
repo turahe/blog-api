@@ -9,12 +9,13 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	userdomain "github.com/turahe/blog-api/internal/core/user/domain"
+	"github.com/turahe/blog-api/internal/shared/pagination"
 )
 
 type fakeUserRepo struct {
-	users       map[uuid.UUID]userdomain.User
-	listErr     error
-	page, limit int
+	users     map[uuid.UUID]userdomain.User
+	listErr   error
+	gotFilter userdomain.ListFilter
 }
 
 func (r *fakeUserRepo) FindByID(_ context.Context, id uuid.UUID) (userdomain.User, error) {
@@ -26,10 +27,10 @@ func (r *fakeUserRepo) FindByID(_ context.Context, id uuid.UUID) (userdomain.Use
 	return user, nil
 }
 
-func (r *fakeUserRepo) List(_ context.Context, page, perPage int) ([]userdomain.User, int64, error) {
-	r.page, r.limit = page, perPage
+func (r *fakeUserRepo) List(_ context.Context, filter userdomain.ListFilter) (userdomain.ListResult, error) {
+	r.gotFilter = filter
 	if r.listErr != nil {
-		return nil, 0, r.listErr
+		return userdomain.ListResult{}, r.listErr
 	}
 
 	out := make([]userdomain.User, 0, len(r.users))
@@ -37,7 +38,14 @@ func (r *fakeUserRepo) List(_ context.Context, page, perPage int) ([]userdomain.
 		out = append(out, user)
 	}
 
-	return out, int64(len(out)), nil
+	total := int64(len(out))
+	return userdomain.ListResult{
+		Items:         out,
+		Total:         &total,
+		Limit:         filter.Limit,
+		OffsetPage:    filter.Page,
+		OffsetPerPage: filter.Limit,
+	}, nil
 }
 
 func TestUserServiceGetByID(t *testing.T) {
@@ -74,11 +82,13 @@ func TestUserServiceListNormalisesPaging(t *testing.T) {
 
 			repo := &fakeUserRepo{users: map[uuid.UUID]userdomain.User{uuid.New(): {Username: "ada"}}}
 
-			users, total, err := New(repo).List(t.Context(), tt.page, tt.perPage)
+			result, err := New(repo).List(t.Context(), userdomain.ListFilter{
+				PageRequest: pagination.PageRequest{Page: tt.page, Limit: tt.perPage},
+			})
 			require.NoError(t, err)
-			assert.Len(t, users, 1)
-			assert.Equal(t, int64(1), total)
-			assert.Equal(t, [2]int{tt.wantPage, tt.wantPer}, [2]int{repo.page, repo.limit})
+			assert.Len(t, result.Items, 1)
+			assert.Equal(t, int64(1), *result.Total)
+			assert.Equal(t, [2]int{tt.wantPage, tt.wantPer}, [2]int{repo.gotFilter.Page, repo.gotFilter.Limit})
 		})
 	}
 }
@@ -88,6 +98,8 @@ func TestUserServiceListPassesThroughFailures(t *testing.T) {
 
 	boom := errors.New("boom")
 
-	_, _, err := New(&fakeUserRepo{listErr: boom}).List(t.Context(), 1, 20)
+	_, err := New(&fakeUserRepo{listErr: boom}).List(t.Context(), userdomain.ListFilter{
+		PageRequest: pagination.PageRequest{Page: 1, Limit: 20},
+	})
 	require.ErrorIs(t, err, boom)
 }

@@ -14,7 +14,10 @@ import (
 	postdomain "github.com/turahe/blog-api/internal/core/post/domain"
 	tagdomain "github.com/turahe/blog-api/internal/core/tag/domain"
 	tagservice "github.com/turahe/blog-api/internal/core/tag/service"
+	"github.com/turahe/blog-api/internal/shared/pagination"
 )
+
+func intPtr(v int64) *int64 { return &v }
 
 type fixedClock struct {
 	now time.Time
@@ -81,7 +84,7 @@ func newFakePostRepo(posts ...postdomain.Post) *fakePostRepo {
 func (f *fakePostRepo) ListPublished(_ context.Context, filter postdomain.ListFilter) (postdomain.ListResult, error) {
 	f.publicReads++
 
-	result := postdomain.ListResult{Page: filter.Page, PerPage: filter.PerPage}
+	result := postdomain.ListResult{OffsetPage: filter.Page, OffsetPerPage: filter.Limit}
 
 	for _, post := range f.posts {
 		if post.Status == postdomain.StatusPublished && post.DeletedAt == nil {
@@ -89,7 +92,8 @@ func (f *fakePostRepo) ListPublished(_ context.Context, filter postdomain.ListFi
 		}
 	}
 
-	result.Total = int64(len(result.Items))
+	total := int64(len(result.Items))
+	result.Total = &total
 
 	return result, nil
 }
@@ -269,24 +273,26 @@ func TestPostServiceListAdminClampsAndScopesAuthorFilter(t *testing.T) {
 
 	authorID := uuid.New()
 	scopeAuthorID := uuid.New()
-	want := postdomain.ListResult{Total: 3, Page: 1, PerPage: 20}
+	total := int64(3)
+	want := postdomain.ListResult{Total: &total, OffsetPage: 1, OffsetPerPage: 100}
 	repo := newFakePostRepo()
 	repo.listAdminResult = want
 	svc := New(repo, nil, fixedClock{})
 
-	got, err := svc.ListAdmin(context.Background(), postdomain.AdminListFilter{
-		Page:            0,
-		PerPage:         101,
+	filter := postdomain.AdminListFilter{
 		Status:          "  PUBLISHED  ",
 		AuthorUUID:      &authorID,
 		Query:           "  hello world  ",
 		ScopeAuthorUUID: &scopeAuthorID,
-	})
+	}
+	filter.PageRequest = pagination.ParseLegacy(postAdminListCfg, 0, 101)
+
+	got, err := svc.ListAdmin(context.Background(), filter)
 
 	require.NoError(t, err)
 	require.Equal(t, want, got)
 	require.Equal(t, 1, repo.listAdminFilter.Page)
-	require.Equal(t, 20, repo.listAdminFilter.PerPage)
+	require.Equal(t, 100, repo.listAdminFilter.Limit)
 	require.Equal(t, "published", repo.listAdminFilter.Status)
 	require.Equal(t, "hello world", repo.listAdminFilter.Query)
 	require.Equal(t, &scopeAuthorID, repo.listAdminFilter.AuthorUUID)

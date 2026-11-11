@@ -14,7 +14,7 @@ import (
 	"github.com/ThreeDotsLabs/watermill/message/router/middleware"
 	"github.com/ThreeDotsLabs/watermill/pubsub/gochannel"
 	"github.com/stretchr/testify/require"
-	"github.com/turahe/blog-api/internal/platform/logging"
+	pklogger "github.com/turahe/pkg/logger"
 )
 
 const testTopic = "test.topic"
@@ -125,7 +125,7 @@ func TestRouterRecoversPanicAndRetries(t *testing.T) {
 			panic("transient")
 		}
 
-		handled <- logging.RequestID(msg.Context())
+		handled <- pklogger.GetCorrelationID(msg.Context())
 
 		return nil
 	})

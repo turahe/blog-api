@@ -16,6 +16,7 @@ import (
 	commentdomain "github.com/turahe/blog-api/internal/core/comment/domain"
 	"github.com/turahe/blog-api/internal/core/comment/ports"
 	"github.com/turahe/blog-api/internal/core/event"
+	"github.com/turahe/blog-api/internal/shared/pagination"
 )
 
 const (
@@ -23,6 +24,22 @@ const (
 	maxAuthorNameRunes = 100
 	repliesPerThread   = 20
 )
+
+var commentsPublicListCfg = pagination.CursorConfig{
+	Kind:           "comments_public",
+	Sort:           []pagination.SortField{{Name: "created_at", Dir: pagination.Asc, Type: pagination.TypeTime}, {Name: "id", Dir: pagination.Asc, Type: pagination.TypeInt64}},
+	TTL:            pagination.DefaultTTL,
+	MaxPerPage:     pagination.DefaultMaxPerPage,
+	DefaultPerPage: pagination.DefaultPerPage,
+}
+
+var commentsMeListCfg = pagination.CursorConfig{
+	Kind:           "comments_me",
+	Sort:           []pagination.SortField{{Name: "created_at", Dir: pagination.Desc, Type: pagination.TypeTime}, {Name: "id", Dir: pagination.Desc, Type: pagination.TypeInt64}},
+	TTL:            pagination.DefaultTTL,
+	MaxPerPage:     pagination.DefaultMaxPerPage,
+	DefaultPerPage: pagination.DefaultPerPage,
+}
 
 // IDGenerator returns new UUIDs.
 type IDGenerator interface {
@@ -187,7 +204,11 @@ func (s *Service) store(ctx context.Context, comment commentdomain.Comment) (com
 
 // ListForPost lists public comments on a public post: roots by default, or the direct
 // replies of parentID. A post whose policy is disabled returns ErrCommentsDisabled.
-func (s *Service) ListForPost(ctx context.Context, postID uuid.UUID, parentID *uuid.UUID, page, perPage int) (commentdomain.ListResult, error) {
+func (s *Service) ListForPost(ctx context.Context, filter commentdomain.ListFilter) (commentdomain.ListResult, error) {
+	var postID uuid.UUID
+	if filter.PostUUID != nil {
+		postID = *filter.PostUUID
+	}
 	policy, err := s.repo.PostPolicy(ctx, postID)
 	if err != nil {
 		return commentdomain.ListResult{}, err
@@ -197,16 +218,20 @@ func (s *Service) ListForPost(ctx context.Context, postID uuid.UUID, parentID *u
 		return commentdomain.ListResult{}, err
 	}
 
-	page, perPage = normalizePage(page, perPage)
+	if filter.Mode == pagination.ModeOffset || filter.Page > 0 || filter.Page < 1 || filter.Limit < 1 {
+		norm := pagination.ParseLegacy(commentsPublicListCfg, filter.Page, filter.Limit)
+		filter.PageRequest = norm
+	}
+	if filter.Page <= 0 {
+		filter.Page = 1
+	}
 
-	return s.repo.List(ctx, commentdomain.ListFilter{
-		PostUUID:   &postID,
-		ParentUUID: parentID,
-		RootsOnly:  parentID == nil,
-		Statuses:   commentdomain.PublicStatuses,
-		Page:       page,
-		PerPage:    perPage,
-	})
+	filter.Statuses = commentdomain.PublicStatuses
+	if filter.ParentUUID == nil {
+		filter.RootsOnly = true
+	}
+
+	return s.repo.ListPublic(ctx, filter)
 }
 
 // GetThread returns a public comment with the first page of its public replies.
@@ -216,12 +241,14 @@ func (s *Service) GetThread(ctx context.Context, id uuid.UUID) (commentdomain.Th
 		return commentdomain.Thread{}, err
 	}
 
-	replies, err := s.repo.List(ctx, commentdomain.ListFilter{
+	repliesPr := pagination.ParseLegacy(commentsPublicListCfg, 1, repliesPerThread)
+	repliesFilter := commentdomain.ListFilter{
 		ParentUUID: &comment.UUID,
 		Statuses:   commentdomain.PublicStatuses,
-		Page:       1,
-		PerPage:    repliesPerThread,
-	})
+	}
+	repliesFilter.PageRequest = repliesPr
+
+	replies, err := s.repo.List(ctx, repliesFilter)
 	if err != nil {
 		return commentdomain.Thread{}, err
 	}
@@ -230,19 +257,22 @@ func (s *Service) GetThread(ctx context.Context, id uuid.UUID) (commentdomain.Th
 }
 
 // ListMine lists the caller's comments in any status except deleted, newest first.
-func (s *Service) ListMine(ctx context.Context, userID uuid.UUID, page, perPage int) (commentdomain.ListResult, error) {
-	page, perPage = normalizePage(page, perPage)
+func (s *Service) ListMine(ctx context.Context, filter commentdomain.ListFilter) (commentdomain.ListResult, error) {
+	if filter.Mode == pagination.ModeOffset || filter.Page > 0 || filter.Page < 1 || filter.Limit < 1 {
+		norm := pagination.ParseLegacy(commentsMeListCfg, filter.Page, filter.Limit)
+		filter.PageRequest = norm
+	}
+	if filter.Page <= 0 {
+		filter.Page = 1
+	}
 
-	return s.repo.List(ctx, commentdomain.ListFilter{
-		AuthorUUID: &userID,
-		Statuses: []commentdomain.Status{
-			commentdomain.StatusPending, commentdomain.StatusApproved, commentdomain.StatusFlagged,
-			commentdomain.StatusSpam, commentdomain.StatusRejected,
-		},
-		NewestFirst: true,
-		Page:        page,
-		PerPage:     perPage,
-	})
+	filter.Statuses = []commentdomain.Status{
+		commentdomain.StatusPending, commentdomain.StatusApproved, commentdomain.StatusFlagged,
+		commentdomain.StatusSpam, commentdomain.StatusRejected,
+	}
+	filter.NewestFirst = true
+
+	return s.repo.ListForMe(ctx, filter)
 }
 
 // Update edits the caller's own comment inside the edit window.

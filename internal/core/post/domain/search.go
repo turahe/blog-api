@@ -4,6 +4,7 @@ import (
 	"errors"
 
 	"github.com/google/uuid"
+	"github.com/turahe/blog-api/internal/shared/pagination"
 )
 
 // MaxSearchQueryLength caps a search query in characters.
@@ -13,10 +14,11 @@ const MaxSearchQueryLength = 200
 var ErrSearchUnavailable = errors.New("post search unavailable")
 
 // SearchFilter selects and pages a full-text search over published posts.
+// Search cannot use keyset cursors (rank is unstable) so the associated
+// CursorConfig should declare OffsetModeOnly:true.
 type SearchFilter struct {
+	pagination.PageRequest
 	Query        string
-	Page         int
-	PerPage      int
 	CategoryUUID *uuid.UUID
 	TagUUID      *uuid.UUID
 }
@@ -31,9 +33,4 @@ type SearchHit struct {
 }
 
 // SearchResult is a page of search hits, best match first.
-type SearchResult struct {
-	Items   []SearchHit
-	Total   int64
-	Page    int
-	PerPage int
-}
+type SearchResult = pagination.PageResult[SearchHit]

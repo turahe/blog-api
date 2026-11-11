@@ -10,7 +10,31 @@ import (
 	"github.com/turahe/blog-api/internal/core/audit"
 	"github.com/turahe/blog-api/internal/core/event"
 	"github.com/turahe/blog-api/internal/core/newsletter/domain"
+	"github.com/turahe/blog-api/internal/shared/pagination"
 )
+
+var subscribersListCfg = pagination.CursorConfig{
+	Kind: "newsletter_subscribers_admin",
+	Sort: []pagination.SortField{
+		{Name: "subscribed_at", Dir: pagination.Desc, Type: pagination.TypeTime},
+		{Name: "email", Dir: pagination.Asc, Type: pagination.TypeString},
+		{Name: "id", Dir: pagination.Desc, Type: pagination.TypeInt64},
+	},
+	TTL:            pagination.DefaultTTL,
+	MaxPerPage:     pagination.DefaultMaxPerPage,
+	DefaultPerPage: pagination.DefaultPerPage,
+}
+
+var issuesListCfg = pagination.CursorConfig{
+	Kind: "newsletter_issues_admin",
+	Sort: []pagination.SortField{
+		{Name: "published_at", Dir: pagination.Desc, Type: pagination.TypeTime},
+		{Name: "id", Dir: pagination.Desc, Type: pagination.TypeInt64},
+	},
+	TTL:            pagination.DefaultTTL,
+	MaxPerPage:     pagination.DefaultMaxPerPage,
+	DefaultPerPage: pagination.DefaultPerPage,
+}
 
 // ProviderConfig is the stored sending settings and the lists.
 type ProviderConfig struct {
@@ -97,7 +121,12 @@ func (s *Service) ListSubscribers(ctx context.Context, filter domain.SubscriberF
 		return domain.SubscriberPage{}, domain.Invalid("unknown status %q", filter.Status)
 	}
 
-	filter.Page, filter.PerPage = clampPage(filter.Page, filter.PerPage)
+	if filter.Limit < 1 {
+		filter.Page, filter.PerPage = clampPage(filter.Page, filter.PerPage)
+		filter.PageRequest = pagination.ParseLegacy(subscribersListCfg, filter.Page, filter.PerPage)
+	} else if filter.Limit > subscribersListCfg.MaxPerPage {
+		filter.Limit = subscribersListCfg.MaxPerPage
+	}
 
 	return s.Repo.ListSubscribers(ctx, filter)
 }
@@ -435,7 +464,12 @@ func (s *Service) ListIssues(ctx context.Context, filter domain.IssueFilter) (do
 		return domain.IssuePage{}, domain.Invalid("unknown status %q", filter.Status)
 	}
 
-	filter.Page, filter.PerPage = clampPage(filter.Page, filter.PerPage)
+	if filter.Limit < 1 {
+		filter.Page, filter.PerPage = clampPage(filter.Page, filter.PerPage)
+		filter.PageRequest = pagination.ParseLegacy(issuesListCfg, filter.Page, filter.PerPage)
+	} else if filter.Limit > issuesListCfg.MaxPerPage {
+		filter.Limit = issuesListCfg.MaxPerPage
+	}
 
 	return s.Repo.ListIssues(ctx, filter)
 }

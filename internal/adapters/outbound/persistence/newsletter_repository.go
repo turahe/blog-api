@@ -9,8 +9,21 @@ import (
 	"github.com/google/uuid"
 	"github.com/turahe/blog-api/internal/core/newsletter/domain"
 	"github.com/turahe/blog-api/internal/core/newsletter/ports"
+	"github.com/turahe/blog-api/internal/shared/pagination"
 	"gorm.io/gorm"
 )
+
+var newsletterSubscribersCfg = pagination.CursorConfig{
+	Kind: "newsletter_subscribers_admin",
+	Sort: []pagination.SortField{
+		{Name: "subscribed_at", Column: "s.created_at", Dir: pagination.Desc, Type: pagination.TypeTime},
+		{Name: "email", Column: "s.normalized_email", Dir: pagination.Asc, Type: pagination.TypeString},
+		{Name: "id", Column: "s.id", Dir: pagination.Desc, Type: pagination.TypeInt64},
+	},
+	TTL:            pagination.DefaultTTL,
+	MaxPerPage:     pagination.DefaultMaxPerPage,
+	DefaultPerPage: pagination.DefaultPerPage,
+}
 
 // NewsletterRepository stores newsletter lists, subscribers, tokens, consent history, issues,
 // and deliveries in PostgreSQL.
@@ -259,7 +272,30 @@ func saveMemberships(db *gorm.DB, subscriberID uuid.UUID, memberships []domain.M
 }
 
 // ListSubscribers returns one page filtered by status, list, and an email or name prefix.
+// Uses cursor-based keyset pagination when after/before cursors are present, and offset
+// pagination when the caller provides only page/perPage via ModeOffset.
 func (r *NewsletterRepository) ListSubscribers(ctx context.Context, filter domain.SubscriberFilter) (domain.SubscriberPage, error) {
+	pr := filter.PageRequest
+	if pr.Limit <= 0 {
+		pr.Limit = newsletterSubscribersCfg.DefaultPerPage
+	}
+
+	var cursorFields map[string]any
+	if pr.Mode == pagination.ModeCursor && pr.Cursor != "" {
+		decoded, _, err := pagination.DecodeCursor(newsletterSubscribersCfg, pr.Cursor)
+		if err != nil {
+			return domain.SubscriberPage{}, err
+		}
+		if err := pagination.ValidateCursor(newsletterSubscribersCfg, decoded); err != nil {
+			return domain.SubscriberPage{}, err
+		}
+		cursorFields = decoded
+	}
+	seek, err := pagination.BuildSeek(newsletterSubscribersCfg, pr, cursorFields)
+	if err != nil {
+		return domain.SubscriberPage{}, err
+	}
+
 	where, args := []string{"TRUE"}, []any{}
 
 	if filter.Status != "" {
@@ -279,20 +315,93 @@ func (r *NewsletterRepository) ListSubscribers(ctx context.Context, filter domai
 		args = append(args, pattern, pattern)
 	}
 
-	clause := " WHERE " + strings.Join(where, " AND ")
-
-	var total int64
-	if err := conn(ctx, r.db).Raw(`SELECT count(*) FROM newsletter_subscribers s`+clause, args...).Scan(&total).Error; err != nil {
-		return domain.SubscriberPage{}, fmt.Errorf("count newsletter subscribers: %w", err)
+	if seek.WhereClause != "" {
+		where = append(where, seek.WhereClause)
+		args = append(args, seek.BindVars...)
 	}
 
-	items, err := r.subscribers(ctx, newsletterSubscriberSelect+clause+` ORDER BY s.created_at DESC, s.id DESC LIMIT ? OFFSET ?`,
-		append(args, filter.PerPage, (filter.Page-1)*filter.PerPage)...)
+	clause := " WHERE " + strings.Join(where, " AND ")
+
+	var out domain.SubscriberPage
+	if pr.IncludeTotal {
+		var total int64
+		if err := conn(ctx, r.db).Raw(`SELECT count(*) FROM newsletter_subscribers s`+clause, args...).Scan(&total).Error; err != nil {
+			return domain.SubscriberPage{}, fmt.Errorf("count newsletter subscribers: %w", err)
+		}
+		out.Total = &total
+	}
+
+	query := newsletterSubscriberSelect + clause + " " + seek.OrderClause + " LIMIT ?"
+	queryArgs := append([]any{}, args...)
+	queryArgs = append(queryArgs, seek.LimitFetch)
+	if pr.Mode == pagination.ModeOffset {
+		query += " OFFSET ?"
+		queryArgs = append(queryArgs, pr.Offset)
+	}
+
+	items, err := r.subscribers(ctx, query, queryArgs...)
 	if err != nil {
 		return domain.SubscriberPage{}, err
 	}
 
-	return domain.SubscriberPage{Items: items, Page: filter.Page, PerPage: filter.PerPage, Total: total}, nil
+	if seek.ReverseDisplay {
+		for i, j := 0, len(items)-1; i < j; i, j = i+1, j-1 {
+			items[i], items[j] = items[j], items[i]
+		}
+	}
+
+	page, hasNext, hasPrev := pagination.TruncatePage(items, pr.Limit, pr.Forward, pr.Cursor != "")
+	out.Items = page
+	out.HasNextPage = hasNext
+	out.HasPreviousPage = hasPrev
+	out.Limit = pr.Limit
+	if pr.Mode == pagination.ModeOffset {
+		out.OffsetPage = pr.Page
+		out.OffsetPerPage = pr.Limit
+	}
+
+	if len(page) > 0 {
+		if out.HasNextPage {
+			fields := pagination.SortValues[domain.Subscriber](newsletterSubscribersCfg, page[len(page)-1],
+				func(row domain.Subscriber, i int) any {
+					switch i {
+					case 0:
+						return row.CreatedAt
+					case 1:
+						return strings.ToLower(strings.TrimSpace(row.Email))
+					case 2:
+						return row.ID
+					}
+					return nil
+				})
+			cur, err := pagination.EncodeCursor(newsletterSubscribersCfg, fields)
+			if err != nil {
+				return domain.SubscriberPage{}, err
+			}
+			out.NextCursor = cur
+		}
+		if out.HasPreviousPage {
+			fields := pagination.SortValues[domain.Subscriber](newsletterSubscribersCfg, page[0],
+				func(row domain.Subscriber, i int) any {
+					switch i {
+					case 0:
+						return row.CreatedAt
+					case 1:
+						return strings.ToLower(strings.TrimSpace(row.Email))
+					case 2:
+						return row.ID
+					}
+					return nil
+				})
+			cur, err := pagination.EncodeCursor(newsletterSubscribersCfg, fields)
+			if err != nil {
+				return domain.SubscriberPage{}, err
+			}
+			out.PreviousCursor = cur
+		}
+	}
+
+	return out, nil
 }
 
 func escapeLike(value string) string {
@@ -348,7 +457,7 @@ func (r *NewsletterRepository) subscribers(ctx context.Context, query string, ar
 	out := make([]domain.Subscriber, 0, len(rows))
 	for _, row := range rows {
 		out = append(out, domain.Subscriber{
-			UUID: row.UUID, Email: derefString(row.Email), DisplayName: derefString(row.DisplayName), UserID: row.UserUUID,
+			ID: row.ID, UUID: row.UUID, Email: derefString(row.Email), DisplayName: derefString(row.DisplayName), UserID: row.UserUUID,
 			Status: domain.Status(row.Status), Format: domain.Format(row.Format), Source: domain.Source(row.Source),
 			IPHash: derefString(row.IPHash), UserAgent: derefString(row.UserAgent), ConfirmSends: row.ConfirmSends,
 			ConfirmWindowStart: row.ConfirmWindowStartedAt, OptedInAt: row.OptedInAt, UnsubscribedAt: row.UnsubscribedAt,

@@ -7,6 +7,7 @@ import (
 
 	"github.com/turahe/blog-api/internal/core/audit/domain"
 	"github.com/turahe/blog-api/internal/core/audit/ports"
+	"github.com/turahe/blog-api/internal/shared/pagination"
 )
 
 const (
@@ -50,15 +51,27 @@ func (a *Activity) list(ctx context.Context, filter domain.ActivityFilter) (doma
 		return domain.ActivityPage{}, ErrInvalidRange
 	}
 
-	if filter.Page < 1 {
-		filter.Page = 1
+	if filter.PageRequest.Cursor == "" {
+		mode := filter.PageRequest.Mode
+		includeTotal := filter.PageRequest.IncludeTotal
+		forward := filter.PageRequest.Forward
+		pr := pagination.ParseLegacy(activityCursorCfg, filter.PageRequest.Page, filter.PageRequest.Limit)
+		pr.IncludeTotal = includeTotal
+		pr.Mode = mode
+		pr.Forward = pr.Forward || forward
+		filter.PageRequest = pr
 	}
-
-	if filter.PerPage < 1 {
-		filter.PerPage = defaultPerPage
-	}
-
-	filter.PerPage = min(filter.PerPage, maxPerPage)
 
 	return a.repo.Activity(ctx, filter)
+}
+
+var activityCursorCfg = pagination.CursorConfig{
+	Kind: "activity_logs",
+	Sort: []pagination.SortField{
+		{Name: "occurred_at", Column: "audit_logs.occurred_at", Dir: pagination.Desc, Type: pagination.TypeTime},
+		{Name: "id", Column: "audit_logs.id", Dir: pagination.Desc, Type: pagination.TypeInt64},
+	},
+	TTL:            pagination.DefaultTTL,
+	MaxPerPage:     maxPerPage,
+	DefaultPerPage: defaultPerPage,
 }

@@ -3,7 +3,6 @@ package password_test
 import (
 	"encoding/base64"
 	"fmt"
-	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -18,7 +17,7 @@ func TestHashAndCompare(t *testing.T) {
 	hasher := password.New()
 	encoded, err := hasher.Hash("correct horse battery staple")
 	require.NoError(t, err)
-	require.True(t, strings.HasPrefix(encoded, "$argon2id$v=19$"))
+	require.Contains(t, encoded, "$argon2id$v=19$m=65536,t=3,p=2$")
 	require.True(t, hasher.Compare(encoded, "correct horse battery staple"))
 	require.False(t, hasher.Compare(encoded, "wrong password"))
 	require.False(t, hasher.Compare("not-a-hash", "correct horse battery staple"))

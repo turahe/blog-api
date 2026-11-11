@@ -5,6 +5,7 @@ import (
 	"errors"
 	nethttp "net/http"
 	"net/http/httptest"
+	"os"
 	"testing"
 	"time"
 
@@ -18,7 +19,23 @@ import (
 	postports "github.com/turahe/blog-api/internal/core/post/ports"
 	postservice "github.com/turahe/blog-api/internal/core/post/service"
 	tagdomain "github.com/turahe/blog-api/internal/core/tag/domain"
+	"github.com/turahe/blog-api/internal/shared/pagination"
 )
+
+// testPaginationHMACKey is used across handler unit tests so cursor signer
+// has a stable key. Not a secret; only for in-process test coverage.
+const testPaginationHMACKey = "handler-test-key-do-not-use-in-production-0000"
+
+// TestMain seeds a fixed APP_KEY for all handler tests so GlobalSigner is
+// deterministic. It also resets any cached signer state between package runs.
+func TestMain(m *testing.M) {
+	pagination.ResetGlobalSigner()
+	os.Setenv("APP_KEY", testPaginationHMACKey)
+	os.Exit(m.Run())
+}
+
+// int64Ptr returns a pointer to n; helps construct *int64 values in test literals.
+func int64Ptr(n int64) *int64 { return &n }
 
 // fakePostRepo backs a real PostService; methods a test does not reach stay unimplemented.
 type fakePostRepo struct {
@@ -177,7 +194,7 @@ func TestAdminListPostsHandlerRequests(t *testing.T) {
 
 			svc := &fakePostAdminService{listAdminFn: func(_ context.Context, filter postdomain.AdminListFilter) (postdomain.ListResult, error) {
 				got = filter
-				return postdomain.ListResult{Page: 1, PerPage: 20}, tc.listErr
+				return postdomain.ListResult{OffsetPage: 1, OffsetPerPage: 20}, tc.listErr
 			}}
 			w, body := runProfile(t, adminListPostsHandlerWithDeps(svc, tc.roles), profileRequest{
 				method: nethttp.MethodGet, target: "/api/v1/admin/posts" + tc.query, user: tc.user,
