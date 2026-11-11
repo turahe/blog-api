@@ -98,11 +98,6 @@ func openTelemetryConfig(environment, version string) pkgconfig.OpenTelemetryCon
 		}
 	}
 
-	project := os.Getenv("OTEL_GCP_PROJECT_ID")
-	if project == "" {
-		project = os.Getenv("GOOGLE_CLOUD_PROJECT")
-	}
-
 	insecure := true
 	if strings.EqualFold(strings.TrimSpace(os.Getenv("OTEL_EXPORTER_OTLP_INSECURE")), "false") {
 		insecure = false
@@ -125,9 +120,7 @@ func openTelemetryConfig(environment, version string) pkgconfig.OpenTelemetryCon
 		ServiceVersion:   envOr("OTEL_SERVICE_VERSION", version),
 		TracesSamplerArg: sampler,
 		ShutdownTimeout:  otelShutdownTimeout(),
-		GCPProjectID:     project,
 		GORMEnabled:      !strings.EqualFold(os.Getenv("OTEL_GORM_ENABLED"), "false"),
-		GCPPropagator:    strings.EqualFold(strings.TrimSpace(os.Getenv("OTEL_GCP_PROPAGATOR")), "true"),
 	}
 }
 

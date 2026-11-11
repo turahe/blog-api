@@ -1,4 +1,4 @@
-.PHONY: test test-race test-integration test-brokers asyncapi-validate coverage lint routes-check swagger dev-keys infra-up infra-down docker-up docker-dev docker-down docker-push docker-build docker-logs docker-seed docker-migrate trivy bench bench-cursor bench-post
+.PHONY: test test-race test-integration test-brokers asyncapi-validate coverage lint vuln routes-check swagger dev-keys infra-up infra-down docker-up docker-dev docker-down docker-push docker-build docker-logs docker-seed docker-migrate trivy bench bench-cursor bench-post
 
 MODULE := github.com/turahe/blog-api
 TEST_PKGS := ./cmd/... ./internal/... ./docs/...
@@ -6,11 +6,12 @@ TEST_PKGS := ./cmd/... ./internal/... ./docs/...
 # Every target runs in Docker; only Docker (with Compose) is required on the host.
 # Go module and build caches live in named volumes so repeat runs stay fast.
 # github.com/turahe/pkg/database imports mattn/go-sqlite3, so every compile needs cgo and gcc.
-GO_IMAGE ?= golang:1.27.1
+GO_IMAGE ?= golang:1.27
 # -race needs cgo and a C toolchain; the Debian image ships gcc, alpine does not.
-GO_RACE_IMAGE ?= golang:1.27.1
+GO_RACE_IMAGE ?= golang:1.27
 GOLANGCI_LINT_IMAGE ?= golangci/golangci-lint:v2.14.0
 SWAG_VERSION ?= v1.16.6
+GOVULNCHECK_VERSION ?= latest
 ASYNCAPI_CLI_VERSION ?= 6.2.0
 # Containers run as root; files they write are chowned back to the host user.
 HOST_UID_GID := $(shell id -u):$(shell id -g)
@@ -100,6 +101,13 @@ lint:
 		-v blog-api-golangci-cache:/root/.cache \
 		-v blog-api-go-mod-cache:/go/pkg/mod \
 		$(GOLANGCI_LINT_IMAGE) golangci-lint run $(LINT_ARGS) ./...
+
+# Scan Go source and dependencies for known CVEs (needs network for the vuln DB).
+# Extra flags via VULN_ARGS, e.g. `make vuln VULN_ARGS=-show=verbose`.
+VULN_ARGS ?=
+
+vuln:
+	$(DOCKER_GO) $(GO_IMAGE) go run golang.org/x/vuln/cmd/govulncheck@$(GOVULNCHECK_VERSION) $(VULN_ARGS) ./...
 
 # Regenerate OpenAPI (docs/) from swag annotations.
 swagger:
