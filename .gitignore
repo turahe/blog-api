@@ -12,6 +12,7 @@ __pycache__/
 *.py[cod]
 data/
 coverage.html
+.scannerwork/
 .vscode/
 .cursor/
 .trae/
