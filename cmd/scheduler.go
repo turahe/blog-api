@@ -11,6 +11,7 @@ import (
 	"text/tabwriter"
 	"time"
 
+	goredis "github.com/redis/go-redis/v9"
 	"github.com/spf13/cobra"
 	"github.com/turahe/blog-api/internal/adapters/inbound/scheduler"
 	"github.com/turahe/blog-api/internal/adapters/outbound/cache"
@@ -21,9 +22,7 @@ import (
 	mediaservice "github.com/turahe/blog-api/internal/core/media/service"
 	"github.com/turahe/blog-api/internal/core/readcache"
 	"github.com/turahe/blog-api/internal/platform/config"
-	"github.com/turahe/blog-api/internal/platform/connect"
 	pkgdb "github.com/turahe/pkg/database"
-	pkgredis "github.com/turahe/pkg/redis"
 )
 
 const (
@@ -177,17 +176,28 @@ func withScheduler(
 
 // schedulerCache connects to the public read cache so erasures can invalidate it. It returns a
 // nil cache when caching is disabled or Redis is unreachable; cached reads then expire by TTL.
+// Uses a process-local client (not the shared pkg redis singleton) so parallel tests and the
+// scheduler binary do not race on global Redis setup.
 func schedulerCache(ctx context.Context, cfg config.Config, logger *slog.Logger) (readcache.Cache, func()) {
 	if !cfg.CacheEnabled {
 		return nil, func() {}
 	}
 
-	if err := connect.OpenRedis(ctx, cfg.RedisURL()); err != nil {
+	opts, err := goredis.ParseURL(cfg.RedisURL())
+	if err != nil {
 		logger.Warn("read cache unavailable; erasures will not invalidate cached reads", "error", err)
 		return nil, func() {}
 	}
 
-	client := pkgredis.GetRedis()
+	client := goredis.NewClient(opts)
+	pingCtx, cancel := context.WithTimeout(ctx, 3*time.Second)
+	defer cancel()
+
+	if err := client.Ping(pingCtx).Err(); err != nil {
+		_ = client.Close()
+		logger.Warn("read cache unavailable; erasures will not invalidate cached reads", "error", err)
+		return nil, func() {}
+	}
 
 	return cache.NewRedis(client, bootstrap.CacheTTLs(cfg), logger), func() { _ = client.Close() }
 }

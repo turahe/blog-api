@@ -84,7 +84,7 @@ jobs:
           cache: true
 
       - name: Run tests with coverage
-        run: go test -covermode=atomic -coverprofile=coverage.out ./cmd/... ./internal/...
+        run: go test -count=1 -covermode=atomic -coverprofile=coverage.out ./cmd/... ./internal/...
 
       - name: SonarQube Scan
         uses: SonarSource/sonarqube-scan-action@v8

@@ -91,7 +91,7 @@ jobs:
         run: go build -o /tmp/blog-api .
 
       - name: Run tests
-        run: go test -race -shuffle=on -run=^$$ -coverprofile=coverage.out ./cmd/... ./internal/...
+        run: go test -race -shuffle=on -count=1 -covermode=atomic -coverprofile=coverage.out ./cmd/... ./internal/...
 
       - name: Upload coverage
         uses: codecov/codecov-action@v7

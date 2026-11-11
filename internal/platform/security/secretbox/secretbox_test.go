@@ -3,6 +3,7 @@ package secretbox
 import (
 	"bytes"
 	"encoding/base64"
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -36,7 +37,17 @@ func TestEncryptRoundTripAndTamper(t *testing.T) {
 	_, err = testBox(t, 2).Decrypt(a)
 	require.ErrorIs(t, err, ErrCiphertext, "a different key cannot open it")
 
-	tampered := a[:len(a)-2] + "AA"
+	// Flip a byte in the sealed payload. Editing the base64 string can be a no-op when
+	// only unused trailing bits change under RawStdEncoding.
+	encoded, ok := strings.CutPrefix(a, version)
+	require.True(t, ok)
+	sealed, err := base64.RawStdEncoding.DecodeString(encoded)
+	require.NoError(t, err)
+	require.NotEmpty(t, sealed)
+	sealed[len(sealed)/2] ^= 0xff
+	tampered := version + base64.RawStdEncoding.EncodeToString(sealed)
+	require.NotEqual(t, a, tampered)
+
 	_, err = box.Decrypt(tampered)
 	require.ErrorIs(t, err, ErrCiphertext)
 
