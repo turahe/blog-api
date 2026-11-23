@@ -2,7 +2,6 @@ package cmd
 
 import (
 	"errors"
-	"fmt"
 
 	"github.com/spf13/cobra"
 	"gorm.io/gorm"
@@ -46,7 +45,7 @@ func newMigrateActionCmd(name string, action func(*gorm.DB) error) *cobra.Comman
 
 			gormDB := db.DB()
 			if gormDB == nil {
-				return fmt.Errorf("gorm db not initialized")
+				return errors.New("gorm db not initialized")
 			}
 
 			return action(gormDB)

@@ -2,9 +2,11 @@ package persistence
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"os"
+	"slices"
 	"sync"
 
 	"gorm.io/gorm"
@@ -92,7 +94,7 @@ func MigrateModels() []any {
 // AutoMigrate creates or updates tables for MigrateModels.
 func AutoMigrate(db *gorm.DB) error {
 	if db == nil {
-		return fmt.Errorf("automigrate: nil db")
+		return errors.New("automigrate: nil db")
 	}
 
 	if err := db.Exec(`CREATE EXTENSION IF NOT EXISTS pgcrypto`).Error; err != nil {
@@ -109,7 +111,7 @@ func AutoMigrate(db *gorm.DB) error {
 // Migrate applies AutoMigrate and ensures posts.search_vector (generated column + GIN index).
 func Migrate(db *gorm.DB) error {
 	if db == nil {
-		return fmt.Errorf("migrate: nil db")
+		return errors.New("migrate: nil db")
 	}
 
 	migrateMu.Lock()
@@ -132,15 +134,15 @@ func Migrate(db *gorm.DB) error {
 // DropAll drops every MigrateModels table (destructive).
 func DropAll(db *gorm.DB) error {
 	if db == nil {
-		return fmt.Errorf("drop all: nil db")
+		return errors.New("drop all: nil db")
 	}
 
 	migrateMu.Lock()
 	defer migrateMu.Unlock()
 
 	models := MigrateModels()
-	for i := len(models) - 1; i >= 0; i-- {
-		if err := db.Migrator().DropTable(models[i]); err != nil {
+	for _, model := range slices.Backward(models) {
+		if err := db.Migrator().DropTable(model); err != nil {
 			return fmt.Errorf("drop table: %w", err)
 		}
 	}
@@ -156,7 +158,7 @@ func SchemaStatus(db *gorm.DB) error {
 // SchemaStatusTo writes present/missing lines to w.
 func SchemaStatusTo(db *gorm.DB, w io.Writer) error {
 	if db == nil {
-		return fmt.Errorf("schema status: nil db")
+		return errors.New("schema status: nil db")
 	}
 
 	migrateMu.Lock()
@@ -164,6 +166,7 @@ func SchemaStatusTo(db *gorm.DB, w io.Writer) error {
 
 	for _, model := range MigrateModels() {
 		name := schemaTableName(db, model)
+
 		state := "missing"
 		if db.Migrator().HasTable(model) {
 			state = "present"

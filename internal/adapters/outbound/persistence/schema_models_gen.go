@@ -11,9 +11,9 @@ import (
 
 // AnalyticsConsentsSchema maps analytics_consents for AutoMigrate.
 type AnalyticsConsentsSchema struct {
-	Id            int64      `gorm:"primaryKey;column:id"`
-	Uuid          uuid.UUID  `gorm:"column:uuid;type:uuid;default:gen_random_uuid()"`
-	SubjectId     int64      `gorm:"column:subject_id"`
+	ID            int64      `gorm:"primaryKey;column:id"`
+	UUID          uuid.UUID  `gorm:"column:uuid;type:uuid;default:gen_random_uuid()"`
+	SubjectID     int64      `gorm:"column:subject_id"`
 	Purpose       string     `gorm:"column:purpose"`
 	Status        string     `gorm:"column:status"`
 	PolicyVersion string     `gorm:"column:policy_version"`
@@ -21,13 +21,14 @@ type AnalyticsConsentsSchema struct {
 	WithdrawnAt   *time.Time `gorm:"column:withdrawn_at"`
 }
 
+// TableName returns the analytics_consents table name for GORM.
 func (AnalyticsConsentsSchema) TableName() string { return "analytics_consents" }
 
 // AnalyticsExportsSchema maps analytics_exports for AutoMigrate.
 type AnalyticsExportsSchema struct {
-	Id          int64      `gorm:"primaryKey;column:id"`
-	Uuid        uuid.UUID  `gorm:"column:uuid;type:uuid;default:gen_random_uuid()"`
-	UserId      int64      `gorm:"column:user_id"`
+	ID          int64      `gorm:"primaryKey;column:id"`
+	UUID        uuid.UUID  `gorm:"column:uuid;type:uuid;default:gen_random_uuid()"`
+	UserID      int64      `gorm:"column:user_id"`
 	Grain       string     `gorm:"column:grain"`
 	FirstDay    time.Time  `gorm:"column:first_day"`
 	LastDay     time.Time  `gorm:"column:last_day"`
@@ -43,30 +44,32 @@ type AnalyticsExportsSchema struct {
 	CompletedAt *time.Time `gorm:"column:completed_at"`
 }
 
+// TableName returns the analytics_exports table name for GORM.
 func (AnalyticsExportsSchema) TableName() string { return "analytics_exports" }
 
 // AnalyticsNavigationSchema maps analytics_navigation for AutoMigrate.
 type AnalyticsNavigationSchema struct {
-	Id             int64      `gorm:"primaryKey;column:id"`
-	Uuid           uuid.UUID  `gorm:"column:uuid;type:uuid"`
-	SubjectUuid    *uuid.UUID `gorm:"column:subject_uuid;type:uuid"`
+	ID             int64      `gorm:"primaryKey;column:id"`
+	UUID           uuid.UUID  `gorm:"column:uuid;type:uuid"`
+	SubjectUUID    *uuid.UUID `gorm:"column:subject_uuid;type:uuid"`
 	VisitorHash    string     `gorm:"column:visitor_hash"`
-	SessionId      uuid.UUID  `gorm:"column:session_id;type:uuid"`
+	SessionID      uuid.UUID  `gorm:"column:session_id;type:uuid"`
 	FromPath       *string    `gorm:"column:from_path"`
 	ToPath         string     `gorm:"column:to_path"`
 	TransitionType string     `gorm:"column:transition_type"`
 	OccurredAt     time.Time  `gorm:"column:occurred_at"`
 }
 
+// TableName returns the analytics_navigation table name for GORM.
 func (AnalyticsNavigationSchema) TableName() string { return "analytics_navigation" }
 
 // AnalyticsPageViewsSchema maps analytics_page_views for AutoMigrate.
 type AnalyticsPageViewsSchema struct {
-	Id          int64      `gorm:"primaryKey;column:id"`
-	Uuid        uuid.UUID  `gorm:"column:uuid;type:uuid"`
-	SubjectUuid *uuid.UUID `gorm:"column:subject_uuid;type:uuid"`
+	ID          int64      `gorm:"primaryKey;column:id"`
+	UUID        uuid.UUID  `gorm:"column:uuid;type:uuid"`
+	SubjectUUID *uuid.UUID `gorm:"column:subject_uuid;type:uuid"`
 	VisitorHash string     `gorm:"column:visitor_hash"`
-	SessionId   uuid.UUID  `gorm:"column:session_id;type:uuid"`
+	SessionID   uuid.UUID  `gorm:"column:session_id;type:uuid"`
 	Path        string     `gorm:"column:path"`
 	Referrer    *string    `gorm:"column:referrer"`
 	CountryCode *string    `gorm:"column:country_code"`
@@ -75,6 +78,7 @@ type AnalyticsPageViewsSchema struct {
 	OccurredAt  time.Time  `gorm:"column:occurred_at"`
 }
 
+// TableName returns the analytics_page_views table name for GORM.
 func (AnalyticsPageViewsSchema) TableName() string { return "analytics_page_views" }
 
 // AnalyticsRollupCohortsSchema maps analytics_rollup_cohorts for AutoMigrate.
@@ -87,6 +91,7 @@ type AnalyticsRollupCohortsSchema struct {
 	ComputedAt time.Time `gorm:"column:computed_at"`
 }
 
+// TableName returns the analytics_rollup_cohorts table name for GORM.
 func (AnalyticsRollupCohortsSchema) TableName() string { return "analytics_rollup_cohorts" }
 
 // AnalyticsRollupDimensionsSchema maps analytics_rollup_dimensions for AutoMigrate.
@@ -99,6 +104,7 @@ type AnalyticsRollupDimensionsSchema struct {
 	Visitors    int64     `gorm:"column:visitors"`
 }
 
+// TableName returns the analytics_rollup_dimensions table name for GORM.
 func (AnalyticsRollupDimensionsSchema) TableName() string { return "analytics_rollup_dimensions" }
 
 // AnalyticsRollupNavigationSchema maps analytics_rollup_navigation for AutoMigrate.
@@ -111,6 +117,7 @@ type AnalyticsRollupNavigationSchema struct {
 	Transitions int64     `gorm:"column:transitions"`
 }
 
+// TableName returns the analytics_rollup_navigation table name for GORM.
 func (AnalyticsRollupNavigationSchema) TableName() string { return "analytics_rollup_navigation" }
 
 // AnalyticsRollupPagesSchema maps analytics_rollup_pages for AutoMigrate.
@@ -126,6 +133,7 @@ type AnalyticsRollupPagesSchema struct {
 	FocusViews   int64     `gorm:"column:focus_views"`
 }
 
+// TableName returns the analytics_rollup_pages table name for GORM.
 func (AnalyticsRollupPagesSchema) TableName() string { return "analytics_rollup_pages" }
 
 // AnalyticsRollupReferrersSchema maps analytics_rollup_referrers for AutoMigrate.
@@ -137,6 +145,7 @@ type AnalyticsRollupReferrersSchema struct {
 	Visitors    int64     `gorm:"column:visitors"`
 }
 
+// TableName returns the analytics_rollup_referrers table name for GORM.
 func (AnalyticsRollupReferrersSchema) TableName() string { return "analytics_rollup_referrers" }
 
 // AnalyticsRollupSearchPositionsSchema maps analytics_rollup_search_positions for AutoMigrate.
@@ -147,6 +156,7 @@ type AnalyticsRollupSearchPositionsSchema struct {
 	Clicks      int64     `gorm:"column:clicks"`
 }
 
+// TableName returns the analytics_rollup_search_positions table name for GORM.
 func (AnalyticsRollupSearchPositionsSchema) TableName() string {
 	return "analytics_rollup_search_positions"
 }
@@ -157,10 +167,11 @@ type AnalyticsRollupSearchResultsSchema struct {
 	PeriodStart  time.Time `gorm:"primaryKey;column:period_start"`
 	Query        string    `gorm:"primaryKey;column:query"`
 	ResourceType string    `gorm:"primaryKey;column:resource_type"`
-	ResourceUuid uuid.UUID `gorm:"primaryKey;column:resource_uuid;type:uuid"`
+	ResourceUUID uuid.UUID `gorm:"primaryKey;column:resource_uuid;type:uuid"`
 	Clicks       int64     `gorm:"column:clicks"`
 }
 
+// TableName returns the analytics_rollup_search_results table name for GORM.
 func (AnalyticsRollupSearchResultsSchema) TableName() string {
 	return "analytics_rollup_search_results"
 }
@@ -178,6 +189,7 @@ type AnalyticsRollupSearchesSchema struct {
 	ClickSeconds      int64     `gorm:"column:click_seconds"`
 }
 
+// TableName returns the analytics_rollup_searches table name for GORM.
 func (AnalyticsRollupSearchesSchema) TableName() string { return "analytics_rollup_searches" }
 
 // AnalyticsRollupSiteSchema maps analytics_rollup_site for AutoMigrate.
@@ -199,15 +211,17 @@ type AnalyticsRollupSiteSchema struct {
 	ComputedAt         time.Time `gorm:"column:computed_at"`
 }
 
+// TableName returns the analytics_rollup_site table name for GORM.
 func (AnalyticsRollupSiteSchema) TableName() string { return "analytics_rollup_site" }
 
 // AnalyticsRollupStateSchema maps analytics_rollup_state for AutoMigrate.
 type AnalyticsRollupStateSchema struct {
-	Id        int64     `gorm:"primaryKey;column:id"`
+	ID        int64     `gorm:"primaryKey;column:id"`
 	Timezone  string    `gorm:"column:timezone"`
 	UpdatedAt time.Time `gorm:"column:updated_at"`
 }
 
+// TableName returns the analytics_rollup_state table name for GORM.
 func (AnalyticsRollupStateSchema) TableName() string { return "analytics_rollup_state" }
 
 // AnalyticsSaltsSchema maps analytics_salts for AutoMigrate.
@@ -217,66 +231,71 @@ type AnalyticsSaltsSchema struct {
 	CreatedAt time.Time `gorm:"column:created_at"`
 }
 
+// TableName returns the analytics_salts table name for GORM.
 func (AnalyticsSaltsSchema) TableName() string { return "analytics_salts" }
 
 // AnalyticsSearchClicksSchema maps analytics_search_clicks for AutoMigrate.
 type AnalyticsSearchClicksSchema struct {
-	Id           int64      `gorm:"primaryKey;column:id"`
-	Uuid         uuid.UUID  `gorm:"column:uuid;type:uuid"`
-	SearchUuid   uuid.UUID  `gorm:"column:search_uuid;type:uuid"`
-	SubjectUuid  *uuid.UUID `gorm:"column:subject_uuid;type:uuid"`
+	ID           int64      `gorm:"primaryKey;column:id"`
+	UUID         uuid.UUID  `gorm:"column:uuid;type:uuid"`
+	SearchUUID   uuid.UUID  `gorm:"column:search_uuid;type:uuid"`
+	SubjectUUID  *uuid.UUID `gorm:"column:subject_uuid;type:uuid"`
 	VisitorHash  string     `gorm:"column:visitor_hash"`
-	SessionId    uuid.UUID  `gorm:"column:session_id;type:uuid"`
+	SessionID    uuid.UUID  `gorm:"column:session_id;type:uuid"`
 	Position     int        `gorm:"column:position"`
 	ResourceType string     `gorm:"column:resource_type"`
-	ResourceUuid uuid.UUID  `gorm:"column:resource_uuid;type:uuid"`
+	ResourceUUID uuid.UUID  `gorm:"column:resource_uuid;type:uuid"`
 	OccurredAt   time.Time  `gorm:"column:occurred_at"`
 }
 
+// TableName returns the analytics_search_clicks table name for GORM.
 func (AnalyticsSearchClicksSchema) TableName() string { return "analytics_search_clicks" }
 
 // AnalyticsSearchesSchema maps analytics_searches for AutoMigrate.
 type AnalyticsSearchesSchema struct {
-	Id          int64      `gorm:"primaryKey;column:id"`
-	Uuid        uuid.UUID  `gorm:"column:uuid;type:uuid"`
-	SubjectUuid *uuid.UUID `gorm:"column:subject_uuid;type:uuid"`
+	ID          int64      `gorm:"primaryKey;column:id"`
+	UUID        uuid.UUID  `gorm:"column:uuid;type:uuid"`
+	SubjectUUID *uuid.UUID `gorm:"column:subject_uuid;type:uuid"`
 	VisitorHash string     `gorm:"column:visitor_hash"`
-	SessionId   uuid.UUID  `gorm:"column:session_id;type:uuid"`
+	SessionID   uuid.UUID  `gorm:"column:session_id;type:uuid"`
 	Query       string     `gorm:"column:query"`
 	ResultCount int        `gorm:"column:result_count"`
 	Filters     []byte     `gorm:"column:filters;type:jsonb"`
 	OccurredAt  time.Time  `gorm:"column:occurred_at"`
 }
 
+// TableName returns the analytics_searches table name for GORM.
 func (AnalyticsSearchesSchema) TableName() string { return "analytics_searches" }
 
 // AnalyticsSubjectFirstSeenSchema maps analytics_subject_first_seen for AutoMigrate.
 type AnalyticsSubjectFirstSeenSchema struct {
-	SubjectUuid uuid.UUID `gorm:"primaryKey;column:subject_uuid;type:uuid"`
+	SubjectUUID uuid.UUID `gorm:"primaryKey;column:subject_uuid;type:uuid"`
 	FirstSeenAt time.Time `gorm:"column:first_seen_at"`
 }
 
+// TableName returns the analytics_subject_first_seen table name for GORM.
 func (AnalyticsSubjectFirstSeenSchema) TableName() string { return "analytics_subject_first_seen" }
 
 // AnalyticsTimeSpentSchema maps analytics_time_spent for AutoMigrate.
 type AnalyticsTimeSpentSchema struct {
-	Id           int64      `gorm:"primaryKey;column:id"`
-	Uuid         uuid.UUID  `gorm:"column:uuid;type:uuid"`
-	SubjectUuid  *uuid.UUID `gorm:"column:subject_uuid;type:uuid"`
+	ID           int64      `gorm:"primaryKey;column:id"`
+	UUID         uuid.UUID  `gorm:"column:uuid;type:uuid"`
+	SubjectUUID  *uuid.UUID `gorm:"column:subject_uuid;type:uuid"`
 	VisitorHash  string     `gorm:"column:visitor_hash"`
-	SessionId    uuid.UUID  `gorm:"column:session_id;type:uuid"`
+	SessionID    uuid.UUID  `gorm:"column:session_id;type:uuid"`
 	Path         string     `gorm:"column:path"`
 	FocusSeconds int        `gorm:"column:focus_seconds"`
 	StartedAt    time.Time  `gorm:"column:started_at"`
 	LastSeenAt   time.Time  `gorm:"column:last_seen_at"`
 }
 
+// TableName returns the analytics_time_spent table name for GORM.
 func (AnalyticsTimeSpentSchema) TableName() string { return "analytics_time_spent" }
 
 // CasbinRulesSchema maps casbin_rules for AutoMigrate.
 type CasbinRulesSchema struct {
-	Id    int64     `gorm:"primaryKey;column:id"`
-	Uuid  uuid.UUID `gorm:"column:uuid;type:uuid;default:gen_random_uuid()"`
+	ID    int64     `gorm:"primaryKey;column:id"`
+	UUID  uuid.UUID `gorm:"column:uuid;type:uuid;default:gen_random_uuid()"`
 	Ptype *string   `gorm:"column:ptype"`
 	V0    *string   `gorm:"column:v0"`
 	V1    *string   `gorm:"column:v1"`
@@ -286,85 +305,91 @@ type CasbinRulesSchema struct {
 	V5    *string   `gorm:"column:v5"`
 }
 
+// TableName returns the casbin_rules table name for GORM.
 func (CasbinRulesSchema) TableName() string { return "casbin_rules" }
 
 // CommentFlagsSchema maps comment_flags for AutoMigrate.
 type CommentFlagsSchema struct {
-	Id             int64     `gorm:"primaryKey;column:id"`
-	Uuid           uuid.UUID `gorm:"column:uuid;type:uuid;default:gen_random_uuid()"`
-	CommentId      int64     `gorm:"column:comment_id"`
-	ReporterUserId *int64    `gorm:"column:reporter_user_id"`
-	ReporterIpHash *string   `gorm:"column:reporter_ip_hash"`
+	ID             int64     `gorm:"primaryKey;column:id"`
+	UUID           uuid.UUID `gorm:"column:uuid;type:uuid;default:gen_random_uuid()"`
+	CommentID      int64     `gorm:"column:comment_id"`
+	ReporterUserID *int64    `gorm:"column:reporter_user_id"`
+	ReporterIPHash *string   `gorm:"column:reporter_ip_hash"`
 	ReasonCode     string    `gorm:"column:reason_code"`
 	Details        *string   `gorm:"column:details"`
 	CreatedAt      time.Time `gorm:"column:created_at"`
 }
 
+// TableName returns the comment_flags table name for GORM.
 func (CommentFlagsSchema) TableName() string { return "comment_flags" }
 
 // CommentUpvotesSchema maps comment_upvotes for AutoMigrate.
 type CommentUpvotesSchema struct {
-	Id          int64     `gorm:"primaryKey;column:id"`
-	Uuid        uuid.UUID `gorm:"column:uuid;type:uuid;default:gen_random_uuid()"`
-	CommentId   int64     `gorm:"column:comment_id"`
-	VoterUserId int64     `gorm:"column:voter_user_id"`
+	ID          int64     `gorm:"primaryKey;column:id"`
+	UUID        uuid.UUID `gorm:"column:uuid;type:uuid;default:gen_random_uuid()"`
+	CommentID   int64     `gorm:"column:comment_id"`
+	VoterUserID int64     `gorm:"column:voter_user_id"`
 	CreatedAt   time.Time `gorm:"column:created_at"`
 }
 
+// TableName returns the comment_upvotes table name for GORM.
 func (CommentUpvotesSchema) TableName() string { return "comment_upvotes" }
 
 // ConsentSubjectsSchema maps consent_subjects for AutoMigrate.
 type ConsentSubjectsSchema struct {
-	Id         int64     `gorm:"primaryKey;column:id"`
-	Uuid       uuid.UUID `gorm:"column:uuid;type:uuid;default:gen_random_uuid()"`
+	ID         int64     `gorm:"primaryKey;column:id"`
+	UUID       uuid.UUID `gorm:"column:uuid;type:uuid;default:gen_random_uuid()"`
 	TokenHash  string    `gorm:"column:token_hash"`
-	UserId     *int64    `gorm:"column:user_id"`
+	UserID     *int64    `gorm:"column:user_id"`
 	CreatedAt  time.Time `gorm:"column:created_at"`
 	LastSeenAt time.Time `gorm:"column:last_seen_at"`
 }
 
+// TableName returns the consent_subjects table name for GORM.
 func (ConsentSubjectsSchema) TableName() string { return "consent_subjects" }
 
 // ImpersonationSessionsSchema maps impersonation_sessions for AutoMigrate.
 type ImpersonationSessionsSchema struct {
-	Id           int64      `gorm:"primaryKey;column:id"`
-	Uuid         uuid.UUID  `gorm:"column:uuid;type:uuid;default:gen_random_uuid()"`
-	ActorId      int64      `gorm:"column:actor_id"`
-	TargetId     int64      `gorm:"column:target_id"`
+	ID           int64      `gorm:"primaryKey;column:id"`
+	UUID         uuid.UUID  `gorm:"column:uuid;type:uuid;default:gen_random_uuid()"`
+	ActorID      int64      `gorm:"column:actor_id"`
+	TargetID     int64      `gorm:"column:target_id"`
 	State        string     `gorm:"column:state"`
 	Reason       string     `gorm:"column:reason"`
-	IpAddress    *string    `gorm:"column:ip_address"`
+	IPAddress    *string    `gorm:"column:ip_address"`
 	UserAgent    *string    `gorm:"column:user_agent"`
 	StartedAt    time.Time  `gorm:"column:started_at"`
 	ExpiresAt    time.Time  `gorm:"column:expires_at"`
 	EndedAt      *time.Time `gorm:"column:ended_at"`
 	EndReason    *string    `gorm:"column:end_reason"`
-	BaseFamilyId *uuid.UUID `gorm:"column:base_family_id;type:uuid"`
+	BaseFamilyID *uuid.UUID `gorm:"column:base_family_id;type:uuid"`
 }
 
+// TableName returns the impersonation_sessions table name for GORM.
 func (ImpersonationSessionsSchema) TableName() string { return "impersonation_sessions" }
 
 // NewsletterConsentAuditSchema maps newsletter_consent_audit for AutoMigrate.
 type NewsletterConsentAuditSchema struct {
-	Id           int64     `gorm:"primaryKey;column:id"`
-	SubscriberId int64     `gorm:"column:subscriber_id"`
+	ID           int64     `gorm:"primaryKey;column:id"`
+	SubscriberID int64     `gorm:"column:subscriber_id"`
 	Event        string    `gorm:"column:event"`
 	ListSlug     *string   `gorm:"column:list_slug"`
 	Source       string    `gorm:"column:source"`
 	ReasonCode   *string   `gorm:"column:reason_code"`
 	Feedback     *string   `gorm:"column:feedback"`
-	IpHash       *string   `gorm:"column:ip_hash"`
+	IPHash       *string   `gorm:"column:ip_hash"`
 	OccurredAt   time.Time `gorm:"column:occurred_at"`
 }
 
+// TableName returns the newsletter_consent_audit table name for GORM.
 func (NewsletterConsentAuditSchema) TableName() string { return "newsletter_consent_audit" }
 
 // NewsletterDeliveriesSchema maps newsletter_deliveries for AutoMigrate.
 type NewsletterDeliveriesSchema struct {
-	Id           int64      `gorm:"primaryKey;column:id"`
-	Uuid         uuid.UUID  `gorm:"column:uuid;type:uuid;default:gen_random_uuid()"`
-	IssueId      int64      `gorm:"column:issue_id"`
-	SubscriberId int64      `gorm:"column:subscriber_id"`
+	ID           int64      `gorm:"primaryKey;column:id"`
+	UUID         uuid.UUID  `gorm:"column:uuid;type:uuid;default:gen_random_uuid()"`
+	IssueID      int64      `gorm:"column:issue_id"`
+	SubscriberID int64      `gorm:"column:subscriber_id"`
 	Status       string     `gorm:"column:status"`
 	Attempts     int        `gorm:"column:attempts"`
 	Permanent    bool       `gorm:"column:permanent"`
@@ -374,20 +399,22 @@ type NewsletterDeliveriesSchema struct {
 	UpdatedAt    time.Time  `gorm:"column:updated_at"`
 }
 
+// TableName returns the newsletter_deliveries table name for GORM.
 func (NewsletterDeliveriesSchema) TableName() string { return "newsletter_deliveries" }
 
 // NewsletterIssueListsSchema maps newsletter_issue_lists for AutoMigrate.
 type NewsletterIssueListsSchema struct {
-	IssueId int64 `gorm:"primaryKey;column:issue_id"`
-	ListId  int64 `gorm:"primaryKey;column:list_id"`
+	IssueID int64 `gorm:"primaryKey;column:issue_id"`
+	ListID  int64 `gorm:"primaryKey;column:list_id"`
 }
 
+// TableName returns the newsletter_issue_lists table name for GORM.
 func (NewsletterIssueListsSchema) TableName() string { return "newsletter_issue_lists" }
 
 // NewsletterIssuesSchema maps newsletter_issues for AutoMigrate.
 type NewsletterIssuesSchema struct {
-	Id           int64      `gorm:"primaryKey;column:id"`
-	Uuid         uuid.UUID  `gorm:"column:uuid;type:uuid;default:gen_random_uuid()"`
+	ID           int64      `gorm:"primaryKey;column:id"`
+	UUID         uuid.UUID  `gorm:"column:uuid;type:uuid;default:gen_random_uuid()"`
 	Subject      string     `gorm:"column:subject"`
 	Preheader    string     `gorm:"column:preheader"`
 	BodyMarkdown string     `gorm:"column:body_markdown"`
@@ -404,24 +431,26 @@ type NewsletterIssuesSchema struct {
 	UpdatedAt    time.Time  `gorm:"column:updated_at"`
 }
 
+// TableName returns the newsletter_issues table name for GORM.
 func (NewsletterIssuesSchema) TableName() string { return "newsletter_issues" }
 
 // NewsletterListMembershipsSchema maps newsletter_list_memberships for AutoMigrate.
 type NewsletterListMembershipsSchema struct {
-	SubscriberId int64      `gorm:"primaryKey;column:subscriber_id"`
-	ListId       int64      `gorm:"primaryKey;column:list_id"`
+	SubscriberID int64      `gorm:"primaryKey;column:subscriber_id"`
+	ListID       int64      `gorm:"primaryKey;column:list_id"`
 	State        string     `gorm:"column:state"`
 	JoinedAt     *time.Time `gorm:"column:joined_at"`
 	LeftAt       *time.Time `gorm:"column:left_at"`
 	UpdatedAt    time.Time  `gorm:"column:updated_at"`
 }
 
+// TableName returns the newsletter_list_memberships table name for GORM.
 func (NewsletterListMembershipsSchema) TableName() string { return "newsletter_list_memberships" }
 
 // NewsletterListsSchema maps newsletter_lists for AutoMigrate.
 type NewsletterListsSchema struct {
-	Id          int64      `gorm:"primaryKey;column:id"`
-	Uuid        uuid.UUID  `gorm:"column:uuid;type:uuid;default:gen_random_uuid()"`
+	ID          int64      `gorm:"primaryKey;column:id"`
+	UUID        uuid.UUID  `gorm:"column:uuid;type:uuid;default:gen_random_uuid()"`
 	Slug        string     `gorm:"column:slug"`
 	Name        string     `gorm:"column:name"`
 	Description string     `gorm:"column:description"`
@@ -432,35 +461,37 @@ type NewsletterListsSchema struct {
 	UpdatedAt   time.Time  `gorm:"column:updated_at"`
 }
 
+// TableName returns the newsletter_lists table name for GORM.
 func (NewsletterListsSchema) TableName() string { return "newsletter_lists" }
 
 // NewsletterProviderConfigSchema maps newsletter_provider_config for AutoMigrate.
 type NewsletterProviderConfigSchema struct {
-	Id                  int64     `gorm:"primaryKey;column:id"`
+	ID                  int64     `gorm:"primaryKey;column:id"`
 	FromName            string    `gorm:"column:from_name"`
 	FromEmail           string    `gorm:"column:from_email"`
 	ReplyTo             string    `gorm:"column:reply_to"`
 	PostalAddress       string    `gorm:"column:postal_address"`
-	ConfirmTtlSeconds   int       `gorm:"column:confirm_ttl_seconds"`
+	ConfirmTTLSeconds   int       `gorm:"column:confirm_ttl_seconds"`
 	DoubleOptinRequired bool      `gorm:"column:double_optin_required"`
 	UpdatedBy           *int64    `gorm:"column:updated_by"`
 	UpdatedAt           time.Time `gorm:"column:updated_at"`
 }
 
+// TableName returns the newsletter_provider_config table name for GORM.
 func (NewsletterProviderConfigSchema) TableName() string { return "newsletter_provider_config" }
 
 // NewsletterSubscribersSchema maps newsletter_subscribers for AutoMigrate.
 type NewsletterSubscribersSchema struct {
-	Id                     int64      `gorm:"primaryKey;column:id"`
-	Uuid                   uuid.UUID  `gorm:"column:uuid;type:uuid;default:gen_random_uuid()"`
+	ID                     int64      `gorm:"primaryKey;column:id"`
+	UUID                   uuid.UUID  `gorm:"column:uuid;type:uuid;default:gen_random_uuid()"`
 	Email                  *string    `gorm:"column:email"`
 	NormalizedEmail        *string    `gorm:"column:normalized_email"`
 	DisplayName            *string    `gorm:"column:display_name"`
-	UserId                 *int64     `gorm:"column:user_id"`
+	UserID                 *int64     `gorm:"column:user_id"`
 	Status                 string     `gorm:"column:status"`
 	Format                 string     `gorm:"column:format"`
 	Source                 string     `gorm:"column:source"`
-	IpHash                 *string    `gorm:"column:ip_hash"`
+	IPHash                 *string    `gorm:"column:ip_hash"`
 	UserAgent              *string    `gorm:"column:user_agent"`
 	ConfirmSends           int        `gorm:"column:confirm_sends"`
 	ConfirmWindowStartedAt *time.Time `gorm:"column:confirm_window_started_at"`
@@ -473,47 +504,50 @@ type NewsletterSubscribersSchema struct {
 	UpdatedAt              time.Time  `gorm:"column:updated_at"`
 }
 
+// TableName returns the newsletter_subscribers table name for GORM.
 func (NewsletterSubscribersSchema) TableName() string { return "newsletter_subscribers" }
 
 // NewsletterTokensSchema maps newsletter_tokens for AutoMigrate.
 type NewsletterTokensSchema struct {
-	Id           int64      `gorm:"primaryKey;column:id"`
-	SubscriberId int64      `gorm:"column:subscriber_id"`
+	ID           int64      `gorm:"primaryKey;column:id"`
+	SubscriberID int64      `gorm:"column:subscriber_id"`
 	Purpose      string     `gorm:"column:purpose"`
 	TokenHash    string     `gorm:"column:token_hash"`
-	IssueId      *int64     `gorm:"column:issue_id"`
+	IssueID      *int64     `gorm:"column:issue_id"`
 	ExpiresAt    time.Time  `gorm:"column:expires_at"`
 	UsedAt       *time.Time `gorm:"column:used_at"`
 	CreatedAt    time.Time  `gorm:"column:created_at"`
 }
 
+// TableName returns the newsletter_tokens table name for GORM.
 func (NewsletterTokensSchema) TableName() string { return "newsletter_tokens" }
 
 // NotificationsSchema maps notifications for AutoMigrate.
 type NotificationsSchema struct {
-	Id          int64      `gorm:"primaryKey;column:id"`
-	Uuid        uuid.UUID  `gorm:"column:uuid;type:uuid;default:gen_random_uuid()"`
-	UserId      int64      `gorm:"column:user_id"`
+	ID          int64      `gorm:"primaryKey;column:id"`
+	UUID        uuid.UUID  `gorm:"column:uuid;type:uuid;default:gen_random_uuid()"`
+	UserID      int64      `gorm:"column:user_id"`
 	Type        string     `gorm:"column:type"`
 	Title       string     `gorm:"column:title"`
 	Body        string     `gorm:"column:body"`
 	Preview     string     `gorm:"column:preview"`
 	Payload     []byte     `gorm:"column:payload;type:jsonb"`
-	ActorUserId *int64     `gorm:"column:actor_user_id"`
+	ActorUserID *int64     `gorm:"column:actor_user_id"`
 	DedupeKey   *string    `gorm:"column:dedupe_key"`
 	ReadAt      *time.Time `gorm:"column:read_at"`
 	CreatedAt   time.Time  `gorm:"column:created_at"`
 }
 
+// TableName returns the notifications table name for GORM.
 func (NotificationsSchema) TableName() string { return "notifications" }
 
 // OutboxEventsSchema maps outbox_events for AutoMigrate.
 type OutboxEventsSchema struct {
-	Id            int64      `gorm:"primaryKey;column:id"`
-	Uuid          uuid.UUID  `gorm:"column:uuid;type:uuid;default:gen_random_uuid()"`
+	ID            int64      `gorm:"primaryKey;column:id"`
+	UUID          uuid.UUID  `gorm:"column:uuid;type:uuid;default:gen_random_uuid()"`
 	Topic         string     `gorm:"column:topic"`
 	AggregateType string     `gorm:"column:aggregate_type"`
-	AggregateId   *uuid.UUID `gorm:"column:aggregate_id;type:uuid"`
+	AggregateID   *uuid.UUID `gorm:"column:aggregate_id;type:uuid"`
 	Payload       []byte     `gorm:"column:payload;type:jsonb"`
 	Headers       []byte     `gorm:"column:headers;type:jsonb"`
 	OccurredAt    time.Time  `gorm:"column:occurred_at"`
@@ -524,13 +558,14 @@ type OutboxEventsSchema struct {
 	FailedAt      *time.Time `gorm:"column:failed_at"`
 }
 
+// TableName returns the outbox_events table name for GORM.
 func (OutboxEventsSchema) TableName() string { return "outbox_events" }
 
 // PostRevisionsSchema maps post_revisions for AutoMigrate.
 type PostRevisionsSchema struct {
-	Id                    int64      `gorm:"primaryKey;column:id"`
-	Uuid                  uuid.UUID  `gorm:"column:uuid;type:uuid;default:gen_random_uuid()"`
-	PostId                int64      `gorm:"column:post_id"`
+	ID                    int64      `gorm:"primaryKey;column:id"`
+	UUID                  uuid.UUID  `gorm:"column:uuid;type:uuid;default:gen_random_uuid()"`
+	PostID                int64      `gorm:"column:post_id"`
 	RevisionNumber        int        `gorm:"column:revision_number"`
 	RevisionType          string     `gorm:"column:revision_type"`
 	Title                 string     `gorm:"column:title"`
@@ -539,8 +574,8 @@ type PostRevisionsSchema struct {
 	Content               string     `gorm:"column:content"`
 	Status                string     `gorm:"column:status"`
 	CommentPolicy         string     `gorm:"column:comment_policy"`
-	CategoryUuid          *uuid.UUID `gorm:"column:category_uuid;type:uuid"`
-	CoverImageMediaUuid   *uuid.UUID `gorm:"column:cover_image_media_uuid;type:uuid"`
+	CategoryUUID          *uuid.UUID `gorm:"column:category_uuid;type:uuid"`
+	CoverImageMediaUUID   *uuid.UUID `gorm:"column:cover_image_media_uuid;type:uuid"`
 	TagsSnapshot          []byte     `gorm:"column:tags_snapshot;type:jsonb"`
 	MediaSnapshot         []byte     `gorm:"column:media_snapshot;type:jsonb"`
 	SeoSnapshot           []byte     `gorm:"column:seo_snapshot;type:jsonb"`
@@ -548,46 +583,48 @@ type PostRevisionsSchema struct {
 	Diff                  []byte     `gorm:"column:diff;type:jsonb"`
 	Changelog             string     `gorm:"column:changelog"`
 	EditorNote            string     `gorm:"column:editor_note"`
-	AuthorId              *int64     `gorm:"column:author_id"`
-	RestoreFromRevisionId *int64     `gorm:"column:restore_from_revision_id"`
-	ImpersonatorId        *int64     `gorm:"column:impersonator_id"`
-	RequestId             string     `gorm:"column:request_id"`
+	AuthorID              *int64     `gorm:"column:author_id"`
+	RestoreFromRevisionID *int64     `gorm:"column:restore_from_revision_id"`
+	ImpersonatorID        *int64     `gorm:"column:impersonator_id"`
+	RequestID             string     `gorm:"column:request_id"`
 	CreatedAt             time.Time  `gorm:"column:created_at"`
 }
 
+// TableName returns the post_revisions table name for GORM.
 func (PostRevisionsSchema) TableName() string { return "post_revisions" }
 
 // PostSeoSchema maps post_seo for AutoMigrate.
 type PostSeoSchema struct {
-	Id                 int64     `gorm:"primaryKey;column:id"`
-	Uuid               uuid.UUID `gorm:"column:uuid;type:uuid;default:gen_random_uuid()"`
-	PostId             int64     `gorm:"column:post_id"`
+	ID                 int64     `gorm:"primaryKey;column:id"`
+	UUID               uuid.UUID `gorm:"column:uuid;type:uuid;default:gen_random_uuid()"`
+	PostID             int64     `gorm:"column:post_id"`
 	SeoTitle           string    `gorm:"column:seo_title"`
 	SeoDescription     string    `gorm:"column:seo_description"`
 	SeoKeywords        []byte    `gorm:"column:seo_keywords;type:jsonb"`
 	OgTitle            string    `gorm:"column:og_title"`
 	OgDescription      string    `gorm:"column:og_description"`
-	OgImageId          *int64    `gorm:"column:og_image_id"`
-	OgUrl              string    `gorm:"column:og_url"`
+	OgImageID          *int64    `gorm:"column:og_image_id"`
+	OgURL              string    `gorm:"column:og_url"`
 	TwitterCard        string    `gorm:"column:twitter_card"`
 	TwitterTitle       string    `gorm:"column:twitter_title"`
 	TwitterDescription string    `gorm:"column:twitter_description"`
-	TwitterImageId     *int64    `gorm:"column:twitter_image_id"`
+	TwitterImageID     *int64    `gorm:"column:twitter_image_id"`
 	TwitterCreator     string    `gorm:"column:twitter_creator"`
-	CanonicalUrl       string    `gorm:"column:canonical_url"`
+	CanonicalURL       string    `gorm:"column:canonical_url"`
 	RobotsNoindex      bool      `gorm:"column:robots_noindex"`
 	RobotsNofollow     bool      `gorm:"column:robots_nofollow"`
 	CreatedAt          time.Time `gorm:"column:created_at"`
 	UpdatedAt          time.Time `gorm:"column:updated_at"`
 }
 
+// TableName returns the post_seo table name for GORM.
 func (PostSeoSchema) TableName() string { return "post_seo" }
 
 // PrivacyRequestsSchema maps privacy_requests for AutoMigrate.
 type PrivacyRequestsSchema struct {
-	Id          int64      `gorm:"primaryKey;column:id"`
-	Uuid        uuid.UUID  `gorm:"column:uuid;type:uuid;default:gen_random_uuid()"`
-	UserId      int64      `gorm:"column:user_id"`
+	ID          int64      `gorm:"primaryKey;column:id"`
+	UUID        uuid.UUID  `gorm:"column:uuid;type:uuid;default:gen_random_uuid()"`
+	UserID      int64      `gorm:"column:user_id"`
 	Kind        string     `gorm:"column:kind"`
 	Status      string     `gorm:"column:status"`
 	StorageKey  *string    `gorm:"column:storage_key"`
@@ -599,15 +636,17 @@ type PrivacyRequestsSchema struct {
 	CompletedAt *time.Time `gorm:"column:completed_at"`
 }
 
+// TableName returns the privacy_requests table name for GORM.
 func (PrivacyRequestsSchema) TableName() string { return "privacy_requests" }
 
 // ProcessedMessagesSchema maps processed_messages for AutoMigrate.
 type ProcessedMessagesSchema struct {
 	Consumer    string    `gorm:"primaryKey;column:consumer"`
-	MessageId   string    `gorm:"primaryKey;column:message_id"`
+	MessageID   string    `gorm:"primaryKey;column:message_id"`
 	ProcessedAt time.Time `gorm:"column:processed_at"`
 }
 
+// TableName returns the processed_messages table name for GORM.
 func (ProcessedMessagesSchema) TableName() string { return "processed_messages" }
 
 // ScheduledJobRunsSchema maps scheduled_job_runs for AutoMigrate.
@@ -619,12 +658,13 @@ type ScheduledJobRunsSchema struct {
 	Runs           int64      `gorm:"column:runs"`
 }
 
+// TableName returns the scheduled_job_runs table name for GORM.
 func (ScheduledJobRunsSchema) TableName() string { return "scheduled_job_runs" }
 
 // SettingsSchema maps settings for AutoMigrate.
 type SettingsSchema struct {
-	Id        int64     `gorm:"primaryKey;column:id"`
-	Uuid      uuid.UUID `gorm:"column:uuid;type:uuid;default:gen_random_uuid()"`
+	ID        int64     `gorm:"primaryKey;column:id"`
+	UUID      uuid.UUID `gorm:"column:uuid;type:uuid;default:gen_random_uuid()"`
 	Key       string    `gorm:"column:key"`
 	Value     []byte    `gorm:"column:value;type:jsonb"`
 	Version   int64     `gorm:"column:version"`
@@ -633,26 +673,28 @@ type SettingsSchema struct {
 	UpdatedAt time.Time `gorm:"column:updated_at"`
 }
 
+// TableName returns the settings table name for GORM.
 func (SettingsSchema) TableName() string { return "settings" }
 
 // SettingsHistorySchema maps settings_history for AutoMigrate.
 type SettingsHistorySchema struct {
-	Id            int64     `gorm:"primaryKey;column:id"`
-	Uuid          uuid.UUID `gorm:"column:uuid;type:uuid;default:gen_random_uuid()"`
+	ID            int64     `gorm:"primaryKey;column:id"`
+	UUID          uuid.UUID `gorm:"column:uuid;type:uuid;default:gen_random_uuid()"`
 	SettingKey    string    `gorm:"column:setting_key"`
 	PreviousValue []byte    `gorm:"column:previous_value;type:jsonb"`
 	NewValue      []byte    `gorm:"column:new_value;type:jsonb"`
 	Version       int64     `gorm:"column:version"`
 	ChangedBy     *int64    `gorm:"column:changed_by"`
-	RequestId     string    `gorm:"column:request_id"`
+	RequestID     string    `gorm:"column:request_id"`
 	CreatedAt     time.Time `gorm:"column:created_at"`
 }
 
+// TableName returns the settings_history table name for GORM.
 func (SettingsHistorySchema) TableName() string { return "settings_history" }
 
 // UserPrivacySettingsSchema maps user_privacy_settings for AutoMigrate.
 type UserPrivacySettingsSchema struct {
-	UserId              int64     `gorm:"primaryKey;column:user_id"`
+	UserID              int64     `gorm:"primaryKey;column:user_id"`
 	VisibilityProfile   string    `gorm:"column:visibility_profile"`
 	VisibilityEmail     bool      `gorm:"column:visibility_email"`
 	VisibilityContact   bool      `gorm:"column:visibility_contact"`
@@ -661,11 +703,12 @@ type UserPrivacySettingsSchema struct {
 	UpdatedAt           time.Time `gorm:"column:updated_at"`
 }
 
+// TableName returns the user_privacy_settings table name for GORM.
 func (UserPrivacySettingsSchema) TableName() string { return "user_privacy_settings" }
 
 // UserProfilesSchema maps user_profiles for AutoMigrate.
 type UserProfilesSchema struct {
-	UserId                    int64      `gorm:"primaryKey;column:user_id"`
+	UserID                    int64      `gorm:"primaryKey;column:user_id"`
 	DisplayName               *string    `gorm:"column:display_name"`
 	Bio                       string     `gorm:"column:bio"`
 	ContactWebsite            *string    `gorm:"column:contact_website"`
@@ -680,4 +723,5 @@ type UserProfilesSchema struct {
 	UpdatedAt                 time.Time  `gorm:"column:updated_at"`
 }
 
+// TableName returns the user_profiles table name for GORM.
 func (UserProfilesSchema) TableName() string { return "user_profiles" }

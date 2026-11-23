@@ -21,3 +21,7 @@ coverage.html
 .cursor/
 .trae/
 .data/.tmp-gopath/
+
+# local tool caches/binaries
+.bin/
+.cache/
