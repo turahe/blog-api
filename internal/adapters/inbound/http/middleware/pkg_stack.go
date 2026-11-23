@@ -1,6 +1,7 @@
 package middleware
 
 import (
+	"sync"
 	"time"
 
 	"github.com/gin-gonic/gin"
@@ -11,12 +12,28 @@ import (
 	"github.com/turahe/blog-api/internal/adapters/inbound/http/responses"
 )
 
+// pkgconfig.GetConfig lazily writes the global Config pointer without synchronization.
+// Parallel NewRouter tests (and any concurrent first use) race on that write; seed once
+// so CORS / mTLS / rate-limit only read a published config. connect.Install may still
+// replace Config at process startup before serving.
+var ensurePkgConfigOnce sync.Once
+
+func ensurePkgConfig() {
+	ensurePkgConfigOnce.Do(func() {
+		if pkgconfig.Config == nil {
+			pkgconfig.Config = &pkgconfig.Configuration{}
+		}
+	})
+}
+
 // PkgStack is the turahe/pkg production middleware order (recovery → trace →
 // instrumentation → logger → metrics → timeout → CORS → mTLS → rate limit), plus a
 // bridge that copies the correlation id onto the Gin context for this API's envelope.
 // Domain middleware (SecurityHeaders, MaxInFlight, Audit, CacheBypass, Sentry Tracing)
 // is layered by the caller.
 func PkgStack(requestTimeout time.Duration) gin.HandlersChain {
+	ensurePkgConfig()
+
 	chain := gin.HandlersChain{
 		pkgmw.RecoveryHandler,
 		pkgmw.TraceMiddleware(),

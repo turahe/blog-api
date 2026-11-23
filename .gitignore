@@ -2,6 +2,10 @@ node_modules/
 dist/
 tmp/
 .idea/
+.vscode/
+.cursor/
+.trae/
+.data/
 .DS_Store
 reports/
 .env
