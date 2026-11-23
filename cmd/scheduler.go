@@ -190,12 +190,15 @@ func schedulerCache(ctx context.Context, cfg config.Config, logger *slog.Logger)
 	}
 
 	client := goredis.NewClient(opts)
+
 	pingCtx, cancel := context.WithTimeout(ctx, 3*time.Second)
 	defer cancel()
 
 	if err := client.Ping(pingCtx).Err(); err != nil {
 		_ = client.Close()
+
 		logger.Warn("read cache unavailable; erasures will not invalidate cached reads", "error", err)
+
 		return nil, func() {}
 	}
 

@@ -98,8 +98,11 @@ func (r *NotificationRepository) Insert(ctx context.Context, n notificationdomai
 }
 
 // List returns one page of the user's notifications, newest first.
+//
+//nolint:dupl,funlen,gocyclo,nestif // cursor page encode/decode mirrors sibling repositories
 func (r *NotificationRepository) List(ctx context.Context, filter notificationdomain.ListFilter) (notificationdomain.ListResult, error) {
 	db := conn(ctx, r.db)
+
 	pr := filter.PageRequest
 	if pr.Limit <= 0 {
 		pr.Limit = notificationListCfg.DefaultPerPage
@@ -115,10 +118,12 @@ func (r *NotificationRepository) List(ctx context.Context, filter notificationdo
 			SELECT count(*) AS total, count(*) FILTER (WHERE n.read_at IS NULL) AS unread
 			FROM notifications n JOIN users u ON u.id = n.user_id
 			WHERE u.uuid = ?`
+
 		args := []any{filter.UserUUID}
 		if filter.UnreadOnly {
 			countQuery += ` AND n.read_at IS NULL`
 		}
+
 		if err := db.Raw(countQuery, args...).Scan(&counts).Error; err != nil {
 			return notificationdomain.ListResult{}, fmt.Errorf("count notifications: %w", err)
 		}
@@ -133,16 +138,20 @@ func (r *NotificationRepository) List(ctx context.Context, filter notificationdo
 	}
 
 	var cursorFields map[string]any
+
 	if pr.Mode == pagination.ModeCursor && pr.Cursor != "" {
 		decoded, _, err := pagination.DecodeCursor(notificationListCfg, pr.Cursor)
 		if err != nil {
 			return notificationdomain.ListResult{}, err
 		}
+
 		if err := pagination.ValidateCursor(notificationListCfg, decoded); err != nil {
 			return notificationdomain.ListResult{}, err
 		}
+
 		cursorFields = decoded
 	}
+
 	seek, err := pagination.BuildSeek(notificationListCfg, pr, cursorFields)
 	if err != nil {
 		return notificationdomain.ListResult{}, err
@@ -150,17 +159,21 @@ func (r *NotificationRepository) List(ctx context.Context, filter notificationdo
 
 	query := notificationSelect + ` WHERE u.uuid = ?`
 	queryArgs := make([]any, 0, len(seek.BindVars)+4)
+
 	queryArgs = append(queryArgs, filter.UserUUID)
 	if filter.UnreadOnly {
 		query += ` AND n.read_at IS NULL`
 	}
+
 	if seek.WhereClause != "" {
 		query += ` AND ` + seek.WhereClause
 		queryArgs = append(queryArgs, seek.BindVars...)
 	}
+
 	query += ` ` + seek.OrderClause + ` LIMIT ?`
 	if pr.Mode == pagination.ModeOffset {
 		query += ` OFFSET ?`
+
 		queryArgs = append(queryArgs, seek.LimitFetch, pr.Offset)
 	} else {
 		queryArgs = append(queryArgs, seek.LimitFetch)
@@ -183,17 +196,21 @@ func (r *NotificationRepository) List(ctx context.Context, filter notificationdo
 		if err != nil {
 			return notificationdomain.ListResult{}, err
 		}
+
 		items = append(items, item)
 	}
 
 	var out notificationdomain.ListResult
+
 	if pr.IncludeTotal {
 		total := counts.Total
 		if filter.UnreadOnly {
 			total = counts.Unread
 		}
+
 		out.Total = &total
 	}
+
 	unread := counts.Unread
 	out.UnreadTotal = &unread
 
@@ -201,11 +218,13 @@ func (r *NotificationRepository) List(ctx context.Context, filter notificationdo
 	out.Items = page
 	out.HasNextPage = hasNext
 	out.HasPreviousPage = hasPrev
+
 	out.Limit = pr.Limit
 	if pr.Mode == pagination.ModeOffset {
 		out.OffsetPage = pr.Page
 		out.OffsetPerPage = pr.Limit
 	}
+
 	if len(page) > 0 {
 		if out.HasNextPage {
 			fields := pagination.SortValues[notificationdomain.Notification](notificationListCfg, page[len(page)-1],
@@ -216,14 +235,18 @@ func (r *NotificationRepository) List(ctx context.Context, filter notificationdo
 					case 1:
 						return row.ID
 					}
+
 					return nil
 				})
+
 			cur, err := pagination.EncodeCursor(notificationListCfg, fields)
 			if err != nil {
 				return notificationdomain.ListResult{}, err
 			}
+
 			out.NextCursor = cur
 		}
+
 		if out.HasPreviousPage {
 			fields := pagination.SortValues[notificationdomain.Notification](notificationListCfg, page[0],
 				func(row notificationdomain.Notification, i int) any {
@@ -233,28 +256,20 @@ func (r *NotificationRepository) List(ctx context.Context, filter notificationdo
 					case 1:
 						return row.ID
 					}
+
 					return nil
 				})
+
 			cur, err := pagination.EncodeCursor(notificationListCfg, fields)
 			if err != nil {
 				return notificationdomain.ListResult{}, err
 			}
+
 			out.PreviousCursor = cur
 		}
 	}
 
 	return out, nil
-}
-
-func joinAnd(parts ...string) string {
-	result := ""
-	for i, p := range parts {
-		if i > 0 {
-			result += " AND "
-		}
-		result += p
-	}
-	return result
 }
 
 // MarkRead sets read_at once and returns the row; other users' ids are ErrNotFound.

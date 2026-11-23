@@ -31,6 +31,7 @@ func (c Config) PkgConfig(version string) pkgconfig.Configuration {
 		if err != nil || parsed == "" {
 			parsed = "8080"
 		}
+
 		listenPort = parsed
 	}
 
@@ -123,6 +124,7 @@ func storageConfig(c Config) pkgconfig.StorageConfiguration {
 	}
 
 	driver := "s3"
+
 	switch strings.ToLower(strings.TrimSpace(c.S3Disk)) {
 	case "gcs", "google":
 		driver = "gcs"
@@ -131,6 +133,7 @@ func storageConfig(c Config) pkgconfig.StorageConfiguration {
 	}
 
 	force := c.S3ForcePathStyle
+
 	return pkgconfig.StorageConfiguration{
 		Driver:          driver,
 		Bucket:          c.S3Bucket,
@@ -197,16 +200,14 @@ func (c Config) sentryConfig(version string) pkgconfig.SentryConfiguration {
 
 func openTelemetryConfig(environment, version string) pkgconfig.OpenTelemetryConfiguration {
 	sampler := 1.0
+
 	if raw := strings.TrimSpace(os.Getenv("OTEL_TRACES_SAMPLER_ARG")); raw != "" {
 		if parsed, err := strconv.ParseFloat(raw, 64); err == nil {
 			sampler = parsed
 		}
 	}
 
-	insecure := true
-	if strings.EqualFold(strings.TrimSpace(os.Getenv("OTEL_EXPORTER_OTLP_INSECURE")), "false") {
-		insecure = false
-	}
+	insecure := !strings.EqualFold(strings.TrimSpace(os.Getenv("OTEL_EXPORTER_OTLP_INSECURE")), "false")
 
 	protocol := strings.TrimSpace(os.Getenv("OTEL_EXPORTER_OTLP_TRACES_PROTOCOL"))
 	if protocol == "" {
@@ -250,9 +251,11 @@ func otelHeaders(raw string) map[string]string {
 	}
 
 	headers := make(map[string]string)
-	for _, pair := range strings.Split(raw, ",") {
+
+	for pair := range strings.SplitSeq(raw, ",") {
 		key, value, ok := strings.Cut(strings.TrimSpace(pair), "=")
 		key = strings.TrimSpace(key)
+
 		value = strings.TrimSpace(value)
 		if ok && key != "" {
 			headers[key] = value

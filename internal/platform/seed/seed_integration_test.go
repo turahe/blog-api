@@ -32,10 +32,12 @@ func seedTx(t *testing.T) *gorm.DB {
 	sqlDB, err := sql.Open("pgx", dsn)
 	require.NoError(t, err)
 	t.Cleanup(func() { _ = sqlDB.Close() })
-	require.NoError(t, migrations.Up(sqlDB))
 
 	db, err := gorm.Open(postgres.New(postgres.Config{Conn: sqlDB}), &gorm.Config{Logger: logger.Default.LogMode(logger.Silent)})
 	require.NoError(t, err)
+
+	db.DisableForeignKeyConstraintWhenMigrating = true
+	require.NoError(t, migrations.Up(db))
 
 	tx := db.Begin()
 	require.NoError(t, tx.Error)
@@ -108,6 +110,8 @@ func failStatements(t *testing.T, db *gorm.DB, fail func(op string, stmt *gorm.S
 
 // These run sequentially: Run inserts the same fixed role and permission rows, and
 // concurrent seeds in separate transactions would block each other on those keys.
+//
+//nolint:paralleltest // shares fixed seed rows across subtests
 func TestRunReportsDatabaseFailures(t *testing.T) {
 	statement := func(wantOp, table, sqlFragment string) func(string, *gorm.Statement) bool {
 		return func(op string, stmt *gorm.Statement) bool {
@@ -156,9 +160,10 @@ func TestRunReportsDatabaseFailures(t *testing.T) {
 	}
 
 	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
+		t.Run(tt.name, func(t *testing.T) { //nolint:paralleltest // shares fixed seed catalogue rows
 			tx := seedTx(t)
 			failStatements(t, tx, tt.fail)
+
 			name := "seed" + strings.ReplaceAll(uuid.NewString()[:8], "-", "")
 
 			err := Run(t.Context(), tx, Options{AdminEmail: name + "@example.test", AdminUsername: name})

@@ -175,6 +175,7 @@ func TestMeTwoFactorGuardsAndErrors(t *testing.T) {
 
 	user := uuid.New()
 	invalid := authdomain.ErrTwoFactorInvalidCode
+
 	tests := []struct {
 		name    string
 		handler func(twoFactorAPI) gin.HandlerFunc

@@ -81,25 +81,34 @@ func (f *fakeNewsletter) MyUnsubscribe(context.Context, uuid.UUID, []string, str
 	return f.prefs, f.err
 }
 
-func (f *fakeNewsletter) ListSubscribers(_ context.Context, filter nldomain.SubscriberFilter) (nldomain.SubscriberPage, error) {
-	var page, perPage int
-	if filter.PageRequest.Limit > 0 {
-		perPage = filter.PageRequest.Limit
-		if filter.PageRequest.Mode == 0 || filter.PageRequest.Mode == 1 {
+func fakeSubscriberListBounds(filter nldomain.SubscriberFilter) (page, perPage int) {
+	if filter.Limit > 0 {
+		perPage = filter.Limit
+		if filter.Mode == 0 || filter.Mode == 1 {
 			page = filter.PageRequest.Page
 		}
+
 		if page < 1 {
 			page = 1
 		}
-	} else {
-		page, perPage = filter.Page, filter.PerPage
-		if page < 1 {
-			page = 1
-		}
-		if perPage < 1 {
-			perPage = 20
-		}
+
+		return page, perPage
 	}
+
+	page, perPage = filter.Page, filter.PerPage
+	if page < 1 {
+		page = 1
+	}
+
+	if perPage < 1 {
+		perPage = 20
+	}
+
+	return page, perPage
+}
+
+func (f *fakeNewsletter) ListSubscribers(_ context.Context, filter nldomain.SubscriberFilter) (nldomain.SubscriberPage, error) {
+	page, perPage := fakeSubscriberListBounds(filter)
 
 	if f.failPage != 0 && page == f.failPage {
 		return nldomain.SubscriberPage{}, errors.New("db down")
@@ -120,9 +129,11 @@ func (f *fakeNewsletter) ListSubscribers(_ context.Context, filter nldomain.Subs
 	if end < len(f.subscribers) {
 		out.HasNextPage = true
 	}
+
 	if page > 1 {
 		out.HasPreviousPage = true
 	}
+
 	return out, f.err
 }
 
@@ -150,17 +161,16 @@ func (f *fakeNewsletter) Issue(_ context.Context, id uuid.UUID) (nldomain.Issue,
 
 func (f *fakeNewsletter) ListIssues(_ context.Context, filter nldomain.IssueFilter) (nldomain.IssuePage, error) {
 	var page, perPage int
-	if filter.PageRequest.Limit > 0 {
-		perPage = filter.PageRequest.Limit
-		page = filter.PageRequest.Page
-		if page < 1 {
-			page = 1
-		}
+	if filter.Limit > 0 {
+		perPage = filter.Limit
+
+		page = max(filter.PageRequest.Page, 1)
 	} else {
 		page, perPage = filter.Page, filter.PerPage
 		if page < 1 {
 			page = 1
 		}
+
 		if perPage < 1 {
 			perPage = 20
 		}
@@ -181,9 +191,11 @@ func (f *fakeNewsletter) ListIssues(_ context.Context, filter nldomain.IssueFilt
 	if end < len(f.issues) {
 		out.HasNextPage = true
 	}
+
 	if page > 1 {
 		out.HasPreviousPage = true
 	}
+
 	return out, f.err
 }
 
@@ -496,6 +508,7 @@ func TestNewsletterPublicHandlers(t *testing.T) {
 	t.Parallel()
 
 	sub := nldomain.Subscriber{UUID: uuid.New(), Email: "reader@example.test", Status: nldomain.StatusActive}
+
 	tests := []struct {
 		name    string
 		handler func(newsletterPublicAPI) gin.HandlerFunc

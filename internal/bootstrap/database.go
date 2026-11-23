@@ -16,7 +16,7 @@ func OpenDatabase(ctx context.Context, cfg config.Config) (*pkgdb.Database, erro
 		return nil, err
 	}
 
-	db.DB().Config.DisableForeignKeyConstraintWhenMigrating = true
+	db.DB().DisableForeignKeyConstraintWhenMigrating = true
 
 	return db, nil
 }

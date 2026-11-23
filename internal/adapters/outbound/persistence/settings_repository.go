@@ -143,36 +143,32 @@ func (r *SettingsRepository) SeedDefaults(ctx context.Context, catalogue setting
 	return nil
 }
 
-type settingHistoryRow struct {
-	UUID          uuid.UUID
-	SettingKey    string
-	PreviousValue *string
-	NewValue      string
-	Version       int64
-	ChangedBy     *uuid.UUID
-	RequestID     string
-	CreatedAt     time.Time
-}
-
 // History implements ports.Repository.
+//
+//nolint:funlen,nestif // cursor next/prev encoding shares structure with other list repositories
 func (r *SettingsRepository) History(ctx context.Context, filter settingsdomain.HistoryFilter) (settingsdomain.HistoryPage, error) {
 	c := conn(ctx, r.db)
+
 	pr := filter.PageRequest
 	if pr.Limit <= 0 {
 		pr.Limit = settingsHistoryCfg.DefaultPerPage
 	}
 
 	var cursorFields map[string]any
+
 	if pr.Mode == pagination.ModeCursor && pr.Cursor != "" {
 		decoded, _, err := pagination.DecodeCursor(settingsHistoryCfg, pr.Cursor)
 		if err != nil {
 			return settingsdomain.HistoryPage{}, err
 		}
+
 		if err := pagination.ValidateCursor(settingsHistoryCfg, decoded); err != nil {
 			return settingsdomain.HistoryPage{}, err
 		}
+
 		cursorFields = decoded
 	}
+
 	seek, err := pagination.BuildSeek(settingsHistoryCfg, pr, cursorFields)
 	if err != nil {
 		return settingsdomain.HistoryPage{}, err
@@ -181,7 +177,7 @@ func (r *SettingsRepository) History(ctx context.Context, filter settingsdomain.
 	baseWhere := `(? = '' OR h.setting_key = ?)`
 	whereArgs := []any{filter.Key, filter.Key}
 
-	countSQL := fmt.Sprintf(`SELECT count(*) FROM settings_history h WHERE %s`, baseWhere)
+	countSQL := "SELECT count(*) FROM settings_history h WHERE " + baseWhere
 	baseSQL := `
 		SELECT h.id, h.uuid, h.setting_key, h.previous_value::text AS previous_value, h.new_value::text AS new_value,
 			h.version, u.uuid AS changed_by, h.request_id, h.created_at
@@ -189,11 +185,13 @@ func (r *SettingsRepository) History(ctx context.Context, filter settingsdomain.
 		WHERE ` + baseWhere
 
 	var out settingsdomain.HistoryPage
+
 	if pr.IncludeTotal {
 		var total int64
 		if err := c.Raw(countSQL, whereArgs...).Scan(&total).Error; err != nil {
 			return out, fmt.Errorf("count settings history: %w", err)
 		}
+
 		out.Total = &total
 	}
 
@@ -202,11 +200,15 @@ func (r *SettingsRepository) History(ctx context.Context, filter settingsdomain.
 		querySQL += ` AND ` + seek.WhereClause
 		whereArgs = append(whereArgs, seek.BindVars...)
 	}
+
 	querySQL += ` ` + seek.OrderClause + ` LIMIT ?`
+
 	queryArgs := append([]any{}, whereArgs...)
 	queryArgs = append(queryArgs, seek.LimitFetch)
+
 	if pr.Mode == pagination.ModeOffset {
 		querySQL += ` OFFSET ?`
+
 		queryArgs = append(queryArgs, pr.Offset)
 	}
 
@@ -235,10 +237,13 @@ func (r *SettingsRepository) History(ctx context.Context, filter settingsdomain.
 		CreatedAt time.Time
 		ID        int64
 	}
+
 	keys := make([]rowKey, 0, len(rawRows))
+
 	items := make([]settingsdomain.HistoryEntry, 0, len(rawRows))
 	for _, row := range rawRows {
 		keys = append(keys, rowKey{CreatedAt: row.CreatedAt, ID: row.ID})
+
 		entry := settingsdomain.HistoryEntry{
 			UUID: row.UUID, Key: row.SettingKey, New: []byte(row.NewValue), Version: row.Version,
 			ChangedBy: row.ChangedBy, RequestID: row.RequestID, CreatedAt: row.CreatedAt,
@@ -246,6 +251,7 @@ func (r *SettingsRepository) History(ctx context.Context, filter settingsdomain.
 		if row.PreviousValue != nil {
 			entry.Previous = []byte(*row.PreviousValue)
 		}
+
 		items = append(items, entry)
 	}
 
@@ -253,6 +259,7 @@ func (r *SettingsRepository) History(ctx context.Context, filter settingsdomain.
 	out.Items = page
 	out.HasNextPage = hasNext
 	out.HasPreviousPage = hasPrev
+
 	out.Limit = pr.Limit
 	if pr.Mode == pagination.ModeOffset {
 		out.OffsetPage = pr.Page
@@ -261,6 +268,7 @@ func (r *SettingsRepository) History(ctx context.Context, filter settingsdomain.
 
 	if len(page) > 0 {
 		var firstIdx, lastIdx int
+
 		switch {
 		case !pr.Forward && len(rawRows) > pr.Limit:
 			firstIdx = 1
@@ -269,6 +277,7 @@ func (r *SettingsRepository) History(ctx context.Context, filter settingsdomain.
 			firstIdx = 0
 			lastIdx = len(page) - 1
 		}
+
 		if out.HasNextPage {
 			k := keys[lastIdx]
 			fields := pagination.SortValues[settingsdomain.HistoryEntry](settingsHistoryCfg, page[len(page)-1],
@@ -279,14 +288,18 @@ func (r *SettingsRepository) History(ctx context.Context, filter settingsdomain.
 					case 1:
 						return k.ID
 					}
+
 					return nil
 				})
+
 			cur, err := pagination.EncodeCursor(settingsHistoryCfg, fields)
 			if err != nil {
 				return out, err
 			}
+
 			out.NextCursor = cur
 		}
+
 		if out.HasPreviousPage {
 			k := keys[firstIdx]
 			fields := pagination.SortValues[settingsdomain.HistoryEntry](settingsHistoryCfg, page[0],
@@ -297,12 +310,15 @@ func (r *SettingsRepository) History(ctx context.Context, filter settingsdomain.
 					case 1:
 						return k.ID
 					}
+
 					return nil
 				})
+
 			cur, err := pagination.EncodeCursor(settingsHistoryCfg, fields)
 			if err != nil {
 				return out, err
 			}
+
 			out.PreviousCursor = cur
 		}
 	}

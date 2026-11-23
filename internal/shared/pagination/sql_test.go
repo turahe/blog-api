@@ -10,6 +10,7 @@ import (
 
 func TestBuildSeekForwardDESC(t *testing.T) {
 	t.Parallel()
+
 	now := time.Now().UTC()
 	pr := pagination.PageRequest{Mode: pagination.ModeCursor, Forward: true, Limit: 20, Cursor: "X"}
 	cursor := map[string]any{"published_at": now, "created_at": now.Add(1), "id": int64(42)}
@@ -26,6 +27,7 @@ func TestBuildSeekForwardDESC(t *testing.T) {
 
 func TestBuildSeekForwardASC(t *testing.T) {
 	t.Parallel()
+
 	cfg := pagination.CursorConfig{
 		Kind: "comments_oldest",
 		Sort: []pagination.SortField{
@@ -44,6 +46,7 @@ func TestBuildSeekForwardASC(t *testing.T) {
 
 func TestBuildSeekBackward(t *testing.T) {
 	t.Parallel()
+
 	cfg := pagination.CursorConfig{
 		Kind: "c_audit",
 		Sort: []pagination.SortField{
@@ -64,6 +67,7 @@ func TestBuildSeekBackward(t *testing.T) {
 
 func TestBuildSeekEmptyCursorFirstPage(t *testing.T) {
 	t.Parallel()
+
 	pr := pagination.PageRequest{Mode: pagination.ModeCursor, Forward: true, Limit: 20}
 	res, err := pagination.BuildSeek(cfgPost, pr, nil)
 	require.NoError(t, err)
@@ -74,6 +78,7 @@ func TestBuildSeekEmptyCursorFirstPage(t *testing.T) {
 
 func TestBuildSeekOffsetModeNoSeek(t *testing.T) {
 	t.Parallel()
+
 	pr := pagination.PageRequest{Mode: pagination.ModeOffset, Limit: 15, Offset: 30}
 	res, err := pagination.BuildSeek(cfgPost, pr, nil)
 	require.NoError(t, err)
@@ -85,12 +90,14 @@ func TestBuildSeekOffsetModeNoSeek(t *testing.T) {
 
 func TestBuildSeekEmptySort(t *testing.T) {
 	t.Parallel()
+
 	_, err := pagination.BuildSeek(pagination.CursorConfig{}, pagination.PageRequest{}, nil)
 	require.Error(t, err)
 }
 
 func TestTruncatePageForwardFirstPageExact(t *testing.T) {
 	t.Parallel()
+
 	items := ints(20)
 	page, hasNext, hasPrev := pagination.TruncatePage(items, 20, true, false)
 	require.Equal(t, ints(20), page)
@@ -100,6 +107,7 @@ func TestTruncatePageForwardFirstPageExact(t *testing.T) {
 
 func TestTruncatePageForwardPeekOne(t *testing.T) {
 	t.Parallel()
+
 	items := ints(21)
 	page, hasNext, hasPrev := pagination.TruncatePage(items, 20, true, true)
 	require.Len(t, page, 20)
@@ -111,6 +119,7 @@ func TestTruncatePageForwardPeekOne(t *testing.T) {
 
 func TestTruncatePageBackwardPeekOne(t *testing.T) {
 	t.Parallel()
+
 	items := ints(21)
 	page, hasNext, hasPrev := pagination.TruncatePage(items, 20, false, true)
 	require.Len(t, page, 20)
@@ -123,6 +132,7 @@ func TestTruncatePageBackwardPeekOne(t *testing.T) {
 
 func TestTruncatePageBackwardBoundaryLastPage(t *testing.T) {
 	t.Parallel()
+
 	items := ints(3) // less than limit 5 — no excess; backward
 	page, hasNext, hasPrev := pagination.TruncatePage(items, 5, false, true)
 	require.Len(t, page, 3)
@@ -143,5 +153,6 @@ func ints(n int) []int {
 	for i := range out {
 		out[i] = i + 1
 	}
+
 	return out
 }

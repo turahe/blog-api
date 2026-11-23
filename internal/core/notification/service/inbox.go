@@ -84,8 +84,10 @@ func (i *Inbox) List(ctx context.Context, userID uuid.UUID, unreadOnly bool, pr 
 	filter := notificationdomain.ListFilter{
 		UserUUID:   userID,
 		UnreadOnly: unreadOnly,
+
+		PageRequest: pr,
 	}
-	filter.PageRequest = pr
+
 	return i.repo.List(ctx, filter)
 }
 

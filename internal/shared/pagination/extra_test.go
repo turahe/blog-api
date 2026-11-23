@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"math/rand"
+	"net/http"
 	"net/http/httptest"
 	"net/url"
 	"testing"
@@ -23,6 +24,7 @@ type rowLike struct {
 
 func TestSortValuesHelper(t *testing.T) {
 	t.Parallel()
+
 	cfg := pagination.CursorConfig{
 		Kind: "x",
 		Sort: []pagination.SortField{
@@ -38,6 +40,7 @@ func TestSortValuesHelper(t *testing.T) {
 		case 1:
 			return row.id
 		}
+
 		return nil
 	})
 	require.Equal(t, time.Unix(1700000000, 0).UTC(), out["created_at"])
@@ -46,8 +49,10 @@ func TestSortValuesHelper(t *testing.T) {
 
 func TestErrorCodeCauseWrapping(t *testing.T) {
 	t.Parallel()
+
 	empty := pagination.ErrorCause(nil)
 	require.Empty(t, empty)
+
 	got := pagination.ErrorCause(errors.New("boom"))
 	require.Contains(t, got, "boom")
 
@@ -65,9 +70,9 @@ func TestErrorCodeCauseWrapping(t *testing.T) {
 		{pagination.ErrCursorUnsupported, pagination.CodeUnsupported},
 	}
 	for _, p := range pairs {
-		p := p
 		t.Run(p.code, func(t *testing.T) {
 			t.Parallel()
+
 			w := wrapper{err: wrapper{err: p.sentinel}}
 			require.ErrorIs(t, w, p.sentinel)
 			require.Equal(t, p.code, pagination.ErrorCode(w))
@@ -82,12 +87,15 @@ func (w wrapper) Unwrap() error { return w.err }
 
 func TestPtrToIntPtrHelpers(t *testing.T) {
 	t.Parallel()
-	b := pagination.PtrTo(true)
+
+	b := new(true)
 	require.NotNil(t, b)
 	require.True(t, *b)
-	s := pagination.PtrTo("hi")
+
+	s := new("hi")
 	require.Equal(t, "hi", *s)
-	p := pagination.IntPtr(7)
+
+	p := new(7)
 	require.NotNil(t, p)
 	require.Equal(t, 7, *p)
 }
@@ -95,6 +103,7 @@ func TestPtrToIntPtrHelpers(t *testing.T) {
 func TestApplyOptionsFallsBackToGlobalSigner(t *testing.T) {
 	pagination.ResetGlobalSigner()
 	t.Setenv("PAGINATION_HMAC_KEY", keyA)
+
 	_, _, err := pagination.DecodeCursor(cfgPost, "garbage-base64!!!")
 	// Expected: token fails because it's garbled (not a cursor), but no error
 	// from signer lookup.
@@ -105,6 +114,7 @@ func TestApplyOptionsFallsBackToGlobalSigner(t *testing.T) {
 func TestParseRequestWithGlobalSignerWhenNotProvided(t *testing.T) {
 	pagination.ResetGlobalSigner()
 	t.Setenv("PAGINATION_HMAC_KEY", keyA)
+
 	q := url.Values{}
 	q.Set("limit", "10")
 	_, err := pagination.ParseRequest(newCtx(t, q), cfgPost)
@@ -113,6 +123,7 @@ func TestParseRequestWithGlobalSignerWhenNotProvided(t *testing.T) {
 
 func TestNormalizeSortValueLooseVariants(t *testing.T) {
 	t.Parallel()
+
 	cfg := pagination.CursorConfig{
 		Kind: "v",
 		Sort: []pagination.SortField{
@@ -138,6 +149,7 @@ func TestNormalizeSortValueLooseVariants(t *testing.T) {
 	require.Equal(t, "hi", dec["a"])
 	require.Equal(t, uid, dec["b"])
 	require.Equal(t, int64(7), dec["c"])
+
 	parsedNow, _ := time.Parse(time.RFC3339, now.Format(time.RFC3339))
 	require.Equal(t, parsedNow.UTC(), dec["d"])
 }
@@ -232,6 +244,8 @@ func TestBuildLinksIncludeTotal(t *testing.T) {
 }
 
 func TestNewSignerPanicsOnEmptyCurrent(t *testing.T) {
+	t.Parallel()
+
 	require.Panics(t, func() {
 		pagination.NewSigner(nil, nil)
 	})
@@ -243,9 +257,10 @@ func TestNewSignerPanicsOnEmptyCurrent(t *testing.T) {
 func TestAbsoluteURLWithoutXForwarded(t *testing.T) {
 	t.Parallel()
 	gin.SetMode(gin.TestMode)
+
 	w := httptest.NewRecorder()
 	c, _ := gin.CreateTestContext(w)
-	c.Request = httptest.NewRequest("GET", "/foo?q=1", nil)
+	c.Request = httptest.NewRequestWithContext(t.Context(), http.MethodGet, "/foo?q=1", nil)
 	c.Request.Host = "local:8080"
 	got := pagination.StripAllCursors("q=1&after=x")
 	parsed, _ := url.ParseQuery(got[1:])
@@ -290,6 +305,7 @@ func TestBuildSeekCoerceBindVariants(t *testing.T) {
 	res2, err := pagination.BuildSeek(cfg, pr, cur2)
 	require.NoError(t, err)
 	require.Equal(t, int64(42), res2.BindVars[3])
+
 	cur2["id"] = uint32(43)
 	res3, err := pagination.BuildSeek(cfg, pr, cur2)
 	require.NoError(t, err)
@@ -298,6 +314,7 @@ func TestBuildSeekCoerceBindVariants(t *testing.T) {
 
 func TestDecodeCursorBase64Malformed(t *testing.T) {
 	t.Parallel()
+
 	_, _, err := pagination.DecodeCursor(cfgPost, "!!!not-base64!!!", pagination.WithSigner(signer))
 	require.ErrorIs(t, err, pagination.ErrCursorMalformed)
 }
@@ -319,6 +336,7 @@ func TestDecodeCursorIssuedAtBadType(t *testing.T) {
 
 func TestSortFieldDefaultsNameToColumn(t *testing.T) {
 	t.Parallel()
+
 	cfg := pagination.CursorConfig{
 		Kind: "no_col",
 		Sort: []pagination.SortField{
@@ -337,6 +355,7 @@ func TestSortFieldDefaultsNameToColumn(t *testing.T) {
 
 func TestBuildSeekComparatorASCForward(t *testing.T) {
 	t.Parallel()
+
 	cfg := pagination.CursorConfig{
 		Kind: "asc_sort",
 		Sort: []pagination.SortField{
@@ -353,6 +372,7 @@ func TestBuildSeekComparatorASCForward(t *testing.T) {
 
 func TestOrderNullsFirstToLastOnBackward(t *testing.T) {
 	t.Parallel()
+
 	cfg := pagination.CursorConfig{
 		Kind: "n",
 		Sort: []pagination.SortField{
@@ -371,22 +391,26 @@ func TestOrderNullsFirstToLastOnBackward(t *testing.T) {
 func TestBidirectionalCursorPages(t *testing.T) {
 	t.Parallel()
 	// Simpler TruncatePage with many random sizes for fuzz-like coverage.
-	r := rand.New(rand.NewSource(1))
-	for i := 0; i < 500; i++ {
+	r := rand.New(rand.NewSource(1)) //nolint:gosec // deterministic fixture RNG, not security-sensitive
+	for range 500 {
 		limit := r.Intn(100) + 1
 		excess := r.Intn(2) == 0
+
 		size := limit
 		if excess {
 			size = limit + 1
 		}
+
 		items := make([]int, size)
 		for j := range items {
 			items[j] = j
 		}
+
 		hadCursor := r.Intn(2) == 0
 		forward := r.Intn(2) == 0
 		p, hn, hp := pagination.TruncatePage(items, limit, forward, hadCursor)
 		require.LessOrEqual(t, len(p), limit)
+
 		_ = hn
 		_ = hp
 	}

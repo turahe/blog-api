@@ -260,8 +260,10 @@ func TestNewsletterSubscriberDetail(t *testing.T) {
 		{
 			name: "events in order",
 			history: []nldomain.ConsentEvent{
-				{Event: nldomain.ConsentListLeft, ListSlug: "launches", Source: "preferences", ReasonCode: "too_many",
-					Feedback: "fewer please", IPHash: "hidden", OccurredAt: nlLeftAt},
+				{
+					Event: nldomain.ConsentListLeft, ListSlug: "launches", Source: "preferences", ReasonCode: "too_many",
+					Feedback: "fewer please", IPHash: "hidden", OccurredAt: nlLeftAt,
+				},
 				{Event: nldomain.ConsentConfirmed, Source: "public", OccurredAt: nlJoinedAt},
 			},
 			want: `{` + activeSubscriberJSON + `, "consentHistory": [

@@ -64,12 +64,15 @@ func BridgeRequestID() gin.HandlerFunc {
 		if id == "" {
 			id = pklogger.GetCorrelationID(c.Request.Context())
 		}
+
 		if id == "" {
 			id = pklogger.GetTraceID(c.Request.Context())
 		}
+
 		if id != "" {
 			c.Set(responses.ContextRequestIDKey, id)
 		}
+
 		c.Next()
 	}
 }

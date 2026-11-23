@@ -79,6 +79,7 @@ func TestSubscribe(t *testing.T) {
 		{
 			name: "new address gets a confirmation link",
 			check: func(t *testing.T, f *fixture) {
+				t.Helper()
 				sub := f.repo.onlySubscriber(t)
 				assert.Equal(t, "reader@example.test", sub.Email)
 				assert.Equal(t, "Reader", sub.DisplayName)
@@ -109,6 +110,7 @@ func TestSubscribe(t *testing.T) {
 			name: "named lists are deduplicated",
 			in:   func(in *SubscribeInput) { in.Lists = []string{"product", "product", "weekly"} },
 			check: func(t *testing.T, f *fixture) {
+				t.Helper()
 				assert.Equal(t, []string{"Product news", "Weekly digest"}, f.mailer.sentConfirms()[0].Lists)
 			},
 		},
@@ -116,6 +118,7 @@ func TestSubscribe(t *testing.T) {
 			name: "honeypot is silently accepted",
 			in:   func(in *SubscribeInput) { in.Honeypot = "bot" },
 			check: func(t *testing.T, f *fixture) {
+				t.Helper()
 				assert.Zero(t, f.repo.subscriberCount())
 				assert.Empty(t, f.mailer.sentConfirms())
 			},
@@ -138,6 +141,7 @@ func TestSubscribe(t *testing.T) {
 			name: "captcha passes",
 			edit: func(d *Deps, _ *Config) { d.Captcha = fakeCaptcha{ok: true} },
 			check: func(t *testing.T, f *fixture) {
+				t.Helper()
 				assert.Len(t, f.mailer.sentConfirms(), 1)
 			},
 		},
@@ -168,6 +172,7 @@ func TestSubscribe(t *testing.T) {
 				f.repo.putSubscriber(sub)
 			},
 			check: func(t *testing.T, f *fixture) {
+				t.Helper()
 				assert.Zero(t, f.repo.callCount("UpdateSubscriber"))
 				assert.Empty(t, f.mailer.sentConfirms())
 			},
@@ -176,6 +181,7 @@ func TestSubscribe(t *testing.T) {
 			name:  "active member gets no email",
 			setup: func(f *fixture) { f.activeSubscriber("reader@example.test", "weekly") },
 			check: func(t *testing.T, f *fixture) {
+				t.Helper()
 				sub := f.repo.onlySubscriber(t)
 				assert.Equal(t, domain.StatusActive, sub.Status)
 				assert.Empty(t, f.repo.tokensFor(sub.UUID, domain.PurposeConfirm))
@@ -189,6 +195,7 @@ func TestSubscribe(t *testing.T) {
 				f.token(sub.UUID, domain.PurposeConfirm)
 			},
 			check: func(t *testing.T, f *fixture) {
+				t.Helper()
 				sub := f.repo.onlySubscriber(t)
 				tokens := f.repo.tokensFor(sub.UUID, domain.PurposeConfirm)
 				require.Len(t, tokens, 1)
@@ -199,6 +206,7 @@ func TestSubscribe(t *testing.T) {
 			name:  "concurrent create is answered the same way",
 			setup: func(f *fixture) { f.repo.failOn("CreateSubscriber", domain.ErrConflict) },
 			check: func(t *testing.T, f *fixture) {
+				t.Helper()
 				assert.Empty(t, f.mailer.sentConfirms())
 			},
 		},
@@ -218,6 +226,7 @@ func TestSubscribe(t *testing.T) {
 			name:  "mailer failure is logged, not returned",
 			setup: func(f *fixture) { f.mailer.err = errBoom },
 			check: func(t *testing.T, f *fixture) {
+				t.Helper()
 				assert.Contains(t, f.logs.String(), "confirmation email failed")
 			},
 		},
@@ -225,6 +234,7 @@ func TestSubscribe(t *testing.T) {
 			name: "without a mailer the token is still issued",
 			edit: func(d *Deps, _ *Config) { d.Mailer = nil },
 			check: func(t *testing.T, f *fixture) {
+				t.Helper()
 				sub := f.repo.onlySubscriber(t)
 				assert.Len(t, f.repo.tokensFor(sub.UUID, domain.PurposeConfirm), 1)
 				assert.Empty(t, f.mailer.sentConfirms())
@@ -234,6 +244,7 @@ func TestSubscribe(t *testing.T) {
 			name:  "list names fall back to slugs",
 			setup: func(f *fixture) { f.repo.failOn("Lists(archived)", errBoom) },
 			check: func(t *testing.T, f *fixture) {
+				t.Helper()
 				assert.Equal(t, []string{"weekly"}, f.mailer.sentConfirms()[0].Lists)
 			},
 		},
@@ -241,6 +252,7 @@ func TestSubscribe(t *testing.T) {
 			name: "identity hasher keys the IP hash",
 			edit: func(d *Deps, _ *Config) { d.IdentityHasher = prefixHasher{} },
 			check: func(t *testing.T, f *fixture) {
+				t.Helper()
 				sub := f.repo.onlySubscriber(t)
 				assert.Equal(t, "mac:203.0.113.9", sub.IPHash)
 				assert.Equal(t, "mac:203.0.113.9", f.repo.consentEvents()[0].IPHash)
@@ -250,6 +262,7 @@ func TestSubscribe(t *testing.T) {
 			name: "long user agent is truncated",
 			in:   func(in *SubscribeInput) { in.UserAgent = strings.Repeat("u", 600) },
 			check: func(t *testing.T, f *fixture) {
+				t.Helper()
 				assert.Len(t, f.repo.onlySubscriber(t).UserAgent, 512)
 			},
 		},
@@ -320,10 +333,13 @@ func TestConfirm(t *testing.T) {
 		{
 			name: "activates pending lists and sends a welcome",
 			setup: func(t *testing.T, f *fixture) string {
+				t.Helper()
 				require.NoError(t, f.svc.Subscribe(t.Context(), SubscribeInput{Email: "reader@example.test", Name: "Reader"}))
+
 				return f.mailer.lastConfirmToken(t)
 			},
 			check: func(t *testing.T, f *fixture, got domain.Subscriber) {
+				t.Helper()
 				sub := f.repo.subscriber(t, got.UUID)
 				assert.Equal(t, domain.StatusActive, got.Status)
 				assert.Equal(t, domain.StatusActive, sub.Status)
@@ -356,7 +372,8 @@ func TestConfirm(t *testing.T) {
 
 				return f.token(sub.UUID, domain.PurposeConfirm)
 			},
-			check: func(t *testing.T, f *fixture, got domain.Subscriber) {
+			check: func(t *testing.T, _ *fixture, got domain.Subscriber) {
+				t.Helper()
 				assert.Equal(t, testNow.Add(-time.Hour), *got.OptedInAt)
 				assert.Equal(t, []string{"weekly", "product"}, got.ActiveLists())
 			},
@@ -365,6 +382,7 @@ func TestConfirm(t *testing.T) {
 			name: "used token",
 			setup: func(_ *testing.T, f *fixture) string {
 				sub := pendingSubscriber(f, "reader@example.test", "weekly")
+
 				return f.repo.putToken("used", domain.Token{
 					SubscriberID: sub.UUID, Purpose: domain.PurposeConfirm, ExpiresAt: testNow.Add(time.Hour), UsedAt: &testNow,
 				})
@@ -468,6 +486,7 @@ func TestConfirm(t *testing.T) {
 				return f.token(pendingSubscriber(f, "reader@example.test", "weekly").UUID, domain.PurposeConfirm)
 			},
 			check: func(t *testing.T, f *fixture, got domain.Subscriber) {
+				t.Helper()
 				assert.Equal(t, domain.StatusActive, got.Status)
 				assert.Contains(t, f.logs.String(), "welcome email failed")
 			},
@@ -479,6 +498,7 @@ func TestConfirm(t *testing.T) {
 				return f.token(pendingSubscriber(f, "reader@example.test", "weekly").UUID, domain.PurposeConfirm)
 			},
 			check: func(t *testing.T, f *fixture, got domain.Subscriber) {
+				t.Helper()
 				assert.Equal(t, domain.StatusActive, got.Status)
 				assert.Empty(t, f.mailer.sentWelcomes())
 			},
@@ -627,6 +647,7 @@ func TestUnsubscribe(t *testing.T) {
 			},
 			in: UnsubscribeInput{ReasonCode: "too_frequent", Feedback: "daily is a lot", IP: "203.0.113.9"},
 			check: func(t *testing.T, f *fixture, sub domain.Subscriber) {
+				t.Helper()
 				got := f.repo.subscriber(t, sub.UUID)
 				assert.Equal(t, domain.StatusUnsubscribed, got.Status)
 				assert.Equal(t, testNow, *got.UnsubscribedAt)
@@ -650,6 +671,7 @@ func TestUnsubscribe(t *testing.T) {
 				return sub, f.token(sub.UUID, domain.PurposeUnsubscribe)
 			},
 			check: func(t *testing.T, f *fixture, sub domain.Subscriber) {
+				t.Helper()
 				assert.Equal(t, domain.StatusUnsubscribed, f.repo.subscriber(t, sub.UUID).Status)
 			},
 		},
@@ -664,6 +686,7 @@ func TestUnsubscribe(t *testing.T) {
 				return sub, f.token(sub.UUID, domain.PurposeUnsubscribe)
 			},
 			check: func(t *testing.T, f *fixture, _ domain.Subscriber) {
+				t.Helper()
 				assert.Zero(t, f.repo.callCount("UpdateSubscriber"))
 				assert.Empty(t, f.repo.consentEvents())
 				assert.Empty(t, f.changes())
@@ -680,6 +703,7 @@ func TestUnsubscribe(t *testing.T) {
 			},
 			in: UnsubscribeInput{ReasonCode: "not_relevant"},
 			check: func(t *testing.T, f *fixture, sub domain.Subscriber) {
+				t.Helper()
 				assert.Equal(t, []string{domain.ConsentUnsubscribed}, f.repo.consentKinds(sub.UUID))
 				assert.Equal(t, domain.StatusUnsubscribed, f.repo.subscriber(t, sub.UUID).Status)
 			},
@@ -694,6 +718,7 @@ func TestUnsubscribe(t *testing.T) {
 				return sub, f.token(sub.UUID, domain.PurposeUnsubscribe)
 			},
 			check: func(t *testing.T, f *fixture, sub domain.Subscriber) {
+				t.Helper()
 				got := f.repo.subscriber(t, sub.UUID)
 				assert.Equal(t, domain.StatusBounced, got.Status)
 				assert.Empty(t, got.ActiveLists())

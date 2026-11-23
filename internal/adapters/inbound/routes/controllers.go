@@ -34,6 +34,8 @@ type Controllers struct {
 }
 
 // Newsletter holds the public double opt-in, self-service, and admin newsletter handlers.
+//
+//nolint:dupl // handler bundle structs intentionally mirror sibling resource groups
 type Newsletter struct {
 	Subscribe        gin.HandlerFunc
 	Confirm          gin.HandlerFunc
@@ -181,6 +183,8 @@ type Users struct {
 }
 
 // Posts public and admin handlers.
+//
+//nolint:dupl // handler bundle structs intentionally mirror sibling resource groups
 type Posts struct {
 	PublicList        gin.HandlerFunc
 	PublicGet         gin.HandlerFunc

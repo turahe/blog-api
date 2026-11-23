@@ -85,6 +85,7 @@ func listPublishedPostsHandler(posts *postservice.PostService) gin.HandlerFunc {
 				responses.Failure(c, nethttp.StatusBadRequest, pagination.ErrorCode(err), pagination.ErrorCause(err))
 				return
 			}
+
 			searchPublishedPosts(c, posts, postdomain.SearchFilter{
 				Query:        query,
 				CategoryUUID: categoryID,
@@ -101,8 +102,10 @@ func listPublishedPostsHandler(posts *postservice.PostService) gin.HandlerFunc {
 			return
 		}
 
-		filter := postdomain.ListFilter{CategoryUUID: categoryID, TagUUID: tagID}
-		filter.PageRequest = pr
+		filter := postdomain.ListFilter{
+			CategoryUUID: categoryID, TagUUID: tagID,
+			PageRequest: pr,
+		}
 
 		result, err := posts.ListPublished(c.Request.Context(), filter)
 		if err != nil {
@@ -118,6 +121,7 @@ func listPublishedPostsHandler(posts *postservice.PostService) gin.HandlerFunc {
 			default:
 				responses.Internal(c, err, "Failed to list posts")
 			}
+
 			return
 		}
 

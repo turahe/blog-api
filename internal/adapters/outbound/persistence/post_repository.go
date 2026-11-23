@@ -68,22 +68,29 @@ func NewPostRepository(db *gorm.DB) *PostRepository {
 // cursor-based keyset pagination when after/before are present, and offset
 // pagination when the caller provides only page/perPage. The COUNT query is
 // skipped when IncludeTotal=false.
+//
+//nolint:nestif // cursor next/prev encoding shares structure with other list repositories
 func (r *PostRepository) ListPublished(ctx context.Context, filter postdomain.ListFilter) (postdomain.ListResult, error) {
 	pr := filter.PageRequest
 	if pr.Limit <= 0 {
 		pr.Limit = postListPublishedCfg.DefaultPerPage
 	}
+
 	var cursorFields map[string]any
+
 	if pr.Mode == pagination.ModeCursor && pr.Cursor != "" {
 		decoded, _, err := pagination.DecodeCursor(postListPublishedCfg, pr.Cursor)
 		if err != nil {
 			return postdomain.ListResult{}, err
 		}
+
 		if err := pagination.ValidateCursor(postListPublishedCfg, decoded); err != nil {
 			return postdomain.ListResult{}, err
 		}
+
 		cursorFields = decoded
 	}
+
 	seek, err := pagination.BuildSeek(postListPublishedCfg, pr, cursorFields)
 	if err != nil {
 		return postdomain.ListResult{}, err
@@ -93,48 +100,59 @@ func (r *PostRepository) ListPublished(ctx context.Context, filter postdomain.Li
 	if filter.CategoryUUID != nil {
 		q = q.Where("category_id = "+idOf("categories"), *filter.CategoryUUID)
 	}
+
 	if filter.TagUUID != nil {
 		q = q.Where("id IN (SELECT post_id FROM post_tags WHERE tag_id = "+idOf("tags")+")", *filter.TagUUID)
 	}
+
 	if seek.WhereClause != "" {
 		q = q.Where(seek.WhereClause, seek.BindVars...)
 	}
 
 	var out postdomain.ListResult
+
 	if pr.IncludeTotal {
 		var total int64
 		if err := q.Count(&total).Error; err != nil {
 			return postdomain.ListResult{}, err
 		}
+
 		out.Total = &total
 	}
 
 	var models []PostModel
+
 	db := q.Select(postColumns).Order(strings.TrimPrefix(seek.OrderClause, "ORDER BY ")).Limit(seek.LimitFetch)
 	if pr.Mode == pagination.ModeOffset {
 		db = db.Offset(pr.Offset)
 	}
+
 	if err := db.Find(&models).Error; err != nil {
 		return postdomain.ListResult{}, err
 	}
+
 	if seek.ReverseDisplay {
 		for i, j := 0, len(models)-1; i < j; i, j = i+1, j-1 {
 			models[i], models[j] = models[j], models[i]
 		}
 	}
+
 	items := make([]postdomain.Post, 0, len(models))
 	for _, model := range models {
 		items = append(items, mapPost(model))
 	}
+
 	page, hasNext, hasPrev := pagination.TruncatePage(items, pr.Limit, pr.Forward, pr.Cursor != "")
 	out.Items = page
 	out.HasNextPage = hasNext
 	out.HasPreviousPage = hasPrev
+
 	out.Limit = pr.Limit
 	if pr.Mode == pagination.ModeOffset {
 		out.OffsetPage = pr.Page
 		out.OffsetPerPage = pr.Limit
 	}
+
 	if len(page) > 0 {
 		if out.HasNextPage {
 			fields := pagination.SortValues[postdomain.Post](postListPublishedCfg, page[len(page)-1],
@@ -147,14 +165,18 @@ func (r *PostRepository) ListPublished(ctx context.Context, filter postdomain.Li
 					case 2:
 						return row.ID
 					}
+
 					return nil
 				})
+
 			cur, err := pagination.EncodeCursor(postListPublishedCfg, fields)
 			if err != nil {
 				return postdomain.ListResult{}, err
 			}
+
 			out.NextCursor = cur
 		}
+
 		if out.HasPreviousPage {
 			fields := pagination.SortValues[postdomain.Post](postListPublishedCfg, page[0],
 				func(row postdomain.Post, i int) any {
@@ -166,15 +188,19 @@ func (r *PostRepository) ListPublished(ctx context.Context, filter postdomain.Li
 					case 2:
 						return row.ID
 					}
+
 					return nil
 				})
+
 			cur, err := pagination.EncodeCursor(postListPublishedCfg, fields)
 			if err != nil {
 				return postdomain.ListResult{}, err
 			}
+
 			out.PreviousCursor = cur
 		}
 	}
+
 	return out, nil
 }
 
@@ -183,22 +209,29 @@ func (r *PostRepository) ListPublished(ctx context.Context, filter postdomain.Li
 // provides only page/perPage. The COUNT query is skipped when IncludeTotal=false.
 // Preserves all filters: status, author, category, query (ILIKE), and trashed
 // (unscoped WHERE deleted_at IS NOT NULL).
+//
+//nolint:dupl,nestif // cursor page encode/decode mirrors sibling repositories
 func (r *PostRepository) ListAdmin(ctx context.Context, filter postdomain.AdminListFilter) (postdomain.ListResult, error) {
 	pr := filter.PageRequest
 	if pr.Limit <= 0 {
 		pr.Limit = postAdminCfg.DefaultPerPage
 	}
+
 	var cursorFields map[string]any
+
 	if pr.Mode == pagination.ModeCursor && pr.Cursor != "" {
 		decoded, _, err := pagination.DecodeCursor(postAdminCfg, pr.Cursor)
 		if err != nil {
 			return postdomain.ListResult{}, err
 		}
+
 		if err := pagination.ValidateCursor(postAdminCfg, decoded); err != nil {
 			return postdomain.ListResult{}, err
 		}
+
 		cursorFields = decoded
 	}
+
 	seek, err := pagination.BuildSeek(postAdminCfg, pr, cursorFields)
 	if err != nil {
 		return postdomain.ListResult{}, err
@@ -208,58 +241,72 @@ func (r *PostRepository) ListAdmin(ctx context.Context, filter postdomain.AdminL
 	if filter.Trashed {
 		q = conn(ctx, r.db).Unscoped().Model(&PostModel{}).Where("deleted_at IS NOT NULL")
 	}
+
 	if filter.Status != "" {
 		q = q.Where("status = ?", filter.Status)
 	}
+
 	if filter.AuthorUUID != nil {
 		q = q.Where("author_id = "+idOf("users"), *filter.AuthorUUID)
 	}
+
 	if filter.CategoryUUID != nil {
 		q = q.Where("category_id = "+idOf("categories"), *filter.CategoryUUID)
 	}
+
 	if filter.Query != "" {
 		like := "%" + filter.Query + "%"
 		q = q.Where("title ILIKE ? OR slug ILIKE ?", like, like)
 	}
+
 	if seek.WhereClause != "" {
 		q = q.Where(seek.WhereClause, seek.BindVars...)
 	}
 
 	var out postdomain.ListResult
+
 	if pr.IncludeTotal {
 		var total int64
 		if err := q.Count(&total).Error; err != nil {
 			return postdomain.ListResult{}, err
 		}
+
 		out.Total = &total
 	}
 
 	var models []PostModel
+
 	db := q.Select(postColumns).Order(strings.TrimPrefix(seek.OrderClause, "ORDER BY ")).Limit(seek.LimitFetch)
 	if pr.Mode == pagination.ModeOffset {
 		db = db.Offset(pr.Offset)
 	}
+
 	if err := db.Find(&models).Error; err != nil {
 		return postdomain.ListResult{}, err
 	}
+
 	if seek.ReverseDisplay {
 		for i, j := 0, len(models)-1; i < j; i, j = i+1, j-1 {
 			models[i], models[j] = models[j], models[i]
 		}
 	}
+
 	items := make([]postdomain.Post, 0, len(models))
 	for _, model := range models {
 		items = append(items, mapPost(model))
 	}
+
 	page, hasNext, hasPrev := pagination.TruncatePage(items, pr.Limit, pr.Forward, pr.Cursor != "")
 	out.Items = page
 	out.HasNextPage = hasNext
 	out.HasPreviousPage = hasPrev
+
 	out.Limit = pr.Limit
 	if pr.Mode == pagination.ModeOffset {
 		out.OffsetPage = pr.Page
 		out.OffsetPerPage = pr.Limit
 	}
+
 	if len(page) > 0 {
 		if out.HasNextPage {
 			fields := pagination.SortValues[postdomain.Post](postListPublishedCfg, page[len(page)-1],
@@ -270,14 +317,18 @@ func (r *PostRepository) ListAdmin(ctx context.Context, filter postdomain.AdminL
 					case 1:
 						return row.ID
 					}
+
 					return nil
 				})
+
 			cur, err := pagination.EncodeCursor(postAdminCfg, fields)
 			if err != nil {
 				return postdomain.ListResult{}, err
 			}
+
 			out.NextCursor = cur
 		}
+
 		if out.HasPreviousPage {
 			fields := pagination.SortValues[postdomain.Post](postAdminCfg, page[0],
 				func(row postdomain.Post, i int) any {
@@ -287,15 +338,19 @@ func (r *PostRepository) ListAdmin(ctx context.Context, filter postdomain.AdminL
 					case 1:
 						return row.ID
 					}
+
 					return nil
 				})
+
 			cur, err := pagination.EncodeCursor(postAdminCfg, fields)
 			if err != nil {
 				return postdomain.ListResult{}, err
 			}
+
 			out.PreviousCursor = cur
 		}
 	}
+
 	return out, nil
 }
 

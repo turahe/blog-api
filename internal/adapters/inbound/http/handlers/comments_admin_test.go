@@ -260,6 +260,7 @@ func TestAdminListCommentsParsesFilters(t *testing.T) {
 		got = in
 
 		total := int64(1)
+
 		return commentdomain.ListResult{Items: []commentdomain.Comment{{
 			UUID: testCommentID, PostUUID: testPostID, Content: "kept", Status: commentdomain.StatusDeleted,
 			CreatedAt: testTime, UpdatedAt: testTime,
@@ -355,6 +356,7 @@ func TestAdminCommentHandlerFailures(t *testing.T) {
 
 	id := testCommentID.String()
 	missing := commentdomain.ErrNotFound
+
 	tests := []struct {
 		name    string
 		handler func(commentModerationAPI) gin.HandlerFunc

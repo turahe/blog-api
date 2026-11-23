@@ -160,6 +160,7 @@ func TestLogoutHandler(t *testing.T) {
 	t.Parallel()
 
 	user := uuid.New()
+
 	tests := []struct {
 		name      string
 		user      *uuid.UUID
@@ -231,6 +232,7 @@ func TestResetTokenValidityHandler(t *testing.T) {
 	t.Parallel()
 
 	expires := time.Date(2026, 9, 1, 10, 0, 0, 0, time.FixedZone("WIB", 7*3600))
+
 	tests := []struct {
 		name   string
 		err    error

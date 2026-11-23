@@ -170,6 +170,7 @@ func runPublisher(t *testing.T, publisher *Publisher) {
 
 	go func() {
 		defer close(done)
+
 		publisher.Run(ctx, FlushEvery)
 	}()
 
@@ -287,6 +288,7 @@ func TestConsumeAcksWithoutDelivering(t *testing.T) {
 			t.Parallel()
 
 			messages := make(chan *message.Message, 1)
+
 			t.Cleanup(func() { close(messages) })
 
 			logs := &lockedBuffer{}

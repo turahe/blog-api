@@ -192,6 +192,7 @@ func NewRuntime(ctx context.Context, cfg config.Config, logger *slog.Logger, ver
 	if err != nil {
 		return fail(err)
 	}
+
 	auditRecorder, activity := newAudit(cfg, db, broadcast, drops.audit, logger)
 	analyticsIngest, analyticsWriter := newAnalytics(cfg, db, drops.analytics, logger)
 	live, liveStreams := newAnalyticsLive(ctx, cfg, broadcast, analyticsIngest, logger)

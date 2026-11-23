@@ -20,8 +20,10 @@ func TestActivityOwnerSeesCategorizedEntriesOnly(t *testing.T) {
 	user := uuid.New()
 
 	pr := pagination.PageRequest{Mode: pagination.ModeOffset, Page: 1, Limit: 500, Offset: 0, IncludeTotal: true}
-	filter := domain.ActivityFilter{UserID: user}
-	filter.PageRequest = pr
+	filter := domain.ActivityFilter{
+		UserID:      user,
+		PageRequest: pr,
+	}
 	page, err := activity.ForOwner(context.Background(), filter)
 	require.NoError(t, err)
 
@@ -41,8 +43,8 @@ func TestActivityAdminSeesEverything(t *testing.T) {
 	require.NoError(t, err)
 
 	require.False(t, repo.filter.CategorizedOnly)
-	require.Equal(t, 1, repo.filter.PageRequest.Page)
-	require.Equal(t, 20, repo.filter.PageRequest.Limit)
+	require.Equal(t, 1, repo.filter.Page)
+	require.Equal(t, 20, repo.filter.Limit)
 	require.Equal(t, 20, page.Limit)
 }
 

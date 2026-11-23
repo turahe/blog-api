@@ -20,7 +20,6 @@ import (
 	"github.com/turahe/blog-api/internal/core/readcache/readcachetest"
 	"github.com/turahe/blog-api/internal/core/settings/domain"
 	"github.com/turahe/blog-api/internal/core/settings/service"
-	"github.com/turahe/blog-api/internal/shared/pagination"
 )
 
 var testNow = time.Date(2026, 9, 25, 10, 0, 0, 0, time.UTC)
@@ -105,9 +104,10 @@ func (r *memoryRepo) History(_ context.Context, f domain.HistoryFilter) (domain.
 		return domain.HistoryPage{}, r.historyErr
 	}
 
-	limit := f.PageRequest.Limit
-	pageNum := f.PageRequest.Page
+	limit := f.Limit
+	pageNum := f.Page
 	page := domain.HistoryPage{Limit: limit, OffsetPage: pageNum, OffsetPerPage: limit}
+
 	for _, w := range slices.Backward(r.writes) {
 		if f.Key == "" || f.Key == w.Key {
 			page.Items = append(page.Items, domain.HistoryEntry{
@@ -452,7 +452,7 @@ func TestHistoryPaginatesAndRedactsUnknownKeys(t *testing.T) {
 	}
 	svc, _, _ := newService(repo)
 
-	page, err := svc.History(t.Context(), domain.HistoryFilter{PageRequest: pagination.PageRequest{Limit: 1000}})
+	page, err := svc.History(t.Context(), domain.HistoryFilter{Limit: 1000})
 	require.NoError(t, err)
 	assert.Equal(t, 1, page.OffsetPage)
 	assert.Equal(t, 100, page.OffsetPerPage, "per_page is capped")
@@ -464,7 +464,7 @@ func TestHistoryPaginatesAndRedactsUnknownKeys(t *testing.T) {
 	assert.Nil(t, page.Items[1].Previous)
 	assert.Nil(t, page.Items[1].New)
 
-	page, err = svc.History(t.Context(), domain.HistoryFilter{Key: " site.name ", PageRequest: pagination.PageRequest{Page: 2}})
+	page, err = svc.History(t.Context(), domain.HistoryFilter{Key: " site.name ", Page: 2})
 	require.NoError(t, err)
 	assert.Equal(t, 2, page.OffsetPage)
 	assert.Equal(t, 20, page.OffsetPerPage, "per_page defaults")

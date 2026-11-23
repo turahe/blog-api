@@ -31,13 +31,16 @@ import (
 func ParseRequest(c *gin.Context, cfg CursorConfig, opts ...Option) (PageRequest, error) {
 	opt, err := applyOptions(opts)
 	_ = opt // reserved for future request correlation; no-op current usage
+
 	if err != nil {
 		return PageRequest{}, err
 	}
+
 	maxPer := cfg.MaxPerPage
 	if maxPer <= 0 {
 		maxPer = DefaultMaxPerPage
 	}
+
 	defPer := cfg.DefaultPerPage
 	if defPer <= 0 {
 		defPer = DefaultPerPage
@@ -45,25 +48,31 @@ func ParseRequest(c *gin.Context, cfg CursorConfig, opts ...Option) (PageRequest
 
 	after := strings.TrimSpace(c.Query("after"))
 	before := strings.TrimSpace(c.Query("before"))
+
 	limitRaw := strings.TrimSpace(c.Query("limit"))
 	if limitRaw == "" {
 		limitRaw = strings.TrimSpace(c.Query("perPage"))
 	}
+
 	limit := defPer
+
 	if limitRaw != "" {
 		n, err := strconv.Atoi(limitRaw)
 		if err == nil {
 			limit = n
 		}
 	}
+
 	if limit < 1 {
 		limit = defPer
 	}
+
 	if limit > maxPer {
 		limit = maxPer
 	}
 
 	includeTotal := true
+
 	if it := strings.TrimSpace(c.Query("includeTotal")); it != "" {
 		switch strings.ToLower(it) {
 		case "0", "false", "no", "off":
@@ -78,17 +87,21 @@ func ParseRequest(c *gin.Context, cfg CursorConfig, opts ...Option) (PageRequest
 		if cfg.OffsetModeOnly {
 			return pr, ErrCursorUnsupported
 		}
+
 		pr.Mode = ModeCursor
 		pr.Forward = true
 		pr.Cursor = after
+
 		return pr, nil
 	case before != "":
 		if cfg.OffsetModeOnly {
 			return pr, ErrCursorUnsupported
 		}
+
 		pr.Mode = ModeCursor
 		pr.Forward = false
 		pr.Cursor = before
+
 		return pr, nil
 	}
 
@@ -99,14 +112,17 @@ func ParseRequest(c *gin.Context, cfg CursorConfig, opts ...Option) (PageRequest
 		if page < 1 {
 			page = 1
 		}
+
 		pr.Mode = ModeOffset
 		pr.Page = page
 		pr.Forward = true
+
 		return pr, nil
 	}
 
 	pr.Mode = ModeCursor
 	pr.Forward = true
+
 	return pr, nil
 }
 
@@ -118,19 +134,24 @@ func ParseLegacy(cfg CursorConfig, page, perPage int) PageRequest {
 	if maxPer <= 0 {
 		maxPer = DefaultMaxPerPage
 	}
+
 	defPer := cfg.DefaultPerPage
 	if defPer <= 0 {
 		defPer = DefaultPerPage
 	}
+
 	if perPage < 1 {
 		perPage = defPer
 	}
+
 	if perPage > maxPer {
 		perPage = maxPer
 	}
+
 	if page < 1 {
 		page = 1
 	}
+
 	return PageRequest{
 		Mode:         ModeOffset,
 		Forward:      true,

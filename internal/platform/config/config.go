@@ -23,6 +23,8 @@ const DBDriverPostgres = "postgres"
 
 const envProduction = "production"
 
+const dbSSLModeDisable = "disable"
+
 const (
 	defaultAddress  = "0.0.0.0:8080"
 	defaultDBDriver = DBDriverPostgres
@@ -434,7 +436,7 @@ func (c Config) DatabaseDSN() (string, error) {
 
 	sslmode := c.DBSSLMode
 	if sslmode == "" {
-		sslmode = "disable"
+		sslmode = dbSSLModeDisable
 	}
 
 	q.Set("sslmode", sslmode)
@@ -477,10 +479,10 @@ func (c Config) ValidateDatabase() error {
 
 	sslmode := strings.ToLower(strings.TrimSpace(c.DBSSLMode))
 	if sslmode == "" {
-		sslmode = "disable"
+		sslmode = dbSSLModeDisable
 	}
 
-	if c.Environment == envProduction && sslmode == "disable" {
+	if c.Environment == envProduction && sslmode == dbSSLModeDisable {
 		return errors.New("DB_SSLMODE cannot be disable in production")
 	}
 
@@ -915,11 +917,11 @@ func dbSSLMode() string {
 				return "require"
 			}
 
-			return "disable"
+			return dbSSLModeDisable
 		}
 	}
 
-	return env("DB_SSLMODE", "disable")
+	return env("DB_SSLMODE", dbSSLModeDisable)
 }
 
 // dbMaxLifetime prefers DATABASE_CONN_MAX_LIFETIME (minutes) over the duration form.

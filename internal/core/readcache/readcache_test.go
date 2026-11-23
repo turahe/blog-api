@@ -29,7 +29,12 @@ func (f *fakeCache) Get(_ context.Context, family readcache.Family, key string, 
 	f.gets = append(f.gets, getCall{family: family, key: key})
 
 	if f.hit {
-		*dst.(*string) = f.cached
+		s, ok := dst.(*string)
+		if !ok {
+			panic("dst must be *string")
+		}
+
+		*s = f.cached
 
 		return true, nil
 	}

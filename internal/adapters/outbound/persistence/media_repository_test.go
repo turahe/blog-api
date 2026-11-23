@@ -8,7 +8,6 @@ import (
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/require"
 	mediadomain "github.com/turahe/blog-api/internal/core/media/domain"
-	"github.com/turahe/blog-api/internal/shared/pagination"
 	"gorm.io/gorm"
 )
 
@@ -91,6 +90,7 @@ func TestMediaRepositoryCreate(t *testing.T) {
 				a.Tags, a.SizeBytes, a.CreatedAt = []string{"avatar"}, 42, created
 			},
 			check: func(t *testing.T, got mediadomain.MediaAsset) {
+				t.Helper()
 				require.Equal(t, &uploader, got.UploadedByUUID)
 				require.Equal(t, &width, got.Width)
 				require.Equal(t, &checksum, got.ChecksumSHA256)
@@ -102,6 +102,7 @@ func TestMediaRepositoryCreate(t *testing.T) {
 		{
 			name: "defaults timestamps",
 			check: func(t *testing.T, got mediadomain.MediaAsset) {
+				t.Helper()
 				require.Nil(t, got.UploadedByUUID)
 				require.Empty(t, got.Tags)
 				require.WithinDuration(t, time.Now(), got.CreatedAt, time.Minute)
@@ -112,6 +113,7 @@ func TestMediaRepositoryCreate(t *testing.T) {
 			name:   "soft-deleted",
 			mutate: func(a *mediadomain.MediaAsset) { a.DeletedAt = &trashed },
 			check: func(t *testing.T, got mediadomain.MediaAsset) {
+				t.Helper()
 				require.NotNil(t, got.DeletedAt)
 				require.WithinDuration(t, trashed, *got.DeletedAt, 0)
 			},
@@ -121,6 +123,8 @@ func TestMediaRepositoryCreate(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
 			got, err := repo.Create(ctx, newMediaAsset(tt.mutate))
 			if tt.wantErr != nil {
 				require.ErrorIs(t, err, tt.wantErr)
@@ -271,7 +275,7 @@ func TestMediaRepositoryOrphansPurgeAndUsage(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, []uuid.UUID{trashed}, ids(gotTrashed))
 
-	unusedPage, err := repo.List(ctx, mediadomain.ListFilter{Query: name, Unused: true, PageRequest: pagination.PageRequest{Page: 1, Limit: 10}})
+	unusedPage, err := repo.List(ctx, mediadomain.ListFilter{Query: name, Unused: true, Page: 1, Limit: 10})
 	require.NoError(t, err)
 	require.Equal(t, []uuid.UUID{unused}, ids(unusedPage.Items))
 

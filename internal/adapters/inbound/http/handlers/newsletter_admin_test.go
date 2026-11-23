@@ -117,6 +117,7 @@ func TestAdminNewsletterSubscriberHandlers(t *testing.T) {
 	t.Parallel()
 
 	id := uuid.NewString()
+
 	tests := []struct {
 		name    string
 		handler func(newsletterAdminAPI) gin.HandlerFunc
@@ -257,6 +258,7 @@ func TestAdminNewsletterConfigHandlers(t *testing.T) {
 	var providerNone responses.NewsletterProvider
 
 	valid := `{"confirmTtlHours":24,"doubleOptinRequired":true,"lists":[{"slug":"weekly","name":"Weekly","isDefault":true}]}`
+
 	tests := []struct {
 		name    string
 		handler gin.HandlerFunc

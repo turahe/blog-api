@@ -141,6 +141,8 @@ func TestDispatch(t *testing.T) {
 			},
 			wantStatus: domain.IssueSent, wantSent: 2,
 			check: func(t *testing.T, f *fixture, issue domain.Issue) {
+				t.Helper()
+
 				emails := f.sender.sent()
 				deliveries := f.repo.recordedDeliveries()
 				require.Len(t, deliveries, 2)
@@ -186,6 +188,7 @@ func TestDispatch(t *testing.T) {
 			edit:       func(_ *Deps, c *Config) { c.BatchSize = 1 },
 			wantStatus: domain.IssueSent, wantSent: 3,
 			check: func(t *testing.T, f *fixture, _ domain.Issue) {
+				t.Helper()
 				assert.Equal(t, 4, f.repo.callCount("ClaimRecipients"), "three batches and an empty claim")
 			},
 		},
@@ -224,6 +227,7 @@ func TestDispatch(t *testing.T) {
 			edit:       func(d *Deps, _ *Config) { d.Markdown = nil },
 			wantStatus: domain.IssueSent, wantSent: 1,
 			check: func(t *testing.T, f *fixture, _ domain.Issue) {
+				t.Helper()
 				assert.NotContains(t, f.sender.sent()[0].HTML, "Hello")
 			},
 		},
@@ -232,6 +236,8 @@ func TestDispatch(t *testing.T) {
 			edit:       func(d *Deps, _ *Config) { d.Links = nil },
 			wantStatus: domain.IssueSent, wantSent: 1,
 			check: func(t *testing.T, f *fixture, _ domain.Issue) {
+				t.Helper()
+
 				email := f.sender.sent()[0]
 				assert.NotContains(t, email.Headers, "List-Unsubscribe")
 				assert.Contains(t, email.Text, "subscribed to Example.\nUnsubscribe: /newsletter/unsubscribe?token=")
@@ -244,6 +250,8 @@ func TestDispatch(t *testing.T) {
 			},
 			wantStatus: domain.IssueSent,
 			check: func(t *testing.T, f *fixture, issue domain.Issue) {
+				t.Helper()
+
 				d := f.repo.recordedDeliveries()[0]
 				assert.True(t, d.Permanent)
 				assert.False(t, d.Sent)
@@ -259,6 +267,8 @@ func TestDispatch(t *testing.T) {
 			wantErr:    domain.ErrDeliveriesPending,
 			wantStatus: domain.IssueSending,
 			check: func(t *testing.T, f *fixture, _ domain.Issue) {
+				t.Helper()
+
 				d := f.repo.recordedDeliveries()[0]
 				assert.False(t, d.Permanent)
 				assert.Equal(t, "boom", d.Error)
@@ -272,6 +282,7 @@ func TestDispatch(t *testing.T) {
 			wantErr:    domain.ErrDeliveriesPending,
 			wantStatus: domain.IssueSending,
 			check: func(t *testing.T, f *fixture, _ domain.Issue) {
+				t.Helper()
 				assert.Len(t, f.repo.recordedDeliveries()[0].Error, maxErrorLength)
 			},
 		},
@@ -281,6 +292,7 @@ func TestDispatch(t *testing.T) {
 			wantErr:    domain.ErrDeliveriesPending,
 			wantStatus: domain.IssueSending,
 			check: func(t *testing.T, f *fixture, _ domain.Issue) {
+				t.Helper()
 				assert.Empty(t, f.sender.sent())
 				assert.Equal(t, "boom", f.repo.recordedDeliveries()[0].Error)
 			},
@@ -291,6 +303,7 @@ func TestDispatch(t *testing.T) {
 			wantErr:    domain.ErrDeliveriesPending,
 			wantStatus: domain.IssueSending,
 			check: func(t *testing.T, f *fixture, _ domain.Issue) {
+				t.Helper()
 				assert.Empty(t, f.sender.sent())
 			},
 		},
@@ -298,6 +311,7 @@ func TestDispatch(t *testing.T) {
 			name: "missing issue is dropped", status: domain.IssueQueued,
 			setup: func(f *fixture, _ domain.Issue) { f.repo.failOn("Issue", domain.ErrNotFound) },
 			check: func(t *testing.T, f *fixture, _ domain.Issue) {
+				t.Helper()
 				assert.Contains(t, f.logs.String(), "dispatch for a missing issue")
 			},
 			wantStatus: domain.IssueQueued,

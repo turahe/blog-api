@@ -2,6 +2,7 @@ package pagination_test
 
 import (
 	"encoding/json"
+	"net/http"
 	"net/http/httptest"
 	"net/url"
 	"strings"
@@ -16,12 +17,14 @@ import (
 func newCtx2(t *testing.T, path string, q url.Values) *gin.Context {
 	t.Helper()
 	gin.SetMode(gin.TestMode)
+
 	w := httptest.NewRecorder()
 	ctx, _ := gin.CreateTestContext(w)
-	req := httptest.NewRequest("GET", path+"?"+q.Encode(), nil)
+	req := httptest.NewRequestWithContext(t.Context(), http.MethodGet, path+"?"+q.Encode(), nil)
 	req.Host = "api.example.com"
 	req.Header.Set("X-Forwarded-Proto", "https")
 	ctx.Request = req
+
 	return ctx
 }
 
@@ -31,7 +34,7 @@ type Item struct {
 	Created   time.Time
 }
 
-func (i Item) SortValues(cfg pagination.CursorConfig) map[string]any {
+func (i Item) SortValues(_ pagination.CursorConfig) map[string]any {
 	return map[string]any{
 		"published_at": i.Published,
 		"created_at":   i.Created,
@@ -39,20 +42,18 @@ func (i Item) SortValues(cfg pagination.CursorConfig) map[string]any {
 	}
 }
 
-func buildResult(total int64, items []Item) pagination.PageResult[Item] {
-	return pagination.PageResult[Item]{
-		Items:           items,
-		Total:           &total,
-		HasNextPage:     len(items) > 0,
-		HasPreviousPage: false,
-		NextCursor:      "NEXT",
-		PreviousCursor:  "PREV",
-		Limit:           20,
-	}
+func jsonFloat(t *testing.T, v any) float64 {
+	t.Helper()
+
+	f, ok := v.(float64)
+	require.True(t, ok)
+
+	return f
 }
 
 func TestBuildMetaCursorMode(t *testing.T) {
 	t.Parallel()
+
 	total := int64(999)
 	r := pagination.PageResult[Item]{
 		Items:           make([]Item, 3),
@@ -69,19 +70,22 @@ func TestBuildMetaCursorMode(t *testing.T) {
 	// Marshal cursor meta only.
 	b, err := json.Marshal(cursor)
 	require.NoError(t, err)
+
 	var m map[string]any
 	require.NoError(t, json.Unmarshal(b, &m))
 	require.Equal(t, "NX", m["nextCursor"])
 	require.Equal(t, "PR", m["previousCursor"])
 	require.Equal(t, true, m["hasNextPage"])
 	require.Equal(t, true, m["hasPreviousPage"])
-	require.Equal(t, float64(10), m["limit"])
+	require.InDelta(t, 10, jsonFloat(t, m["limit"]), 0)
 	require.Equal(t, "R-1", m["requestId"])
+
 	_ = legacy
 }
 
 func TestBuildMetaOffsetMode(t *testing.T) {
 	t.Parallel()
+
 	total := int64(999)
 	r := pagination.PageResult[Item]{
 		Items:         make([]Item, 20),
@@ -94,19 +98,21 @@ func TestBuildMetaOffsetMode(t *testing.T) {
 	legacy, _ := pagination.BuildMeta[Item](ctx, r)
 	b, err := json.Marshal(legacy)
 	require.NoError(t, err)
+
 	var m map[string]any
 	require.NoError(t, json.Unmarshal(b, &m))
-	require.Equal(t, float64(3), m["currentPage"])
-	require.Equal(t, float64(50), m["lastPage"]) // 999 / 20 ceil = 50
-	require.Equal(t, float64(20), m["perPage"])
-	require.Equal(t, float64(41), m["from"]) // (3-1)*20 + 1
-	require.Equal(t, float64(60), m["to"])   // (3-1)*20 + 20
-	require.Equal(t, float64(999), m["total"])
+	require.InDelta(t, 3, jsonFloat(t, m["currentPage"]), 0)
+	require.InDelta(t, 50, jsonFloat(t, m["lastPage"]), 0) // 999 / 20 ceil = 50
+	require.InDelta(t, 20, jsonFloat(t, m["perPage"]), 0)
+	require.InDelta(t, 41, jsonFloat(t, m["from"]), 0) // (3-1)*20 + 1
+	require.InDelta(t, 60, jsonFloat(t, m["to"]), 0)   // (3-1)*20 + 20
+	require.InDelta(t, 999, jsonFloat(t, m["total"]), 0)
 	require.Equal(t, "/v1/posts", m["path"])
 }
 
 func TestBuildLinksCursorModePreservesFilters(t *testing.T) {
 	t.Parallel()
+
 	r := pagination.PageResult[Item]{
 		Items:           make([]Item, 5),
 		HasNextPage:     true,
@@ -129,6 +135,7 @@ func TestBuildLinksCursorModePreservesFilters(t *testing.T) {
 	require.NotNil(t, links.Next, "Next link must exist when hasNextPage=true")
 	u, err := url.Parse(*links.Next)
 	require.NoError(t, err)
+
 	q := u.Query()
 	require.Equal(t, "NC", q.Get("after"))
 	require.Empty(t, q.Get("before"))
@@ -144,6 +151,7 @@ func TestBuildLinksCursorModePreservesFilters(t *testing.T) {
 
 func TestBuildLinksOffsetModeLegacy(t *testing.T) {
 	t.Parallel()
+
 	total := int64(100)
 	r := pagination.PageResult[Item]{
 		Items:         make([]Item, 20),
@@ -162,12 +170,14 @@ func TestBuildLinksOffsetModeLegacy(t *testing.T) {
 	u, _ := url.Parse(*links.Next)
 	require.Equal(t, "4", u.Query().Get("page"))
 	require.Equal(t, "hello", u.Query().Get("q"))
+
 	ul, _ := url.Parse(*links.Last)
 	require.Equal(t, "5", ul.Query().Get("page"))
 }
 
 func TestBuildMetaNoTotalSkipsLegacyFields(t *testing.T) {
 	t.Parallel()
+
 	r := pagination.PageResult[Item]{
 		Items:         make([]Item, 5),
 		Total:         nil,
@@ -178,6 +188,7 @@ func TestBuildMetaNoTotalSkipsLegacyFields(t *testing.T) {
 	ctx := newCtx2(t, "/x", url.Values{})
 	legacy, _ := pagination.BuildMeta[Item](ctx, r)
 	b, _ := json.Marshal(legacy)
+
 	var m map[string]any
 	require.NoError(t, json.Unmarshal(b, &m))
 	require.NotContains(t, m, "total")
@@ -188,6 +199,8 @@ func TestBuildMetaNoTotalSkipsLegacyFields(t *testing.T) {
 }
 
 func TestStripAllCursorsRemovesKeys(t *testing.T) {
+	t.Parallel()
+
 	out := pagination.StripAllCursors("after=a&before=b&page=1&q=x")
 	parsed, _ := url.ParseQuery(strings.TrimPrefix(out, "?"))
 	require.Empty(t, parsed.Get("after"))

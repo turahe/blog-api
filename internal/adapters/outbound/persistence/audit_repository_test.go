@@ -34,9 +34,11 @@ func TestAuditRepositoryRoundTripsEntry(t *testing.T) {
 
 	require.NoError(t, repo.Insert(t.Context(), []auditdomain.Entry{entry}))
 
-	f := auditdomain.ActivityFilter{UserID: user}
-	f.PageRequest = pagination.ParseLegacy(pagination.CursorConfig{}, 1, 10)
-	f.PageRequest.IncludeTotal = true
+	f := auditdomain.ActivityFilter{
+		UserID:      user,
+		PageRequest: pagination.ParseLegacy(pagination.CursorConfig{}, 1, 10),
+	}
+	f.IncludeTotal = true
 	page, err := repo.Activity(t.Context(), f)
 	require.NoError(t, err)
 	require.NotNil(t, page.Total)
@@ -67,9 +69,11 @@ func TestAuditRepositoryIgnoresRedeliveredEntries(t *testing.T) {
 	require.NoError(t, repo.Insert(t.Context(), []auditdomain.Entry{first}))
 	require.NoError(t, repo.Insert(t.Context(), []auditdomain.Entry{first, second}))
 
-	f := auditdomain.ActivityFilter{UserID: user}
-	f.PageRequest = pagination.ParseLegacy(pagination.CursorConfig{}, 1, 10)
-	f.PageRequest.IncludeTotal = true
+	f := auditdomain.ActivityFilter{
+		UserID:      user,
+		PageRequest: pagination.ParseLegacy(pagination.CursorConfig{}, 1, 10),
+	}
+	f.IncludeTotal = true
 	page, err := repo.Activity(t.Context(), f)
 	require.NoError(t, err)
 	require.NotNil(t, page.Total)
@@ -87,8 +91,10 @@ func TestAuditRepositoryStoresImpersonator(t *testing.T) {
 	entry.ImpersonatorID = &staff
 	require.NoError(t, repo.Insert(t.Context(), []auditdomain.Entry{entry}))
 
-	f := auditdomain.ActivityFilter{UserID: target}
-	f.PageRequest = pagination.ParseLegacy(pagination.CursorConfig{}, 1, 10)
+	f := auditdomain.ActivityFilter{
+		UserID:      target,
+		PageRequest: pagination.ParseLegacy(pagination.CursorConfig{}, 1, 10),
+	}
 	page, err := repo.Activity(t.Context(), f)
 	require.NoError(t, err)
 	require.Len(t, page.Items, 1)
@@ -114,44 +120,54 @@ func TestAuditRepositoryActivityCoversActorAndSubject(t *testing.T) {
 	}
 	require.NoError(t, repo.Insert(t.Context(), entries))
 
-	fAll := auditdomain.ActivityFilter{UserID: user}
-	fAll.PageRequest = pagination.ParseLegacy(pagination.CursorConfig{}, 1, 10)
-	fAll.PageRequest.IncludeTotal = true
+	fAll := auditdomain.ActivityFilter{
+		UserID:      user,
+		PageRequest: pagination.ParseLegacy(pagination.CursorConfig{}, 1, 10),
+	}
+	fAll.IncludeTotal = true
 	all, err := repo.Activity(t.Context(), fAll)
 	require.NoError(t, err)
 	require.NotNil(t, all.Total)
 	require.Equal(t, int64(3), *all.Total)
 	require.Equal(t, "admin.posts.delete", all.Items[0].Action, "newest first")
 
-	fOwner := auditdomain.ActivityFilter{UserID: user, CategorizedOnly: true}
-	fOwner.PageRequest = pagination.ParseLegacy(pagination.CursorConfig{}, 1, 10)
-	fOwner.PageRequest.IncludeTotal = true
+	fOwner := auditdomain.ActivityFilter{
+		UserID: user, CategorizedOnly: true,
+		PageRequest: pagination.ParseLegacy(pagination.CursorConfig{}, 1, 10),
+	}
+	fOwner.IncludeTotal = true
 	owner, err := repo.Activity(t.Context(), fOwner)
 	require.NoError(t, err)
 	require.NotNil(t, owner.Total)
 	require.Equal(t, int64(2), *owner.Total)
 
-	fLogins := auditdomain.ActivityFilter{UserID: user, Categories: []string{"login"}}
-	fLogins.PageRequest = pagination.ParseLegacy(pagination.CursorConfig{}, 1, 10)
-	fLogins.PageRequest.IncludeTotal = true
+	fLogins := auditdomain.ActivityFilter{
+		UserID: user, Categories: []string{"login"},
+		PageRequest: pagination.ParseLegacy(pagination.CursorConfig{}, 1, 10),
+	}
+	fLogins.IncludeTotal = true
 	logins, err := repo.Activity(t.Context(), fLogins)
 	require.NoError(t, err)
 	require.NotNil(t, logins.Total)
 	require.Equal(t, int64(1), *logins.Total)
 
 	from, to := base.Add(30*time.Minute), base.Add(90*time.Minute)
-	fWindow := auditdomain.ActivityFilter{UserID: user, From: &from, To: &to}
-	fWindow.PageRequest = pagination.ParseLegacy(pagination.CursorConfig{}, 1, 10)
-	fWindow.PageRequest.IncludeTotal = true
+	fWindow := auditdomain.ActivityFilter{
+		UserID: user, From: &from, To: &to,
+		PageRequest: pagination.ParseLegacy(pagination.CursorConfig{}, 1, 10),
+	}
+	fWindow.IncludeTotal = true
 	window, err := repo.Activity(t.Context(), fWindow)
 	require.NoError(t, err)
 	require.NotNil(t, window.Total)
 	require.Equal(t, int64(1), *window.Total)
 	require.Equal(t, "admin.users.roles.assign", window.Items[0].Action)
 
-	fPaged := auditdomain.ActivityFilter{UserID: user}
-	fPaged.PageRequest = pagination.ParseLegacy(pagination.CursorConfig{}, 2, 2)
-	fPaged.PageRequest.IncludeTotal = true
+	fPaged := auditdomain.ActivityFilter{
+		UserID:      user,
+		PageRequest: pagination.ParseLegacy(pagination.CursorConfig{}, 2, 2),
+	}
+	fPaged.IncludeTotal = true
 	paged, err := repo.Activity(t.Context(), fPaged)
 	require.NoError(t, err)
 	require.NotNil(t, paged.Total)
@@ -170,9 +186,11 @@ func TestAuditRepositoryStoresUnknownActorAsNull(t *testing.T) {
 		auditAt("auth.logout", "logout", &ghost, auditdomain.ResourceUser, &ghost, time.Now()),
 	}))
 
-	f := auditdomain.ActivityFilter{UserID: ghost}
-	f.PageRequest = pagination.ParseLegacy(pagination.CursorConfig{}, 1, 10)
-	f.PageRequest.IncludeTotal = true
+	f := auditdomain.ActivityFilter{
+		UserID:      ghost,
+		PageRequest: pagination.ParseLegacy(pagination.CursorConfig{}, 1, 10),
+	}
+	f.IncludeTotal = true
 	page, err := repo.Activity(t.Context(), f)
 	require.NoError(t, err)
 	require.NotNil(t, page.Total)
@@ -197,9 +215,11 @@ func TestAuditRepositoryPrunesOldEntries(t *testing.T) {
 	require.NoError(t, err)
 	require.GreaterOrEqual(t, deleted, int64(1))
 
-	f := auditdomain.ActivityFilter{UserID: user}
-	f.PageRequest = pagination.ParseLegacy(pagination.CursorConfig{}, 1, 10)
-	f.PageRequest.IncludeTotal = true
+	f := auditdomain.ActivityFilter{
+		UserID:      user,
+		PageRequest: pagination.ParseLegacy(pagination.CursorConfig{}, 1, 10),
+	}
+	f.IncludeTotal = true
 	page, err := repo.Activity(t.Context(), f)
 	require.NoError(t, err)
 	require.NotNil(t, page.Total)

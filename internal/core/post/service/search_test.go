@@ -7,7 +7,6 @@ import (
 
 	"github.com/stretchr/testify/require"
 	postdomain "github.com/turahe/blog-api/internal/core/post/domain"
-	"github.com/turahe/blog-api/internal/shared/pagination"
 )
 
 type fakeSearcher struct {
@@ -33,8 +32,8 @@ func TestSearchNormalizesTheFilter(t *testing.T) {
 	svc := New(nil, nil, nil).WithSearch(searcher)
 
 	got, err := svc.Search(t.Context(), postdomain.SearchFilter{
-		Query:       "  go \t generics\n",
-		PageRequest: pagination.PageRequest{Page: 0, Limit: 0},
+		Query: "  go \t generics\n",
+		Page:  0, Limit: 0,
 	})
 	require.NoError(t, err)
 	require.Equal(t, "go generics", searcher.filter.Query)

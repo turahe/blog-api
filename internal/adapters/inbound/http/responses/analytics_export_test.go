@@ -12,7 +12,7 @@ import (
 var exportNow = time.Date(2026, 8, 10, 12, 0, 0, 0, time.UTC)
 
 func sampleExport(status analyticsdomain.ExportStatus) analyticsservice.ExportView {
-	return analyticsservice.ExportView{Export: analyticsdomain.Export{
+	return analyticsservice.ExportView{
 		UUID:      uuid.MustParse("0198a1b2-0000-7000-8000-00000000e001"),
 		Grain:     analyticsdomain.GrainWeek,
 		FirstDay:  "2026-07-06",
@@ -20,7 +20,7 @@ func sampleExport(status analyticsdomain.ExportStatus) analyticsservice.ExportVi
 		Timezone:  "Asia/Jakarta",
 		Status:    status,
 		CreatedAt: time.Date(2026, 8, 10, 18, 0, 0, 0, time.FixedZone("WIB", 7*60*60)),
-	}}
+	}
 }
 
 const exportBaseJSON = `"id": "0198a1b2-0000-7000-8000-00000000e001", "grain": "week",

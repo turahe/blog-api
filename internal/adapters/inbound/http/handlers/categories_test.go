@@ -138,6 +138,7 @@ func TestGetCategoryHandler(t *testing.T) {
 	t.Parallel()
 
 	cat := sampleCategory()
+
 	tests := []struct {
 		name    string
 		err     error
@@ -213,6 +214,7 @@ func TestAdminCreateCategoryHandlerInputs(t *testing.T) {
 	t.Parallel()
 
 	parentID, imageID, beforeID := uuid.New(), uuid.New(), uuid.New()
+
 	tests := []struct {
 		name   string
 		body   string
@@ -272,6 +274,7 @@ func TestAdminUpdateCategoryHandler(t *testing.T) {
 	t.Parallel()
 
 	catID, imageID := uuid.New(), uuid.New()
+
 	tests := []struct {
 		name    string
 		param   string
@@ -464,6 +467,7 @@ func TestAdminMoveCategoryHandler(t *testing.T) {
 	t.Parallel()
 
 	catID, parentID, beforeID := uuid.New(), uuid.New(), uuid.New()
+
 	tests := []struct {
 		name       string
 		param      string

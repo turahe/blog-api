@@ -13,7 +13,9 @@ import (
 // ancientDay returns a random UTC midnight between the years 1200 and 1800: before every real
 // row, and unlikely to collide with another run's keys.
 func ancientDay() time.Time {
-	return time.Date(1200+rand.IntN(600), time.January, 1, 0, 0, 0, 0, time.UTC).AddDate(0, 0, rand.IntN(365))
+	//nolint:gosec // deterministic fixture RNG, not security-sensitive
+	rng := rand.New(rand.NewPCG(1, 2))
+	return time.Date(1200+rng.IntN(600), time.January, 1, 0, 0, 0, 0, time.UTC).AddDate(0, 0, rng.IntN(365))
 }
 
 func insertRawAnalytics(t *testing.T, tx *gorm.DB, at time.Time) {

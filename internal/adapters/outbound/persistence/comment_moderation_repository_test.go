@@ -120,6 +120,7 @@ func TestCommentRepositoryModerationRejectsUnencodableSnapshot(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
 			c := createComment(t, repo, commentdomain.Comment{PostUUID: post, AuthorName: "g", Content: "c", Status: commentdomain.StatusPending})
 			entry := moderationEntry(c, &moderator, tt.before, tt.after)
 
@@ -157,6 +158,7 @@ func TestCommentRepositoryListModerationLogRejectsNonObjectSnapshot(t *testing.T
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
 			c := createComment(t, repo, commentdomain.Comment{PostUUID: post, AuthorName: "g", Content: "c"})
 			require.NoError(t, tx.Exec(`INSERT INTO comment_moderation_log
 				(uuid, comment_id, comment_uuid, action, from_status, to_status, before_state, after_state, created_at)

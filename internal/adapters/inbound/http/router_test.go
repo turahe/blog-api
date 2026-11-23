@@ -282,5 +282,6 @@ func TestNewRouterRecordsMetricsByRoute(t *testing.T) {
 
 	metrics.mu.Lock()
 	defer metrics.mu.Unlock()
+
 	require.Equal(t, []string{"/api/v1/health"}, metrics.routes)
 }

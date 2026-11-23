@@ -82,5 +82,6 @@ func ErrorCause(err error) string {
 	if err == nil {
 		return ""
 	}
+
 	return fmt.Sprintf("The cursor could not be processed: %v.", err)
 }

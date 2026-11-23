@@ -9,6 +9,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -353,7 +354,7 @@ func TestReadPrefixRejectsInvalidLength(t *testing.T) {
 	t.Parallel()
 
 	for _, n := range []int64{0, -1} {
-		t.Run(fmt.Sprint(n), func(t *testing.T) {
+		t.Run(strconv.FormatInt(n, 10), func(t *testing.T) {
 			t.Parallel()
 
 			getter := &fakeGetClient{body: "data"}

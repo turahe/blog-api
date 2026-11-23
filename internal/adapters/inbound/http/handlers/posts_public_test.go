@@ -42,7 +42,7 @@ func TestListPublishedPostsHandler(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 
-			repo := &fakePostRepo{err: tc.repoErr, published: postdomain.ListResult{Items: []postdomain.Post{post}, Total: int64Ptr(11), OffsetPage: 2, OffsetPerPage: 5}}
+			repo := &fakePostRepo{err: tc.repoErr, published: postdomain.ListResult{Items: []postdomain.Post{post}, Total: new(int64(11)), OffsetPage: 2, OffsetPerPage: 5}}
 			code, body := getPosts(t, postservice.New(repo, nil, nil), tc.query)
 			require.Equal(t, tc.status, code)
 			require.Equal(t, tc.code, errorCode(body))
@@ -80,6 +80,7 @@ func TestGetPublishedPostHandler(t *testing.T) {
 	t.Parallel()
 
 	post := postdomain.Post{UUID: uuid.New(), Title: "Hello", Slug: "hello", Status: postdomain.StatusPublished}
+
 	tests := []struct {
 		name     string
 		param    string

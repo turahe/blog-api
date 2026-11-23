@@ -189,7 +189,7 @@ func TestBusClose(t *testing.T) {
 		require.ErrorIs(t, err, errPub)
 		require.ErrorIs(t, err, errSub)
 		require.ErrorIs(t, err, errClient)
-		assert.EqualError(t, err, "close publisher: pub\nclose subscriber: sub\nclient")
+		require.EqualError(t, err, "close publisher: pub\nclose subscriber: sub\nclient")
 		assert.Equal(t, []string{"publisher", "subscriber", "second", "first"}, closed, "cleanup runs in reverse")
 	})
 

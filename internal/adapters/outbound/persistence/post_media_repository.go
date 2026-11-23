@@ -21,7 +21,7 @@ type PostMediaModel struct {
 	Kind           string    `gorm:"column:kind"`
 	SortOrder      int       `gorm:"column:sort_order"`
 	CreatedAt      time.Time `gorm:"column:created_at"`
-	MediaAssetUUID uuid.UUID `gorm:"column:media_asset_uuid;->"`
+	MediaAssetUUID uuid.UUID `gorm:"column:media_asset_uuid;->;-:migration"`
 }
 
 // TableName returns the post_media table name for GORM.

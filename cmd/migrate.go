@@ -1,11 +1,12 @@
 package cmd
 
 import (
-	"database/sql"
 	"errors"
 	"fmt"
 
 	"github.com/spf13/cobra"
+	"gorm.io/gorm"
+
 	"github.com/turahe/blog-api/internal/bootstrap"
 	"github.com/turahe/blog-api/internal/platform/config"
 	"github.com/turahe/blog-api/internal/platform/migrations"
@@ -14,7 +15,7 @@ import (
 func newMigrateCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "migrate",
-		Short: "Manage database migrations",
+		Short: "Manage database schema (GORM AutoMigrate)",
 	}
 	cmd.AddCommand(
 		newMigrateActionCmd("up", migrations.Up),
@@ -25,10 +26,10 @@ func newMigrateCmd() *cobra.Command {
 	return cmd
 }
 
-func newMigrateActionCmd(name string, action func(*sql.DB) error) *cobra.Command {
+func newMigrateActionCmd(name string, action func(*gorm.DB) error) *cobra.Command {
 	return &cobra.Command{
 		Use:   name,
-		Short: name + " database migrations",
+		Short: name + " database schema",
 		Args:  cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) (err error) {
 			cfg, err := config.LoadBackground()
@@ -43,12 +44,12 @@ func newMigrateActionCmd(name string, action func(*sql.DB) error) *cobra.Command
 
 			defer func() { err = errors.Join(err, db.Close()) }()
 
-			sqlDB, err := db.DB().DB()
-			if err != nil {
-				return fmt.Errorf("get sql.DB: %w", err)
+			gormDB := db.DB()
+			if gormDB == nil {
+				return fmt.Errorf("gorm db not initialized")
 			}
 
-			return action(sqlDB)
+			return action(gormDB)
 		},
 	}
 }

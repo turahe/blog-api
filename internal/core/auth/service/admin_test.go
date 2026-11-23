@@ -47,6 +47,7 @@ func (r *memRoles) AssignRoles(_ context.Context, userID uuid.UUID, names []stri
 	}
 
 	r.assigned[userID] = append(r.assigned[userID], names...)
+
 	return nil
 }
 

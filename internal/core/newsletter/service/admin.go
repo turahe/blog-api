@@ -121,12 +121,9 @@ func (s *Service) ListSubscribers(ctx context.Context, filter domain.SubscriberF
 		return domain.SubscriberPage{}, domain.Invalid("unknown status %q", filter.Status)
 	}
 
-	if filter.Limit < 1 {
-		filter.Page, filter.PerPage = clampPage(filter.Page, filter.PerPage)
-		filter.PageRequest = pagination.ParseLegacy(subscribersListCfg, filter.Page, filter.PerPage)
-	} else if filter.Limit > subscribersListCfg.MaxPerPage {
-		filter.Limit = subscribersListCfg.MaxPerPage
-	}
+	filter.Page, filter.PerPage, filter.PageRequest = normalizeAdminListPaging(
+		filter.Page, filter.PerPage, filter.PageRequest, subscribersListCfg,
+	)
 
 	return s.Repo.ListSubscribers(ctx, filter)
 }
@@ -464,12 +461,9 @@ func (s *Service) ListIssues(ctx context.Context, filter domain.IssueFilter) (do
 		return domain.IssuePage{}, domain.Invalid("unknown status %q", filter.Status)
 	}
 
-	if filter.Limit < 1 {
-		filter.Page, filter.PerPage = clampPage(filter.Page, filter.PerPage)
-		filter.PageRequest = pagination.ParseLegacy(issuesListCfg, filter.Page, filter.PerPage)
-	} else if filter.Limit > issuesListCfg.MaxPerPage {
-		filter.Limit = issuesListCfg.MaxPerPage
-	}
+	filter.Page, filter.PerPage, filter.PageRequest = normalizeAdminListPaging(
+		filter.Page, filter.PerPage, filter.PageRequest, issuesListCfg,
+	)
 
 	return s.Repo.ListIssues(ctx, filter)
 }
@@ -485,6 +479,19 @@ const (
 	defaultPerPage = 20
 	maxPerPage     = 100
 )
+
+func normalizeAdminListPaging(page, perPage int, pr pagination.PageRequest, cfg pagination.CursorConfig) (int, int, pagination.PageRequest) {
+	if pr.Limit < 1 {
+		page, perPage = clampPage(page, perPage)
+		return page, perPage, pagination.ParseLegacy(cfg, page, perPage)
+	}
+
+	if pr.Limit > cfg.MaxPerPage {
+		pr.Limit = cfg.MaxPerPage
+	}
+
+	return page, perPage, pr
+}
 
 func clampPage(page, perPage int) (int, int) {
 	if page < 1 {

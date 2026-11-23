@@ -1,68 +1,17 @@
-// Package migrations runs the embedded goose SQL migrations.
+// Package migrations exposes CLI-facing schema commands backed by GORM AutoMigrate.
 package migrations
 
 import (
-	"context"
-	"database/sql"
-	"embed"
-	"fmt"
+	"gorm.io/gorm"
 
-	"github.com/pressly/goose/v3"
+	"github.com/turahe/blog-api/internal/adapters/outbound/persistence"
 )
 
-//go:embed sql/*.sql
-var files embed.FS
+// Up creates or updates the application schema.
+func Up(db *gorm.DB) error { return persistence.Migrate(db) }
 
-// upLockKey is the pg_advisory_lock key that serializes concurrent Up calls.
-const upLockKey int64 = 0x626c6f675f6d6967
+// Down drops AutoMigrate tables (destructive; local/dev).
+func Down(db *gorm.DB) error { return persistence.DropAll(db) }
 
-// Up applies all pending migrations. A session advisory lock serializes
-// concurrent callers (replicas starting together, parallel test packages).
-func Up(db *sql.DB) error {
-	goose.SetBaseFS(files)
-
-	if err := goose.SetDialect("postgres"); err != nil {
-		return fmt.Errorf("set migration dialect: %w", err)
-	}
-
-	if db.Stats().MaxOpenConnections == 1 { // the lock would hold goose's only connection
-		return goose.Up(db, "sql")
-	}
-
-	ctx := context.Background()
-
-	conn, err := db.Conn(ctx)
-	if err != nil {
-		return fmt.Errorf("migration lock connection: %w", err)
-	}
-	defer func() { _ = conn.Close() }()
-
-	if _, err := conn.ExecContext(ctx, "SELECT pg_advisory_lock($1)", upLockKey); err != nil {
-		return fmt.Errorf("acquire migration lock: %w", err)
-	}
-	defer conn.ExecContext(ctx, "SELECT pg_advisory_unlock($1)", upLockKey) //nolint:errcheck // released with the session anyway
-
-	return goose.Up(db, "sql")
-}
-
-// Down rolls back the most recent migration.
-func Down(db *sql.DB) error {
-	goose.SetBaseFS(files)
-
-	if err := goose.SetDialect("postgres"); err != nil {
-		return fmt.Errorf("set migration dialect: %w", err)
-	}
-
-	return goose.Down(db, "sql")
-}
-
-// Status logs the applied state of every migration.
-func Status(db *sql.DB) error {
-	goose.SetBaseFS(files)
-
-	if err := goose.SetDialect("postgres"); err != nil {
-		return fmt.Errorf("set migration dialect: %w", err)
-	}
-
-	return goose.Status(db, "sql")
-}
+// Status prints which schema tables are present.
+func Status(db *gorm.DB) error { return persistence.SchemaStatus(db) }

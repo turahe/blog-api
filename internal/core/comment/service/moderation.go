@@ -48,9 +48,11 @@ func (s *Service) AdminList(ctx context.Context, in AdminListInput) (commentdoma
 		norm := pagination.ParseLegacy(commentsAdminListCfg, in.Page, in.Limit)
 		in.PageRequest = norm
 	}
+
 	if in.Limit <= 0 {
 		in.Limit = commentsAdminListCfg.DefaultPerPage
 	}
+
 	if in.Page <= 0 {
 		in.Page = 1
 	}
@@ -59,8 +61,9 @@ func (s *Service) AdminList(ctx context.Context, in AdminListInput) (commentdoma
 		PostUUID:    in.PostUUID,
 		Statuses:    statuses,
 		NewestFirst: in.NewestFirst,
+
+		PageRequest: in.PageRequest,
 	}
-	filter.PageRequest = in.PageRequest
 
 	return s.repo.ListAdmin(ctx, filter)
 }

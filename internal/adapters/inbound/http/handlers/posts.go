@@ -168,8 +168,9 @@ func adminListPostsHandlerWithDeps(posts postAdminAPI, roles RoleLookup) gin.Han
 			CategoryUUID: categoryID,
 			Query:        c.Query("q"),
 			Trashed:      trashed,
+
+			PageRequest: pr,
 		}
-		filter.PageRequest = pr
 		if !unrestricted {
 			filter.ScopeAuthorUUID = &userID
 		}
@@ -198,12 +199,14 @@ func parseBoolQuery(c *gin.Context, name string, def bool) (bool, error) {
 	if v == "" {
 		return def, nil
 	}
+
 	switch strings.ToLower(v) {
 	case "1", "true", "yes", "on":
 		return true, nil
 	case "0", "false", "no", "off":
 		return false, nil
 	}
+
 	return def, errors.New("invalid bool")
 }
 

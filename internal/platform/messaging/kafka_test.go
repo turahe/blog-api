@@ -98,6 +98,8 @@ func TestOpenKafkaErrors(t *testing.T) {
 		{
 			name: "invalid TLS CA",
 			cfg: func(t *testing.T) config.Config {
+				t.Helper()
+
 				return config.Config{
 					MessageBroker: "kafka", KafkaBrokers: []string{mockKafka(t)}, KafkaConsumerGroup: "g",
 					KafkaTLS: true, KafkaTLSCAPath: badCA,

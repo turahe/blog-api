@@ -84,6 +84,9 @@ func TestTracingMarksSuccessfulMessageOK(t *testing.T) {
 	defer transport.mu.Unlock()
 
 	require.Len(t, transport.events, 1)
-	require.Equal(t, sentry.SpanStatusOK, transport.events[0].Contexts["trace"]["status"])
-	require.Equal(t, "id-1", transport.events[0].Contexts["trace"]["data"].(map[string]any)["messaging.message.id"])
+	traceCtx := transport.events[0].Contexts["trace"]
+	require.Equal(t, sentry.SpanStatusOK, traceCtx["status"])
+	data, ok := traceCtx["data"].(map[string]any)
+	require.True(t, ok)
+	require.Equal(t, "id-1", data["messaging.message.id"])
 }

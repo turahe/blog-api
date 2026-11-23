@@ -20,17 +20,14 @@ const (
 	payloadFieldFields = "fields"
 )
 
-var (
-	b64 = base64.RawURLEncoding
-)
+var b64 = base64.RawURLEncoding
 
 // Option tunes one-off behaviour in EncodeCursor / DecodeCursor / ParseRequest.
 type Option func(*options)
 
 type options struct {
-	signer    *Signer
-	nowFn     func() time.Time
-	pageReqID string
+	signer *Signer
+	nowFn  func() time.Time
 }
 
 // WithSigner overrides the Signer for one call. Tests use this to inject a
@@ -49,13 +46,16 @@ func applyOptions(opts []Option) (*options, error) {
 	for _, fn := range opts {
 		fn(out)
 	}
+
 	if out.signer == nil {
 		g, err := GlobalSigner()
 		if err != nil {
 			return nil, err
 		}
+
 		out.signer = g
 	}
+
 	return out, nil
 }
 
@@ -71,24 +71,30 @@ func EncodeCursor(cfg CursorConfig, fields map[string]any, opts ...Option) (stri
 	if err != nil {
 		return "", err
 	}
+
 	normalized := make(map[string]any, len(cfg.Sort))
 	for _, f := range cfg.Sort {
 		v, ok := fields[f.Name]
 		if !ok {
 			return "", fmt.Errorf("%w: %s", ErrCursorMissingField, f.Name)
 		}
+
 		normalized[f.Name] = normalizeSortValue(f.Type, v)
 	}
+
 	payload := map[string]any{
 		payloadFieldKind:     cfg.Kind,
 		payloadFieldIssuedAt: opt.nowFn().UTC().Unix(),
 		payloadFieldFields:   normalized,
 	}
+
 	raw, err := json.Marshal(payload)
 	if err != nil {
 		return "", fmt.Errorf("%w: %w", ErrCursorMalformed, err)
 	}
+
 	signed := opt.signer.Sign(raw)
+
 	return b64.EncodeToString(signed), nil
 }
 
@@ -101,23 +107,29 @@ func DecodeCursor(cfg CursorConfig, token string, opts ...Option) (map[string]an
 	if err != nil {
 		return nil, time.Time{}, err
 	}
+
 	signed, err := b64.DecodeString(token)
 	if err != nil {
 		return nil, time.Time{}, ErrCursorMalformed
 	}
+
 	raw, err := opt.signer.Verify(signed)
 	if err != nil {
 		return nil, time.Time{}, err
 	}
+
 	var payload map[string]any
 	if err := json.Unmarshal(raw, &payload); err != nil {
 		return nil, time.Time{}, ErrCursorMalformed
 	}
+
 	kind, _ := payload[payloadFieldKind].(string)
 	if kind != cfg.Kind {
 		return nil, time.Time{}, fmt.Errorf("%w: got %q want %q", ErrCursorWrongKind, kind, cfg.Kind)
 	}
+
 	var issuedAt time.Time
+
 	switch v := payload[payloadFieldIssuedAt].(type) {
 	case float64:
 		issuedAt = time.Unix(int64(v), 0).UTC()
@@ -128,22 +140,27 @@ func DecodeCursor(cfg CursorConfig, token string, opts ...Option) (map[string]an
 	default:
 		return nil, time.Time{}, fmt.Errorf("%w: issued_at", ErrCursorMalformed)
 	}
+
 	ttl := cfg.TTL
 	if ttl <= 0 {
 		ttl = DefaultTTL
 	}
+
 	if opt.nowFn().UTC().Sub(issuedAt) > ttl {
 		return nil, issuedAt, ErrCursorExpired
 	}
+
 	fields, _ := payload[payloadFieldFields].(map[string]any)
 	if fields == nil {
 		return nil, issuedAt, fmt.Errorf("%w: missing fields", ErrCursorMalformed)
 	}
+
 	for _, f := range cfg.Sort {
 		if raw, ok := fields[f.Name]; ok {
 			fields[f.Name] = normalizeSortValue(f.Type, raw)
 		}
 	}
+
 	return fields, issuedAt, nil
 }
 
@@ -157,10 +174,12 @@ func ValidateCursor(cfg CursorConfig, fields map[string]any) error {
 		if !ok || v == nil {
 			return fmt.Errorf("%w: %s", ErrCursorMissingField, f.Name)
 		}
+
 		if err := checkType(f.Type, v); err != nil {
 			return fmt.Errorf("%w: %s: %w", ErrCursorFieldType, f.Name, err)
 		}
 	}
+
 	return nil
 }
 
@@ -177,13 +196,16 @@ func checkType(t ColumnType, v any) error {
 			if n == float64(int64(n)) {
 				return nil
 			}
+
 			return errors.New("float value is not integer")
 		case json.Number:
 			if _, err := n.Int64(); err == nil {
 				return nil
 			}
+
 			return fmt.Errorf("json.Number not int64: %v", n)
 		}
+
 		return fmt.Errorf("got %s", reflect.TypeOf(v))
 	case TypeFloat64:
 		switch n := v.(type) {
@@ -195,13 +217,16 @@ func checkType(t ColumnType, v any) error {
 			if _, err := n.Float64(); err == nil {
 				return nil
 			}
+
 			return fmt.Errorf("json.Number not float64: %v", n)
 		}
+
 		return fmt.Errorf("got %s", reflect.TypeOf(v))
 	case TypeString:
 		if _, ok := v.(string); ok {
 			return nil
 		}
+
 		return fmt.Errorf("got %s", reflect.TypeOf(v))
 	case TypeUUID:
 		switch u := v.(type) {
@@ -211,6 +236,7 @@ func checkType(t ColumnType, v any) error {
 			_, err := uuid.Parse(u)
 			return err
 		}
+
 		return fmt.Errorf("got %s", reflect.TypeOf(v))
 	case TypeTime:
 		switch tm := v.(type) {
@@ -220,7 +246,9 @@ func checkType(t ColumnType, v any) error {
 			_, err := time.Parse(time.RFC3339Nano, tm)
 			return err
 		}
+
 		return fmt.Errorf("got %s", reflect.TypeOf(v))
 	}
+
 	return fmt.Errorf("unknown column type %d", t)
 }

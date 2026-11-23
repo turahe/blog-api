@@ -7,6 +7,7 @@ import (
 	"math/rand"
 	"os"
 	"sort"
+	"strconv"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -19,12 +20,13 @@ import (
 	auditdomain "github.com/turahe/blog-api/internal/core/audit/domain"
 	commentdomain "github.com/turahe/blog-api/internal/core/comment/domain"
 	postdomain "github.com/turahe/blog-api/internal/core/post/domain"
-	"github.com/turahe/blog-api/internal/platform/migrations"
 	"github.com/turahe/blog-api/internal/shared/pagination"
 	"gorm.io/driver/postgres"
 	"gorm.io/gorm"
 	"gorm.io/gorm/logger"
 )
+
+var benchFixtureRNG = rand.New(rand.NewSource(1)) //nolint:gosec // deterministic fixture RNG, not security-sensitive
 
 const (
 	benchmarkRows = 100050
@@ -71,23 +73,25 @@ var (
 	}{}
 )
 
-func benchmarkDB(t testing.TB) *benchmarkSeed {
-	t.Helper()
+func benchmarkDB(tb testing.TB) *benchmarkSeed {
+	tb.Helper()
 	benchOnce.Do(initBenchSeed)
+
 	if errBench != nil {
 		if os.Getenv(testDatabaseURLEnv) == "" {
-			switch tt := t.(type) {
+			switch tt := tb.(type) {
 			case *testing.T:
 				tt.Skipf("%s; skipping benchmark/integration DB tests", errBench)
 			case *testing.B:
 				tt.Skipf("%s; skipping benchmark/integration DB tests", errBench)
 			default:
-				t.Fatalf("benchmark seed init failed: %v", errBench)
+				tb.Fatalf("benchmark seed init failed: %v", errBench)
 			}
 		} else {
-			t.Fatalf("benchmark seed init failed: %v", errBench)
+			tb.Fatalf("benchmark seed init failed: %v", errBench)
 		}
 	}
+
 	return benchSeed
 }
 
@@ -103,17 +107,19 @@ func initBenchSeed() {
 		errBench = err
 		return
 	}
+
 	sqlDB.SetMaxOpenConns(16)
 	sqlDB.SetMaxIdleConns(8)
-
-	if err = migrations.Up(sqlDB); err != nil {
-		errBench = err
-		return
-	}
 
 	db, err := gorm.Open(postgres.New(postgres.Config{Conn: sqlDB}),
 		&gorm.Config{Logger: logger.Default.LogMode(logger.Silent)})
 	if err != nil {
+		errBench = err
+		return
+	}
+
+	db.DisableForeignKeyConstraintWhenMigrating = true
+	if err = Migrate(db); err != nil {
 		errBench = err
 		return
 	}
@@ -123,6 +129,7 @@ func initBenchSeed() {
 		errBench = err
 		return
 	}
+
 	benchSeed = seed
 }
 
@@ -151,12 +158,15 @@ func (s *benchmarkSeed) populate() error {
 	if err := s.buildPostCursors(ctx); err != nil {
 		return err
 	}
+
 	if err := s.buildCommentCursors(ctx); err != nil {
 		return err
 	}
+
 	if err := s.buildAuditCursors(ctx); err != nil {
 		return err
 	}
+
 	return nil
 }
 
@@ -173,51 +183,71 @@ func (s *benchmarkSeed) ensureBenchIndices() {
 
 func insertUserSeed(db *gorm.DB) uuid.UUID {
 	name := "bench-user-" + uuid.NewString()[:8]
+
 	var id uuid.UUID
-	db.Raw("INSERT INTO users (email, username, full_name) VALUES (?, ?, ?) ON CONFLICT DO NOTHING RETURNING uuid",
-		name+"@example.test", name, name).Row().Scan(&id)
-	if id == uuid.Nil {
-		db.Raw("SELECT uuid FROM users WHERE username = ?", name).Row().Scan(&id)
+	if err := db.Raw("INSERT INTO users (email, username, full_name) VALUES (?, ?, ?) ON CONFLICT DO NOTHING RETURNING uuid",
+		name+"@example.test", name, name).Row().Scan(&id); err != nil {
+		panic(err)
 	}
+
+	if id == uuid.Nil {
+		if err := db.Raw("SELECT uuid FROM users WHERE username = ?", name).Row().Scan(&id); err != nil {
+			panic(err)
+		}
+	}
+
 	return id
 }
 
 func insertCategorySeed(db *gorm.DB) uuid.UUID {
 	slug := "bench-cat-" + uuid.NewString()[:8]
+
 	var id uuid.UUID
-	db.Raw("INSERT INTO categories (name, slug) VALUES (?, ?) ON CONFLICT DO NOTHING RETURNING uuid", slug, slug).Row().Scan(&id)
-	if id == uuid.Nil {
-		db.Raw("SELECT uuid FROM categories WHERE slug = ?", slug).Row().Scan(&id)
+	if err := db.Raw("INSERT INTO categories (name, slug) VALUES (?, ?) ON CONFLICT DO NOTHING RETURNING uuid", slug, slug).Row().Scan(&id); err != nil {
+		panic(err)
 	}
+
+	if id == uuid.Nil {
+		if err := db.Raw("SELECT uuid FROM categories WHERE slug = ?", slug).Row().Scan(&id); err != nil {
+			panic(err)
+		}
+	}
+
 	return id
 }
 
-func (s *benchmarkSeed) insert100kPosts(ctx context.Context) uuid.UUID {
+func (s *benchmarkSeed) insert100kPosts(_ context.Context) uuid.UUID {
 	db := s.db
 	authorID := s.postAuthorRowID
 	categoryID := s.postCategoryRowID
 
 	var count int64
 	db.Model(&PostModel{}).Where("author_id = ?", authorID).Count(&count)
+
 	if count >= benchmarkRows {
 		var firstPost PostModel
 		db.Model(&PostModel{}).Where("author_id = ?", authorID).
 			Order("published_at DESC NULLS LAST, created_at DESC, id DESC").
 			First(&firstPost)
+
 		return firstPost.UUID
 	}
 
 	batch := 500
 	baseTime := time.Date(2025, 1, 1, 0, 0, 0, 0, time.UTC)
-	rng := rand.New(rand.NewSource(1))
+	rng := benchFixtureRNG
 
 	tx := db.Begin()
+
 	defer func() {
 		if r := recover(); r != nil {
 			tx.Rollback()
 		}
 	}()
-	require.NoError(nil, tx.Error)
+
+	if tx.Error != nil {
+		panic(fmt.Sprintf("begin tx: %v", tx.Error))
+	}
 
 	for i := 0; i < benchmarkRows; i += batch {
 		models := make([]PostModel, 0, batch)
@@ -240,27 +270,33 @@ func (s *benchmarkSeed) insert100kPosts(ctx context.Context) uuid.UUID {
 				UpdatedAt:     createdAt,
 			})
 		}
+
 		if err := tx.Omit("ID").Create(&models).Error; err != nil {
 			tx.Rollback()
 			panic(fmt.Sprintf("insert posts batch: %v", err))
 		}
 	}
-	require.NoError(nil, tx.Commit().Error)
+
+	if err := tx.Commit().Error; err != nil {
+		panic(fmt.Sprintf("commit tx: %v", err))
+	}
 
 	var firstPost PostModel
 	db.Model(&PostModel{}).Where("author_id = ?", authorID).
 		Order("published_at DESC NULLS LAST, created_at DESC, id DESC").
 		First(&firstPost)
+
 	return firstPost.UUID
 }
 
-func (s *benchmarkSeed) insert100kComments(ctx context.Context) {
+func (s *benchmarkSeed) insert100kComments(_ context.Context) {
 	db := s.db
 	postID := s.commentPostRowID
 	authorID := s.commentAuthorRowID
 
 	var count int64
 	db.Model(&CommentModel{}).Where("post_id = ?", postID).Count(&count)
+
 	if count >= benchmarkRows {
 		return
 	}
@@ -269,7 +305,9 @@ func (s *benchmarkSeed) insert100kComments(ctx context.Context) {
 	baseTime := time.Date(2025, 1, 1, 0, 0, 0, 0, time.UTC)
 
 	tx := db.Begin()
-	require.NoError(nil, tx.Error)
+	if tx.Error != nil {
+		panic(fmt.Sprintf("begin tx: %v", tx.Error))
+	}
 
 	for i := 0; i < benchmarkRows; i += batch {
 		models := make([]CommentModel, 0, batch)
@@ -289,20 +327,25 @@ func (s *benchmarkSeed) insert100kComments(ctx context.Context) {
 				UpdatedAt:   createdAt,
 			})
 		}
+
 		if err := tx.Omit("ID").Create(&models).Error; err != nil {
 			tx.Rollback()
 			panic(fmt.Sprintf("insert comments batch: %v", err))
 		}
 	}
-	require.NoError(nil, tx.Commit().Error)
+
+	if err := tx.Commit().Error; err != nil {
+		panic(fmt.Sprintf("commit tx: %v", err))
+	}
 }
 
-func (s *benchmarkSeed) insert100kAuditLogs(ctx context.Context) {
+func (s *benchmarkSeed) insert100kAuditLogs(_ context.Context) {
 	db := s.db
 	actorID := s.auditActorRowID
 
 	var count int64
 	db.Model(&AuditLogModel{}).Where("actor_id = ?", actorID).Count(&count)
+
 	if count >= benchmarkRows {
 		return
 	}
@@ -314,7 +357,9 @@ func (s *benchmarkSeed) insert100kAuditLogs(ctx context.Context) {
 	actions := []string{"me.profile.update", "me.settings.update", "me.password.change", "me.email.change"}
 
 	tx := db.Begin()
-	require.NoError(nil, tx.Error)
+	if tx.Error != nil {
+		panic(fmt.Sprintf("begin tx: %v", tx.Error))
+	}
 
 	for i := 0; i < benchmarkRows; i += batch {
 		models := make([]AuditLogModel, 0, batch)
@@ -334,12 +379,16 @@ func (s *benchmarkSeed) insert100kAuditLogs(ctx context.Context) {
 				OccurredAt:   occurredAt,
 			})
 		}
+
 		if err := tx.Omit("ID").Create(&models).Error; err != nil {
 			tx.Rollback()
 			panic(fmt.Sprintf("insert audit batch: %v", err))
 		}
 	}
-	require.NoError(nil, tx.Commit().Error)
+
+	if err := tx.Commit().Error; err != nil {
+		panic(fmt.Sprintf("commit tx: %v", err))
+	}
 }
 
 func mustIDByUUID(db *gorm.DB, table string, id uuid.UUID) int64 {
@@ -347,9 +396,11 @@ func mustIDByUUID(db *gorm.DB, table string, id uuid.UUID) int64 {
 	if err := db.Table(table).Where("uuid = ?", id).Limit(1).Pluck("id", &ids).Error; err != nil {
 		panic(err)
 	}
+
 	if len(ids) == 0 {
 		panic(fmt.Sprintf("no %s with uuid %s", table, id))
 	}
+
 	return ids[0]
 }
 
@@ -359,11 +410,12 @@ type postRowLite struct {
 	CreatedAt   time.Time
 }
 
-func (s *benchmarkSeed) buildPostCursors(ctx context.Context) error {
+func (s *benchmarkSeed) buildPostCursors(_ context.Context) error {
 	db := s.db
 	authorID := s.postAuthorRowID
 
 	var all []postRowLite
+
 	err := db.Model(&PostModel{}).
 		Select("id, published_at, created_at").
 		Where("author_id = ? AND status = ? AND deleted_at IS NULL", authorID, string(postdomain.StatusPublished)).
@@ -372,6 +424,7 @@ func (s *benchmarkSeed) buildPostCursors(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
+
 	if len(all) < 100000 {
 		return fmt.Errorf("not enough posts seeded: %d", len(all))
 	}
@@ -388,18 +441,22 @@ func (s *benchmarkSeed) buildPostCursors(ctx context.Context) error {
 				case 2:
 					return r.ID
 				}
+
 				return nil
 			})
+
 		cur, err := pagination.EncodeCursor(postListPublishedCfg, fields)
 		if err != nil {
 			panic(err)
 		}
+
 		return cur
 	}
 
 	s.postRow1Cursor = getNthCursor(0)
 	s.postRow49999Cursor = getNthCursor(49998)
 	s.postRow99950Cursor = getNthCursor(99949)
+
 	return nil
 }
 
@@ -408,11 +465,12 @@ type commentRowLite struct {
 	CreatedAt time.Time
 }
 
-func (s *benchmarkSeed) buildCommentCursors(ctx context.Context) error {
+func (s *benchmarkSeed) buildCommentCursors(_ context.Context) error {
 	db := s.db
 	postID := s.commentPostRowID
 
 	var all []commentRowLite
+
 	err := db.Model(&CommentModel{}).
 		Select("id, created_at").
 		Where("post_id = ?", postID).
@@ -421,6 +479,7 @@ func (s *benchmarkSeed) buildCommentCursors(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
+
 	if len(all) < 100000 {
 		return fmt.Errorf("not enough comments seeded: %d", len(all))
 	}
@@ -435,18 +494,22 @@ func (s *benchmarkSeed) buildCommentCursors(ctx context.Context) error {
 				case 1:
 					return r.ID
 				}
+
 				return nil
 			})
+
 		cur, err := pagination.EncodeCursor(commentsPublicCfg, fields)
 		if err != nil {
 			panic(err)
 		}
+
 		return cur
 	}
 
 	s.commentRow1Cursor = getNthCursor(0)
 	s.commentRow49999Cursor = getNthCursor(49998)
 	s.commentRow99950Cursor = getNthCursor(99949)
+
 	return nil
 }
 
@@ -455,11 +518,12 @@ type auditRowLite struct {
 	OccurredAt time.Time
 }
 
-func (s *benchmarkSeed) buildAuditCursors(ctx context.Context) error {
+func (s *benchmarkSeed) buildAuditCursors(_ context.Context) error {
 	db := s.db
 	actorID := s.auditActorRowID
 
 	var all []auditRowLite
+
 	err := db.Model(&AuditLogModel{}).
 		Select("id, occurred_at").
 		Where("actor_id = ?", actorID).
@@ -468,6 +532,7 @@ func (s *benchmarkSeed) buildAuditCursors(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
+
 	if len(all) < 100000 {
 		return fmt.Errorf("not enough audit logs seeded: %d", len(all))
 	}
@@ -482,18 +547,22 @@ func (s *benchmarkSeed) buildAuditCursors(ctx context.Context) error {
 				case 1:
 					return r.ID
 				}
+
 				return nil
 			})
+
 		cur, err := pagination.EncodeCursor(activityListCfg, fields)
 		if err != nil {
 			panic(err)
 		}
+
 		return cur
 	}
 
 	s.auditRow1Cursor = getNthCursor(0)
 	s.auditRow49999Cursor = getNthCursor(49998)
 	s.auditRow99950Cursor = getNthCursor(99949)
+
 	return nil
 }
 
@@ -514,6 +583,7 @@ func BenchmarkOffsetPage_Posts_1000(b *testing.B) { benchPostsOffset(b, 1000) }
 func BenchmarkOffsetPage_Posts_2000(b *testing.B) { benchPostsOffset(b, 2000) }
 
 func benchPostsOffset(b *testing.B, page int) {
+	b.Helper()
 	seed := benchmarkDB(b)
 	db := seed.db
 	offset := (page - 1) * driftPageSize
@@ -522,11 +592,14 @@ func benchPostsOffset(b *testing.B, page int) {
 	seek, _ := pagination.BuildSeek(postListPublishedCfg, pr, nil)
 
 	var ids []int64
+
 	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
+
+	for range b.N {
 		q := db.Model(&PostModel{}).Unscoped().
 			Where("status = ? AND deleted_at IS NULL AND category_id = ?",
 				string(postdomain.StatusPublished), seed.postCategoryRowID)
+
 		q = q.Select("posts.id").
 			Order(fixedOrder(seek.OrderClause)).
 			Limit(seek.LimitFetch).
@@ -534,6 +607,7 @@ func benchPostsOffset(b *testing.B, page int) {
 		if err := q.Scan(&ids).Error; err != nil {
 			b.Fatal(err)
 		}
+
 		ids = ids[:0]
 	}
 }
@@ -543,10 +617,12 @@ func BenchmarkCursorAfter_Posts_Row49999(b *testing.B) { benchPostsCursor(b, 499
 func BenchmarkCursorAfter_Posts_Row99950(b *testing.B) { benchPostsCursor(b, 99950) }
 
 func benchPostsCursor(b *testing.B, row int) {
+	b.Helper()
 	seed := benchmarkDB(b)
 	db := seed.db
 
 	var cursor string
+
 	switch row {
 	case 1:
 		cursor = seed.postRow1Cursor
@@ -560,31 +636,37 @@ func benchPostsCursor(b *testing.B, row int) {
 	if err != nil {
 		b.Fatal(err)
 	}
+
 	pr := pagination.PageRequest{
 		Mode: pagination.ModeCursor, Forward: true,
 		Limit:  driftPageSize,
 		Cursor: cursor,
 	}
+
 	seek, err := pagination.BuildSeek(postListPublishedCfg, pr, cursorFields)
 	if err != nil {
 		b.Fatal(err)
 	}
 
 	var ids []int64
+
 	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
+
+	for range b.N {
 		q := db.Model(&PostModel{}).Unscoped().
 			Where("status = ? AND deleted_at IS NULL AND category_id = ?",
 				string(postdomain.StatusPublished), seed.postCategoryRowID)
 		if seek.WhereClause != "" {
 			q = q.Where(seek.WhereClause, seek.BindVars...)
 		}
+
 		q = q.Select("posts.id").
 			Order(fixedOrder(seek.OrderClause)).
 			Limit(seek.LimitFetch)
 		if err := q.Scan(&ids).Error; err != nil {
 			b.Fatal(err)
 		}
+
 		ids = ids[:0]
 	}
 }
@@ -600,6 +682,7 @@ func BenchmarkOffsetPage_Comments_1000(b *testing.B) { benchCommentsOffset(b, 10
 func BenchmarkOffsetPage_Comments_2000(b *testing.B) { benchCommentsOffset(b, 2000) }
 
 func benchCommentsOffset(b *testing.B, page int) {
+	b.Helper()
 	seed := benchmarkDB(b)
 	db := seed.db
 	offset := (page - 1) * driftPageSize
@@ -608,10 +691,13 @@ func benchCommentsOffset(b *testing.B, page int) {
 	seek, _ := pagination.BuildSeek(commentsPublicCfg, pr, nil)
 
 	var ids []int64
+
 	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
+
+	for range b.N {
 		q := db.Model(&CommentModel{}).
 			Where("post_id = ?", seed.commentPostRowID)
+
 		q = q.Select("comments.id").
 			Order(fixedOrder(seek.OrderClause)).
 			Limit(seek.LimitFetch).
@@ -619,6 +705,7 @@ func benchCommentsOffset(b *testing.B, page int) {
 		if err := q.Scan(&ids).Error; err != nil {
 			b.Fatal(err)
 		}
+
 		ids = ids[:0]
 	}
 }
@@ -628,10 +715,12 @@ func BenchmarkCursorAfter_Comments_Row49999(b *testing.B) { benchCommentsCursor(
 func BenchmarkCursorAfter_Comments_Row99950(b *testing.B) { benchCommentsCursor(b, 99950) }
 
 func benchCommentsCursor(b *testing.B, row int) {
+	b.Helper()
 	seed := benchmarkDB(b)
 	db := seed.db
 
 	var cursor string
+
 	switch row {
 	case 1:
 		cursor = seed.commentRow1Cursor
@@ -645,30 +734,36 @@ func benchCommentsCursor(b *testing.B, row int) {
 	if err != nil {
 		b.Fatal(err)
 	}
+
 	pr := pagination.PageRequest{
 		Mode: pagination.ModeCursor, Forward: true,
 		Limit:  driftPageSize,
 		Cursor: cursor,
 	}
+
 	seek, err := pagination.BuildSeek(commentsPublicCfg, pr, cursorFields)
 	if err != nil {
 		b.Fatal(err)
 	}
 
 	var ids []int64
+
 	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
+
+	for range b.N {
 		q := db.Model(&CommentModel{}).
 			Where("post_id = ?", seed.commentPostRowID)
 		if seek.WhereClause != "" {
 			q = q.Where(seek.WhereClause, seek.BindVars...)
 		}
+
 		q = q.Select("comments.id").
 			Order(fixedOrder(seek.OrderClause)).
 			Limit(seek.LimitFetch)
 		if err := q.Scan(&ids).Error; err != nil {
 			b.Fatal(err)
 		}
+
 		ids = ids[:0]
 	}
 }
@@ -684,6 +779,7 @@ func BenchmarkOffsetPage_Audit_1000(b *testing.B) { benchAuditOffset(b, 1000) }
 func BenchmarkOffsetPage_Audit_2000(b *testing.B) { benchAuditOffset(b, 2000) }
 
 func benchAuditOffset(b *testing.B, page int) {
+	b.Helper()
 	seed := benchmarkDB(b)
 	db := seed.db
 	offset := (page - 1) * driftPageSize
@@ -692,11 +788,14 @@ func benchAuditOffset(b *testing.B, page int) {
 	seek, _ := pagination.BuildSeek(activityListCfg, pr, nil)
 
 	var ids []int64
+
 	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
+
+	for range b.N {
 		q := db.Model(&AuditLogModel{}).
 			Where("(audit_logs.actor_id = ? OR (audit_logs.resource_type = ? AND audit_logs.resource_id = ?))",
 				seed.auditActorRowID, auditdomain.ResourceUser, seed.auditActor)
+
 		q = q.Select("audit_logs.id").
 			Order(fixedOrder(seek.OrderClause)).
 			Limit(seek.LimitFetch).
@@ -704,6 +803,7 @@ func benchAuditOffset(b *testing.B, page int) {
 		if err := q.Scan(&ids).Error; err != nil {
 			b.Fatal(err)
 		}
+
 		ids = ids[:0]
 	}
 }
@@ -713,10 +813,12 @@ func BenchmarkCursorAfter_Audit_Row49999(b *testing.B) { benchAuditCursor(b, 499
 func BenchmarkCursorAfter_Audit_Row99950(b *testing.B) { benchAuditCursor(b, 99950) }
 
 func benchAuditCursor(b *testing.B, row int) {
+	b.Helper()
 	seed := benchmarkDB(b)
 	db := seed.db
 
 	var cursor string
+
 	switch row {
 	case 1:
 		cursor = seed.auditRow1Cursor
@@ -730,31 +832,37 @@ func benchAuditCursor(b *testing.B, row int) {
 	if err != nil {
 		b.Fatal(err)
 	}
+
 	pr := pagination.PageRequest{
 		Mode: pagination.ModeCursor, Forward: true,
 		Limit:  driftPageSize,
 		Cursor: cursor,
 	}
+
 	seek, err := pagination.BuildSeek(activityListCfg, pr, cursorFields)
 	if err != nil {
 		b.Fatal(err)
 	}
 
 	var ids []int64
+
 	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
+
+	for range b.N {
 		q := db.Model(&AuditLogModel{}).
 			Where("(audit_logs.actor_id = ? OR (audit_logs.resource_type = ? AND audit_logs.resource_id = ?))",
 				seed.auditActorRowID, auditdomain.ResourceUser, seed.auditActor)
 		if seek.WhereClause != "" {
 			q = q.Where(seek.WhereClause, seek.BindVars...)
 		}
+
 		q = q.Select("audit_logs.id").
 			Order(fixedOrder(seek.OrderClause)).
 			Limit(seek.LimitFetch)
 		if err := q.Scan(&ids).Error; err != nil {
 			b.Fatal(err)
 		}
+
 		ids = ids[:0]
 	}
 }
@@ -763,10 +871,12 @@ func benchAuditCursor(b *testing.B, row int) {
 // EXPLAIN ANALYZE HELPERS
 // =============================
 
+//nolint:paralleltest // shares process-global explainOut writers
 func TestExplainAnalyze_OffsetVsCursor(t *testing.T) {
 	if testing.Short() {
 		t.Skip("skipping EXPLAIN ANALYZE in short mode")
 	}
+
 	seed := benchmarkDB(t)
 	ctx := context.Background()
 	db := seed.db
@@ -786,6 +896,7 @@ func TestExplainAnalyze_OffsetVsCursor(t *testing.T) {
 	explainOut.posts.WriteString("Sort order: `published_at DESC NULLS LAST, created_at DESC, id DESC`\n\n")
 
 	explainOut.posts.WriteString("## OFFSET 99949 LIMIT 50 (page 2000 at 50/page)\n\n```sql\n")
+
 	qPostsOffset := fmt.Sprintf(
 		`EXPLAIN ANALYZE SELECT posts.id FROM posts WHERE status = '%s' AND deleted_at IS NULL AND category_id = %d ORDER BY published_at DESC NULLS LAST, created_at DESC, id DESC LIMIT %d OFFSET %d`,
 		string(postdomain.StatusPublished), categoryID, limit, offset99950)
@@ -795,6 +906,7 @@ func TestExplainAnalyze_OffsetVsCursor(t *testing.T) {
 	explainOut.posts.WriteString("\n```\n\n")
 
 	explainOut.posts.WriteString("## CURSOR AFTER Row99950 (Index Seek via row-value comparator)\n\n```sql\n")
+
 	postCursor, _, _ := pagination.DecodeCursor(postListPublishedCfg, seed.postRow99950Cursor)
 	seek, _ := pagination.BuildSeek(postListPublishedCfg, pagination.PageRequest{
 		Mode: pagination.ModeCursor, Forward: true, Limit: limit, Cursor: seed.postRow99950Cursor,
@@ -814,6 +926,7 @@ func TestExplainAnalyze_OffsetVsCursor(t *testing.T) {
 	explainOut.comments.WriteString("Sort order: `created_at ASC, id ASC`\n\n")
 
 	explainOut.comments.WriteString("## OFFSET 99949 LIMIT 50 (page 2000 at 50/page)\n\n```sql\n")
+
 	qCommentsOffset := fmt.Sprintf(
 		`EXPLAIN ANALYZE SELECT comments.id FROM comments WHERE comments.post_id = %d ORDER BY created_at ASC, id ASC LIMIT %d OFFSET %d`,
 		postID, limit, offset99950)
@@ -823,6 +936,7 @@ func TestExplainAnalyze_OffsetVsCursor(t *testing.T) {
 	explainOut.comments.WriteString("\n```\n\n")
 
 	explainOut.comments.WriteString("## CURSOR AFTER Row99950 (Index Seek via row-value comparator)\n\n```sql\n")
+
 	commentCursor, _, _ := pagination.DecodeCursor(commentsPublicCfg, seed.commentRow99950Cursor)
 	seekC, _ := pagination.BuildSeek(commentsPublicCfg, pagination.PageRequest{
 		Mode: pagination.ModeCursor, Forward: true, Limit: limit, Cursor: seed.commentRow99950Cursor,
@@ -841,6 +955,7 @@ func TestExplainAnalyze_OffsetVsCursor(t *testing.T) {
 	explainOut.audit.WriteString("Sort order: `occurred_at DESC, id DESC`\n\n")
 
 	explainOut.audit.WriteString("## OFFSET 99949 LIMIT 50 (page 2000 at 50/page)\n\n```sql\n")
+
 	qAuditOffset := fmt.Sprintf(
 		`EXPLAIN ANALYZE SELECT audit_logs.id FROM audit_logs WHERE (audit_logs.actor_id = %d OR (audit_logs.resource_type = '%s' AND audit_logs.resource_id = '%s')) ORDER BY occurred_at DESC, id DESC LIMIT %d OFFSET %d`,
 		actorID, auditdomain.ResourceUser, seed.auditActor, limit, offset99950)
@@ -850,6 +965,7 @@ func TestExplainAnalyze_OffsetVsCursor(t *testing.T) {
 	explainOut.audit.WriteString("\n```\n\n")
 
 	explainOut.audit.WriteString("## CURSOR AFTER Row99950 (Index Seek via row-value comparator)\n\n```sql\n")
+
 	auditCursor, _, _ := pagination.DecodeCursor(activityListCfg, seed.auditRow99950Cursor)
 	seekA, _ := pagination.BuildSeek(activityListCfg, pagination.PageRequest{
 		Mode: pagination.ModeCursor, Forward: true, Limit: limit, Cursor: seed.auditRow99950Cursor,
@@ -875,27 +991,33 @@ func TestExplainAnalyze_OffsetVsCursor(t *testing.T) {
 	}
 }
 
-func writeExplain(t testing.TB, path, content string) {
-	t.Helper()
+func writeExplain(tb testing.TB, path, content string) {
+	tb.Helper()
+
 	dir := path[:strings.LastIndex(path, "/")]
-	if err := os.MkdirAll(dir, 0o755); err != nil {
-		t.Logf("mkdir explain dir: %v", err)
+	//nolint:gosec // G703: path is EXPLAIN_OUT_DIR plus fixed benchmark artifact names
+	if err := os.MkdirAll(dir, 0o750); err != nil {
+		tb.Logf("mkdir explain dir: %v", err)
 		return
 	}
-	if err := os.WriteFile(path, []byte(content), 0o644); err != nil {
-		t.Logf("write explain %s: %v", path, err)
+
+	//nolint:gosec // G703: path is EXPLAIN_OUT_DIR plus fixed benchmark artifact names
+	if err := os.WriteFile(path, []byte(content), 0o600); err != nil {
+		tb.Logf("write explain %s: %v", path, err)
 	}
 }
 
 func renderWithVars(q string, vars []any) string {
 	out := q
+
 	for _, bv := range vars {
 		var vv string
+
 		switch v := bv.(type) {
 		case time.Time:
 			vv = "'" + v.Format(time.RFC3339Nano) + "'"
 		case int64:
-			vv = fmt.Sprintf("%d", v)
+			vv = strconv.FormatInt(v, 10)
 		case *time.Time:
 			if v == nil {
 				vv = "NULL"
@@ -905,26 +1027,38 @@ func renderWithVars(q string, vars []any) string {
 		default:
 			vv = fmt.Sprintf("%v", v)
 		}
+
 		out = strings.Replace(out, "?", vv, 1)
 	}
+
 	return out
 }
 
-func runExplain(ctx context.Context, db *gorm.DB, query string, args ...any) string {
+func runExplain(_ context.Context, db *gorm.DB, query string, args ...any) string {
 	rows, err := db.Raw(query, args...).Rows()
 	if err != nil {
 		return fmt.Sprintf("ERROR: %v", err)
 	}
-	defer rows.Close()
+	defer func() {
+		_ = rows.Close()
+	}()
+
 	var sb strings.Builder
+
 	for rows.Next() {
 		var line string
 		if err := rows.Scan(&line); err != nil {
 			return fmt.Sprintf("SCAN ERROR: %v", err)
 		}
+
 		sb.WriteString(line)
 		sb.WriteString("\n")
 	}
+
+	if err := rows.Err(); err != nil {
+		return fmt.Sprintf("ROWS ERROR: %v", err)
+	}
+
 	return sb.String()
 }
 
@@ -932,10 +1066,12 @@ func runExplain(ctx context.Context, db *gorm.DB, query string, args ...any) str
 // CONCURRENT DRIFT TEST
 // =============================
 
+//nolint:paralleltest // shares benchmarkDB singleton seed
 func TestConcurrentDrift_NoDupesOrSkips_3Runs(t *testing.T) {
 	if testing.Short() {
 		t.Skip("skipping drift test in short mode")
 	}
+
 	seed := benchmarkDB(t)
 
 	for run := 1; run <= driftRuns; run++ {
@@ -945,12 +1081,8 @@ func TestConcurrentDrift_NoDupesOrSkips_3Runs(t *testing.T) {
 	}
 }
 
-type driftPage struct {
-	IDs    []int64
-	Cursor string
-}
-
 func runDriftOnce(t *testing.T, seed *benchmarkSeed, run int) {
+	t.Helper()
 	// Use the shared pool DB. Base posts from benchmark seed are stable:
 	// author = seed.postAuthor, category = seed.postCategory. Inserter uses a
 	// DIFFERENT author but same category, so fresh rows land in the same result
@@ -960,6 +1092,7 @@ func runDriftOnce(t *testing.T, seed *benchmarkSeed, run int) {
 
 	// ---- Snapshot IDs at walk-start for base posts (seed author + category) ----
 	var snapshotIDs []int64
+
 	err := seed.db.Raw(`SELECT id FROM posts
 		WHERE author_id = $1 AND status = $2 AND deleted_at IS NULL AND category_id = $3
 		ORDER BY published_at DESC NULLS LAST, created_at DESC, id DESC`,
@@ -988,20 +1121,23 @@ func runDriftOnce(t *testing.T, seed *benchmarkSeed, run int) {
 	driftAuthorUUID := insertUserSeed(seed.db)
 	driftAuthorRowID := mustIDByUUID(seed.db, "users", driftAuthorUUID)
 
-	wg.Add(1)
-	go func() {
-		defer wg.Done()
+	wg.Go(func() {
 		ticker := time.NewTicker(100 * time.Millisecond)
 		defer ticker.Stop()
-		rng := rand.New(rand.NewSource(int64(run * 9999)))
+
+		rng := rand.New(rand.NewSource(int64(run * 9999))) //nolint:gosec // deterministic fixture RNG, not security-sensitive
 		n := 0
+
 		for !stopInserter.Load() {
 			<-ticker.C
+
 			if stopInserter.Load() {
 				break
 			}
+
 			now := time.Now().UTC().Add(time.Duration(n) * time.Millisecond)
 			slug := fmt.Sprintf("drift-%d-%s", run, uuid.NewString()[:10])
+
 			err := inserterDB.Exec(`INSERT INTO posts
 				(uuid, author_id, category_id, title, slug, content, status, comment_policy, version, published_at, created_at, updated_at)
 				VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)`,
@@ -1013,20 +1149,26 @@ func runDriftOnce(t *testing.T, seed *benchmarkSeed, run int) {
 				inserterErr.Store(err)
 				return
 			}
+
 			insertCount.Add(1)
+
 			n++
 		}
-	}()
+	})
 
 	// ---- Walker: 2000 pages × 50 rows via cursor; collect only snapshot rows ----
 	walkerDB := seed.db.Session(&gorm.Session{})
 	collected := make(map[int64]int, 100000)
-	var duplicates []int64
-	var pagesWalked int
-	var totalRows int
+
+	var (
+		duplicates  []int64
+		pagesWalked int
+		totalRows   int
+	)
+
 	cursor := ""
 
-	for p := 0; p < driftPages; p++ {
+	for p := range driftPages {
 		pr := pagination.PageRequest{
 			Mode:         pagination.ModeCursor,
 			Forward:      true,
@@ -1034,14 +1176,18 @@ func runDriftOnce(t *testing.T, seed *benchmarkSeed, run int) {
 			Cursor:       cursor,
 			IncludeTotal: false,
 		}
+
 		var cursorFields map[string]any
+
 		if cursor != "" {
 			var derr error
+
 			cursorFields, _, derr = pagination.DecodeCursor(postListPublishedCfg, cursor)
 			if derr != nil {
 				t.Fatalf("page %d: decode cursor: %v", p, derr)
 			}
 		}
+
 		seek, serr := pagination.BuildSeek(postListPublishedCfg, pr, cursorFields)
 		if serr != nil {
 			t.Fatalf("page %d: build seek: %v", p, serr)
@@ -1055,6 +1201,7 @@ func runDriftOnce(t *testing.T, seed *benchmarkSeed, run int) {
 		}
 
 		var rows []postRowLite
+
 		q = q.Select("posts.id, posts.published_at, posts.created_at").
 			Order(fixedOrder(seek.OrderClause)).
 			Limit(seek.LimitFetch)
@@ -1071,12 +1218,15 @@ func runDriftOnce(t *testing.T, seed *benchmarkSeed, run int) {
 		items, hasNext, _ := pagination.TruncatePage(rows, driftPageSize, pr.Forward, pr.Cursor != "")
 
 		pagesWalked++
+
 		if len(items) == 0 {
 			break
 		}
+
 		for _, row := range items {
 			id := row.ID
 			totalRows++
+
 			if _, inSnapshot := snapshotSet[id]; inSnapshot {
 				if _, ok := collected[id]; ok {
 					duplicates = append(duplicates, id)
@@ -1085,9 +1235,11 @@ func runDriftOnce(t *testing.T, seed *benchmarkSeed, run int) {
 				}
 			}
 		}
+
 		if !hasNext {
 			break
 		}
+
 		last := items[len(items)-1]
 		fields := pagination.SortValues[postRowLite](postListPublishedCfg, last,
 			func(r postRowLite, i int) any {
@@ -1099,21 +1251,26 @@ func runDriftOnce(t *testing.T, seed *benchmarkSeed, run int) {
 				case 2:
 					return r.ID
 				}
+
 				return nil
 			})
+
 		ncur, ncerr := pagination.EncodeCursor(postListPublishedCfg, fields)
 		if ncerr != nil {
 			t.Fatalf("page %d: encode cursor: %v", p, ncerr)
 		}
+
 		cursor = ncur
 	}
 
 	// ---- Stop inserter ----
 	stopInserter.Store(true)
 	wg.Wait()
+
 	if errVal, ok := inserterErr.Load().(error); ok {
 		t.Fatalf("inserter goroutine error: %v", errVal)
 	}
+
 	t.Logf("Run %d: inserter added %d rows during walk", run, insertCount.Load())
 	t.Logf("Run %d: walker pages=%d rowsSeen=%d snapshotRowsCollected=%d", run, pagesWalked, totalRows, len(collected))
 
@@ -1138,7 +1295,9 @@ func runDriftOnce(t *testing.T, seed *benchmarkSeed, run int) {
 			maxRank = r
 		}
 	}
+
 	var skipped []int64
+
 	if maxRank >= 0 {
 		for i := 0; i <= maxRank; i++ {
 			id := snapshotIDs[i]
@@ -1147,6 +1306,7 @@ func runDriftOnce(t *testing.T, seed *benchmarkSeed, run int) {
 			}
 		}
 	}
+
 	require.Empty(t, skipped,
 		"Run %d: %d skips among first %d snapshot rows (ranks 0..%d); collected=%d snapshot=%d; first 10 skipped snapshot IDs=%v",
 		run, len(skipped), maxRank+1, maxRank, len(collected), len(snapshotIDs), firstN(skipped, 10))
@@ -1158,99 +1318,14 @@ func runDriftOnce(t *testing.T, seed *benchmarkSeed, run int) {
 	for id := range collected {
 		collectedOrder = append(collectedOrder, id)
 	}
+
 	sort.Slice(collectedOrder, func(i, j int) bool {
 		return rank[collectedOrder[i]] < rank[collectedOrder[j]]
 	})
-	for i := 0; i < len(collectedOrder); i++ {
+
+	for i := range collectedOrder {
 		require.Equal(t, snapshotIDs[i], collectedOrder[i],
 			"Run %d: collected row #%d out of order — walk order does not match snapshot order", run, i)
-	}
-}
-
-func clonePostsInto(tx *gorm.DB, seed *benchmarkSeed, authorID, categoryID int64) {
-	need := benchmarkRows
-	var have int64
-	tx.Raw(`SELECT count(*) FROM posts WHERE author_id = $1 AND category_id = $2 AND deleted_at IS NULL`,
-		authorID, categoryID).Scan(&have)
-	if have >= int64(need) {
-		return
-	}
-	from := seed.db
-	srcAuthorID := mustIDByUUID(from, "users", seed.postAuthor)
-	err := tx.Exec(fmt.Sprintf(`
-		INSERT INTO posts
-			(uuid, author_id, category_id, title, slug, content, status, comment_policy, version, published_at, created_at, updated_at)
-		SELECT
-			gen_random_uuid(),
-			$1, $2,
-			'tx-clone-' || p.id || ' ' || left(p.title, 40),
-			'tx-clone-%d-' || p.uuid::text || '-' || to_char(p.id, 'FM0000000'),
-			p.content,
-			p.status, p.comment_policy, 1,
-			p.published_at, p.created_at, p.updated_at
-		FROM posts p
-		WHERE p.author_id = $3 AND p.status = '%s' AND p.deleted_at IS NULL
-		LIMIT %d
-	`, rand.Intn(100000), string(postdomain.StatusPublished), need),
-		authorID, categoryID,
-		srcAuthorID,
-	).Error
-	if err != nil {
-		panic(fmt.Sprintf("clone posts into tx: %v", err))
-	}
-}
-
-func cloneCommentsInto(tx *gorm.DB, seed *benchmarkSeed, postID, authorID int64) {
-	need := benchmarkRows
-	var have int64
-	tx.Raw(`SELECT count(*) FROM comments WHERE post_id = $1`, postID).Scan(&have)
-	if have >= int64(need) {
-		return
-	}
-	from := seed.db
-	srcPostID := mustIDByUUID(from, "posts", seed.commentPost)
-	err := tx.Exec(fmt.Sprintf(`
-		INSERT INTO comments
-			(uuid, post_id, parent_id, author_id, content, content_html, status, depth, created_at, updated_at)
-		SELECT
-			gen_random_uuid(),
-			$1, NULL, $2,
-			'tx-clone ' || c.content,
-			'<p>tx-clone ' || substr(c.content, 1, 60) || '</p>',
-			c.status, 0,
-			c.created_at, c.updated_at
-		FROM comments c
-		WHERE c.post_id = $3
-		LIMIT %d
-	`, need), postID, authorID, srcPostID).Error
-	if err != nil {
-		panic(fmt.Sprintf("clone comments into tx: %v", err))
-	}
-}
-
-func cloneAuditInto(tx *gorm.DB, seed *benchmarkSeed, actorID int64, actorUUID uuid.UUID) {
-	need := benchmarkRows
-	var have int64
-	tx.Raw(`SELECT count(*) FROM audit_logs WHERE actor_id = $1`, actorID).Scan(&have)
-	if have >= int64(need) {
-		return
-	}
-	from := seed.db
-	srcActorID := mustIDByUUID(from, "users", seed.auditActor)
-	err := tx.Exec(fmt.Sprintf(`
-		INSERT INTO audit_logs
-			(uuid, actor_id, impersonator_id, action, category, result, resource_type, resource_id, metadata, occurred_at)
-		SELECT
-			gen_random_uuid(),
-			$1, NULL,
-			a.action, a.category, a.result, a.resource_type, $2::uuid,
-			a.metadata, a.occurred_at
-		FROM audit_logs a
-		WHERE a.actor_id = $3
-		LIMIT %d
-	`, need), actorID, actorUUID, srcActorID).Error
-	if err != nil {
-		panic(fmt.Sprintf("clone audit into tx: %v", err))
 	}
 }
 
@@ -1258,5 +1333,6 @@ func firstN[T any](s []T, n int) []T {
 	if len(s) <= n {
 		return s
 	}
+
 	return s[:n]
 }

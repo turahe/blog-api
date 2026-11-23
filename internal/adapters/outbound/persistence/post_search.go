@@ -80,6 +80,8 @@ func rankExpr(language string) (string, []any) {
 
 // SearchPublished ranks published posts matching filter.Query with ts_rank (normalized by
 // document length), then highlights the page's titles and content with ts_headline.
+//
+//nolint:funlen,gocyclo,nestif // full-text rank + cursor seek + headline branches in one query path
 func (s *PostSearch) SearchPublished(ctx context.Context, filter postdomain.SearchFilter) (postdomain.SearchResult, error) {
 	pr := filter.PageRequest
 	if pr.Mode == pagination.ModeOffset || pr.Page > 0 || pr.Page < 1 || pr.Limit < 1 {
@@ -88,14 +90,17 @@ func (s *PostSearch) SearchPublished(ctx context.Context, filter postdomain.Sear
 	}
 
 	var cursorFields map[string]any
+
 	if pr.Mode == pagination.ModeCursor && pr.Cursor != "" {
 		decoded, _, err := pagination.DecodeCursor(postSearchCfg, pr.Cursor)
 		if err != nil {
 			return postdomain.SearchResult{}, err
 		}
+
 		if err := pagination.ValidateCursor(postSearchCfg, decoded); err != nil {
 			return postdomain.SearchResult{}, err
 		}
+
 		cursorFields = decoded
 	}
 
@@ -116,6 +121,7 @@ func (s *PostSearch) SearchPublished(ctx context.Context, filter postdomain.Sear
 	}
 
 	var result postdomain.SearchResult
+
 	result.Limit = pr.Limit
 	if pr.Mode == pagination.ModeOffset {
 		result.OffsetPage = pr.Page
@@ -127,6 +133,7 @@ func (s *PostSearch) SearchPublished(ctx context.Context, filter postdomain.Sear
 		if err := q.Count(&total).Error; err != nil {
 			return postdomain.SearchResult{}, err
 		}
+
 		result.Total = &total
 	}
 
@@ -134,6 +141,7 @@ func (s *PostSearch) SearchPublished(ctx context.Context, filter postdomain.Sear
 	if pr.Mode == pagination.ModeOffset {
 		forward = true
 	}
+
 	orderDir := func(dir pagination.Direction, fwd bool) string {
 		d := dir
 		if !fwd {
@@ -143,20 +151,25 @@ func (s *PostSearch) SearchPublished(ctx context.Context, filter postdomain.Sear
 				d = pagination.Asc
 			}
 		}
+
 		if d == pagination.Desc {
 			return "DESC"
 		}
+
 		return "ASC"
 	}
 	nullsDir := func(nulls pagination.NullsOrder, fwd bool) string {
 		n := nulls
 		if !fwd {
-			if n == pagination.NullsFirst {
+			switch n {
+			case pagination.NullsFirst:
 				n = pagination.NullsLast
-			} else if n == pagination.NullsLast {
+			case pagination.NullsLast:
 				n = pagination.NullsFirst
+			case pagination.NullsDefault:
 			}
 		}
+
 		switch n {
 		case pagination.NullsFirst:
 			return "NULLS FIRST"
@@ -175,25 +188,26 @@ func (s *PostSearch) SearchPublished(ctx context.Context, filter postdomain.Sear
 		orderDir(pagination.Desc, forward), nullsDir(pagination.NullsLast, forward),
 		orderDir(pagination.Desc, forward))
 
-	selectBinds := append([]any{}, rankBinds...)
-	selectBinds = append(selectBinds, qBinds...)
-
 	var whereSeekBinds []any
+
 	if pr.Mode == pagination.ModeCursor && cursorFields != nil {
 		op := "<"
 		if !forward {
 			op = ">"
 		}
+
 		rankVal := cursorFields["rank"]
 		publishedVal := cursorFields["published_at"]
 		idVal := cursorFields["id"]
 		whereSeekBinds = []any{rankVal, publishedVal, idVal}
+
 		seekBinds := append([]any{}, rankBinds...)
 		seekBinds = append(seekBinds, whereSeekBinds...)
 		q = q.Where(fmt.Sprintf("(%s, posts.published_at, posts.id) %s (?, ?, ?)", rankExp, op), seekBinds...)
 	}
 
 	fetchLimit := pr.Limit + 1
+
 	rankSelectBinds := append([]any{}, rankBinds...)
 	rankSelectBinds = append(rankSelectBinds, qBinds...)
 
@@ -208,6 +222,7 @@ func (s *PostSearch) SearchPublished(ctx context.Context, filter postdomain.Sear
 	if pr.Mode == pagination.ModeOffset {
 		rankQuery = rankQuery.Offset(pr.Offset)
 	}
+
 	if err := rankQuery.Scan(&page).Error; err != nil {
 		return postdomain.SearchResult{}, err
 	}
@@ -255,6 +270,7 @@ func (s *PostSearch) SearchPublished(ctx context.Context, filter postdomain.Sear
 		if !ok {
 			continue
 		}
+
 		result.Items = append(result.Items, postdomain.SearchHit{
 			Post:    mapPost(row.PostModel),
 			Rank:    hit.Rank,
@@ -276,14 +292,18 @@ func (s *PostSearch) SearchPublished(ctx context.Context, filter postdomain.Sear
 					case 2:
 						return row.Post.ID
 					}
+
 					return nil
 				})
+
 			cur, err := pagination.EncodeCursor(postSearchCfg, fields)
 			if err != nil {
 				return postdomain.SearchResult{}, err
 			}
+
 			result.NextCursor = cur
 		}
+
 		if result.HasPreviousPage {
 			first := result.Items[0]
 			fields := pagination.SortValues[postdomain.SearchHit](postSearchCfg, first,
@@ -296,12 +316,15 @@ func (s *PostSearch) SearchPublished(ctx context.Context, filter postdomain.Sear
 					case 2:
 						return row.Post.ID
 					}
+
 					return nil
 				})
+
 			cur, err := pagination.EncodeCursor(postSearchCfg, fields)
 			if err != nil {
 				return postdomain.SearchResult{}, err
 			}
+
 			result.PreviousCursor = cur
 		}
 	}

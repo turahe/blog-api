@@ -89,6 +89,7 @@ func OpenDatabase(ctx context.Context, cfg config.Config) (*pkgdb.Database, erro
 	defer restore()
 
 	dbCfg := cfg.PkgConfig("").Database
+
 	idle := cfg.DBMaxIdleTime
 	if idle <= 0 {
 		idle = 10 * time.Minute
@@ -244,6 +245,7 @@ func useGoogleCredentials(cfg config.Config) (func(), error) {
 	}
 
 	previous, had := os.LookupEnv("GOOGLE_APPLICATION_CREDENTIALS")
+
 	if err := os.Setenv("GOOGLE_APPLICATION_CREDENTIALS", path); err != nil {
 		return nil, err
 	}

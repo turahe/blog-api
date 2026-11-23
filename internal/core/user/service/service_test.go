@@ -9,7 +9,6 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	userdomain "github.com/turahe/blog-api/internal/core/user/domain"
-	"github.com/turahe/blog-api/internal/shared/pagination"
 )
 
 type fakeUserRepo struct {
@@ -39,6 +38,7 @@ func (r *fakeUserRepo) List(_ context.Context, filter userdomain.ListFilter) (us
 	}
 
 	total := int64(len(out))
+
 	return userdomain.ListResult{
 		Items:         out,
 		Total:         &total,
@@ -83,7 +83,7 @@ func TestUserServiceListNormalisesPaging(t *testing.T) {
 			repo := &fakeUserRepo{users: map[uuid.UUID]userdomain.User{uuid.New(): {Username: "ada"}}}
 
 			result, err := New(repo).List(t.Context(), userdomain.ListFilter{
-				PageRequest: pagination.PageRequest{Page: tt.page, Limit: tt.perPage},
+				Page: tt.page, Limit: tt.perPage,
 			})
 			require.NoError(t, err)
 			assert.Len(t, result.Items, 1)
@@ -99,7 +99,7 @@ func TestUserServiceListPassesThroughFailures(t *testing.T) {
 	boom := errors.New("boom")
 
 	_, err := New(&fakeUserRepo{listErr: boom}).List(t.Context(), userdomain.ListFilter{
-		PageRequest: pagination.PageRequest{Page: 1, Limit: 20},
+		Page: 1, Limit: 20,
 	})
 	require.ErrorIs(t, err, boom)
 }

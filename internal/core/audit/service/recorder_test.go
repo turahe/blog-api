@@ -48,9 +48,9 @@ func (r *memRepo) Activity(_ context.Context, filter domain.ActivityFilter) (dom
 	r.filter = filter
 
 	return domain.ActivityPage{
-		OffsetPage:    filter.PageRequest.Page,
-		OffsetPerPage: filter.PageRequest.Limit,
-		Limit:         filter.PageRequest.Limit,
+		OffsetPage:    filter.Page,
+		OffsetPerPage: filter.Limit,
+		Limit:         filter.Limit,
 	}, nil
 }
 

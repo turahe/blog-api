@@ -108,11 +108,13 @@ func TestSendMultipartWhenHTMLIsSet(t *testing.T) {
 	reader := multipart.NewReader(msg.Body, params["boundary"])
 
 	var parts []string
+
 	for {
 		part, err := reader.NextPart()
 		if errors.Is(err, io.EOF) {
 			break
 		}
+
 		require.NoError(t, err)
 
 		body, err := io.ReadAll(part)

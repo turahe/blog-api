@@ -32,6 +32,7 @@ func (f *fakeUserRepo) FindByID(_ context.Context, id uuid.UUID) (userdomain.Use
 func (f *fakeUserRepo) List(_ context.Context, filter userdomain.ListFilter) (userdomain.ListResult, error) {
 	f.gotFilter = filter
 	total := f.total
+
 	return userdomain.ListResult{
 		Items:         f.users,
 		Total:         &total,
@@ -54,6 +55,7 @@ func TestMeGetHandler(t *testing.T) {
 	t.Parallel()
 
 	user := sampleUser()
+
 	tests := []struct {
 		name    string
 		anon    bool
@@ -72,6 +74,7 @@ func TestMeGetHandler(t *testing.T) {
 			t.Parallel()
 
 			repo := &fakeUserRepo{user: user, err: tc.err}
+
 			req := profileRequest{method: nethttp.MethodGet, target: "/api/v1/me"}
 			if !tc.anon {
 				req.user = &user.UUID

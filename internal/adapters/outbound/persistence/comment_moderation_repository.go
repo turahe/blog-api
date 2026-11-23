@@ -30,7 +30,7 @@ type ModerationLogModel struct {
 	BeforeState   *string `gorm:"type:jsonb"`
 	AfterState    *string `gorm:"type:jsonb"`
 	CreatedAt     time.Time
-	ModeratorUUID *uuid.UUID `gorm:"column:moderator_uuid;->"`
+	ModeratorUUID *uuid.UUID `gorm:"column:moderator_uuid;->;-:migration"`
 }
 
 // TableName returns the moderation log table name for GORM.

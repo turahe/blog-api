@@ -81,6 +81,7 @@ func adminUsersListHandler(users *userservice.UserService) gin.HandlerFunc {
 		}
 
 		filter := userdomain.ListFilter{PageRequest: pr}
+
 		result, err := users.List(c.Request.Context(), filter)
 		if err != nil {
 			switch {
@@ -95,6 +96,7 @@ func adminUsersListHandler(users *userservice.UserService) gin.HandlerFunc {
 			default:
 				responses.Internal(c, err, "Failed to list users")
 			}
+
 			return
 		}
 

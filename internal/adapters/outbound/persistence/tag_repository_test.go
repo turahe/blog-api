@@ -91,6 +91,8 @@ func TestTagRepositoryGet(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
 			got, err := tt.get()
 			if tt.wantErr != nil {
 				require.ErrorIs(t, err, tt.wantErr)
@@ -158,6 +160,7 @@ func TestTagRepositorySlugTaken(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
 			taken, err := repo.SlugTaken(t.Context(), tt.slug, tt.exclude)
 			require.NoError(t, err)
 			require.Equal(t, tt.want, taken)

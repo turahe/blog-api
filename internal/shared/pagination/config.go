@@ -2,6 +2,7 @@ package pagination
 
 import (
 	"encoding/json"
+	"math"
 	"time"
 
 	"github.com/google/uuid"
@@ -154,12 +155,15 @@ func SortValues[T any](cfg CursorConfig, row T, fn func(T, int) any) map[string]
 		v := fn(row, i)
 		out[f.Name] = normalizeSortValue(f.Type, v)
 	}
+
 	return out
 }
 
 // normalizeSortValue accepts common loose types (e.g. int for TypeInt64) and
 // produces the canonical runtime type stored in cursor payloads so that
 // ValidateCursor's type check is deterministic.
+//
+//nolint:gocyclo // accepts many JSON/numeric loose types into canonical cursor values
 func normalizeSortValue(t ColumnType, v any) any {
 	switch t {
 	case TypeInt64:
@@ -171,10 +175,18 @@ func normalizeSortValue(t ColumnType, v any) any {
 		case int64:
 			return n
 		case uint:
+			if uint64(n) > math.MaxInt64 {
+				break
+			}
+
 			return int64(n)
 		case uint32:
 			return int64(n)
 		case uint64:
+			if n > math.MaxInt64 {
+				break
+			}
+
 			return int64(n)
 		case float64:
 			if n == float64(int64(n)) {
@@ -216,6 +228,7 @@ func normalizeSortValue(t ColumnType, v any) any {
 		if u, ok := v.(uuid.UUID); ok {
 			return u
 		}
+
 		if s, ok := v.(string); ok {
 			if u, err := uuid.Parse(s); err == nil {
 				return u
@@ -225,14 +238,17 @@ func normalizeSortValue(t ColumnType, v any) any {
 		if tm, ok := v.(time.Time); ok {
 			return tm.UTC()
 		}
+
 		if s, ok := v.(string); ok {
 			if tm, err := time.Parse(time.RFC3339Nano, s); err == nil {
 				return tm.UTC()
 			}
+
 			if tm, err := time.Parse(time.RFC3339, s); err == nil {
 				return tm.UTC()
 			}
 		}
 	}
+
 	return v
 }

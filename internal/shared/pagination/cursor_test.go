@@ -37,6 +37,7 @@ var (
 
 func TestEncodeDecodeCursorRoundTrip(t *testing.T) {
 	t.Parallel()
+
 	now := time.Now().UTC()
 	fields := map[string]any{
 		"published_at": now.Add(-3 * time.Hour),
@@ -61,6 +62,7 @@ func TestEncodeDecodeCursorRoundTrip(t *testing.T) {
 
 func TestCursorExpiry(t *testing.T) {
 	t.Parallel()
+
 	now := time.Now().UTC()
 	fields := map[string]any{"published_at": now, "created_at": now, "id": int64(1)}
 	tok, err := pagination.EncodeCursor(cfgPost, fields, pagination.WithSigner(signer), pagination.WithNow(func() time.Time { return now }))
@@ -73,6 +75,7 @@ func TestCursorExpiry(t *testing.T) {
 
 func TestCursorWrongKind(t *testing.T) {
 	t.Parallel()
+
 	now := time.Now()
 	fields := map[string]any{"published_at": now, "created_at": now, "id": int64(1)}
 	tok, err := pagination.EncodeCursor(cfgPost, fields, pagination.WithSigner(signer))
@@ -84,12 +87,13 @@ func TestCursorWrongKind(t *testing.T) {
 
 func TestCursorTamperedByteFlipping(t *testing.T) {
 	t.Parallel()
+
 	now := time.Now()
 	fields := map[string]any{"published_at": now, "created_at": now, "id": int64(77)}
 	tok, err := pagination.EncodeCursor(cfgPost, fields, pagination.WithSigner(signer))
 	require.NoError(t, err)
 
-	for i := 0; i < 100; i++ {
+	for i := range 100 {
 		mutated := mutate(t, tok, i)
 		_, _, err := pagination.DecodeCursor(cfgPost, mutated, pagination.WithSigner(signer))
 		code := pagination.ErrorCode(err)
@@ -102,8 +106,10 @@ func TestCursorTamperedByteFlipping(t *testing.T) {
 // or truncate by one char for half the iterations.
 func mutate(t *testing.T, tok string, seed int) string {
 	t.Helper()
+
 	b := []byte(tok)
 	n, _ := rand.Int(rand.Reader, big.NewInt(int64(len(b)*2)))
+
 	idx := int(n.Int64()) % len(b)
 	switch {
 	case seed%5 == 0:
@@ -113,7 +119,15 @@ func mutate(t *testing.T, tok string, seed int) string {
 	case seed%5 == 2:
 		// append random printable char
 		c, _ := rand.Int(rand.Reader, big.NewInt(26))
-		return tok + string(rune('a'+int(c.Int64())))
+
+		const letters = "abcdefghijklmnopqrstuvwxyz"
+
+		off := c.Int64()
+		if off < 0 || off >= int64(len(letters)) {
+			off = 0
+		}
+
+		return tok + string(letters[off])
 	default:
 		b[idx] ^= 0x01
 		return string(b)
@@ -122,6 +136,7 @@ func mutate(t *testing.T, tok string, seed int) string {
 
 func TestCursorMissingField(t *testing.T) {
 	t.Parallel()
+
 	now := time.Now()
 	// Missing created_at.
 	fields := map[string]any{"published_at": now, "id": int64(9)}
@@ -132,6 +147,7 @@ func TestCursorMissingField(t *testing.T) {
 
 func TestCursorValidateBadType(t *testing.T) {
 	t.Parallel()
+
 	now := time.Now()
 	fields := map[string]any{"published_at": now, "created_at": now, "id": "not-an-int"}
 	// Encode accepts string-for-int because Encode normalizes — here id comes
@@ -144,6 +160,7 @@ func TestCursorValidateBadType(t *testing.T) {
 
 func TestCursorUUIDTypeCoercion(t *testing.T) {
 	t.Parallel()
+
 	cfg := pagination.CursorConfig{
 		Kind: "by_uuid",
 		Sort: []pagination.SortField{{Name: "u", Type: pagination.TypeUUID, Dir: pagination.Asc}},
@@ -161,5 +178,7 @@ func TestCursorUUIDTypeCoercion(t *testing.T) {
 }
 
 func TestErrorCodeFallback(t *testing.T) {
+	t.Parallel()
+
 	require.Equal(t, pagination.CodeMalformed, pagination.ErrorCode(nil))
 }

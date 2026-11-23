@@ -27,6 +27,7 @@ func NewLogger(cfg config.Config, version string) (*slog.Logger, func(), error) 
 	stopTracing := connect.InitTracing(context.Background(), cfg, version)
 	flush := func() {
 		sentryx.Flush(2 * time.Second)
+
 		_ = stopTracing(context.Background())
 		_ = pkgstorage.Close()
 	}

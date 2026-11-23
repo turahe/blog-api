@@ -167,6 +167,7 @@ func TestParseAccessRejectsInvalidTokens(t *testing.T) {
 	}
 
 	good := sign(jwtlib.SigningMethodES256, priv, valid)
+
 	tampered := good[:len(good)-4] + "AAAA"
 	if tampered == good {
 		tampered = good[:len(good)-4] + "BBBB"

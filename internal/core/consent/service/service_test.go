@@ -272,6 +272,7 @@ func TestStoreFailures(t *testing.T) {
 			svc, repo, events := newService()
 
 			token := ""
+
 			if tt.existing {
 				state, err := svc.Store(t.Context(), "", nil, grant, "v1")
 				require.NoError(t, err)

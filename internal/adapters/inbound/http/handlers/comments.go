@@ -94,8 +94,10 @@ func listPostCommentsHandler(comments commentAPI) gin.HandlerFunc {
 			return
 		}
 
-		filter := commentdomain.ListFilter{PostUUID: &postID, ParentUUID: parentID}
-		filter.PageRequest = pr
+		filter := commentdomain.ListFilter{
+			PostUUID: &postID, ParentUUID: parentID,
+			PageRequest: pr,
+		}
 
 		result, err := comments.ListForPost(c.Request.Context(), filter)
 		if err != nil {
@@ -113,6 +115,7 @@ func listPostCommentsHandler(comments commentAPI) gin.HandlerFunc {
 					return
 				}
 			}
+
 			return
 		}
 
@@ -300,8 +303,10 @@ func listMyCommentsHandler(comments commentAPI) gin.HandlerFunc {
 			return
 		}
 
-		filter := commentdomain.ListFilter{AuthorUUID: &userID}
-		filter.PageRequest = pr
+		filter := commentdomain.ListFilter{
+			AuthorUUID:  &userID,
+			PageRequest: pr,
+		}
 
 		result, err := comments.ListMine(c.Request.Context(), filter)
 		if err != nil {
@@ -319,6 +324,7 @@ func listMyCommentsHandler(comments commentAPI) gin.HandlerFunc {
 					return
 				}
 			}
+
 			return
 		}
 

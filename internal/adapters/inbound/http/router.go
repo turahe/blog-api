@@ -258,6 +258,7 @@ func optionalServices(controllerDeps *handlers.Deps, deps Dependencies) {
 // Domain middleware (Sentry, security headers, shedding, audit, cache bypass) stays local.
 func globalMiddleware(deps Dependencies) gin.HandlersChain {
 	global := middleware.PkgStack(deps.RequestTimeout)
+
 	global = append(global,
 		middleware.Tracing(),
 		middleware.SecurityHeaders(),
@@ -266,9 +267,11 @@ func globalMiddleware(deps Dependencies) gin.HandlersChain {
 	if deps.Metrics != nil {
 		global = append(global, middleware.Metrics(deps.Metrics))
 	}
+
 	if deps.Audit != nil {
 		global = append(global, middleware.Audit(deps.Audit))
 	}
+
 	if deps.CacheBypassHeader {
 		global = append(global, middleware.CacheBypass())
 	}

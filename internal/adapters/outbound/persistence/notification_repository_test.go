@@ -50,9 +50,11 @@ func TestNotificationRepositoryInsertDedupeListRead(t *testing.T) {
 	require.NoError(t, err)
 	require.False(t, created, "unknown recipients are skipped")
 
-	filter := notificationdomain.ListFilter{UserUUID: user}
-	filter.PageRequest = pagination.ParseLegacy(pagination.CursorConfig{}, 1, 10)
-	filter.PageRequest.IncludeTotal = true
+	filter := notificationdomain.ListFilter{
+		UserUUID:    user,
+		PageRequest: pagination.ParseLegacy(pagination.CursorConfig{}, 1, 10),
+	}
+	filter.IncludeTotal = true
 	page, err := repo.List(ctx, filter)
 	require.NoError(t, err)
 	require.NotNil(t, page.Total)
@@ -79,9 +81,11 @@ func TestNotificationRepositoryInsertDedupeListRead(t *testing.T) {
 	require.NoError(t, err)
 	require.True(t, readAt.Equal(got.ReadAt.UTC()), "marking again keeps the first read time")
 
-	unreadFilter := notificationdomain.ListFilter{UserUUID: user, UnreadOnly: true}
-	unreadFilter.PageRequest = pagination.ParseLegacy(pagination.CursorConfig{}, 1, 10)
-	unreadFilter.PageRequest.IncludeTotal = true
+	unreadFilter := notificationdomain.ListFilter{
+		UserUUID: user, UnreadOnly: true,
+		PageRequest: pagination.ParseLegacy(pagination.CursorConfig{}, 1, 10),
+	}
+	unreadFilter.IncludeTotal = true
 	unread, err := repo.List(ctx, unreadFilter)
 	require.NoError(t, err)
 	require.NotNil(t, unread.Total)

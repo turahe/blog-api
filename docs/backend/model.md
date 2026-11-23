@@ -75,11 +75,11 @@ repository             --> persistence model  <-->  domain entity
 - primary keys: `id bigint GENERATED ALWAYS AS IDENTITY` on every entity table, plus `uuid uuid NOT NULL UNIQUE DEFAULT gen_random_uuid()` (app-generated when known); foreign keys reference `id`; join tables (`user_roles`, `role_permissions`, `post_tags`) keep composite bigint keys
 - GORM models: `ID int64` `primaryKey`, `UUID` with `default:gen_random_uuid()`, `int64` foreign keys, and read-only (`->`) `…UUID` fields filled by the `uuidRef` subqueries in `persistence/ids.go`
 - ports take and return public UUIDs; bigint ids never appear in HTTP DTOs, JWT subjects, Casbin subjects, or events
-- indexes and CHECKs belong in goose migrations, not only in GORM tags
+- prefer GORM tags for columns/indexes AutoMigrate can express; document Postgres-only constraints (partial unique indexes, CHECKs) in database.md when they are not AutoMigrated
 - soft delete only where product requires restore/tombstone: typically `users`, `posts`, `media_assets`, `comments`
 - append-only tables: no GORM `Updates` on historical rows (`post_revisions`, `audit_logs`, `user_activity`, `settings_history`, password history/tokens); `outbox_events` rows only change delivery state (`attempts`, `published_at`, `failed_at`)
 - Casbin: `casbin_rules` is canonical; `rbac_*` mirrors are service-maintained — do not write mirrors from ad-hoc repos
-- foundation migration [00001_foundation.sql](../../internal/platform/migrations/sql/00001_foundation.sql) is a **bootstrap subset**; full target schema is [database.md](./database.md) + [ERD.md](./ERD.md)
+- schema bootstrap is GORM AutoMigrate via `app migrate up` (`persistence.Migrate`); full target schema is [database.md](./database.md) + [ERD.md](./ERD.md)
 
 ## Lifecycle Patterns
 
@@ -209,7 +209,7 @@ See [newsletter.md](newsletter.md).
 ## Checklist: Adding a Model
 
 1. Specify columns and indexes in [database.md](./database.md); update [ERD.md](./ERD.md) if relationships change.
-2. Add a goose migration under `internal/platform/migrations/sql/`.
+2. Extend the GORM model (or `schema_models_gen.go` / `MigrateModels`) and run `app migrate up`.
 3. Add domain type + ports in `internal/core/<module>/`.
 4. Add persistence struct + repository mapper (no GORM in core).
 5. Expose only via OpenAPI-backed HTTP DTOs; committed swag docs under `docs/` (`make swagger`)  / `make routes-check` as needed.

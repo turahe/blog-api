@@ -52,15 +52,14 @@ func BenchmarkListPublished_CursorPage1(b *testing.B) {
 	repo := NewPostRepository(seed.db)
 
 	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
+
+	for range b.N {
 		filter := postdomain.ListFilter{
-			PageRequest: pagination.PageRequest{
-				Mode:         pagination.ModeCursor,
-				Forward:      true,
-				Limit:        20,
-				Cursor:       seed.postRow1Cursor,
-				IncludeTotal: false,
-			},
+			Mode:         pagination.ModeCursor,
+			Forward:      true,
+			Limit:        20,
+			Cursor:       seed.postRow1Cursor,
+			IncludeTotal: false,
 			CategoryUUID: &seed.postCategory,
 		}
 		_, _ = repo.ListPublished(ctx, filter)
@@ -75,15 +74,14 @@ func BenchmarkListPublished_CursorPage50000(b *testing.B) {
 	repo := NewPostRepository(seed.db)
 
 	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
+
+	for range b.N {
 		filter := postdomain.ListFilter{
-			PageRequest: pagination.PageRequest{
-				Mode:         pagination.ModeCursor,
-				Forward:      true,
-				Limit:        20,
-				Cursor:       seed.postRow49999Cursor,
-				IncludeTotal: false,
-			},
+			Mode:         pagination.ModeCursor,
+			Forward:      true,
+			Limit:        20,
+			Cursor:       seed.postRow49999Cursor,
+			IncludeTotal: false,
 			CategoryUUID: &seed.postCategory,
 		}
 		_, _ = repo.ListPublished(ctx, filter)
@@ -103,19 +101,19 @@ func BenchmarkListPublished_SmallPageSize(b *testing.B) {
 }
 
 func benchmarkListPublished(b *testing.B, page, pageSize int, includeTotal bool) {
+	b.Helper()
 	seed := benchmarkDB(b)
 	ctx := context.Background()
 	repo := NewPostRepository(seed.db)
 
 	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
+
+	for range b.N {
 		filter := postdomain.ListFilter{
-			PageRequest: pagination.PageRequest{
-				Mode:         pagination.ModeOffset,
-				Page:         page,
-				Limit:        pageSize,
-				IncludeTotal: includeTotal,
-			},
+			Mode:         pagination.ModeOffset,
+			Page:         page,
+			Limit:        pageSize,
+			IncludeTotal: includeTotal,
 			CategoryUUID: &seed.postCategory,
 		}
 		_, _ = repo.ListPublished(ctx, filter)
@@ -188,16 +186,15 @@ func BenchmarkSearchPublished_CursorPage1(b *testing.B) {
 	search := NewPostSearch(seed.db, "english")
 
 	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
+
+	for range b.N {
 		filter := postdomain.SearchFilter{
-			Query: "ipsum",
-			PageRequest: pagination.PageRequest{
-				Mode:         pagination.ModeCursor,
-				Forward:      true,
-				Limit:        20,
-				Cursor:       "", // Start from beginning
-				IncludeTotal: false,
-			},
+			Query:        "ipsum",
+			Mode:         pagination.ModeCursor,
+			Forward:      true,
+			Limit:        20,
+			Cursor:       "", // Start from beginning
+			IncludeTotal: false,
 		}
 		_, _ = search.SearchPublished(ctx, filter)
 	}
@@ -210,20 +207,20 @@ func BenchmarkSearchPublished_NoResults(b *testing.B) {
 }
 
 func benchmarkSearchPublished(b *testing.B, query string, page, pageSize int, includeTotal bool) {
+	b.Helper()
 	seed := benchmarkDB(b)
 	ctx := context.Background()
 	search := NewPostSearch(seed.db, "english")
 
 	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
+
+	for range b.N {
 		filter := postdomain.SearchFilter{
-			Query: query,
-			PageRequest: pagination.PageRequest{
-				Mode:         pagination.ModeOffset,
-				Page:         page,
-				Limit:        pageSize,
-				IncludeTotal: includeTotal,
-			},
+			Query:        query,
+			Mode:         pagination.ModeOffset,
+			Page:         page,
+			Limit:        pageSize,
+			IncludeTotal: includeTotal,
 		}
 		_, _ = search.SearchPublished(ctx, filter)
 	}
@@ -242,14 +239,13 @@ func BenchmarkListPublished_OffsetVsCursor_Position1(b *testing.B) {
 
 	b.Run("Offset", func(b *testing.B) {
 		b.ResetTimer()
-		for i := 0; i < b.N; i++ {
+
+		for range b.N {
 			filter := postdomain.ListFilter{
-				PageRequest: pagination.PageRequest{
-					Mode:         pagination.ModeOffset,
-					Page:         1,
-					Limit:        50,
-					IncludeTotal: false,
-				},
+				Mode:         pagination.ModeOffset,
+				Page:         1,
+				Limit:        50,
+				IncludeTotal: false,
 				CategoryUUID: &seed.postCategory,
 			}
 			_, _ = repo.ListPublished(ctx, filter)
@@ -258,15 +254,14 @@ func BenchmarkListPublished_OffsetVsCursor_Position1(b *testing.B) {
 
 	b.Run("Cursor", func(b *testing.B) {
 		b.ResetTimer()
-		for i := 0; i < b.N; i++ {
+
+		for range b.N {
 			filter := postdomain.ListFilter{
-				PageRequest: pagination.PageRequest{
-					Mode:         pagination.ModeCursor,
-					Forward:      true,
-					Limit:        50,
-					Cursor:       seed.postRow1Cursor,
-					IncludeTotal: false,
-				},
+				Mode:         pagination.ModeCursor,
+				Forward:      true,
+				Limit:        50,
+				Cursor:       seed.postRow1Cursor,
+				IncludeTotal: false,
 				CategoryUUID: &seed.postCategory,
 			}
 			_, _ = repo.ListPublished(ctx, filter)
@@ -283,14 +278,13 @@ func BenchmarkListPublished_OffsetVsCursor_Position50000(b *testing.B) {
 
 	b.Run("Offset", func(b *testing.B) {
 		b.ResetTimer()
-		for i := 0; i < b.N; i++ {
+
+		for range b.N {
 			filter := postdomain.ListFilter{
-				PageRequest: pagination.PageRequest{
-					Mode:         pagination.ModeOffset,
-					Page:         1000, // offset = 49950
-					Limit:        50,
-					IncludeTotal: false,
-				},
+				Mode:         pagination.ModeOffset,
+				Page:         1000, // offset = 49950
+				Limit:        50,
+				IncludeTotal: false,
 				CategoryUUID: &seed.postCategory,
 			}
 			_, _ = repo.ListPublished(ctx, filter)
@@ -299,15 +293,14 @@ func BenchmarkListPublished_OffsetVsCursor_Position50000(b *testing.B) {
 
 	b.Run("Cursor", func(b *testing.B) {
 		b.ResetTimer()
-		for i := 0; i < b.N; i++ {
+
+		for range b.N {
 			filter := postdomain.ListFilter{
-				PageRequest: pagination.PageRequest{
-					Mode:         pagination.ModeCursor,
-					Forward:      true,
-					Limit:        50,
-					Cursor:       seed.postRow49999Cursor,
-					IncludeTotal: false,
-				},
+				Mode:         pagination.ModeCursor,
+				Forward:      true,
+				Limit:        50,
+				Cursor:       seed.postRow49999Cursor,
+				IncludeTotal: false,
 				CategoryUUID: &seed.postCategory,
 			}
 			_, _ = repo.ListPublished(ctx, filter)

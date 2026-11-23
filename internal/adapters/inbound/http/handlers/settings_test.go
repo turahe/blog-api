@@ -39,12 +39,12 @@ func (f *fakeSettings) List(_ context.Context, filter settingsservice.ListFilter
 
 	return []settingsdomain.Setting{
 		{
-			Definition: settingsdomain.Definition{Key: "site.name", Category: settingsdomain.CategorySite, Type: settingsdomain.TypeString, Sensitivity: settingsdomain.PublicSafe, Default: "Blog"},
-			Value:      "Mine", Version: 2, UpdatedAt: &updatedAt, UpdatedBy: &testUserID,
+			Key: "site.name", Category: settingsdomain.CategorySite, Type: settingsdomain.TypeString, Sensitivity: settingsdomain.PublicSafe, Default: "Blog",
+			Value: "Mine", Version: 2, UpdatedAt: &updatedAt, UpdatedBy: &testUserID,
 		},
 		{
-			Definition: settingsdomain.Definition{Key: "media.quality", Category: settingsdomain.CategoryMedia, Type: settingsdomain.TypeInteger, Sensitivity: settingsdomain.PublicSafe, Default: int64(80)},
-			Value:      int64(80), Defaulted: true,
+			Key: "media.quality", Category: settingsdomain.CategoryMedia, Type: settingsdomain.TypeInteger, Sensitivity: settingsdomain.PublicSafe, Default: int64(80),
+			Value: int64(80), Defaulted: true,
 		},
 	}, nil
 }
@@ -68,6 +68,7 @@ func (f *fakeSettings) History(_ context.Context, filter settingsdomain.HistoryF
 	}
 
 	total := int64(2)
+
 	return settingsdomain.HistoryPage{
 		Items: []settingsdomain.HistoryEntry{
 			{UUID: uuid.New(), Key: "site.name", Previous: json.RawMessage(`"Blog"`), New: json.RawMessage(`"Mine"`), Version: 1, CreatedAt: testTime},
@@ -278,15 +279,13 @@ func TestSettingsHistoryPaginatesAndShowsRedaction(t *testing.T) {
 	w, body := runProfile(t, h.history, profileRequest{method: nethttp.MethodGet, target: "/?key=site.name&page=2&perPage=5", user: &testUserID})
 	require.Equal(t, nethttp.StatusOK, w.Code, w.Body.String())
 	assert.Equal(t, settingsdomain.HistoryFilter{
-		Key: "site.name",
-		PageRequest: pagination.PageRequest{
-			Mode:         pagination.ModeOffset,
-			Forward:      true,
-			Page:         2,
-			Limit:        5,
-			Offset:       0,
-			IncludeTotal: true,
-		},
+		Key:          "site.name",
+		Mode:         pagination.ModeOffset,
+		Forward:      true,
+		Page:         2,
+		Limit:        5,
+		Offset:       0,
+		IncludeTotal: true,
 	}, svc.historyFilter)
 
 	items, _ := body["data"].([]any)

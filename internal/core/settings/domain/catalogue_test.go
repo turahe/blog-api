@@ -186,6 +186,7 @@ func TestValuesStringsClonesSlice(t *testing.T) {
 		is.Equal([]string{"a", "b"}, got)
 
 		got[0] = "changed"
+
 		is.Equal([]string{"a", "b"}, v.Strings("list"), "stored slice untouched")
 		is.Equal([]string{"a", "b"}, original, "caller's original slice untouched")
 	})

@@ -164,6 +164,7 @@ func (m *memRepo) RevokeRole(_ context.Context, userID uuid.UUID, name string) e
 	}
 
 	m.users[userID] = slices.DeleteFunc(m.users[userID], func(n string) bool { return n == name })
+
 	return nil
 }
 

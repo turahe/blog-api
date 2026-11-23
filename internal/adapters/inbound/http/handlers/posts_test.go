@@ -30,12 +30,13 @@ const testPaginationHMACKey = "handler-test-key-do-not-use-in-production-0000"
 // deterministic. It also resets any cached signer state between package runs.
 func TestMain(m *testing.M) {
 	pagination.ResetGlobalSigner()
-	os.Setenv("APP_KEY", testPaginationHMACKey)
+
+	if err := os.Setenv("APP_KEY", testPaginationHMACKey); err != nil {
+		panic(err)
+	}
+
 	os.Exit(m.Run())
 }
-
-// int64Ptr returns a pointer to n; helps construct *int64 values in test literals.
-func int64Ptr(n int64) *int64 { return &n }
 
 // fakePostRepo backs a real PostService; methods a test does not reach stay unimplemented.
 type fakePostRepo struct {
@@ -106,6 +107,7 @@ func TestAdminCreatePostHandlerRequests(t *testing.T) {
 	t.Parallel()
 
 	categoryID := uuid.New()
+
 	tests := []struct {
 		name         string
 		user         *uuid.UUID
@@ -145,6 +147,7 @@ func TestAdminListPostsHandlerRequests(t *testing.T) {
 	t.Parallel()
 
 	authorID := uuid.New()
+
 	tests := []struct {
 		name    string
 		user    *uuid.UUID
@@ -217,6 +220,7 @@ func TestAdminUpdatePostHandlerRequests(t *testing.T) {
 	t.Parallel()
 
 	postID := uuid.New()
+
 	tests := []struct {
 		name    string
 		user    *uuid.UUID
@@ -318,6 +322,7 @@ func TestAdminReplacePostMediaHandler(t *testing.T) {
 			t.Parallel()
 
 			post := postdomain.Post{UUID: postID, Status: postdomain.StatusDraft}
+
 			if tc.deleted {
 				at := time.Now()
 				post.DeletedAt = &at

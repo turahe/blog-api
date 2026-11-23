@@ -80,7 +80,7 @@ func TestAdminListPostsHandlerReturnsMetaTotalAndScopesRestrictedAuthors(t *test
 					CreatedAt:    now,
 					UpdatedAt:    now,
 				}},
-				Total:         int64Ptr(7),
+				Total:         new(int64(7)),
 				OffsetPage:    2,
 				OffsetPerPage: 10,
 			}, nil

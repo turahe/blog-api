@@ -62,8 +62,10 @@ func TestCommentRepositoryPersistsContentHTML(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, "<p><em>edited</em></p>", updated.ContentHTML)
 
-	listFilter := commentdomain.ListFilter{PostUUID: &post, Statuses: commentdomain.PublicStatuses}
-	listFilter.PageRequest = pagination.ParseLegacy(commentsPublicCfg, 1, 10)
+	listFilter := commentdomain.ListFilter{
+		PostUUID: &post, Statuses: commentdomain.PublicStatuses,
+		PageRequest: pagination.ParseLegacy(commentsPublicCfg, 1, 10),
+	}
 	list, err := repo.List(t.Context(), listFilter)
 	require.NoError(t, err)
 	require.Len(t, list.Items, 1)
@@ -268,8 +270,10 @@ func TestCommentRepositoryReplyCountsOnlyPublicReplies(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, 3, got.ReplyCount, "approved and deleted placeholders only")
 
-	rootsFilter := commentdomain.ListFilter{PostUUID: &post, RootsOnly: true, Statuses: commentdomain.PublicStatuses}
-	rootsFilter.PageRequest = pagination.ParseLegacy(commentsPublicCfg, 1, 10)
+	rootsFilter := commentdomain.ListFilter{
+		PostUUID: &post, RootsOnly: true, Statuses: commentdomain.PublicStatuses,
+		PageRequest: pagination.ParseLegacy(commentsPublicCfg, 1, 10),
+	}
 	roots, err := repo.List(t.Context(), rootsFilter)
 	require.NoError(t, err)
 	require.Len(t, roots.Items, 1)

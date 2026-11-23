@@ -37,9 +37,15 @@ make test                    # or make test-race / make coverage
 
 ## Migration policy
 
-- explicit goose SQL under `internal/platform/migrations/sql` (currently through `00036`)
-- prefer expand → migrate → contract → remove for breaking schema
-- do not ship destructive drops in the same release as unverified code
+- schema is applied with GORM AutoMigrate (`app migrate up` → `persistence.Migrate`)
+- models live under `internal/adapters/outbound/persistence` (`MigrateModels`, plus
+  `schema_models_gen.go` for Raw-SQL-era tables); `posts.search_vector` is ensured after
+  AutoMigrate via `RebuildPostSearchIndex`
+- AutoMigrate does not recreate every historical CHECK/partial index from the old goose
+  SQL tree; treat local Compose as greenfield (`make docker-down` + wipe `./.data/postgres18`
+  when switching) and verify uniqueness in app code where indexes are incomplete
+- prefer expand → migrate → contract → remove for breaking schema changes to models
+- `app migrate down` drops AutoMigrate tables (destructive; local/dev only)
 
 ## Rollback
 

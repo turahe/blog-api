@@ -117,6 +117,8 @@ func (r *NewsletterRepository) Issue(ctx context.Context, id uuid.UUID) (domain.
 // ListIssues returns one page of issues, newest first. Uses cursor-based keyset
 // pagination when after/before cursors are present, and offset pagination when
 // the caller provides only page/perPage via ModeOffset.
+//
+//nolint:dupl,nestif // cursor page encode/decode mirrors sibling repositories
 func (r *NewsletterRepository) ListIssues(ctx context.Context, filter domain.IssueFilter) (domain.IssuePage, error) {
 	pr := filter.PageRequest
 	if pr.Limit <= 0 {
@@ -124,16 +126,20 @@ func (r *NewsletterRepository) ListIssues(ctx context.Context, filter domain.Iss
 	}
 
 	var cursorFields map[string]any
+
 	if pr.Mode == pagination.ModeCursor && pr.Cursor != "" {
 		decoded, _, err := pagination.DecodeCursor(newsletterIssuesCfg, pr.Cursor)
 		if err != nil {
 			return domain.IssuePage{}, err
 		}
+
 		if err := pagination.ValidateCursor(newsletterIssuesCfg, decoded); err != nil {
 			return domain.IssuePage{}, err
 		}
+
 		cursorFields = decoded
 	}
+
 	seek, err := pagination.BuildSeek(newsletterIssuesCfg, pr, cursorFields)
 	if err != nil {
 		return domain.IssuePage{}, err
@@ -152,19 +158,24 @@ func (r *NewsletterRepository) ListIssues(ctx context.Context, filter domain.Iss
 	clause := " WHERE " + strings.Join(where, " AND ")
 
 	var out domain.IssuePage
+
 	if pr.IncludeTotal {
 		var total int64
 		if err := conn(ctx, r.db).Raw(`SELECT count(*) FROM newsletter_issues i`+clause, args...).Scan(&total).Error; err != nil {
 			return domain.IssuePage{}, fmt.Errorf("count newsletter issues: %w", err)
 		}
+
 		out.Total = &total
 	}
 
 	query := newsletterIssueSelect + clause + " " + seek.OrderClause + " LIMIT ?"
+
 	queryArgs := append([]any{}, args...)
 	queryArgs = append(queryArgs, seek.LimitFetch)
+
 	if pr.Mode == pagination.ModeOffset {
 		query += " OFFSET ?"
+
 		queryArgs = append(queryArgs, pr.Offset)
 	}
 
@@ -183,6 +194,7 @@ func (r *NewsletterRepository) ListIssues(ctx context.Context, filter domain.Iss
 	out.Items = page
 	out.HasNextPage = hasNext
 	out.HasPreviousPage = hasPrev
+
 	out.Limit = pr.Limit
 	if pr.Mode == pagination.ModeOffset {
 		out.OffsetPage = pr.Page
@@ -199,14 +211,18 @@ func (r *NewsletterRepository) ListIssues(ctx context.Context, filter domain.Iss
 					case 1:
 						return row.ID
 					}
+
 					return nil
 				})
+
 			cur, err := pagination.EncodeCursor(newsletterIssuesCfg, fields)
 			if err != nil {
 				return domain.IssuePage{}, err
 			}
+
 			out.NextCursor = cur
 		}
+
 		if out.HasPreviousPage {
 			fields := pagination.SortValues[domain.Issue](newsletterIssuesCfg, page[0],
 				func(row domain.Issue, i int) any {
@@ -216,12 +232,15 @@ func (r *NewsletterRepository) ListIssues(ctx context.Context, filter domain.Iss
 					case 1:
 						return row.ID
 					}
+
 					return nil
 				})
+
 			cur, err := pagination.EncodeCursor(newsletterIssuesCfg, fields)
 			if err != nil {
 				return domain.IssuePage{}, err
 			}
+
 			out.PreviousCursor = cur
 		}
 	}

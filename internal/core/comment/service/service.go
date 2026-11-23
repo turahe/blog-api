@@ -209,6 +209,7 @@ func (s *Service) ListForPost(ctx context.Context, filter commentdomain.ListFilt
 	if filter.PostUUID != nil {
 		postID = *filter.PostUUID
 	}
+
 	policy, err := s.repo.PostPolicy(ctx, postID)
 	if err != nil {
 		return commentdomain.ListResult{}, err
@@ -222,6 +223,7 @@ func (s *Service) ListForPost(ctx context.Context, filter commentdomain.ListFilt
 		norm := pagination.ParseLegacy(commentsPublicListCfg, filter.Page, filter.Limit)
 		filter.PageRequest = norm
 	}
+
 	if filter.Page <= 0 {
 		filter.Page = 1
 	}
@@ -245,8 +247,9 @@ func (s *Service) GetThread(ctx context.Context, id uuid.UUID) (commentdomain.Th
 	repliesFilter := commentdomain.ListFilter{
 		ParentUUID: &comment.UUID,
 		Statuses:   commentdomain.PublicStatuses,
+
+		PageRequest: repliesPr,
 	}
-	repliesFilter.PageRequest = repliesPr
 
 	replies, err := s.repo.List(ctx, repliesFilter)
 	if err != nil {
@@ -262,6 +265,7 @@ func (s *Service) ListMine(ctx context.Context, filter commentdomain.ListFilter)
 		norm := pagination.ParseLegacy(commentsMeListCfg, filter.Page, filter.Limit)
 		filter.PageRequest = norm
 	}
+
 	if filter.Page <= 0 {
 		filter.Page = 1
 	}
@@ -543,18 +547,6 @@ func normalizeContent(raw string) (string, error) {
 	}
 
 	return content, nil
-}
-
-func normalizePage(page, perPage int) (int, int) {
-	if page < 1 {
-		page = 1
-	}
-
-	if perPage < 1 || perPage > 100 {
-		perPage = 20
-	}
-
-	return page, perPage
 }
 
 func (s *Service) hashIdentity(value string) string {

@@ -20,7 +20,7 @@ func TestIDByUUID(t *testing.T) {
 
 	tests := []struct {
 		name    string
-		ctx     context.Context
+		ctx     context.Context //nolint:containedctx // test table carries per-case request context
 		id      uuid.UUID
 		want    int64
 		wantErr error
@@ -32,6 +32,8 @@ func TestIDByUUID(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
 			got, err := idByUUID(tx.WithContext(tt.ctx), "users", tt.id)
 			require.ErrorIs(t, err, tt.wantErr)
 			require.Equal(t, tt.want, got)
