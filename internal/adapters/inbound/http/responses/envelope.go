@@ -79,6 +79,7 @@ const (
 	ErrorCodeValidation   = "validation_error"
 	ErrorCodeUnauthorized = "unauthorized"
 	ErrorCodeForbidden    = "forbidden"
+	ErrorCodeCORSOrigin   = "cors.origin_not_allowed"
 	ErrorCodeNotFound     = "not_found"
 	ErrorCodeConflict     = "conflict"
 	ErrorCodeInternal     = "internal_error"

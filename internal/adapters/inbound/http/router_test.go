@@ -247,7 +247,7 @@ func TestOptionalServices(t *testing.T) {
 func TestGlobalMiddleware(t *testing.T) {
 	t.Parallel()
 
-	const base = 6
+	const base = 7 // RequestID, CORS, Tracing, SecurityHeaders, AccessLog, MaxInFlight, Recovery
 
 	tests := []struct {
 		name  string

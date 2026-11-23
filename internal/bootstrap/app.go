@@ -230,6 +230,7 @@ func NewRuntime(ctx context.Context, cfg config.Config, logger *slog.Logger, ver
 		TrustedProxies:    cfg.TrustedProxies,
 		SwaggerEnabled:    cfg.SwaggerEnabled,
 		CacheBypassHeader: cfg.CacheEnabled && cfg.CacheBypassHeader,
+		CORSOrigins:       cfg.CORSOrigins,
 	})
 	if err != nil {
 		return fail(fmt.Errorf("create router: %w", err))
