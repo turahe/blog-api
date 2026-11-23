@@ -2,7 +2,6 @@ package middleware
 
 import (
 	"context"
-	"log/slog"
 	nethttp "net/http"
 	"net/http/httptest"
 	"sync"
@@ -12,6 +11,7 @@ import (
 	"github.com/getsentry/sentry-go"
 	"github.com/gin-gonic/gin"
 	"github.com/stretchr/testify/require"
+	pkgmw "github.com/turahe/pkg/middlewares"
 )
 
 type captureTransport struct {
@@ -59,9 +59,8 @@ func TestTracingRecordsRouteTemplateTransaction(t *testing.T) {
 
 	gin.SetMode(gin.TestMode)
 
-	logger := slog.New(slog.DiscardHandler)
 	router := gin.New()
-	router.Use(RequestID(), Tracing(), AccessLog(logger), Recovery(logger))
+	router.Use(pkgmw.TraceMiddleware(), BridgeRequestID(), Tracing(), pkgmw.RecoveryHandler)
 	router.GET("/posts/:slug", func(*gin.Context) { panic("boom") })
 
 	rec := httptest.NewRecorder()

@@ -5,12 +5,12 @@ Each phase file says *what is left to build*; the goals below say *what each pha
 
 | Phase | Doc | Status | Goal |
 | --- | --- | --- | --- |
-| 1 — Foundation | [phase-1-foundation.md](./phase-1-foundation.md) | Done | Bootstrap, config, DB/Redis, health, auth, user/role/permission model |
+| 1 — Foundation | [phase-1-foundation.md](./phase-1-foundation.md) | Done | Bootstrap, config, DB/Redis, health, auth (including self-registration), user/role/permission model |
 | 2 — Content Core | [phase-2-content-core.md](./phase-2-content-core.md) | Done | Posts, categories, tags, media, public reads, Redis caching |
 | 3 — Collaboration and Moderation | [phase-3-collaboration-moderation.md](./phase-3-collaboration-moderation.md) | Done | Comments, moderation, audit logging, notification hooks |
 | 4 — Event-Driven Platform | [phase-4-event-driven-platform.md](./phase-4-event-driven-platform.md) | Done | Watermill publishing, durable outbox, workers/jobs, media cache, ops hardening |
-| 5 — Product Expansion | [phase-5-product-expansion.md](./phase-5-product-expansion.md) | In progress | Richer admin UX, search, analytics dashboard, privacy/consent, media pipeline |
-| 6 — Analytics and Reporting | [phase-6-analytics-reporting.md](./phase-6-analytics-reporting.md) | In progress | Telemetry ingest, popular/retention widgets, search CTR, realtime admin views, export/retention |
+| 5 — Product Expansion | [phase-5-product-expansion.md](./phase-5-product-expansion.md) | Done | Richer admin UX, search, privacy/consent, media pipeline, newsletter, impersonation |
+| 6 — Analytics and Reporting | [phase-6-analytics-reporting.md](./phase-6-analytics-reporting.md) | Done | Telemetry ingest, popular/retention widgets, search CTR, realtime admin views, export/retention |
 
 ## Status legend
 
@@ -24,45 +24,35 @@ Each phase file says *what is left to build*; the goals below say *what each pha
 
 ## Current baseline
 
-Snapshot of the tree these files were written against:
+Snapshot of the tree these files describe:
 
 - **HTTP surface** — Gin `routes.Register*` binds in `internal/adapters/inbound/routes/` are the
   runtime source of truth; the published contract is swag-generated into
-  [swagger.json](../swagger.json) (`make swagger`, `make routes-check`). Operations without a
-  handler return `501 operation.not_implemented` via `routes.NotImplemented` (`stubs.go`,
-  `analytics.go`).
-- **Wired operations** — `health.live`, `health.ready`, `health.version`; `auth.login`,
-  `auth.refresh`, `auth.logout`, `auth.password.forgot`, `auth.password.reset`,
-  `auth.password.reset_token_validity`; `me.get`, `me.password.update`, `me.profile.patch`,
-  `me.avatar.upload`, `me.avatar.delete`, `me.email.request_change`, `me.email.confirm_change`;
-  `public.users.profile`; `admin.users.list`, `admin.users.profile.get`,
-  `admin.users.profile.patch`;
-  `admin.posts.create`, `admin.posts.list`, `admin.posts.update`, `admin.posts.publish`,
-  `admin.posts.unpublish`, `admin.posts.archive`, `admin.posts.delete`, `admin.posts.restore`,
-  `admin.posts.media.replace`; `admin.categories.list`, `admin.categories.create`,
-  `admin.categories.update`, `admin.categories.delete`, `admin.categories.move`;
-  `admin.tags.create`, `admin.tags.update`, `admin.tags.merge`, `admin.tags.delete`;
-  `admin.media.create`, `admin.media.complete`, `admin.media.list`, `admin.media.delete`,
-  `admin.media.tags.patch`; `public.posts.list`, `public.posts.get`, `public.categories.list`,
-  `public.categories.get`, `public.tags.list`, `public.media.get`;
-  `public.posts.comments.list`, `public.posts.comments.create`, `public.comments.get`,
-  `public.comments.flag`, `self.comments.list`, `self.comments.patch`, `self.comments.delete`,
-  `self.comments.upvote`; `admin.comments.list`, `admin.comments.get`, `admin.comments.stats`,
-  `admin.comments.moderate`, `admin.comments.bulk_moderate`, `admin.comments.delete`.
-- **Schema** — PostgreSQL migrations `00001`–`00012` create users, user_profiles,
-  user_privacy_settings, roles, permissions, user_roles, role_permissions, posts (slug unique
-  among live rows), categories (nested set), tags, post_tags, comments, comment_flags,
-  comment_upvotes, comment_moderation_log, audit_logs, outbox_events, refresh_sessions,
-  password_reset_tokens (also used for email change), casbin_rules, media_assets, post_media,
-  plus list indexes. Entity tables key on `id bigint` identity with a
-  unique public `uuid`; only the UUID leaves the persistence adapters.
+  [swagger.json](../swagger.json) (`make swagger`, `make routes-check`).
+  `routes/swagger_parity_test.go` expects every swagger operation to be mounted (no global
+  `501 operation.not_implemented` stubs).
+- **Wired operations** — full auth (login/refresh/logout, password reset, 2FA, OAuth,
+  `auth.register` / `auth.verify_email`), `/me` profile and privacy, admin users/roles,
+  posts/categories/tags/media, comments and moderation, notifications, settings
+  (`admin.settings.*`, `public.settings.get`), post revisions and SEO (`public.home.seo_meta`,
+  `public.posts.seo_meta`), search on `public.posts.list`, newsletter, impersonation,
+  analytics ingest/consent/reports/realtime/export. Enumerate via swagger or
+  [api.md](../backend/api.md).
+- **Schema** — PostgreSQL migrations `00001`–`00036` under
+  `internal/platform/migrations/sql` (users through registrations, plus settings, revisions,
+  SEO, search, impersonation, newsletter, analytics events/rollups/exports/salts, outbox
+  relay, processed messages, scheduled jobs, privacy requests, and related indexes). Entity
+  tables key on `id bigint` identity with a unique public `uuid`; only the UUID leaves the
+  persistence adapters.
 - **Platform** — PostgreSQL (plus Cloud SQL connector), Redis (fixed-window rate limits and
   the generation-keyed public read cache), ES256 JWT, Argon2id, Casbin enforcer,
-  S3-compatible object storage, and multi-broker Watermill messaging (`MESSAGE_BROKER`) with an
-  `app worker` scaffold.
+  S3-compatible object storage, multi-broker Watermill messaging (`MESSAGE_BROKER`),
+  production `app worker` / `app scheduler` / `app outbox`, and imgproxy transforms.
 - **Audit log** — `audit_logs` (extended by `00016`) is written asynchronously by
   `middleware.Audit` and read by `me.activity.list` and `admin.users.activity.list`.
-- **Schema-only** — the `outbox_events` table exists with no service or HTTP layer.
+- **Outbox** — `outbox_events` is written in the business transaction and relayed by the
+  worker with retries, parking, pruning, and metrics; consumers handle email, newsletter,
+  notifications, and analytics live fan-out.
 
 ## Maintenance rules
 

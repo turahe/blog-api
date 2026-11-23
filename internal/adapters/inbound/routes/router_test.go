@@ -126,28 +126,35 @@ func TestLoginValidationWithoutAuthService(t *testing.T) {
 	require.Equal(t, nethttp.StatusNotImplemented, recorder.Code)
 }
 
-func TestAccessLogCarriesRouteGroup(t *testing.T) {
+func TestAdminRouteMetaCarriesGroup(t *testing.T) {
 	t.Parallel()
 
-	var logs bytes.Buffer
-
+	// Access logging is github.com/turahe/pkg/middlewares.LoggerMiddleware (pkg global
+	// logger), not deps.Logger. Route group / auth mode still come from routes.WithMeta
+	// and surface on contract stubs used by audit and RBAC.
 	router, err := httpadapter.NewRouter(httpadapter.Dependencies{
-		Logger:  slog.New(slog.NewJSONHandler(&logs, nil)),
+		Logger:  slog.New(slog.DiscardHandler),
 		Health:  healthservice.New("test"),
 		Version: "test",
 	})
 	require.NoError(t, err)
 
+	recorder := httptest.NewRecorder()
 	router.ServeHTTP(
-		httptest.NewRecorder(),
+		recorder,
 		httptest.NewRequestWithContext(t.Context(), nethttp.MethodGet, "/api/v1/admin/users", nil),
 	)
 
-	var entry map[string]any
-	require.NoError(t, json.Unmarshal(logs.Bytes(), &entry))
-	require.Equal(t, "admin.users.list", entry["operation_id"])
-	require.Equal(t, "admin", entry["route_group"])
-	require.Equal(t, "required", entry["auth_mode"])
+	require.Equal(t, nethttp.StatusNotImplemented, recorder.Code)
+
+	var envelope responses.Envelope
+	require.NoError(t, json.Unmarshal(recorder.Body.Bytes(), &envelope))
+	require.Equal(t, "operation.not_implemented", envelope.Error.Code)
+	require.Equal(t, map[string]any{
+		"operationId": "admin.users.list",
+		"routeGroup":  "admin",
+		"authMode":    "required",
+	}, envelope.Error.Details)
 }
 
 func TestAdminContentRoutesRequireAdminOrEditorRole(t *testing.T) {

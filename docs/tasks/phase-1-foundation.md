@@ -32,7 +32,8 @@ TOTP 2FA, OAuth sign-in, role administration, and per-user activity from the aud
 - [x] Database open in `internal/platform/database` (PostgreSQL; MySQL and SQL Server dropped)
 - [x] Google Cloud SQL connectivity via `cloud.google.com/go/cloudsqlconn` with IAM auth and private IP
 - [x] Connection pool tuning from config (`DB_MAX_OPEN`, `DB_MAX_IDLE`, lifetimes)
-- [x] Goose SQL migrations `00001`–`00009` under `internal/platform/migrations/sql`
+- [x] Goose SQL migrations under `internal/platform/migrations/sql` (foundation through
+      `00009` in this phase; the tree continues through `00036_registrations.sql`)
 - [x] Every entity table keys on `id bigint` identity with a unique public `uuid`; foreign keys are bigint
 - [x] Redis client in `internal/platform/redis`
 - [x] Seeder in `internal/platform/seed` for baseline roles
@@ -78,6 +79,10 @@ TOTP 2FA, OAuth sign-in, role administration, and per-user activity from the aud
 - [x] Refresh-token rotation with reuse detection revoking the whole session family
 - [x] Add login throttling and lockout on repeated failures (`AUTH_LOGIN_*`; per-IP limit plus
       per-email Redis lockout, `429` with `Retry-After`)
+- [x] `auth.register` — `POST /api/v1/auth/register` (self-registration; migration `00036`;
+      10 requests per hour per IP)
+- [x] `auth.verify_email` — `POST /api/v1/auth/verify-email` (emits `blog.user.created` on
+      verified registration)
 
 Spec: [authentication.md](../features/authentication.md)
 
@@ -110,9 +115,9 @@ Specs: [user-management.md](../features/user-management.md),
 ## Cross-cutting
 
 - [x] Unit tests for JWT, config messaging validation, and database driver normalization
-- [x] Route smoke tests (`make routes-check`) for `routes.Register*` auth ordering, route metadata, and 501 stubs
+- [x] Route smoke tests (`make routes-check`) for `routes.Register*` auth ordering and route metadata
 - [x] Test that every mounted Gin route has a matching operation in `docs/swagger.json` and vice versa
-      (`routes/swagger_parity_test.go`; 501 stubs are excluded until they get a handler)
+      (`routes/swagger_parity_test.go`; every swagger operation is expected to be mounted)
 - [x] Integration tests for the full login / refresh / logout cycle against a real database
       (`internal/bootstrap/auth_integration_test.go`, real repositories, ES256 and Argon2id)
 - [x] Negative-path tests for expired and reused refresh tokens (expired, reused, logged-out and

@@ -2,19 +2,29 @@
 
 ## CI gates (current)
 
-Workflow: [.github/workflows/go.yml](../../.github/workflows/go.yml)
+Workflows under [.github/workflows/](../../.github/workflows/):
 
-1. `go mod download`
-2. `go test -count=1 ./...`
-3. `go vet ./...`
-4. `go build -o app .`
+| Workflow | Role |
+| --- | --- |
+| [test.yml](../../.github/workflows/test.yml) | `go test -race` with coverage (Postgres + Kafka services) |
+| [lint.yml](../../.github/workflows/lint.yml) | `gofmt` / `go vet` / golangci-lint |
+| [swagger.yml](../../.github/workflows/swagger.yml) | OpenAPI regeneration / parity |
+| [asyncapi.yml](../../.github/workflows/asyncapi.yml) | AsyncAPI validation |
+| [security.yml](../../.github/workflows/security.yml) / [govulncheck.yaml](../../.github/workflows/govulncheck.yaml) | Dependency and vuln scans |
+| [sonarqube.yml](../../.github/workflows/sonarqube.yml) | SonarQube analysis with coverage |
+| [docker.yml](../../.github/workflows/docker.yml) | Image build |
+| [release.yml](../../.github/workflows/release.yml) | Release publishing |
+| [pr-validation.yml](../../.github/workflows/pr-validation.yml) | PR body RELEASE NOTES + `Type:` label |
+| [dependabot-auto-merge.yml](../../.github/workflows/dependabot-auto-merge.yml) | Dependabot PR auto-merge helper |
 
 Also run locally before release:
 
 ```bash
 make lint
+make vuln                    # govulncheck in Docker
 make swagger                 # when handler annotations changed
-make routes-check # Go routes ↔ OpenAPI parity
+make routes-check            # Go routes ↔ OpenAPI parity
+make test                    # or make test-race / make coverage
 ```
 
 ## Recommended deploy order
@@ -22,12 +32,12 @@ make routes-check # Go routes ↔ OpenAPI parity
 1. Build image with immutable `VERSION` / `COMMIT` tags
 2. Apply migrations: `app migrate up` (before traffic needs new schema)
 3. Roll out API (`serve`)
-4. Roll out workers / scheduler when those commands exist
+4. Roll out `app worker` and `app scheduler` (separate processes; see [checklist.md](./checklist.md))
 5. Smoke: health + auth + one public read + one admin read
 
 ## Migration policy
 
-- explicit goose SQL under `internal/platform/migrations/sql`
+- explicit goose SQL under `internal/platform/migrations/sql` (currently through `00036`)
 - prefer expand → migrate → contract → remove for breaking schema
 - do not ship destructive drops in the same release as unverified code
 

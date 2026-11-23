@@ -9,15 +9,17 @@ Index: [README.md](./README.md).
 
 ## Status
 
-**In progress** — telemetry ingest, the aggregation pipeline, dashboard reporting, and the live
-view are done: the five ingest routes store raw events, `app scheduler` rolls them up, the five
-admin reports read the rollups, and the realtime stream counts broker-fed events in memory.
-Export still returns `501`.
+**Done** — telemetry ingest, the aggregation pipeline, dashboard reporting, the live view, and
+export/retention are in place: the five ingest routes store raw events, `app scheduler` rolls
+them up, the five admin reports read the rollups, the realtime stream counts broker-fed events
+in memory, and `admin.analytics.export` queues ZIP artefacts in object storage (503
+`analytics.export_unavailable` only when storage is unset).
 
 ## Epic: telemetry ingest
 
 - [x] Analytics event schema and storage — see [analytics.md](../backend/analytics.md)
-      (migration 00032: one plain table per event type, deduplicated by client event id)
+      (migrations `00032` events, `00035` daily visitor salts; one plain table per event type,
+      deduplicated by client event id)
 - [x] Analytics core module with an ingest port and a storage adapter
 - [x] `analytics.ingest.page_view` — `POST /api/v1/analytics/ingest/page-view`
 - [x] `analytics.ingest.time_spent` — `POST /api/v1/analytics/ingest/time-spent`
@@ -78,7 +80,8 @@ Spec: [analytics-dashboard.md](../features/analytics-dashboard.md)
 ## Epic: export and retention
 
 - [x] `admin.analytics.export` — `POST /api/v1/admin/analytics/export` (`analytics.export`,
-  admins only, password and 2FA step-up; rollups only, as a ZIP of CSVs)
+  admins only, password and 2FA step-up; rollups only, as a ZIP of CSVs; migration `00034`
+  `analytics_exports`)
 - [x] Asynchronous export producing a downloadable artefact in object storage (`analytics-exports`
   job, `analytics-exports/<id>.zip`; status via `GET /api/v1/admin/analytics/exports/{id}`)
 - [x] Signed, expiring download links (`ANALYTICS_EXPORT_URL_TTL`, archive kept
@@ -103,7 +106,8 @@ Spec: [analytics-dashboard.md](../features/analytics-dashboard.md)
       then `make swagger` + `make routes-check`
 - [x] Load test ingest at expected peak write volume
 - [x] Query-performance tests on rollup reads with realistic row counts
-- [x] Privacy review: retention, anonymisation, and export scope
+- [x] Privacy review: retention, anonymisation, and export scope — recorded in
+  [analytics.md](../backend/analytics.md#privacy-review-2026-09-25)
 - [x] Verify ingest endpoints cannot be used to enumerate content or users
 - [x] Add analytics dashboards or alerts to the operational runbook
 

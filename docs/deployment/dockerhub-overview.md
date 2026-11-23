@@ -89,9 +89,11 @@ For production deployments, run migrations as a one-off release job and wait for
 
 ## Health and Metrics
 
-- API health: `GET /api/v1/health`
-- Prometheus metrics: configure `METRICS_ADDR=0.0.0.0:9090`
+- Liveness / readiness / version: `GET /health/live`, `GET /health/ready`, `GET /health/version`
+- Convenience alias: `GET /api/v1/health` (same as live; not in OpenAPI)
+- Prometheus metrics: configure `METRICS_ADDR=0.0.0.0:9090` (serves `blog_*` and pkg `http_*` series)
 - Keep the metrics listener private and expose it only to your monitoring system.
+- Browser frontends need `CORS_ORIGINS` (or `CORS_GLOBAL`); see the configuration reference.
 
 Example with metrics enabled:
 
@@ -113,10 +115,11 @@ For local development with PostgreSQL, Redis, RustFS, imgproxy, Mailpit, Kafka, 
 git clone https://github.com/turahe/blog-api.git
 cd blog-api
 cp .env.example .env
-docker compose up --build
+make docker-up       # or: docker compose up --build
+make docker-seed     # roles + local admin (production migrate image)
 ```
 
-The Compose stack is intended for development and evaluation. Use managed or separately operated dependencies for production.
+The Compose stack is intended for development and evaluation. Use managed or separately operated dependencies for production. Full local steps: [local.md](./local.md).
 
 ## Image Details
 

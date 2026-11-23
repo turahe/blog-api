@@ -13,7 +13,7 @@ Cover at least:
 - implemented health routes (`/health/live`, ready, version)
 - one contract stub → `501` with `operation_id`, `route_group`, `auth_mode`
 - `404` / `405` envelopes
-- access-log fields for a sample admin route (when logger is injectable)
+- admin contract stub → `501` with `operation_id`, `route_group`, `auth_mode` (pkg access logs use the global logger, not `deps.Logger`)
 
 ## Route groups
 

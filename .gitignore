@@ -16,4 +16,4 @@ coverage.html
 .vscode/
 .cursor/
 .trae/
-.data/
+.data/.tmp-gopath/

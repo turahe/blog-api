@@ -7,8 +7,10 @@
 - [ ] Migrations reviewed; expand/contract plan if breaking
 - [ ] Env vars set from [.env.example](../../.env.example) shapes (real secrets in vault)
 - [ ] `APP_TRUSTED_PROXIES` matches the edge proxy
-- [ ] CORS allowlist updated for this environment (when enabled)
-- [ ] Object storage bucket + credentials verified
+- [ ] `CORS_ORIGINS` (or `CORS_GLOBAL`) matches the frontends for this environment
+- [ ] Object storage bucket + credentials verified (`S3_*` / media)
+- [ ] Impersonation: confirm `impersonation.start` is granted only to intended staff roles for
+      this environment (threat model in [authn-authz.md](../security/authn-authz.md))
 
 ## Deploy
 
@@ -28,7 +30,8 @@
 - [ ] `/health/version` shows expected version
 - [ ] Smoke: public posts, auth login, admin gated route
 - [ ] Error rate / latency dashboards nominal
-- [ ] No unexpected 501 spikes on newly implemented operations
+- [ ] No unexpected 4xx/5xx spikes on newly shipped operations (Swagger parity expects every
+      operation mounted)
 - [ ] With a broker: worker `/readyz` is 200 and `blog_outbox_lag_seconds` stays low
 
 ## Rollback triggers

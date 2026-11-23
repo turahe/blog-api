@@ -1,17 +1,24 @@
 # Project Configuration
 
 The application is configured exclusively through process environment variables.
-Shared infrastructure comes from [`github.com/turahe/pkg/config`](https://pkg.go.dev/github.com/turahe/pkg/config).
-`internal/platform/config.Config` embeds that package's `Configuration`, and `Load` fills
-`Server`, `Database`, `Redis`, `Sentry`, `OpenTelemetry`, and `Timezone` from the variables
-in the sections below. `internal/platform/config` is the source of truth for every name the
-process reads.
+Shared infrastructure comes from [`github.com/turahe/pkg`](https://pkg.go.dev/github.com/turahe/pkg)
+([config](https://pkg.go.dev/github.com/turahe/pkg/config), database, Redis, logger, crypto,
+storage, otelx, sentryx, middlewares). `internal/platform/config.Config` embeds that
+package's `Configuration`. `Load` then `connect.Install` projects the full block —
+`Server`, `Cors`, `Database`, `Redis`, `Storage`, `RateLimiter`, `Timezone`,
+`OpenTelemetry`, `Sentry`, `MTLS`, and `Hashing` — and starts the pkg logger, crypto
+hasher, and (when media is enabled) object-storage driver. HTTP infrastructure middleware
+(recovery, trace, logging, Prometheus `http_*`, request timeout, CORS, optional mTLS and
+global rate limit) comes from `github.com/turahe/pkg/middlewares`; domain middleware
+(Sentry transactions, security headers, shedding, audit, cache bypass) stays in this API.
+`internal/platform/config` is the source of truth for every name the process reads.
 
 A package variable wins when it is set. The historical name in the Alias column is read
 only when the package variable is unset. [.env.example](../../.env.example) still uses those
 historical names, and it also supplies variable substitution for
 [compose.yaml](../../compose.yaml). Settings this API owns (HTTP limits, mail, messaging,
-media, and the rest) have no package equivalent and are unchanged.
+per-route rate limits, media policy, and the rest) have no package equivalent and are
+unchanged.
 
 ## Loading configuration
 
@@ -64,13 +71,25 @@ docker run --rm --env-file .env -p 8080:8080 blog-api:local serve
 | `APP_SWAGGER_ENABLED` | `true` when `APP_ENV=local`, else `false` | No | Serve Swagger UI at `/swagger` and the OpenAPI document at `/openapi.yaml`. |
 | `APP_TRUSTED_PROXIES` | empty | No | Comma-separated proxies trusted by Gin. Leave empty unless the proxy addresses are known. |
 | `APP_SHUTDOWN_TIMEOUT` | `15s` | No | Graceful shutdown deadline. |
-| `APP_READ_TIMEOUT` | `15s` | No | Maximum request body read time. |
+| `APP_READ_TIMEOUT` | `15s` | No | Maximum request body read time, and the pkg `RequestTimeout` middleware deadline. |
 | `APP_READ_HEADER_TIMEOUT` | `5s` | No | Maximum request header read time. |
 | `APP_IDLE_TIMEOUT` | `60s` | No | Keep-alive idle timeout. |
 | `HTTP_MAX_INFLIGHT` | `0` | No | Concurrent requests one `app serve` process handles before answering `503` `server.overloaded` with `Retry-After: 1`. `0` disables shedding. Health probes and SSE streams are not counted. |
 
 Do not use `0.0.0.0/0`, `*`, or arbitrary client-controlled addresses in
 `APP_TRUSTED_PROXIES`. See [docker.md](./docker.md) for reverse-proxy deployment notes.
+
+## CORS
+
+Browser Origins are projected onto `github.com/turahe/pkg/config.CorsConfiguration` and
+enforced by `github.com/turahe/pkg/middlewares.CORS`.
+
+| Variable | Default | Required | Purpose |
+| --- | --- | --- | --- |
+| `CORS_ORIGINS` | empty | For browser frontends | Comma-separated allowlist. First entry is `Cors.Frontend`; the full list is `Cors.Ips`. Empty leaves `Cors.Global=false` (no cross-origin allow). |
+| `CORS_GLOBAL` | `false` | No | `true`, or a sole `CORS_ORIGINS=*`, sets `Cors.Global` and allows any Origin. |
+
+Local Vite defaults to `CORS_ORIGINS=http://localhost:5173` in [.env.example](../../.env.example).
 
 ## Authentication and security
 
@@ -118,6 +137,45 @@ private key invalidates existing access tokens; rotating `APP_SESSION_KEY` inval
 refresh/reset tokens. Additional handling rules are in
 [secrets-and-headers.md](../security/secrets-and-headers.md).
 
+### Password hashing (turahe/pkg crypto)
+
+Projected onto `HashingConfiguration` and installed by `crypto.Setup` at process start.
+New password hashes use this driver; verification still accepts existing Argon2id PHC strings
+within the login work budget.
+
+| Variable | Default | Required | Purpose |
+| --- | --- | --- | --- |
+| `HASH_DRIVER` | `argon2id` | No | `argon2id` (this API's default), `argon`, or `bcrypt`. |
+| `HASH_ARGON_MEMORY` | `65536` | No | Argon memory in KiB (64 MiB). |
+| `HASH_ARGON_TIME` | `3` | No | Argon iterations. |
+| `HASH_ARGON_THREADS` | `2` | No | Argon parallelism. |
+| `HASH_BCRYPT_ROUNDS` | `0` | No | Bcrypt cost when `HASH_DRIVER=bcrypt`; `0` means the crypto package default. |
+
+### Global rate limiter (optional)
+
+Separate from per-route Redis limits (`AUTH_LOGIN_*`, comment rates, analytics ingest). When
+enabled, `github.com/turahe/pkg/middlewares.RateLimiter` applies a Redis sliding window to
+every request (skipping configured paths).
+
+| Variable | Default | Required | Purpose |
+| --- | --- | --- | --- |
+| `RATE_LIMITER_ENABLED` | `false` | No | Turn on the pkg global limiter. |
+| `RATE_LIMITER_REQUESTS` | `100` | No | Max requests per window. |
+| `RATE_LIMITER_WINDOW` | `60` | No | Window length in seconds. |
+| `RATE_LIMITER_KEY_BY` | `ip` | No | `ip` or `user`. |
+| `RATE_LIMITER_SKIP_PATHS` | `/health/live,/health/ready,/health/version,/metrics` | No | Comma-separated paths skipped by the limiter. |
+| `RATE_LIMITER_TRUST_PROXY` | `false` | No | Key on Gin's `ClientIP` (forwarded headers). Enable only behind a trusted proxy listed in `APP_TRUSTED_PROXIES`. |
+
+### Mutual TLS (optional)
+
+| Variable | Default | Required | Purpose |
+| --- | --- | --- | --- |
+| `MTLS_ENABLED` | `false` | No | Require a verified client certificate (`MTLSMiddleware`). |
+| `MTLS_CA_CERT` | `/etc/mtls/ca.crt` | With mTLS | CA used to verify clients. |
+| `MTLS_SERVER_CERT` / `MTLS_SERVER_KEY` | under `/etc/mtls/` | With mTLS | Server certificate and key (also used by `mtls.ConfigureServer` when wired). |
+| `MTLS_CLIENT_CERT` / `MTLS_CLIENT_KEY` | under `/etc/mtls/` | No | Optional client identity for outbound calls. |
+| `MTLS_SKIP_PATHS` | `/health/live,/health/ready,/health/version,/metrics` | No | Paths that bypass the mTLS middleware. |
+
 ## Email
 
 | Variable | Default | Required | Purpose |
@@ -140,7 +198,13 @@ Local Mailpit UI is [http://127.0.0.1:8025](http://127.0.0.1:8025). Messages cov
 | `METRICS_ADDR` | empty | No | Listen address for Prometheus `GET /metrics` (e.g. `0.0.0.0:9090`). Empty disables metrics. In `app worker` the same listener serves the `GET /healthz` and `GET /readyz` probes. |
 
 Metrics are served on their own listener so they never share the public API port; keep that
-port off the public load balancer. Series use the `blog_` prefix:
+port off the public load balancer.
+
+`github.com/turahe/pkg/middlewares.Metrics` also registers Prometheus series without the
+`blog_` prefix (`http_requests_total`, `http_request_duration_seconds`,
+`http_requests_in_flight`), labelled by method/path/status.
+
+Application series use the `blog_` prefix:
 
 - `blog_http_requests_total{method,route,status}` and `blog_http_request_duration_seconds{method,route}`,
   labelled by route template (`unmatched` for 404s), so login attempt and lockout rates are
@@ -247,6 +311,11 @@ enables Redis (`Redis.Enabled` is true) and opens it from `REDIS_HOST`, `REDIS_P
 | `REDIS_PORT` | `6379` | No | Port, from `1` through `65535`. |
 | `REDIS_PASSWORD` | empty | No | Password. Keep it in a secret store outside local development. |
 | `REDIS_DB` | `0` | No | Logical database number; must be zero or greater. |
+| `REDIS_CLUSTER_MODE` | `false` | No | Use a Redis cluster client (for example Memorystore). |
+| `REDIS_CLUSTER_NODES` | empty | With cluster | Comma-separated `host:port` nodes when `REDIS_CLUSTER_MODE` is true. |
+| `REDIS_POOL_SIZE` | `0` | No | Client pool size; `0` keeps the go-redis default. |
+| `REDIS_MIN_IDLE_CONNS` | `0` | No | Minimum idle connections in the pool. |
+| `REDIS_READ_TIMEOUT_SEC` / `REDIS_WRITE_TIMEOUT_SEC` | `0` | No | Per-command timeouts in seconds; `0` means no timeout. |
 
 Example with authentication against Valkey:
 
@@ -282,15 +351,17 @@ generations, invalidation) is in [services.md](../backend/services.md#public-rea
 ## OpenTelemetry
 
 Tracing settings are `github.com/turahe/pkg/config.OpenTelemetryConfiguration` and are
-passed to `github.com/turahe/pkg/otelx`. Export starts when `OTEL_TRACES_EXPORTER` is `gcp`
-(or `google`, `cloudtrace`), or when the exporter is `otlp` / `otlp_grpc` and an endpoint
-is set. An empty exporter is treated as `otlp` and stays off until an endpoint is set.
-GORM tracing inside the package stays off for this API's pool; Sentry still records SQL
-spans inside a sampled transaction.
+passed to `github.com/turahe/pkg/otelx`. Export is OTLP-only: it starts when an endpoint is
+set (`OTEL_EXPORTER_OTLP_ENDPOINT` or `OTEL_EXPORTER_OTLP_TRACES_ENDPOINT`). An empty
+exporter is treated as `otlp`. Unknown exporters (including a bare `gcp`) leave tracing
+off. GORM tracing inside the package stays off for this API's pool; Sentry still records
+SQL spans inside a sampled transaction. Trace/correlation IDs on HTTP requests come from
+`github.com/turahe/pkg/middlewares.TraceMiddleware` (including `X-Cloud-Trace-Context`
+propagation headers when present).
 
 | Variable | Default | Purpose |
 | --- | --- | --- |
-| `OTEL_TRACES_EXPORTER` | empty (`otlp`, disabled without an endpoint) | `otlp`, `otlp_grpc`, or `gcp`. |
+| `OTEL_TRACES_EXPORTER` | empty (`otlp`, disabled without an endpoint) | `otlp` or `otlp_grpc`. |
 | `OTEL_EXPORTER_OTLP_PROTOCOL` | `http/protobuf` | `http/protobuf` or `grpc`. `OTEL_EXPORTER_OTLP_TRACES_PROTOCOL` overrides it. |
 | `OTEL_EXPORTER_OTLP_ENDPOINT` | empty | OTLP endpoint (`:4318` HTTP, `:4317` gRPC). |
 | `OTEL_EXPORTER_OTLP_TRACES_ENDPOINT` | empty | Traces endpoint override. |
@@ -302,8 +373,6 @@ spans inside a sampled transaction.
 | `OTEL_TRACES_SAMPLER_ARG` | `1.0` | Trace sampler argument, `0`–`1`. |
 | `OTEL_SHUTDOWN_TIMEOUT` | `5s` | Tracer shutdown deadline. |
 | `OTEL_GORM_ENABLED` | `true` | Stored on the embedded configuration. SQL spans for this API's pool are the Sentry spans described under Sentry. |
-| `OTEL_GCP_PROJECT_ID` | `GOOGLE_CLOUD_PROJECT` | Cloud Trace project. |
-| `OTEL_GCP_PROPAGATOR` | `false` | Also on for the `gcp` exporter. Propagates `X-Cloud-Trace-Context`. |
 
 ## Messaging
 
@@ -359,8 +428,13 @@ delivery semantics are in [events.md](../backend/events.md).
 
 ## Media storage
 
-`config.Load` consumes the media variables below. `S3_*` configure the storage backend, and
-`MEDIA_*` define the upload policy enforced by the media service.
+`config.Load` consumes the media variables below. `S3_*` configure the storage backend and
+are also projected onto `github.com/turahe/pkg/config.StorageConfiguration` (`Driver` is
+`s3` for `minio`/`s3`/`r2`/`do_spaces`, or `gcs` when `S3_DISK` is `gcs`/`google`).
+`connect.Install` calls `storage.Setup` when media is enabled. Upload/presign/head paths
+still use this API's S3 adapter. `MEDIA_*` define the upload policy enforced by the media
+service. Optional pkg aliases (`STORAGE_DRIVER`, `STORAGE_BUCKET`, …) are not read by
+`Load`; set `S3_*` (and `GCS_CREDENTIALS_FILE` for GCS ADC path) instead.
 
 | Variable | Default | Required | Purpose |
 | --- | --- | --- | --- |

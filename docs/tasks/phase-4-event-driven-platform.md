@@ -27,8 +27,8 @@ validated in CI, and Kafka supports TLS and SASL.
 - [x] Broker alias normalization (`amqp`, `rabbit`, `pubsub`, `gcp-pubsub`)
 - [x] `ValidateMessaging` enforces per-broker required environment variables
 - [x] Topic prefixing through `MESSAGE_TOPIC_PREFIX`
-- [x] Kafka and RabbitMQ in `compose.yaml` under the `messaging` profile
-- [x] `make infra-up-messaging` / `make infra-down-messaging`
+- [x] Kafka and RabbitMQ in `compose.yaml` (started with `make docker-up` / `make infra-up`;
+      the old `messaging` Compose profile and `make infra-*-messaging` targets were removed)
 - [x] `app doctor` probes broker reachability when messaging is enabled
 - [x] Document per-broker delivery semantics and ordering guarantees in [events.md](../backend/events.md#delivery)
 - [x] Add a dead-letter or parking-lot topic per broker (`blog.dead_letter` via the Watermill
