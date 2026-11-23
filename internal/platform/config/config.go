@@ -53,6 +53,7 @@ type Config struct {
 	RedisPassword                 string
 	RedisDB                       int
 	TrustedProxies                []string
+	CORSOrigins                   []string
 	ShutdownTimeout               time.Duration
 	ReadTimeout                   time.Duration
 	ReadHeaderTimeout             time.Duration
@@ -623,6 +624,7 @@ func load(withJWTKeys bool) (Config, error) {
 		RedisPassword:                 env("REDIS_PASSWORD", ""),
 		RedisDB:                       integer("REDIS_DB", 0),
 		TrustedProxies:                splitCSV(os.Getenv("APP_TRUSTED_PROXIES")),
+		CORSOrigins:                   splitCSV(os.Getenv("CORS_ORIGINS")),
 		ShutdownTimeout:               duration("APP_SHUTDOWN_TIMEOUT", 15*time.Second),
 		ReadTimeout:                   duration("APP_READ_TIMEOUT", 15*time.Second),
 		ReadHeaderTimeout:             duration("APP_READ_HEADER_TIMEOUT", 5*time.Second),

@@ -95,6 +95,8 @@ type Dependencies struct {
 	SwaggerEnabled     bool
 	// CacheBypassHeader honours `Cache-Control: no-cache` on public reads (debugging only).
 	CacheBypassHeader bool
+	// CORSOrigins is the browser Origin allowlist; empty disables cross-origin browser access.
+	CORSOrigins []string
 }
 
 // NewRouter wires middleware + controllers into routes.NewRouter.
@@ -254,6 +256,7 @@ func optionalServices(controllerDeps *handlers.Deps, deps Dependencies) {
 func globalMiddleware(deps Dependencies) gin.HandlersChain {
 	global := gin.HandlersChain{
 		middleware.RequestID(),
+		middleware.CORS(deps.CORSOrigins),
 		middleware.Tracing(),
 		middleware.SecurityHeaders(),
 		middleware.AccessLog(deps.Logger),

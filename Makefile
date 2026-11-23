@@ -160,8 +160,9 @@ docker-logs:
 docker-migrate: dev-keys
 	docker compose run --rm migrate
 
+# Production image (migrate), not the live-reload api image (no /bin/app entrypoint).
 docker-seed: dev-keys
-	docker compose run --rm --no-deps api seed
+	docker compose run --rm --no-deps migrate seed
 
 # Every service except migrate and api (for running the API from an IDE or debugger).
 infra-up:
