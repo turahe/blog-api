@@ -11,7 +11,6 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-//nolint:paralleltest // t.Setenv
 func TestLoadRejectsUnreadableJWTKeys(t *testing.T) {
 	tests := []struct {
 		name    string
@@ -121,7 +120,6 @@ func TestValidateSecrets(t *testing.T) {
 	}
 }
 
-//nolint:paralleltest // t.Setenv
 func TestPEMFromEnvOrFile(t *testing.T) {
 	const inlineKey, pathKey = "BLOG_TEST_PEM", "BLOG_TEST_PEM_PATH"
 
@@ -164,7 +162,6 @@ func TestPEMFromEnvOrFile(t *testing.T) {
 	}
 }
 
-//nolint:paralleltest // t.Setenv
 func TestEnvParsers(t *testing.T) {
 	const key = "BLOG_TEST_VALUE"
 
@@ -207,7 +204,6 @@ func TestEnvParsers(t *testing.T) {
 	}
 }
 
-//nolint:paralleltest // t.Setenv
 func TestDurationOrSeconds(t *testing.T) {
 	const durationKey, secondsKey = "BLOG_TEST_DURATION", "BLOG_TEST_SECONDS"
 

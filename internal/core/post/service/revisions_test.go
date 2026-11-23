@@ -67,21 +67,20 @@ func (m *memRevisions) List(_ context.Context, filter postdomain.RevisionFilter)
 
 	total := int64(len(items))
 	offset := 0
+
 	limit := pr.Limit
 	if limit <= 0 {
 		limit = 20
 	}
+
 	if pr.Mode == pagination.ModeOffset {
-		offset = pr.Offset
-		if offset > len(items) {
-			offset = len(items)
-		}
+		offset = min(pr.Offset, len(items))
 	}
-	end := offset + limit
-	if end > len(items) {
-		end = len(items)
-	}
+
+	end := min(offset+limit, len(items))
+
 	paged := items[offset:end]
+
 	out := postdomain.RevisionPage{
 		Items:         paged,
 		Total:         &total,
@@ -93,6 +92,7 @@ func (m *memRevisions) List(_ context.Context, filter postdomain.RevisionFilter)
 	if out.OffsetPage <= 0 {
 		out.OffsetPage = 1
 	}
+
 	return out, nil
 }
 
@@ -321,7 +321,7 @@ func TestPostRevisionsHideOtherAuthorsPosts(t *testing.T) {
 	_, err = svc.RestoreRevision(t.Context(), postID, postdomain.RevisionRef{Number: &one}, stranger, false, "")
 	require.ErrorIs(t, err, postdomain.ErrNotFound)
 
-	page, err := svc.ListRevisions(t.Context(), stranger, true, postdomain.RevisionFilter{PostUUID: postID, PageRequest: pagination.PageRequest{Limit: 0}})
+	page, err := svc.ListRevisions(t.Context(), stranger, true, postdomain.RevisionFilter{PostUUID: postID, Limit: 0})
 	require.NoError(t, err)
 	require.Len(t, page.Items, 1)
 	require.Equal(t, 20, page.OffsetPerPage)

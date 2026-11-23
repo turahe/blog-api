@@ -51,11 +51,11 @@ func (a *Activity) list(ctx context.Context, filter domain.ActivityFilter) (doma
 		return domain.ActivityPage{}, ErrInvalidRange
 	}
 
-	if filter.PageRequest.Cursor == "" {
-		mode := filter.PageRequest.Mode
-		includeTotal := filter.PageRequest.IncludeTotal
-		forward := filter.PageRequest.Forward
-		pr := pagination.ParseLegacy(activityCursorCfg, filter.PageRequest.Page, filter.PageRequest.Limit)
+	if filter.Cursor == "" {
+		mode := filter.Mode
+		includeTotal := filter.IncludeTotal
+		forward := filter.Forward
+		pr := pagination.ParseLegacy(activityCursorCfg, filter.Page, filter.Limit)
 		pr.IncludeTotal = includeTotal
 		pr.Mode = mode
 		pr.Forward = pr.Forward || forward

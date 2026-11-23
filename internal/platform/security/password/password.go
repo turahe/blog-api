@@ -1,4 +1,4 @@
-// Package password hashes and verifies passwords with Argon2id.
+// Package password hashes and verifies passwords with Argon2id via github.com/turahe/pkg/crypto.
 package password
 
 import (
@@ -17,8 +17,8 @@ const (
 	argonSaltLen uint32 = 16
 )
 
-// issueParams is the cost used for new hashes. It is stricter than
-// crypto.DefaultArgon2Params so existing hashes and new ones stay at the same work factor.
+// issueParams is the cost used for new hashes when the pkg default hasher is unset.
+// It matches Config.PkgConfig Hashing defaults (argon2id t=3, 64 MiB, p=2).
 var issueParams = crypto.Argon2Params{
 	Memory:      argonMemory,
 	Iterations:  argonTime,
@@ -28,16 +28,33 @@ var issueParams = crypto.Argon2Params{
 }
 
 // Hasher implements authports.PasswordHasher with Argon2id.
-type Hasher struct{}
+type Hasher struct {
+	inner crypto.Hasher
+}
 
-// New returns a Hasher using Argon2id (t=3, m=64 MiB, p=2).
+// New returns a Hasher using the process-wide crypto default (from crypto.Setup /
+// HASH_* via turahe/pkg) when available, otherwise Argon2id (t=3, m=64 MiB, p=2).
 func New() *Hasher {
-	return &Hasher{}
+	if h := crypto.Default(); h != nil && h.Driver() == crypto.DriverArgon2id {
+		return &Hasher{inner: h}
+	}
+
+	fallback, err := crypto.NewHasher(crypto.DriverArgon2id, crypto.HasherOptions{Argon: issueParams})
+	if err != nil {
+		return &Hasher{}
+	}
+
+	return &Hasher{inner: fallback}
 }
 
 // Hash returns the PHC-encoded Argon2id hash of the password.
 func (h *Hasher) Hash(password string) (string, error) {
-	return crypto.HashArgon2idWithParams([]byte(password), issueParams)
+	plain := []byte(password)
+	if h.inner != nil {
+		return h.inner.Hash(plain)
+	}
+
+	return crypto.HashArgon2idWithParams(plain, issueParams)
 }
 
 // Compare reports whether password matches a PHC-encoded Argon2id hash.
@@ -48,7 +65,12 @@ func (h *Hasher) Compare(encoded, password string) bool {
 		return false
 	}
 
-	ok, err := crypto.VerifyArgon2id(encoded, []byte(password))
+	plain := []byte(password)
+	if h.inner != nil {
+		return h.inner.Check(encoded, plain)
+	}
+
+	ok, err := crypto.VerifyArgon2id(encoded, plain)
 
 	return err == nil && ok
 }

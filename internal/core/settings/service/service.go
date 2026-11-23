@@ -331,6 +331,7 @@ func (s *Service) History(ctx context.Context, filter settingsdomain.HistoryFilt
 	if pr.Page < 1 {
 		pr.Page = 1
 	}
+
 	if pr.Mode == pagination.ModeOffset {
 		pr.Offset = (pr.Page - 1) * pr.Limit
 		pr.Forward = true

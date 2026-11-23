@@ -79,7 +79,7 @@ secrets manager entries. The canonical connector package and latest usage guidan
 
 ### Supported Database Dialect
 
-Only PostgreSQL is supported. MySQL and SQL Server drivers were removed because the goose
+Only PostgreSQL is supported. MySQL and SQL Server drivers were removed because the
 migrations use identity columns, `gen_random_uuid()`, and partial indexes.
 
 | Dialect (`DB_DRIVER`) | Driver | GORM driver package | Cloud SQL connector integration |

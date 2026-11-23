@@ -211,6 +211,7 @@ func newLoggedCache(t *testing.T, wrap func(goredis.Cmdable) goredis.Cmdable) (*
 
 	server := miniredis.RunT(t)
 	client := goredis.NewClient(&goredis.Options{Addr: server.Addr(), MaxRetries: -1})
+
 	t.Cleanup(func() { _ = client.Close() })
 
 	var cmd goredis.Cmdable = client

@@ -129,22 +129,29 @@ func (r *MediaRepository) Update(ctx context.Context, asset mediadomain.MediaAss
 }
 
 // List returns a page of live media assets matching the filter.
+//
+//nolint:dupl,nestif // cursor page encode/decode mirrors sibling repositories
 func (r *MediaRepository) List(ctx context.Context, filter mediadomain.ListFilter) (mediadomain.ListResult, error) {
 	pr := filter.PageRequest
 	if pr.Limit <= 0 {
 		pr.Limit = pagination.DefaultPerPage
 	}
+
 	var cursorFields map[string]any
+
 	if pr.Mode == pagination.ModeCursor && pr.Cursor != "" {
 		decoded, _, err := pagination.DecodeCursor(mediaAdminCfg, pr.Cursor)
 		if err != nil {
 			return mediadomain.ListResult{}, err
 		}
+
 		if err := pagination.ValidateCursor(mediaAdminCfg, decoded); err != nil {
 			return mediadomain.ListResult{}, err
 		}
+
 		cursorFields = decoded
 	}
+
 	seek, err := pagination.BuildSeek(mediaAdminCfg, pr, cursorFields)
 	if err != nil {
 		return mediadomain.ListResult{}, err
@@ -174,40 +181,49 @@ func (r *MediaRepository) List(ctx context.Context, filter mediadomain.ListFilte
 	}
 
 	var out mediadomain.ListResult
+
 	if pr.IncludeTotal {
 		var total int64
 		if err := q.Count(&total).Error; err != nil {
 			return mediadomain.ListResult{}, err
 		}
+
 		out.Total = &total
 	}
 
 	var models []MediaAssetModel
+
 	db := q.Select(mediaColumns).Order(strings.TrimPrefix(seek.OrderClause, "ORDER BY ")).Limit(seek.LimitFetch)
 	if pr.Mode == pagination.ModeOffset {
 		db = db.Offset(pr.Offset)
 	}
+
 	if err := db.Find(&models).Error; err != nil {
 		return mediadomain.ListResult{}, err
 	}
+
 	if seek.ReverseDisplay {
 		for i, j := 0, len(models)-1; i < j; i, j = i+1, j-1 {
 			models[i], models[j] = models[j], models[i]
 		}
 	}
+
 	items := make([]mediadomain.MediaAsset, 0, len(models))
 	for _, model := range models {
 		items = append(items, mapMediaAsset(model))
 	}
+
 	page, hasNext, hasPrev := pagination.TruncatePage(items, pr.Limit, pr.Forward, pr.Cursor != "")
 	out.Items = page
 	out.HasNextPage = hasNext
 	out.HasPreviousPage = hasPrev
+
 	out.Limit = pr.Limit
 	if pr.Mode == pagination.ModeOffset {
 		out.OffsetPage = pr.Page
 		out.OffsetPerPage = pr.Limit
 	}
+
 	if len(page) > 0 {
 		if out.HasNextPage {
 			fields := pagination.SortValues[mediadomain.MediaAsset](mediaAdminCfg, page[len(page)-1],
@@ -218,14 +234,18 @@ func (r *MediaRepository) List(ctx context.Context, filter mediadomain.ListFilte
 					case 1:
 						return row.ID
 					}
+
 					return nil
 				})
+
 			cur, err := pagination.EncodeCursor(mediaAdminCfg, fields)
 			if err != nil {
 				return mediadomain.ListResult{}, err
 			}
+
 			out.NextCursor = cur
 		}
+
 		if out.HasPreviousPage {
 			fields := pagination.SortValues[mediadomain.MediaAsset](mediaAdminCfg, page[0],
 				func(row mediadomain.MediaAsset, i int) any {
@@ -235,15 +255,19 @@ func (r *MediaRepository) List(ctx context.Context, filter mediadomain.ListFilte
 					case 1:
 						return row.ID
 					}
+
 					return nil
 				})
+
 			cur, err := pagination.EncodeCursor(mediaAdminCfg, fields)
 			if err != nil {
 				return mediadomain.ListResult{}, err
 			}
+
 			out.PreviousCursor = cur
 		}
 	}
+
 	return out, nil
 }
 

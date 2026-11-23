@@ -131,6 +131,7 @@ func TestConsumeAcksMalformedMessagesWithoutDelivering(t *testing.T) {
 	t.Parallel()
 
 	messages := make(chan *message.Message, 1)
+
 	t.Cleanup(func() { close(messages) })
 
 	logs := &bytes.Buffer{}

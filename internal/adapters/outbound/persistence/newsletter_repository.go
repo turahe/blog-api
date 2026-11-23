@@ -274,6 +274,8 @@ func saveMemberships(db *gorm.DB, subscriberID uuid.UUID, memberships []domain.M
 // ListSubscribers returns one page filtered by status, list, and an email or name prefix.
 // Uses cursor-based keyset pagination when after/before cursors are present, and offset
 // pagination when the caller provides only page/perPage via ModeOffset.
+//
+//nolint:funlen,nestif // cursor next/prev encoding shares structure with other list repositories
 func (r *NewsletterRepository) ListSubscribers(ctx context.Context, filter domain.SubscriberFilter) (domain.SubscriberPage, error) {
 	pr := filter.PageRequest
 	if pr.Limit <= 0 {
@@ -281,16 +283,20 @@ func (r *NewsletterRepository) ListSubscribers(ctx context.Context, filter domai
 	}
 
 	var cursorFields map[string]any
+
 	if pr.Mode == pagination.ModeCursor && pr.Cursor != "" {
 		decoded, _, err := pagination.DecodeCursor(newsletterSubscribersCfg, pr.Cursor)
 		if err != nil {
 			return domain.SubscriberPage{}, err
 		}
+
 		if err := pagination.ValidateCursor(newsletterSubscribersCfg, decoded); err != nil {
 			return domain.SubscriberPage{}, err
 		}
+
 		cursorFields = decoded
 	}
+
 	seek, err := pagination.BuildSeek(newsletterSubscribersCfg, pr, cursorFields)
 	if err != nil {
 		return domain.SubscriberPage{}, err
@@ -323,19 +329,24 @@ func (r *NewsletterRepository) ListSubscribers(ctx context.Context, filter domai
 	clause := " WHERE " + strings.Join(where, " AND ")
 
 	var out domain.SubscriberPage
+
 	if pr.IncludeTotal {
 		var total int64
 		if err := conn(ctx, r.db).Raw(`SELECT count(*) FROM newsletter_subscribers s`+clause, args...).Scan(&total).Error; err != nil {
 			return domain.SubscriberPage{}, fmt.Errorf("count newsletter subscribers: %w", err)
 		}
+
 		out.Total = &total
 	}
 
 	query := newsletterSubscriberSelect + clause + " " + seek.OrderClause + " LIMIT ?"
+
 	queryArgs := append([]any{}, args...)
 	queryArgs = append(queryArgs, seek.LimitFetch)
+
 	if pr.Mode == pagination.ModeOffset {
 		query += " OFFSET ?"
+
 		queryArgs = append(queryArgs, pr.Offset)
 	}
 
@@ -354,6 +365,7 @@ func (r *NewsletterRepository) ListSubscribers(ctx context.Context, filter domai
 	out.Items = page
 	out.HasNextPage = hasNext
 	out.HasPreviousPage = hasPrev
+
 	out.Limit = pr.Limit
 	if pr.Mode == pagination.ModeOffset {
 		out.OffsetPage = pr.Page
@@ -372,14 +384,18 @@ func (r *NewsletterRepository) ListSubscribers(ctx context.Context, filter domai
 					case 2:
 						return row.ID
 					}
+
 					return nil
 				})
+
 			cur, err := pagination.EncodeCursor(newsletterSubscribersCfg, fields)
 			if err != nil {
 				return domain.SubscriberPage{}, err
 			}
+
 			out.NextCursor = cur
 		}
+
 		if out.HasPreviousPage {
 			fields := pagination.SortValues[domain.Subscriber](newsletterSubscribersCfg, page[0],
 				func(row domain.Subscriber, i int) any {
@@ -391,12 +407,15 @@ func (r *NewsletterRepository) ListSubscribers(ctx context.Context, filter domai
 					case 2:
 						return row.ID
 					}
+
 					return nil
 				})
+
 			cur, err := pagination.EncodeCursor(newsletterSubscribersCfg, fields)
 			if err != nil {
 				return domain.SubscriberPage{}, err
 			}
+
 			out.PreviousCursor = cur
 		}
 	}

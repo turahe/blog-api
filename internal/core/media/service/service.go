@@ -249,9 +249,11 @@ func (s *Service) List(ctx context.Context, filter mediadomain.ListFilter) (medi
 	if pr.Limit < 1 || pr.Limit > pagination.DefaultMaxPerPage {
 		pr.Limit = pagination.DefaultPerPage
 	}
+
 	if pr.Page < 1 {
 		pr.Page = 1
 	}
+
 	if pr.Mode == pagination.ModeOffset {
 		pr.Offset = (pr.Page - 1) * pr.Limit
 		pr.Forward = true

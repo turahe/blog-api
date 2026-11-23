@@ -241,6 +241,7 @@ func TestRelayWithObserver(t *testing.T) {
 		observer := &recordingObserver{}
 
 		pubsub := gochannel.NewGoChannel(gochannel.Config{}, watermill.NopLogger{})
+
 		t.Cleanup(func() { _ = pubsub.Close() })
 
 		_, err := New(store, pubsub, func(s string) string { return s }, Config{}, nil).WithObserver(observer).Drain(t.Context())
@@ -269,6 +270,7 @@ func TestRelayRun(t *testing.T) {
 
 		go func() {
 			defer close(done)
+
 			relay.Run(ctx)
 		}()
 
@@ -347,6 +349,7 @@ func TestRelayRunDrainErrors(t *testing.T) {
 
 				go func() {
 					defer close(done)
+
 					relay.Run(ctx)
 				}()
 

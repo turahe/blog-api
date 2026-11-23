@@ -327,8 +327,9 @@ func (r *memRepo) ListSubscribers(_ context.Context, filter domain.SubscriberFil
 	r.subscriberFilter = filter
 
 	total := int64(len(r.subs))
-	limit := filter.PageRequest.Limit
+	limit := filter.Limit
 	page := filter.PageRequest.Page
+
 	return domain.SubscriberPage{
 		Total:         &total,
 		Limit:         limit,
@@ -531,8 +532,9 @@ func (r *memRepo) ListIssues(_ context.Context, filter domain.IssueFilter) (doma
 	r.issueFilter = filter
 
 	total := int64(len(r.issues))
-	limit := filter.PageRequest.Limit
+	limit := filter.Limit
 	page := filter.PageRequest.Page
+
 	return domain.IssuePage{
 		Total:         &total,
 		Limit:         limit,

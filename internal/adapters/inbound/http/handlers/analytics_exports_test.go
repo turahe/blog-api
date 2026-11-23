@@ -46,10 +46,10 @@ func (f *fakeAnalyticsExports) List(_ context.Context, actor uuid.UUID) ([]analy
 }
 
 func pendingExportView() analyticsservice.ExportView {
-	return analyticsservice.ExportView{Export: analyticsdomain.Export{
+	return analyticsservice.ExportView{
 		UUID: uuid.New(), Grain: analyticsdomain.GrainDay, FirstDay: "2026-08-01", LastDay: "2026-08-31",
 		Timezone: "Asia/Jakarta", Status: analyticsdomain.ExportPending, CreatedAt: time.Now(),
-	}}
+	}
 }
 
 const exportBody = `{"from":"2026-08-01","to":"2026-08-31","currentPassword":"pw","twoFactorCode":"123456"}`

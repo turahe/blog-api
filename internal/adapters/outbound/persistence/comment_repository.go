@@ -74,13 +74,13 @@ type CommentModel struct {
 	ModeratedBy      *int64
 	ModerationReason *string
 	ModeratedAt      *time.Time
-	PostUUID         uuid.UUID  `gorm:"column:post_uuid;->"`
-	ParentUUID       *uuid.UUID `gorm:"column:parent_uuid;->"`
-	AuthorUUID       *uuid.UUID `gorm:"column:author_uuid;->"`
-	AuthorUsername   *string    `gorm:"column:author_username;->"`
-	DeletedByUUID    *uuid.UUID `gorm:"column:deleted_by_uuid;->"`
-	ModeratedByUUID  *uuid.UUID `gorm:"column:moderated_by_uuid;->"`
-	ReplyCount       int        `gorm:"column:reply_count;->"`
+	PostUUID         uuid.UUID  `gorm:"column:post_uuid;->;-:migration"`
+	ParentUUID       *uuid.UUID `gorm:"column:parent_uuid;->;-:migration"`
+	AuthorUUID       *uuid.UUID `gorm:"column:author_uuid;->;-:migration"`
+	AuthorUsername   *string    `gorm:"column:author_username;->;-:migration"`
+	DeletedByUUID    *uuid.UUID `gorm:"column:deleted_by_uuid;->;-:migration"`
+	ModeratedByUUID  *uuid.UUID `gorm:"column:moderated_by_uuid;->;-:migration"`
+	ReplyCount       int        `gorm:"column:reply_count;->;-:migration"`
 }
 
 // TableName returns the comments table name for GORM.
@@ -145,17 +145,18 @@ func (r *CommentRepository) GetByID(ctx context.Context, id uuid.UUID) (commentd
 // Kept as a simple offset-mode helper for internal thread-reply pagination.
 func (r *CommentRepository) List(ctx context.Context, filter commentdomain.ListFilter) (commentdomain.ListResult, error) {
 	pr := filter.PageRequest
-	page := pr.Page
-	if page < 1 {
-		page = 1
-	}
+
+	page := max(pr.Page, 1)
+
 	perPage := pr.Limit
 	if perPage < 1 {
 		perPage = 20
 	}
+
 	if perPage > 100 {
 		perPage = 100
 	}
+
 	q := conn(ctx, r.db).Model(&CommentModel{})
 	if filter.PostUUID != nil {
 		q = q.Where("comments.post_id = "+idOf("posts"), *filter.PostUUID)
@@ -196,6 +197,7 @@ func (r *CommentRepository) List(ctx context.Context, filter commentdomain.ListF
 	var models []CommentModel
 
 	offset := (page - 1) * perPage
+
 	err := q.Select(commentColumns).Order(order).
 		Limit(perPage).Offset(offset).
 		Find(&models).Error
@@ -207,10 +209,12 @@ func (r *CommentRepository) List(ctx context.Context, filter commentdomain.ListF
 	for _, model := range models {
 		items = append(items, mapComment(model))
 	}
+
 	var totalPtr *int64
 	if pr.IncludeTotal {
 		totalPtr = &total
 	}
+
 	return commentdomain.ListResult{
 		Items:         items,
 		Total:         totalPtr,
@@ -221,22 +225,29 @@ func (r *CommentRepository) List(ctx context.Context, filter commentdomain.ListF
 }
 
 // listWithCursor runs the shared cursor+seek pipeline using cfg and filter.
+//
+//nolint:dupl,funlen,gocyclo,nestif // cursor page encode/decode mirrors sibling repositories
 func (r *CommentRepository) listWithCursor(ctx context.Context, cfg pagination.CursorConfig, filter commentdomain.ListFilter) (commentdomain.ListResult, error) {
 	pr := filter.PageRequest
 	if pr.Limit <= 0 {
 		pr.Limit = cfg.DefaultPerPage
 	}
+
 	var cursorFields map[string]any
+
 	if pr.Mode == pagination.ModeCursor && pr.Cursor != "" {
 		decoded, _, err := pagination.DecodeCursor(cfg, pr.Cursor)
 		if err != nil {
 			return commentdomain.ListResult{}, err
 		}
+
 		if err := pagination.ValidateCursor(cfg, decoded); err != nil {
 			return commentdomain.ListResult{}, err
 		}
+
 		cursorFields = decoded
 	}
+
 	seek, err := pagination.BuildSeek(cfg, pr, cursorFields)
 	if err != nil {
 		return commentdomain.ListResult{}, err
@@ -263,47 +274,58 @@ func (r *CommentRepository) listWithCursor(ctx context.Context, cfg pagination.C
 		for _, status := range filter.Statuses {
 			statuses = append(statuses, string(status))
 		}
+
 		q = q.Where("comments.status IN ?", statuses)
 	}
+
 	if seek.WhereClause != "" {
 		q = q.Where(seek.WhereClause, seek.BindVars...)
 	}
 
 	var out commentdomain.ListResult
+
 	if pr.IncludeTotal {
 		var total int64
 		if err := q.Count(&total).Error; err != nil {
 			return commentdomain.ListResult{}, err
 		}
+
 		out.Total = &total
 	}
 
 	var models []CommentModel
+
 	db := q.Select(commentColumns).Order(seek.OrderClause).Limit(seek.LimitFetch)
 	if pr.Mode == pagination.ModeOffset {
 		db = db.Offset(pr.Offset)
 	}
+
 	if err := db.Find(&models).Error; err != nil {
 		return commentdomain.ListResult{}, err
 	}
+
 	if seek.ReverseDisplay {
 		for i, j := 0, len(models)-1; i < j; i, j = i+1, j-1 {
 			models[i], models[j] = models[j], models[i]
 		}
 	}
+
 	items := make([]commentdomain.Comment, 0, len(models))
 	for _, model := range models {
 		items = append(items, mapComment(model))
 	}
+
 	page, hasNext, hasPrev := pagination.TruncatePage(items, pr.Limit, pr.Forward, pr.Cursor != "")
 	out.Items = page
 	out.HasNextPage = hasNext
 	out.HasPreviousPage = hasPrev
+
 	out.Limit = pr.Limit
 	if pr.Mode == pagination.ModeOffset {
 		out.OffsetPage = pr.Page
 		out.OffsetPerPage = pr.Limit
 	}
+
 	if len(page) > 0 {
 		if out.HasNextPage {
 			fields := pagination.SortValues[commentdomain.Comment](cfg, page[len(page)-1],
@@ -314,14 +336,18 @@ func (r *CommentRepository) listWithCursor(ctx context.Context, cfg pagination.C
 					case 1:
 						return row.ID
 					}
+
 					return nil
 				})
+
 			cur, err := pagination.EncodeCursor(cfg, fields)
 			if err != nil {
 				return commentdomain.ListResult{}, err
 			}
+
 			out.NextCursor = cur
 		}
+
 		if out.HasPreviousPage {
 			fields := pagination.SortValues[commentdomain.Comment](cfg, page[0],
 				func(row commentdomain.Comment, i int) any {
@@ -331,15 +357,19 @@ func (r *CommentRepository) listWithCursor(ctx context.Context, cfg pagination.C
 					case 1:
 						return row.ID
 					}
+
 					return nil
 				})
+
 			cur, err := pagination.EncodeCursor(cfg, fields)
 			if err != nil {
 				return commentdomain.ListResult{}, err
 			}
+
 			out.PreviousCursor = cur
 		}
 	}
+
 	return out, nil
 }
 
@@ -368,6 +398,7 @@ func (r *CommentRepository) ListAdmin(ctx context.Context, filter commentdomain.
 			DefaultPerPage: commentsAdminCfg.DefaultPerPage,
 		}
 	}
+
 	return r.listWithCursor(ctx, cfg, filter)
 }
 

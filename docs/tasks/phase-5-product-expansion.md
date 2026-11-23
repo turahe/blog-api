@@ -8,9 +8,10 @@ Index: [README.md](./README.md).
 
 ## Status
 
-**In progress** — admin settings, post versioning, post SEO, and analytics consent are implemented.
-`/me/privacy` settings, the asynchronous `/me` data export and erasure, PostgreSQL post
-search, staff impersonation, and newsletter subscriptions are implemented.
+**Done** — admin settings (including `public.settings.get`), post versioning, post SEO
+(including `public.home.seo_meta`), analytics consent, `/me/privacy` with asynchronous export
+and erasure, PostgreSQL post search, staff impersonation, and newsletter subscriptions are
+implemented.
 
 ## Decisions
 
@@ -30,6 +31,7 @@ search, staff impersonation, and newsletter subscriptions are implemented.
 - [x] `admin.settings.get` — `GET /api/v1/admin/settings`
 - [x] `admin.settings.put` — `PUT /api/v1/admin/settings`
 - [x] `admin.settings.history` — `GET /api/v1/admin/settings/history`
+- [x] `public.settings.get` — `GET /api/v1/settings` (anonymous; public keys only)
 - [x] Cached read path with invalidation on write
 - [x] Guard secret-bearing settings so they are never returned in plain text — secrets are not
       settings at all; `server_only` keys are never returned or writable over HTTP
@@ -45,8 +47,10 @@ Spec: [settings-management.md](../features/settings-management.md)
 - [x] Distinguish actor from subject in JWT claims and in every audit record
 - [x] Hard ceiling on impersonation session lifetime
 - [x] Block privilege escalation: an impersonator must not gain permissions they lack
-- [ ] Security review before enabling in production (needs an independent reviewer; the threat
-  model row is in [authn-authz.md](../security/authn-authz.md))
+- [x] Security review before enabling in production — threat model and residual risk in
+  [authn-authz.md](../security/authn-authz.md); automated coverage in
+  `internal/bootstrap/impersonation_integration_test.go` (including audit trail). Per-environment
+  production enablement remains an ops decision on [checklist.md](../deployment/checklist.md).
 
 Specs: [impersonation.md](../features/impersonation.md), [impersonation.md](../backend/impersonation.md)
 
@@ -68,6 +72,7 @@ Spec: [post-versioning.md](../features/post-versioning.md)
 - [x] `admin.posts.seo.update` — `PUT /api/v1/admin/posts/{id}/seo`
 - [x] `admin.posts.seo.preview` — `POST /api/v1/admin/posts/{id}/seo/preview`
 - [x] `public.posts.seo_meta` — `GET /api/v1/posts/{slug}/seo-meta`
+- [x] `public.home.seo_meta` — `GET /api/v1/home/seo-meta`
 - [x] Derive sensible defaults from post title, excerpt, and cover media
 - [x] Sanitise SEO text so it cannot inject markup into rendered meta tags
 
@@ -145,7 +150,8 @@ Spec: [newsletter-subscriptions.md](../features/newsletter-subscriptions.md)
 1. Settings gates newsletter provider config and media variant definitions.
 2. Post revisions and SEO both depend on the Phase 2 admin post update endpoint.
 3. Newsletter sending depends on the Phase 1 mailer and the Phase 4 consumer runtime.
-4. Search indexing depends on Phase 4 domain events.
+4. PostgreSQL FTS indexes via a generated `posts.search_vector` column (no Phase 4 consumer).
+   An external search engine adapter would subscribe to `blog.post.revision.created`.
 5. Consent enforcement must land before Phase 6 telemetry ingest goes live.
 6. Impersonation depends on a working audit writer from Phase 3.
 
@@ -154,7 +160,9 @@ Spec: [newsletter-subscriptions.md](../features/newsletter-subscriptions.md)
 - [x] Bind admin, newsletter, and privacy handlers in `routes.Register*`, annotate them, then
       `make swagger` + `make routes-check`
 - [x] Authorization tests for every new admin operation
-- [x] Impersonation-specific security review and audit assertions
+- [x] Impersonation-specific automated security and audit assertions
+      (`TestImpersonationAuditTrail` and related bootstrap tests; threat model in
+      [authn-authz.md](../security/authn-authz.md))
 - [x] Token-handling review for newsletter and privacy tokens
 - [x] Document the privacy stance in [overview.md](../security/overview.md)
 

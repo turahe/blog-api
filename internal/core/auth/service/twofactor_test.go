@@ -672,6 +672,7 @@ func TestTwoFactorStatus(t *testing.T) {
 		{
 			name: "pending",
 			setup: func(t *testing.T, f *twoFactorFixture) {
+				t.Helper()
 				_, err := f.svc.SetupTwoFactor(t.Context(), f.userID)
 				require.NoError(t, err)
 			},
@@ -761,12 +762,13 @@ func TestConfirmTwoFactorFailures(t *testing.T) {
 		},
 		{
 			name:    "already enabled",
-			setup:   func(t *testing.T, f *twoFactorFixture) { f.enroll(t) },
+			setup:   func(t *testing.T, f *twoFactorFixture) { t.Helper(); f.enroll(t) },
 			wantErr: authdomain.ErrTwoFactorAlreadyEnabled,
 		},
 		{
 			name: "store confirmation",
 			setup: func(t *testing.T, f *twoFactorFixture) {
+				t.Helper()
 				_, err := f.svc.SetupTwoFactor(t.Context(), f.userID)
 				require.NoError(t, err)
 
@@ -808,18 +810,20 @@ func TestRegenerateBackupCodesFailures(t *testing.T) {
 		{
 			name: "enrollment not confirmed",
 			setup: func(t *testing.T, f *twoFactorFixture) {
+				t.Helper()
 				_, err := f.svc.SetupTwoFactor(t.Context(), f.userID)
 				require.NoError(t, err)
 			},
 			wantErr: authdomain.ErrTwoFactorNotEnrolled,
 		},
 		{
-			name: "wrong code", setup: func(t *testing.T, f *twoFactorFixture) { f.enroll(t) },
+			name: "wrong code", setup: func(t *testing.T, f *twoFactorFixture) { t.Helper(); f.enroll(t) },
 			code: "000000", wantErr: authdomain.ErrTwoFactorInvalidCode,
 		},
 		{
 			name: "store codes",
 			setup: func(t *testing.T, f *twoFactorFixture) {
+				t.Helper()
 				f.enroll(t)
 				f.repo.fail = faults{"ReplaceBackupCodes": errBoom}
 			},

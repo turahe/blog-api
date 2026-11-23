@@ -43,6 +43,14 @@ func TestLoadExtendsPkgConfig(t *testing.T) {
 	if shared.Sentry.Release != "v9" || shared.OpenTelemetry.ServiceVersion != "v9" {
 		t.Fatalf("release projection sentry=%s otel=%s", shared.Sentry.Release, shared.OpenTelemetry.ServiceVersion)
 	}
+
+	if shared.Hashing.Driver != "argon2id" || shared.Hashing.ArgonMemory != 64*1024 {
+		t.Fatalf("hashing=%+v", shared.Hashing)
+	}
+
+	if shared.Cors.Global {
+		t.Fatal("expected Cors.Global=false when CORS_ORIGINS unset")
+	}
 }
 
 func TestLoadReadsPkgEnv(t *testing.T) {

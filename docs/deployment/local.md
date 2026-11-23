@@ -3,7 +3,7 @@
 ## Prerequisites
 
 - Docker + Compose — every `make` target (tests, lint, swagger, dev keys, stack) runs in containers
-- Go `1.27.1` (optional; only for running the API directly on the host with `go run` — see [go.mod](../../go.mod))
+- Go `1.27.3` (optional; only for running the API directly on the host with `go run` — see [go.mod](../../go.mod))
 
 ## Boot sequence (Docker — recommended)
 
@@ -14,10 +14,14 @@ cp .env.example .env
 
 make dev-keys          # generate configs/dev/*.pem if missing; chmod 644 (containers run as nonroot)
 make docker-up         # build + every service (see Services below) + migrate + api
-make docker-seed       # roles + admin@example.com / ChangeMeNow!123
+make docker-seed       # roles + admin@example.com / ChangeMeNow!123 (production migrate image)
 # API: http://localhost:8080  (Swagger UI: /swagger/index.html when local)
 # Mailpit: http://localhost:8025  (SMTP catcher for password and email-change mail)
 ```
+
+`make docker-seed` runs `migrate seed` on the production image (`ENTRYPOINT /bin/app`). Do not
+seed through the live-reload `api` service from `make docker-dev` — that image has no
+`/bin/app` entrypoint.
 
 Compose overrides `DB_HOST`/`REDIS_HOST`/`S3_ENDPOINT` to service DNS names so the same
 `.env` works for both Docker and a host `go run . serve` (host keeps `127.0.0.1`).
@@ -25,6 +29,7 @@ Compose overrides `DB_HOST`/`REDIS_HOST`/`S3_ENDPOINT` to service DNS names so t
 Useful:
 
 ```bash
+make docker-dev        # same stack; api is air live-reload (compose.dev.yaml)
 make docker-logs       # follow api logs
 make docker-migrate    # re-run migrations
 make docker-down       # stop the stack (volumes under ./.data/ keep data)

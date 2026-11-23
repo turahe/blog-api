@@ -19,14 +19,7 @@ type PageLinks struct {
 	Next  *string `json:"next,omitempty"`
 }
 
-// MetaForResult builds cursor-mode pagination metadata for a PageResult.
-// The envelope writer merges this onto PaginationMeta so callers get both
-// legacy and cursor fields on a single response object.
-//
-//   - When result.Total is nil (includeTotal=false) we omit total, lastPage,
-//     from, to, first and last.
-//   - When OffsetMode: returns canonical PaginationMeta values using legacy
-//     result.OffsetPage / OffsetPerPage fields.
+// CursorMeta holds cursor-pagination fields merged onto PaginationMeta in API responses.
 type CursorMeta struct {
 	Limit           int     `json:"limit,omitempty"`
 	HasNextPage     *bool   `json:"hasNextPage,omitempty"`
@@ -64,6 +57,7 @@ func BuildMeta[T any](c *gin.Context, r PageResult[T]) (LegacyMeta, CursorMeta) 
 		Path:      path,
 		RequestID: requestID,
 	}
+
 	cursor := CursorMeta{
 		RequestID: requestID,
 		Limit:     r.Limit,
@@ -71,49 +65,60 @@ func BuildMeta[T any](c *gin.Context, r PageResult[T]) (LegacyMeta, CursorMeta) 
 	if r.Limit > 0 {
 		legacy.PerPage = r.Limit
 	}
+
 	t := true
 	f := false
+
 	if r.HasNextPage {
 		cursor.HasNextPage = &t
 	} else {
 		cursor.HasNextPage = &f
 	}
+
 	if r.HasPreviousPage {
 		cursor.HasPreviousPage = &t
 	} else {
 		cursor.HasPreviousPage = &f
 	}
+
 	if r.NextCursor != "" {
 		s := r.NextCursor
 		cursor.NextCursor = &s
 	}
+
 	if r.PreviousCursor != "" {
 		s := r.PreviousCursor
 		cursor.PreviousCursor = &s
 	}
+
 	switch {
 	case r.OffsetPage > 0:
 		page := r.OffsetPage
+
 		perPage := r.OffsetPerPage
 		if perPage <= 0 {
 			perPage = r.Limit
 		}
+
 		legacy.CurrentPage = page
 		legacy.PerPage = perPage
+
 		if r.Total != nil {
 			total := *r.Total
 			legacy.Total = &total
-			lastPage := int((total + int64(perPage) - 1) / int64(perPage))
-			if lastPage < 1 {
-				lastPage = 1
-			}
+
+			lastPage := max(int((total+int64(perPage)-1)/int64(perPage)), 1)
+
 			legacy.LastPage = lastPage
+
 			if total > 0 {
 				from := (page-1)*perPage + 1
+
 				to := page * perPage
 				if int64(to) > total {
 					to = int(total)
 				}
+
 				legacy.From = &from
 				legacy.To = &to
 			}
@@ -128,22 +133,21 @@ func BuildMeta[T any](c *gin.Context, r PageResult[T]) (LegacyMeta, CursorMeta) 
 		// it; callers will simply see 0 which is safe because they know
 		// from the presence of nextCursor that cursor mode is active).
 		total := *r.Total
+
 		perPage := r.Limit
 		if perPage <= 0 {
 			perPage = DefaultPerPage
 		}
+
 		legacy.Total = &total
-		lastPage := int((total + int64(perPage) - 1) / int64(perPage))
-		if lastPage < 1 {
-			lastPage = 1
-		}
+
+		lastPage := max(int((total+int64(perPage)-1)/int64(perPage)), 1)
+
 		legacy.LastPage = lastPage
 		legacy.CurrentPage = 0 // cursor mode — no page number; left as a sentinel
-		if total > 0 {
-			// approximate from/to based on hasPreviousPage (unknown exact row
-			// index without additional queries); omit to keep API honest.
-		}
+		// from/to omitted in cursor mode (unknown exact row index without extra queries).
 	}
+
 	return legacy, cursor
 }
 
@@ -156,6 +160,7 @@ func BuildMeta[T any](c *gin.Context, r PageResult[T]) (LegacyMeta, CursorMeta) 
 // For includeTotal=false (Total==nil) both first and last are nil (FR4.2).
 func BuildLinks[T any](c *gin.Context, r PageResult[T], legacy LegacyMeta) PageLinks {
 	links := PageLinks{}
+
 	pageCursorNotEmpty := r.NextCursor != "" || r.PreviousCursor != ""
 	if r.Total != nil {
 		if r.Mode() == ModeOffset && legacy.LastPage >= 1 {
@@ -165,16 +170,19 @@ func BuildLinks[T any](c *gin.Context, r PageResult[T], legacy LegacyMeta) PageL
 			links.Last = &last
 		}
 	}
+
 	switch r.Mode() {
 	case ModeOffset:
 		if legacy.CurrentPage > 1 {
 			s := absoluteURL(c, withPage(legacy.CurrentPage-1))
 			links.Prev = &s
 		}
+
 		if legacy.LastPage >= 1 && legacy.CurrentPage < legacy.LastPage {
 			s := absoluteURL(c, withPage(legacy.CurrentPage+1))
 			links.Next = &s
 		}
+
 		return links
 	case ModeCursor:
 		if r.NextCursor != "" && r.HasNextPage {
@@ -185,6 +193,7 @@ func BuildLinks[T any](c *gin.Context, r PageResult[T], legacy LegacyMeta) PageL
 			})
 			links.Next = &s
 		}
+
 		if r.PreviousCursor != "" && r.HasPreviousPage {
 			s := absoluteURL(c, func(v url.Values) {
 				v.Set("before", r.PreviousCursor)
@@ -195,7 +204,9 @@ func BuildLinks[T any](c *gin.Context, r PageResult[T], legacy LegacyMeta) PageL
 		}
 	default:
 	}
+
 	_ = pageCursorNotEmpty
+
 	return links
 }
 
@@ -205,6 +216,7 @@ func (r PageResult[T]) Mode() Mode {
 	if r.OffsetPage > 0 {
 		return ModeOffset
 	}
+
 	return ModeCursor
 }
 
@@ -216,6 +228,7 @@ func (r PageResult[T]) Mode() Mode {
 func absoluteURL(c *gin.Context, mutate func(url.Values)) string {
 	req := c.Request
 	u := &url.URL{}
+
 	proto := req.Header.Get("X-Forwarded-Proto")
 	if proto == "" {
 		if req.TLS != nil {
@@ -224,19 +237,25 @@ func absoluteURL(c *gin.Context, mutate func(url.Values)) string {
 			proto = "http"
 		}
 	}
+
 	u.Scheme = proto
+
 	host := req.Header.Get("X-Forwarded-Host")
 	if host == "" {
 		host = req.Host
 	}
+
 	u.Host = host
 	u.Path = req.URL.Path
+
 	q := req.URL.Query()
 	for _, k := range []string{"after", "before", "page", "limit", "perPage", "includeTotal"} {
 		q.Del(k)
 	}
+
 	mutate(q)
 	u.RawQuery = q.Encode()
+
 	return u.String()
 }
 
@@ -256,12 +275,15 @@ func setIncludeTotal(v url.Values, include bool) {
 		v.Set("includeTotal", "true")
 		return
 	}
+
 	v.Set("includeTotal", "false")
 }
 
 // PtrTo is a tiny generic helper for setting *bool / *string / *int fields
 // without repeated local vars in envelope writers.
-func PtrTo[T any](v T) *T { return &v }
+//
+//go:fix inline
+func PtrTo[T any](v T) *T { return new(v) }
 
 // StripAllCursors removes after / before / limit / includeTotal / page /
 // perPage from a query string. Used by tests and envelope URL normalisers.
@@ -270,15 +292,19 @@ func StripAllCursors(raw string) string {
 	for _, k := range []string{"after", "before", "limit", "perPage", "page", "includeTotal"} {
 		q.Del(k)
 	}
+
 	encoded := q.Encode()
 	if encoded == "" {
 		return ""
 	}
+
 	return "?" + encoded
 }
 
 // IntPtr is a typed helper for setting LegacyMeta.From / To pointers.
-func IntPtr(n int) *int { return &n }
+//
+//go:fix inline
+func IntPtr(n int) *int { return new(n) }
 
 // Re-export StatusOK to allow handlers to import pagination without also
 // importing net/http for numeric constants.

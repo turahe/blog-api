@@ -214,8 +214,10 @@ func revisionTarget(c *gin.Context) (uuid.UUID, uuid.UUID, postdomain.RevisionRe
 }
 
 func revisionFilter(c *gin.Context, postID uuid.UUID, pr pagination.PageRequest) (postdomain.RevisionFilter, bool, bool) {
-	filter := postdomain.RevisionFilter{PostUUID: postID}
-	filter.PageRequest = pr
+	filter := postdomain.RevisionFilter{
+		PostUUID:    postID,
+		PageRequest: pr,
+	}
 
 	fail := func(message string) (postdomain.RevisionFilter, bool, bool) {
 		responses.Failure(c, nethttp.StatusBadRequest, responses.ErrorCodeValidation, message)

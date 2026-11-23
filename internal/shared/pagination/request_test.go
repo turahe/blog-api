@@ -1,6 +1,7 @@
 package pagination_test
 
 import (
+	"net/http"
 	"net/http/httptest"
 	"net/url"
 	"testing"
@@ -13,19 +14,24 @@ import (
 func newCtx(t *testing.T, query url.Values) *gin.Context {
 	t.Helper()
 	gin.SetMode(gin.TestMode)
+
 	w := httptest.NewRecorder()
 	ctx, _ := gin.CreateTestContext(w)
+
 	raw := ""
 	if len(query) > 0 {
 		raw = "?" + query.Encode()
 	}
-	req := httptest.NewRequest("GET", "/api/v1/posts"+raw, nil)
+
+	req := httptest.NewRequestWithContext(t.Context(), http.MethodGet, "/api/v1/posts"+raw, nil)
 	ctx.Request = req
+
 	return ctx
 }
 
 func TestParseRequestCursorAfter(t *testing.T) {
 	t.Parallel()
+
 	q := url.Values{}
 	q.Set("after", "XYZABC")
 	q.Set("limit", "5")
@@ -42,6 +48,7 @@ func TestParseRequestCursorAfter(t *testing.T) {
 
 func TestParseRequestCursorBefore(t *testing.T) {
 	t.Parallel()
+
 	q := url.Values{}
 	q.Set("before", "BEF")
 	pr, err := pagination.ParseRequest(newCtx(t, q), cfgPost, pagination.WithSigner(signer))
@@ -53,6 +60,7 @@ func TestParseRequestCursorBefore(t *testing.T) {
 
 func TestParseRequestAfterWinsOverPage(t *testing.T) {
 	t.Parallel()
+
 	q := url.Values{}
 	q.Set("after", "X")
 	q.Set("page", "99")
@@ -64,6 +72,7 @@ func TestParseRequestAfterWinsOverPage(t *testing.T) {
 
 func TestParseRequestLegacyOffset(t *testing.T) {
 	t.Parallel()
+
 	q := url.Values{}
 	q.Set("page", "3")
 	q.Set("perPage", "7")
@@ -88,6 +97,7 @@ func TestParseRequestDefaults(t *testing.T) {
 
 func TestParseRequestLimitCaps(t *testing.T) {
 	t.Parallel()
+
 	cfg := cfgPost
 	// Default max per cfgPost: 100.
 	cases := []struct {
@@ -102,13 +112,14 @@ func TestParseRequestLimitCaps(t *testing.T) {
 		{"50", 50},
 	}
 	for _, tc := range cases {
-		tc := tc
 		t.Run("limit="+tc.in, func(t *testing.T) {
 			t.Parallel()
+
 			q := url.Values{}
 			if tc.in != "" {
 				q.Set("limit", tc.in)
 			}
+
 			pr, err := pagination.ParseRequest(newCtx(t, q), cfg, pagination.WithSigner(signer))
 			require.NoError(t, err)
 			require.Equal(t, tc.want, pr.Limit)
@@ -118,6 +129,7 @@ func TestParseRequestLimitCaps(t *testing.T) {
 
 func TestParseRequestPerPageAlias(t *testing.T) {
 	t.Parallel()
+
 	cfg := cfgPost
 	q := url.Values{}
 	q.Set("perPage", "12")
@@ -133,21 +145,29 @@ func TestParseRequestPerPageAlias(t *testing.T) {
 
 func TestParseRequestIncludeTotalBooleans(t *testing.T) {
 	t.Parallel()
+
 	cases := []struct {
 		v    string
 		want bool
 	}{
-		{"", true}, {"true", true}, {"1", true}, {"yes", true},
-		{"false", false}, {"0", false}, {"no", false}, {"off", false},
+		{"", true},
+		{"true", true},
+		{"1", true},
+		{"yes", true},
+		{"false", false},
+		{"0", false},
+		{"no", false},
+		{"off", false},
 	}
 	for _, tc := range cases {
-		tc := tc
 		t.Run(tc.v, func(t *testing.T) {
 			t.Parallel()
+
 			q := url.Values{}
 			if tc.v != "" {
 				q.Set("includeTotal", tc.v)
 			}
+
 			pr, err := pagination.ParseRequest(newCtx(t, q), cfgPost, pagination.WithSigner(signer))
 			require.NoError(t, err)
 			require.Equal(t, tc.want, pr.IncludeTotal)
@@ -157,6 +177,7 @@ func TestParseRequestIncludeTotalBooleans(t *testing.T) {
 
 func TestParseRequestOffsetModeOnlyConfigRejectsCursors(t *testing.T) {
 	t.Parallel()
+
 	cfg := pagination.CursorConfig{Kind: "search", Sort: []pagination.SortField{{Name: "id", Type: pagination.TypeInt64}}, OffsetModeOnly: true}
 	q := url.Values{}
 	q.Set("after", "BAD")
@@ -167,6 +188,7 @@ func TestParseRequestOffsetModeOnlyConfigRejectsCursors(t *testing.T) {
 
 func TestParseLegacyClamps(t *testing.T) {
 	t.Parallel()
+
 	cfg := pagination.CursorConfig{Kind: "x", Sort: []pagination.SortField{{Name: "id", Type: pagination.TypeInt64}}}
 	pr := pagination.ParseLegacy(cfg, 0, -4)
 	require.Equal(t, pagination.ModeOffset, pr.Mode)

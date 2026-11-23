@@ -155,7 +155,7 @@ func TestExportedRouterFunctionsExistAndMount(t *testing.T) {
 	t.Parallel()
 	gin.SetMode(gin.TestMode)
 
-	noop := func(c *gin.Context) {}
+	noop := func(_ *gin.Context) {}
 	c := routes.Controllers{
 		Stub:   routes.NotImplemented,
 		Health: routes.Health{Live: noop, Ready: noop, Version: noop},
@@ -176,13 +176,16 @@ func TestExportedRouterFunctionsExistAndMount(t *testing.T) {
 
 	t.Run("RegisterCommonRouter mounts /health on a caller-owned group", func(t *testing.T) {
 		t.Parallel()
+
 		engine := gin.New()
 		routes.RegisterCommonRouter(engine.Group("/prefix"), c)
 		info := engine.Routes()
+
 		got := map[string]bool{}
 		for _, r := range info {
 			got[r.Method+" "+r.Path] = true
 		}
+
 		require.True(t, got["GET /prefix/health/live"], "missing /prefix/health/live")
 		require.True(t, got["GET /prefix/health/ready"], "missing /prefix/health/ready")
 		require.True(t, got["GET /prefix/health/version"], "missing /prefix/health/version")
@@ -190,28 +193,34 @@ func TestExportedRouterFunctionsExistAndMount(t *testing.T) {
 
 	t.Run("RegisterUserAuthRouter mounts /auth/login and /auth/logout on caller group", func(t *testing.T) {
 		t.Parallel()
+
 		engine := gin.New()
 		routes.RegisterUserAuthRouter(engine.Group("/v1"), auth, c)
 		info := engine.Routes()
+
 		got := map[string]bool{}
 		for _, r := range info {
 			got[r.Method+" "+r.Path] = true
 		}
+
 		require.True(t, got["POST /v1/auth/login"], "missing /v1/auth/login")
 		require.True(t, got["POST /v1/auth/logout"], "missing /v1/auth/logout (required auth)")
 	})
 
 	t.Run("RegisterAdminAuthRouter mounts /admin/auth/login and /admin/posts on caller group", func(t *testing.T) {
 		t.Parallel()
+
 		c2 := c
 		c2.Posts = routes.Posts{AdminCreate: noop}
 		engine := gin.New()
 		routes.RegisterAdminAuthRouter(engine.Group(""), auth, c2)
 		info := engine.Routes()
+
 		got := map[string]bool{}
 		for _, r := range info {
 			got[r.Method+" "+r.Path] = true
 		}
+
 		require.True(t, got["POST /admin/auth/login"], "missing /admin/auth/login")
 		require.True(t, got["POST /admin/posts"], "missing /admin/posts (admin create)")
 	})

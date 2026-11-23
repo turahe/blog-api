@@ -401,6 +401,7 @@ func TestAdminListMediaHandler(t *testing.T) {
 	t.Parallel()
 
 	asset := sampleAsset()
+
 	tests := []struct {
 		name        string
 		query       string
@@ -447,6 +448,7 @@ func TestAdminListMediaHandler(t *testing.T) {
 				listFn: func(_ context.Context, filter mediadomain.ListFilter) (mediadomain.ListResult, error) {
 					got = filter
 					total := int64(1)
+
 					return mediadomain.ListResult{
 						Items:         []mediadomain.MediaAsset{asset},
 						Total:         &total,
@@ -478,6 +480,7 @@ func TestAdminDeleteMediaHandler(t *testing.T) {
 	t.Parallel()
 
 	id := uuid.New()
+
 	tests := []struct {
 		name   string
 		param  string
@@ -509,6 +512,7 @@ func TestAdminPatchMediaTagsHandler(t *testing.T) {
 	t.Parallel()
 
 	asset := sampleAsset()
+
 	tests := []struct {
 		name   string
 		param  string
@@ -549,6 +553,7 @@ func TestPublicGetMediaHandler(t *testing.T) {
 	t.Parallel()
 
 	asset := sampleAsset()
+
 	tests := []struct {
 		name   string
 		param  string

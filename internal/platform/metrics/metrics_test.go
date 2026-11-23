@@ -53,6 +53,7 @@ func TestNewRegistersDBStats(t *testing.T) {
 	t.Parallel()
 
 	db := sql.OpenDB(noConnector{})
+
 	t.Cleanup(func() { _ = db.Close() })
 
 	status, body := scrape(t, New(db, "v1").Handler(), "")

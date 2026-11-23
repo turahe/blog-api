@@ -262,6 +262,7 @@ func TestAdminUserRolesListHandler(t *testing.T) {
 	t.Parallel()
 
 	target := uuid.New()
+
 	tests := []struct {
 		name   string
 		param  string

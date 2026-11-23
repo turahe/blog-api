@@ -148,6 +148,7 @@ func adminListMediaHandler(media mediaports.Service) gin.HandlerFunc {
 			default:
 				mapMediaError(c, err)
 			}
+
 			return
 		}
 
@@ -311,11 +312,13 @@ func publicTransformMediaHandler(media mediaports.Service) gin.HandlerFunc {
 func adminMediaUsageHandler(media mediaports.Service) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		var topLimit int
+
 		if raw := strings.TrimSpace(c.Query("top")); raw != "" {
 			if n, err := strconv.Atoi(raw); err == nil && n >= 1 {
 				topLimit = n
 			}
 		}
+
 		filter := mediadomain.UsageFilter{TopLimit: topLimit}
 
 		if raw := strings.TrimSpace(c.Query("userId")); raw != "" {

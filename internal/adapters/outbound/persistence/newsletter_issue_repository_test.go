@@ -161,13 +161,14 @@ func TestNewsletterRepositoryListIssues(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
 			page, err := repo.ListIssues(t.Context(), tt.filter)
 			require.NoError(t, err)
 			require.NotNil(t, page.Total)
 			require.GreaterOrEqual(t, *page.Total, tt.wantTotal)
 			require.Equal(t, tt.want, issueIDs(page.Items)[:len(tt.want)])
 			require.Equal(t, tt.filter.PageRequest.Page, page.OffsetPage)
-			require.Equal(t, tt.filter.PageRequest.Limit, page.OffsetPerPage)
+			require.Equal(t, tt.filter.Limit, page.OffsetPerPage)
 		})
 	}
 
@@ -234,6 +235,7 @@ func TestNewsletterRepositoryMoveIssue(t *testing.T) {
 	}
 
 	require.True(t, move([]domain.IssueStatus{domain.IssueDraft, domain.IssueScheduled}, domain.IssueQueued, at(1)))
+
 	got := load()
 	require.Equal(t, domain.IssueQueued, got.Status)
 	require.WithinDuration(t, at(1), *got.QueuedAt, 0)
@@ -243,12 +245,14 @@ func TestNewsletterRepositoryMoveIssue(t *testing.T) {
 	require.False(t, move([]domain.IssueStatus{domain.IssueDraft}, domain.IssueSending, at(2)), "not in a from status")
 
 	require.True(t, move([]domain.IssueStatus{domain.IssueQueued}, domain.IssueSending, at(3)))
+
 	got = load()
 	require.WithinDuration(t, at(3), *got.StartedAt, 0)
 	require.WithinDuration(t, at(1), *got.QueuedAt, 0, "queued_at is only stamped when queueing")
 
 	require.True(t, move([]domain.IssueStatus{domain.IssueSending}, domain.IssueQueued, at(4)))
 	require.True(t, move([]domain.IssueStatus{domain.IssueQueued}, domain.IssueSending, at(5)))
+
 	got = load()
 	require.WithinDuration(t, at(4), *got.QueuedAt, 0)
 	require.WithinDuration(t, at(3), *got.StartedAt, 0, "started_at keeps the first start")
@@ -389,6 +393,7 @@ func TestNewsletterRepositoryIssueDatabaseErrors(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
 			require.ErrorIs(t, tt.call(), context.Canceled)
 		})
 	}

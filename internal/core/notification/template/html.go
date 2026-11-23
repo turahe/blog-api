@@ -45,10 +45,10 @@ func emailHTML(subject, body, token, siteName string) (string, error) {
 func paragraphs(body, token string) [][][]segment {
 	var out [][][]segment
 
-	for _, block := range strings.Split(strings.ReplaceAll(body, "\r\n", "\n"), "\n\n") {
+	for block := range strings.SplitSeq(strings.ReplaceAll(body, "\r\n", "\n"), "\n\n") {
 		var lines [][]segment
 
-		for _, line := range strings.Split(block, "\n") {
+		for line := range strings.SplitSeq(block, "\n") {
 			if line = strings.TrimSpace(line); line != "" {
 				lines = append(lines, segments(line, token))
 			}

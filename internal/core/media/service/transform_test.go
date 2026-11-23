@@ -94,6 +94,7 @@ func TestTransformURLFailures(t *testing.T) {
 
 			svc, repo, _ := newTestService()
 			ready := seedAsset(repo, "image/png", mediadomain.StatusReady)
+
 			svc.WithTransforms(tc.transformer, []int{256}).WithPolicy(tc.policy)
 
 			_, err := svc.TransformURL(t.Context(), ready, mediadomain.Transform{Width: 256})

@@ -11,7 +11,6 @@ import (
 	"github.com/google/uuid"
 	_ "github.com/jackc/pgx/v5/stdlib"
 	"github.com/stretchr/testify/require"
-	"github.com/turahe/blog-api/internal/platform/migrations"
 	"gorm.io/driver/postgres"
 	"gorm.io/gorm"
 	"gorm.io/gorm/logger"
@@ -44,13 +43,15 @@ func integrationTx(t *testing.T) *gorm.DB {
 			return
 		}
 
-		if err = migrations.Up(sqlDB); err != nil {
+		integrationGorm, err = gorm.Open(postgres.New(postgres.Config{Conn: sqlDB}),
+			&gorm.Config{Logger: logger.Default.LogMode(logger.Silent)})
+		if err != nil {
 			errIntegration = err
 			return
 		}
 
-		integrationGorm, errIntegration = gorm.Open(postgres.New(postgres.Config{Conn: sqlDB}),
-			&gorm.Config{Logger: logger.Default.LogMode(logger.Silent)})
+		integrationGorm.DisableForeignKeyConstraintWhenMigrating = true
+		errIntegration = Migrate(integrationGorm)
 	})
 	require.NoError(t, errIntegration)
 

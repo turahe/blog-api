@@ -41,6 +41,7 @@ func TestEncryptRoundTripAndTamper(t *testing.T) {
 	// only unused trailing bits change under RawStdEncoding.
 	encoded, ok := strings.CutPrefix(a, version)
 	require.True(t, ok)
+
 	sealed, err := base64.RawStdEncoding.DecodeString(encoded)
 	require.NoError(t, err)
 	require.NotEmpty(t, sealed)

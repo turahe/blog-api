@@ -129,6 +129,7 @@ func (f *fakeRepo) Create(_ context.Context, cat categorydomain.Category) (categ
 	}
 
 	f.put(cat)
+
 	return cat, nil
 }
 

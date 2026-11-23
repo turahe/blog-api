@@ -85,18 +85,20 @@ func (r *fakeRepo) List(_ context.Context, filter commentdomain.ListFilter) (com
 	}
 
 	var totalPtr *int64
+
 	if filter.IncludeTotal {
-		var t int64 = 0
-		totalPtr = &t
+		var total int64
+
+		totalPtr = &total
 	}
-	page := filter.Page
-	if page < 1 {
-		page = 1
-	}
+
+	page := max(filter.Page, 1)
+
 	limit := filter.Limit
 	if limit < 1 {
 		limit = 20
 	}
+
 	return commentdomain.ListResult{OffsetPage: page, OffsetPerPage: limit, Total: totalPtr, Limit: limit}, nil
 }
 
@@ -107,18 +109,20 @@ func (r *fakeRepo) ListPublic(_ context.Context, filter commentdomain.ListFilter
 	}
 
 	var totalPtr *int64
+
 	if filter.IncludeTotal {
-		var t int64 = 0
-		totalPtr = &t
+		var total int64
+
+		totalPtr = &total
 	}
-	page := filter.Page
-	if page < 1 {
-		page = 1
-	}
+
+	page := max(filter.Page, 1)
+
 	limit := filter.Limit
 	if limit < 1 {
 		limit = 20
 	}
+
 	return commentdomain.ListResult{OffsetPage: page, OffsetPerPage: limit, Total: totalPtr, Limit: limit}, nil
 }
 
@@ -129,18 +133,20 @@ func (r *fakeRepo) ListForMe(_ context.Context, filter commentdomain.ListFilter)
 	}
 
 	var totalPtr *int64
+
 	if filter.IncludeTotal {
-		var t int64 = 0
-		totalPtr = &t
+		var total int64
+
+		totalPtr = &total
 	}
-	page := filter.Page
-	if page < 1 {
-		page = 1
-	}
+
+	page := max(filter.Page, 1)
+
 	limit := filter.Limit
 	if limit < 1 {
 		limit = 20
 	}
+
 	return commentdomain.ListResult{OffsetPage: page, OffsetPerPage: limit, Total: totalPtr, Limit: limit}, nil
 }
 
@@ -151,18 +157,20 @@ func (r *fakeRepo) ListAdmin(_ context.Context, filter commentdomain.ListFilter)
 	}
 
 	var totalPtr *int64
+
 	if filter.IncludeTotal {
-		var t int64 = 0
-		totalPtr = &t
+		var total int64
+
+		totalPtr = &total
 	}
-	page := filter.Page
-	if page < 1 {
-		page = 1
-	}
+
+	page := max(filter.Page, 1)
+
 	limit := filter.Limit
 	if limit < 1 {
 		limit = 20
 	}
+
 	return commentdomain.ListResult{OffsetPage: page, OffsetPerPage: limit, Total: totalPtr, Limit: limit}, nil
 }
 
@@ -172,6 +180,7 @@ func (r *fakeRepo) Create(_ context.Context, c commentdomain.Comment) (commentdo
 	}
 
 	r.comments[c.UUID] = c
+
 	return c, nil
 }
 
@@ -814,6 +823,7 @@ func TestGetThreadFailures(t *testing.T) {
 			t.Parallel()
 
 			f := newFixture(Config{})
+
 			id := f.seed(commentdomain.Comment{Content: "hi"}).UUID
 			if tt.missing {
 				id = uuid.New()

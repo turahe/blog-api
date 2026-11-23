@@ -146,8 +146,10 @@ func TestPrivacyDataExportAndErase(t *testing.T) {
 	require.Zero(t, firstSeen)
 	require.Equal(t, int64(1), anonymousRows, "unlinked events are not the user's")
 
-	commentsFilter := commentdomain.ListFilter{AuthorUUID: &userID}
-	commentsFilter.PageRequest = pagination.ParseLegacy(commentsMeCfg, 1, 10)
+	commentsFilter := commentdomain.ListFilter{
+		AuthorUUID:  &userID,
+		PageRequest: pagination.ParseLegacy(commentsMeCfg, 1, 10),
+	}
 	comments, err := NewCommentRepository(tx).List(ctx, commentsFilter)
 	require.NoError(t, err)
 	require.Len(t, comments.Items, 1)

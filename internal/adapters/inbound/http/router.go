@@ -95,8 +95,8 @@ type Dependencies struct {
 	SwaggerEnabled     bool
 	// CacheBypassHeader honours `Cache-Control: no-cache` on public reads (debugging only).
 	CacheBypassHeader bool
-	// CORSOrigins is the browser Origin allowlist; empty disables cross-origin browser access.
-	CORSOrigins []string
+	// RequestTimeout bounds handler work via pkg RequestTimeout; 0 disables.
+	RequestTimeout time.Duration
 }
 
 // NewRouter wires middleware + controllers into routes.NewRouter.
@@ -253,19 +253,21 @@ func optionalServices(controllerDeps *handlers.Deps, deps Dependencies) {
 }
 
 // globalMiddleware is the chain every request passes through, outermost first.
+// Infrastructure middleware comes from github.com/turahe/pkg/middlewares (recovery,
+// trace, instrumentation, logger, metrics, timeout, CORS, optional mTLS/rate limit).
+// Domain middleware (Sentry, security headers, shedding, audit, cache bypass) stays local.
 func globalMiddleware(deps Dependencies) gin.HandlersChain {
-	global := gin.HandlersChain{
-		middleware.RequestID(),
-		middleware.CORS(deps.CORSOrigins),
+	global := middleware.PkgStack(deps.RequestTimeout)
+
+	global = append(global,
 		middleware.Tracing(),
 		middleware.SecurityHeaders(),
-		middleware.AccessLog(deps.Logger),
-	}
+		middleware.MaxInFlight(deps.MaxInFlight),
+	)
 	if deps.Metrics != nil {
 		global = append(global, middleware.Metrics(deps.Metrics))
 	}
 
-	global = append(global, middleware.MaxInFlight(deps.MaxInFlight), middleware.Recovery(deps.Logger))
 	if deps.Audit != nil {
 		global = append(global, middleware.Audit(deps.Audit))
 	}

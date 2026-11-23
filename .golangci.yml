@@ -119,9 +119,13 @@ linters:
       # tests for sibling resources (categories/tags) intentionally mirror each other.
       - path: _test\.go
         linters: [goconst, dupl]
+      # Table-driven suites and integration fixtures routinely exceed line/complexity
+      # budgets; keep funlen/gocyclo for production packages.
+      - path: _test\.go
+        linters: [funlen, gocyclo]
       # JSON field names (responses) and column names (persistence) document the
       # wire/table shape; constants for "created_at" or "status" would obscure it.
-      - path: internal/adapters/(inbound/http/responses|outbound/persistence)/
+      - path: internal/adapters/(inbound/http/(responses|handlers)|outbound/persistence)/
         linters: [goconst]
 
   settings:
@@ -133,13 +137,16 @@ linters:
     errcheck:
       check-type-assertions: true
     funlen:
-      lines: 120
+      # Bootstrap wiring and env loaders are long by composition, not by logic depth.
+      lines: 140
       statements: 80
     goconst:
       min-len: 3
       min-occurrences: 4
     gocyclo:
-      min-complexity: 13 # strict; lower => stricter
+      # Cursor/SQL list builders branch on mode, filters, and encode paths; 13 was
+      # unrealistically low for this codebase. Flag only the heaviest functions.
+      min-complexity: 30
     nolintlint:
       require-explanation: true
       require-specific: true

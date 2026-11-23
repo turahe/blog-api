@@ -115,6 +115,7 @@ func TestSEOHandlersRejectBeforeCallingService(t *testing.T) {
 	handlers := map[string]func(postSEOAPI, seoAccess) gin.HandlerFunc{
 		"get": adminGetPostSEOHandler, "update": adminUpdatePostSEOHandler, "preview": adminPreviewPostSEOHandler,
 	}
+
 	tests := []struct {
 		name    string
 		handler string

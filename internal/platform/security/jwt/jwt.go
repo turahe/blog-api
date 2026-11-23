@@ -118,13 +118,11 @@ func (s *Service) IssueAccess(claims authdomain.AccessClaims) (string, error) {
 		Act:       act,
 		SessionID: claims.SessionID,
 		Family:    family,
-		RegisteredClaims: jwtlib.RegisteredClaims{
-			Subject:   claims.Subject.String(),
-			Issuer:    s.issuer,
-			ID:        claims.ID,
-			IssuedAt:  jwtlib.NewNumericDate(claims.IssuedAt),
-			ExpiresAt: jwtlib.NewNumericDate(claims.ExpiresAt),
-		},
+		Subject:   claims.Subject.String(),
+		Issuer:    s.issuer,
+		ID:        claims.ID,
+		IssuedAt:  jwtlib.NewNumericDate(claims.IssuedAt),
+		ExpiresAt: jwtlib.NewNumericDate(claims.ExpiresAt),
 	})
 
 	return token.SignedString(s.privateKey)

@@ -11,6 +11,7 @@ import (
 // dayWindow is a window of whole UTC days, one period per day.
 func dayWindow(days ...string) analyticsdomain.Window {
 	w := analyticsdomain.Window{Grain: analyticsdomain.GrainDay}
+
 	for _, day := range days {
 		start, err := time.Parse(time.DateOnly, day)
 		if err != nil {
@@ -37,11 +38,9 @@ const twoDayHeaderJSON = `"timezone": "UTC", "grain": "day",
 
 func sampleTotals(periods int) analyticsdomain.Totals {
 	return analyticsdomain.Totals{
-		SiteRow: analyticsdomain.SiteRow{
-			Views: 10, Visitors: 6, Sessions: 4, Bounces: 1, FocusSeconds: 30, FocusViews: 3,
-			Searches: 2, ZeroResultSearches: 1, SearchesWithClick: 1, SearchClicks: 3,
-			ConsentedVisitors: 5, NewVisitors: 2,
-		},
+		Views: 10, Visitors: 6, Sessions: 4, Bounces: 1, FocusSeconds: 30, FocusViews: 3,
+		Searches: 2, ZeroResultSearches: 1, SearchesWithClick: 1, SearchClicks: 3,
+		ConsentedVisitors: 5, NewVisitors: 2,
 		Periods: periods,
 	}
 }

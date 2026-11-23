@@ -57,8 +57,10 @@ func TestPostSearchRanksFiltersAndHighlights(t *testing.T) {
 
 	search := NewPostSearch(tx, "simple")
 
-	filter := postdomain.SearchFilter{Query: word}
-	filter.PageRequest = pagination.ParseLegacy(postSearchCfg, 1, 10)
+	filter := postdomain.SearchFilter{
+		Query:       word,
+		PageRequest: pagination.ParseLegacy(postSearchCfg, 1, 10),
+	}
 	got, err := search.SearchPublished(ctx, filter)
 	require.NoError(t, err)
 	require.EqualValues(t, 2, got.Total, "drafts and deleted posts are excluded")
@@ -74,38 +76,48 @@ func TestPostSearchRanksFiltersAndHighlights(t *testing.T) {
 	require.NotContains(t, snippet, "<script>", "content is HTML-escaped")
 	require.Equal(t, "Weekly notes", got.Items[1].Title)
 
-	filter2 := postdomain.SearchFilter{Query: word}
-	filter2.PageRequest = pagination.ParseLegacy(postSearchCfg, 2, 1)
+	filter2 := postdomain.SearchFilter{
+		Query:       word,
+		PageRequest: pagination.ParseLegacy(postSearchCfg, 2, 1),
+	}
 	got, err = search.SearchPublished(ctx, filter2)
 	require.NoError(t, err)
 	require.EqualValues(t, 2, got.Total)
 	require.Len(t, got.Items, 1)
 	require.Equal(t, inContent.UUID, got.Items[0].Post.UUID)
 
-	filter3 := postdomain.SearchFilter{Query: word, CategoryUUID: &category}
-	filter3.PageRequest = pagination.ParseLegacy(postSearchCfg, 1, 10)
+	filter3 := postdomain.SearchFilter{
+		Query: word, CategoryUUID: &category,
+		PageRequest: pagination.ParseLegacy(postSearchCfg, 1, 10),
+	}
 	got, err = search.SearchPublished(ctx, filter3)
 	require.NoError(t, err)
 	require.Len(t, got.Items, 1)
 	require.Equal(t, inTitle.UUID, got.Items[0].Post.UUID)
 
 	tag := insertTag(t, tx, inContent.UUID)
-	filter4 := postdomain.SearchFilter{Query: word, TagUUID: &tag}
-	filter4.PageRequest = pagination.ParseLegacy(postSearchCfg, 1, 10)
+	filter4 := postdomain.SearchFilter{
+		Query: word, TagUUID: &tag,
+		PageRequest: pagination.ParseLegacy(postSearchCfg, 1, 10),
+	}
 	got, err = search.SearchPublished(ctx, filter4)
 	require.NoError(t, err)
 	require.Len(t, got.Items, 1)
 	require.Equal(t, inContent.UUID, got.Items[0].Post.UUID)
 
-	filter5 := postdomain.SearchFilter{Query: word + " -about"}
-	filter5.PageRequest = pagination.ParseLegacy(postSearchCfg, 1, 10)
+	filter5 := postdomain.SearchFilter{
+		Query:       word + " -about",
+		PageRequest: pagination.ParseLegacy(postSearchCfg, 1, 10),
+	}
 	got, err = search.SearchPublished(ctx, filter5)
 	require.NoError(t, err)
 	require.Len(t, got.Items, 1, "web search syntax excludes terms")
 	require.Equal(t, inContent.UUID, got.Items[0].Post.UUID)
 
-	filter6 := postdomain.SearchFilter{Query: `"` + word + ` nope"`}
-	filter6.PageRequest = pagination.ParseLegacy(postSearchCfg, 1, 10)
+	filter6 := postdomain.SearchFilter{
+		Query:       `"` + word + ` nope"`,
+		PageRequest: pagination.ParseLegacy(postSearchCfg, 1, 10),
+	}
 	got, err = search.SearchPublished(ctx, filter6)
 	require.NoError(t, err)
 	require.Empty(t, got.Items)
@@ -146,8 +158,10 @@ func TestRebuildPostSearchIndex(t *testing.T) {
 	author := insertUser(t, tx)
 	post := createSearchPost(t, tx, author, searchPost{title: "Running shoes"})
 
-	filterRun := postdomain.SearchFilter{Query: "run"}
-	filterRun.PageRequest = pagination.ParseLegacy(postSearchCfg, 1, 50)
+	filterRun := postdomain.SearchFilter{
+		Query:       "run",
+		PageRequest: pagination.ParseLegacy(postSearchCfg, 1, 50),
+	}
 	got, err := NewPostSearch(tx, language).SearchPublished(ctx, filterRun)
 	require.NoError(t, err)
 	require.Contains(t, searchHitIDs(got.Items), post.UUID, "english stems running to run")

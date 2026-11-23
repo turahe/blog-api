@@ -33,10 +33,12 @@ func NewSigner(currentKey, previousKey []byte) *Signer {
 	if len(currentKey) == 0 {
 		panic("pagination: NewSigner called with empty currentKey")
 	}
+
 	out := &Signer{CurrentKey: slices.Clone(currentKey)}
 	if len(previousKey) > 0 {
 		out.PreviousKey = slices.Clone(previousKey)
 	}
+
 	return out
 }
 
@@ -51,11 +53,14 @@ func NewSignerFromEnv() (*Signer, error) {
 	if current == "" {
 		current = os.Getenv("APP_KEY")
 	}
+
 	if current == "" {
 		return nil, errors.New("pagination: neither PAGINATION_HMAC_KEY nor APP_KEY are set; " +
 			"cursors cannot be signed securely")
 	}
+
 	previous := os.Getenv("PAGINATION_HMAC_KEY_PREVIOUS")
+
 	return NewSigner([]byte(current), []byte(previous)), nil
 }
 
@@ -66,6 +71,7 @@ func GlobalSigner() (*Signer, error) {
 	signerOnce.Do(func() {
 		signerInst, errSigner = NewSignerFromEnv()
 	})
+
 	return signerInst, errSigner
 }
 
@@ -89,6 +95,7 @@ func (s *Signer) Sign(payload []byte) []byte {
 	out = append(out, '|')
 	encoder := hex.NewEncoder(&byteSliceWriter{&out})
 	_, _ = encoder.Write(sum)
+
 	return out
 }
 
@@ -98,32 +105,40 @@ func (s *Signer) Sign(payload []byte) []byte {
 // returns ErrCursorInvalidSignature wrapped with contextual detail.
 func (s *Signer) Verify(signedBytes []byte) ([]byte, error) {
 	sep := -1
-	for i := len(signedBytes) - 1; i >= 0; i-- {
-		if signedBytes[i] == '|' {
+
+	for i, signedByte := range slices.Backward(signedBytes) {
+		if signedByte == '|' {
 			sep = i
 			break
 		}
 	}
+
 	if sep < 1 || sep == len(signedBytes)-1 {
 		return nil, ErrCursorInvalidSignature
 	}
+
 	payload := signedBytes[:sep]
 	sumHex := signedBytes[sep+1:]
+
 	want := make([]byte, hex.DecodedLen(len(sumHex)))
 	if _, err := hex.Decode(want, sumHex); err != nil {
 		return nil, ErrCursorInvalidSignature
 	}
+
 	candidates := [][]byte{s.CurrentKey}
 	if len(s.PreviousKey) > 0 {
 		candidates = append(candidates, s.PreviousKey)
 	}
+
 	for _, key := range candidates {
 		mac := hmac.New(sha256.New, key)
 		mac.Write(payload)
+
 		if hmac.Equal(mac.Sum(nil), want) {
 			return payload, nil
 		}
 	}
+
 	return nil, ErrCursorInvalidSignature
 }
 

@@ -163,7 +163,9 @@ func TestStreamLiveClosesOnShutdown(t *testing.T) {
 
 	c, _ := streamContext(t, 100)
 	rec := httptest.NewRecorder()
-	c.Writer.(*failingWriter).ResponseWriter = ginWriter(t, rec)
+	fw, ok := c.Writer.(*failingWriter)
+	require.True(t, ok)
+	fw.ResponseWriter = ginWriter(t, rec)
 
 	streamLive(c, conn, &fakeLiveBoard{}, time.Hour)
 	assert.Contains(t, rec.Body.String(), "event: stream.closed")

@@ -48,6 +48,7 @@ var ada = userdomain.User{Email: "ada@example.com", FullName: "Ada"}
 
 func newService(mailer *captureMailer) (*notificationservice.Service, *bytes.Buffer) {
 	var logs bytes.Buffer
+
 	svc := notificationservice.New(mailer, slog.New(slog.NewTextHandler(&logs, nil)), " http://127.0.0.1:8080/ ")
 
 	return svc, &logs

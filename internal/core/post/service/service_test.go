@@ -17,8 +17,6 @@ import (
 	"github.com/turahe/blog-api/internal/shared/pagination"
 )
 
-func intPtr(v int64) *int64 { return &v }
-
 type fixedClock struct {
 	now time.Time
 }
@@ -284,8 +282,9 @@ func TestPostServiceListAdminClampsAndScopesAuthorFilter(t *testing.T) {
 		AuthorUUID:      &authorID,
 		Query:           "  hello world  ",
 		ScopeAuthorUUID: &scopeAuthorID,
+
+		PageRequest: pagination.ParseLegacy(postAdminListCfg, 0, 101),
 	}
-	filter.PageRequest = pagination.ParseLegacy(postAdminListCfg, 0, 101)
 
 	got, err := svc.ListAdmin(context.Background(), filter)
 

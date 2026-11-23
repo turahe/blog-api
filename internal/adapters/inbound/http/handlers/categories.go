@@ -16,6 +16,7 @@ import (
 	categoryservice "github.com/turahe/blog-api/internal/core/category/service"
 )
 
+//nolint:dupl // mirrors fakeCategoryService in categories_test.go
 type categoryAPI interface {
 	List(ctx context.Context) ([]categorydomain.Category, error)
 	GetBySlug(ctx context.Context, slug string) (categorydomain.Category, error)

@@ -14,11 +14,13 @@ import (
 
 	goredis "github.com/redis/go-redis/v9"
 	pkgconfig "github.com/turahe/pkg/config"
+	"github.com/turahe/pkg/crypto"
 	pkgdb "github.com/turahe/pkg/database"
 	pkgjwt "github.com/turahe/pkg/jwt"
 	pklogger "github.com/turahe/pkg/logger"
 	"github.com/turahe/pkg/otelx"
 	pkgredis "github.com/turahe/pkg/redis"
+	pkgstorage "github.com/turahe/pkg/storage"
 	gormlogger "gorm.io/gorm/logger"
 
 	"github.com/turahe/blog-api/internal/platform/config"
@@ -26,11 +28,22 @@ import (
 
 const redacted = "[REDACTED]"
 
-// Install publishes cfg on the turahe/pkg config singleton and starts its logger.
-// Call once at process start, before Sentry, Redis, or tracing.
+// Install publishes cfg on the turahe/pkg config singleton and starts its logger,
+// crypto hasher, and (when configured) object-storage driver. Call once at process
+// start, before Sentry, Redis, or tracing.
 func Install(cfg config.Config, version string) {
 	pkgconfig.Config = Configuration(cfg, version)
 	pklogger.Init(loggerConfig(cfg, version))
+
+	if err := crypto.Setup(); err != nil {
+		pklogger.Warnf("crypto setup skipped: %v", err)
+	}
+
+	if cfg.MediaEnabled() {
+		if err := pkgstorage.Setup(); err != nil {
+			pklogger.Warnf("storage setup skipped: %v", err)
+		}
+	}
 }
 
 // Configuration returns the turahe/pkg configuration carried by cfg.
@@ -76,6 +89,7 @@ func OpenDatabase(ctx context.Context, cfg config.Config) (*pkgdb.Database, erro
 	defer restore()
 
 	dbCfg := cfg.PkgConfig("").Database
+
 	idle := cfg.DBMaxIdleTime
 	if idle <= 0 {
 		idle = 10 * time.Minute
@@ -169,8 +183,9 @@ func OpenRedis(ctx context.Context, rawURL string) error {
 	return nil
 }
 
-// InitTracing starts the global tracer when OTEL_TRACES_EXPORTER is gcp or an OTLP
-// endpoint is set. The returned function is safe to call when tracing is off.
+// InitTracing starts the global tracer when an OTLP endpoint is set (see
+// github.com/turahe/pkg/otelx.TracingEnabled). The returned function is safe to call
+// when tracing is off.
 func InitTracing(ctx context.Context, cfg config.Config, version string) func(context.Context) error {
 	otelCfg := cfg.PkgConfig(version).OpenTelemetry
 	noop := func(context.Context) error { return nil }
@@ -230,6 +245,7 @@ func useGoogleCredentials(cfg config.Config) (func(), error) {
 	}
 
 	previous, had := os.LookupEnv("GOOGLE_APPLICATION_CREDENTIALS")
+
 	if err := os.Setenv("GOOGLE_APPLICATION_CREDENTIALS", path); err != nil {
 		return nil, err
 	}

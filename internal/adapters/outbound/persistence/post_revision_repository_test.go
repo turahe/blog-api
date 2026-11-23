@@ -103,8 +103,10 @@ func TestPostRevisionsCaptureRestoreAndPrune(t *testing.T) {
 	require.Empty(t, restored.Snapshot.Media, "revision 1 had no media, so the restore cleared it")
 
 	from := time.Now().Add(-time.Hour)
-	revFilter1 := postdomain.RevisionFilter{PostUUID: post.UUID, AuthorUUID: &author, From: &from}
-	revFilter1.PageRequest = pagination.ParseLegacy(revisionsCfg, 1, 2)
+	revFilter1 := postdomain.RevisionFilter{
+		PostUUID: post.UUID, AuthorUUID: &author, From: &from,
+		PageRequest: pagination.ParseLegacy(revisionsCfg, 1, 2),
+	}
 	page, err := revs.List(ctx, revFilter1)
 	require.NoError(t, err)
 	require.EqualValues(t, 4, page.Total)
@@ -124,8 +126,10 @@ func TestPostRevisionsCaptureRestoreAndPrune(t *testing.T) {
 	require.NoError(t, err)
 	require.GreaterOrEqual(t, deleted, int64(2))
 
-	revFilter2 := postdomain.RevisionFilter{PostUUID: post.UUID}
-	revFilter2.PageRequest = pagination.ParseLegacy(revisionsCfg, 1, 10)
+	revFilter2 := postdomain.RevisionFilter{
+		PostUUID:    post.UUID,
+		PageRequest: pagination.ParseLegacy(revisionsCfg, 1, 10),
+	}
 	page, err = revs.List(ctx, revFilter2)
 	require.NoError(t, err)
 	require.EqualValues(t, 2, page.Total)

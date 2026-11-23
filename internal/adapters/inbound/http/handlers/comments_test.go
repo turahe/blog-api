@@ -19,8 +19,6 @@ import (
 	commentservice "github.com/turahe/blog-api/internal/core/comment/service"
 )
 
-func intPtr(v int64) *int64 { return &v }
-
 type fakeCommentService struct {
 	createFn func(context.Context, commentservice.CreateInput) (commentdomain.Comment, error)
 	listFn   func(context.Context, commentdomain.ListFilter) (commentdomain.ListResult, error)
@@ -284,7 +282,7 @@ func TestGetCommentHidesDeletedContentAndAuthor(t *testing.T) {
 				UUID: uuid.New(), PostUUID: testPostID, ParentUUID: &testCommentID, AuthorName: "Guest",
 				AuthorEmail: "guest@example.com", Content: "reply", ContentHTML: "<p>reply</p>", Status: commentdomain.StatusApproved, Depth: 1,
 				CreatedAt: testTime, UpdatedAt: testTime,
-			}}, Total: intPtr(1)},
+			}}, Total: new(int64(1))},
 		}, nil
 	}}
 	c, w := commentContext(nethttp.MethodGet, "/api/v1/comments/x", "", nil, testCommentID.String())
@@ -321,6 +319,7 @@ func TestListPostCommentsPaginatesAndParsesParent(t *testing.T) {
 		require.Equal(t, 5, filter.Limit)
 
 		total := int64(7)
+
 		return commentdomain.ListResult{OffsetPage: 2, OffsetPerPage: 5, Total: &total}, nil
 	}}
 	c, w := commentContext(nethttp.MethodGet, "/api/v1/posts/x/comments?page=2&perPage=5&parentId="+parent.String(), "", nil, testPostID.String())
@@ -446,6 +445,7 @@ func TestCommentHandlerPaths(t *testing.T) {
 	t.Parallel()
 
 	id := testCommentID.String()
+
 	tests := []struct {
 		name    string
 		handler func(commentAPI) gin.HandlerFunc

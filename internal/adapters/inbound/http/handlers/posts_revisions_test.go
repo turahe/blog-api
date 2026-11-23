@@ -28,6 +28,7 @@ func (f *fakeRevisions) ListRevisions(_ context.Context, _ uuid.UUID, unrestrict
 	f.filter, f.unrestricted = filter, unrestricted
 
 	total := int64(1)
+
 	return postdomain.RevisionPage{Items: []postdomain.Revision{sampleRevision()}, Total: &total, OffsetPage: 1, OffsetPerPage: 20}, f.err
 }
 
@@ -119,6 +120,7 @@ func TestListRevisionsFailures(t *testing.T) {
 	t.Parallel()
 
 	postID := uuid.NewString()
+
 	tests := []struct {
 		name   string
 		param  string

@@ -42,8 +42,8 @@ type RefreshSessionModel struct {
 	UserAgent      *string    `gorm:"column:user_agent"`
 	IPAddress      *string    `gorm:"column:ip_address"`
 	CreatedAt      time.Time  `gorm:"column:created_at"`
-	UserUUID       uuid.UUID  `gorm:"column:user_uuid;->"`
-	ReplacedByUUID *uuid.UUID `gorm:"column:replaced_by_uuid;->"`
+	UserUUID       uuid.UUID  `gorm:"column:user_uuid;->;-:migration"`
+	ReplacedByUUID *uuid.UUID `gorm:"column:replaced_by_uuid;->;-:migration"`
 }
 
 // TableName returns the refresh_sessions table name for GORM.
@@ -67,9 +67,9 @@ type PostModel struct {
 	CreatedAt           time.Time
 	UpdatedAt           time.Time
 	DeletedAt           gorm.DeletedAt `gorm:"index"`
-	AuthorUUID          uuid.UUID      `gorm:"column:author_uuid;->"`
-	CategoryUUID        *uuid.UUID     `gorm:"column:category_uuid;->"`
-	CoverImageMediaUUID *uuid.UUID     `gorm:"column:cover_image_media_uuid;->"`
+	AuthorUUID          uuid.UUID      `gorm:"column:author_uuid;->;-:migration"`
+	CategoryUUID        *uuid.UUID     `gorm:"column:category_uuid;->;-:migration"`
+	CoverImageMediaUUID *uuid.UUID     `gorm:"column:cover_image_media_uuid;->;-:migration"`
 }
 
 // TableName returns the posts table name for GORM.
@@ -94,7 +94,7 @@ type MediaAssetModel struct {
 	CreatedAt        time.Time      `gorm:"column:created_at"`
 	UpdatedAt        time.Time      `gorm:"column:updated_at"`
 	DeletedAt        gorm.DeletedAt `gorm:"column:deleted_at;index"`
-	UploadedByUUID   *uuid.UUID     `gorm:"column:uploaded_by_uuid;->"`
+	UploadedByUUID   *uuid.UUID     `gorm:"column:uploaded_by_uuid;->;-:migration"`
 }
 
 // TableName returns the media_assets table name for GORM.

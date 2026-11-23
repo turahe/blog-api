@@ -133,6 +133,7 @@ func adminNewsletterSubscribersHandler(nl newsletterAdminAPI, canExport func(*gi
 			responses.Failure(c, nethttp.StatusBadRequest, pagination.ErrorCode(err), pagination.ErrorCause(err))
 			return
 		}
+
 		filter.PageRequest = pr
 
 		page, err := nl.ListSubscribers(c.Request.Context(), filter)
@@ -314,6 +315,7 @@ func adminNewsletterIssuesHandler(nl newsletterAdminAPI) gin.HandlerFunc {
 			responses.Failure(c, nethttp.StatusBadRequest, pagination.ErrorCode(err), pagination.ErrorCause(err))
 			return
 		}
+
 		filter.PageRequest = pr
 
 		page, err := nl.ListIssues(c.Request.Context(), filter)

@@ -105,7 +105,6 @@ func TestProbeAddresses(t *testing.T) {
 	}
 }
 
-//nolint:paralleltest // sets PUBSUB_EMULATOR_HOST
 func TestProbeAddressesPubSubEmulator(t *testing.T) {
 	t.Setenv("PUBSUB_EMULATOR_HOST", " 127.0.0.1:8085 ")
 

@@ -243,6 +243,7 @@ func (r *fakeRepo) List(_ context.Context, filter mediadomain.ListFilter) (media
 	}
 
 	total := int64(len(items))
+
 	return mediadomain.ListResult{
 		Items:         items,
 		Total:         &total,
@@ -655,6 +656,7 @@ func TestUpdateTags(t *testing.T) {
 	t.Parallel()
 
 	failure := errors.New("backend down")
+
 	many := make([]string, 51)
 	for i := range many {
 		many[i] = "tag-" + strings.Repeat("x", i+1)

@@ -12,6 +12,8 @@ import (
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	pkgmw "github.com/turahe/pkg/middlewares"
+
 	"github.com/turahe/blog-api/internal/adapters/inbound/routes"
 	"github.com/turahe/blog-api/internal/core/audit"
 	auditdomain "github.com/turahe/blog-api/internal/core/audit/domain"
@@ -44,7 +46,7 @@ func runAudit(t *testing.T, tc auditCase) []auditdomain.Entry {
 
 	writer := &captureWriter{}
 	router := gin.New()
-	router.Use(RequestID(), Audit(writer))
+	router.Use(pkgmw.TraceMiddleware(), BridgeRequestID(), Audit(writer))
 
 	tc.route.Method = tc.method
 	router.Handle(tc.method, tc.pattern, routes.WithMeta(tc.route), func(c *gin.Context) {

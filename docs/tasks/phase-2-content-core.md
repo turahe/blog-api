@@ -12,13 +12,14 @@ Index: [README.md](./README.md).
 restore, deterministic slug suffixes), categories, tags, media (presigned upload with content
 sniffing on completion, list, delete, tags, public get, post attachments), Redis caching of
 public reads (posts, categories, tags, user profiles), and all 8 profile, avatar, and email
-change operations are wired. Migrations run through `00012_user_profiles.sql`.
+change operations are wired. Phase 2 schema ended at `00012_user_profiles.sql` (later phases
+extend through `00036`).
 
 Deferred by decision: `public.media.transform` and avatar size variants (see the media epic).
-Carried to later phases: email delivery uses a logging notifier until the Phase 1 mailer
-lands; 2FA step-up, profile audit or outbox events, `/me/privacy`, `followers_only`
-visibility, per-user storage quota, and malware scanning are listed in
-[upload-security.md](../backend/upload-security.md) and [api.md](../backend/api.md#implementation-status).
+Later phases covered the former carry-overs: Phase 1 SMTP mailer and 2FA, Phase 3/4 audit and
+outbox events, Phase 5 `/me/privacy` and media usage reporting. Remaining upload-security
+notes (`followers_only` visibility, per-user storage quota, malware scanning) stay in
+[upload-security.md](../backend/upload-security.md).
 
 ## Epic: posts
 

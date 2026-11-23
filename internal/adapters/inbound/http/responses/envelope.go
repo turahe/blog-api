@@ -79,7 +79,6 @@ const (
 	ErrorCodeValidation   = "validation_error"
 	ErrorCodeUnauthorized = "unauthorized"
 	ErrorCodeForbidden    = "forbidden"
-	ErrorCodeCORSOrigin   = "cors.origin_not_allowed"
 	ErrorCodeNotFound     = "not_found"
 	ErrorCodeConflict     = "conflict"
 	ErrorCodeInternal     = "internal_error"
@@ -180,6 +179,7 @@ func SuccessPaginatedFor(c *gin.Context, status int, opts PageOpts) {
 	}
 
 	totalPtr := total
+
 	service := opts.Service
 	if service == 0 {
 		service = ServicePlatform
@@ -224,16 +224,20 @@ type CursorPageOpts[T any] struct {
 // context URL (filters preserved) so next/prev links are stable.
 func SuccessPaginatedResult[T any](c *gin.Context, status int, opts CursorPageOpts[T]) {
 	r := opts.Result
+
 	service := opts.Service
 	if service == 0 {
 		service = ServicePlatform
 	}
+
 	body := opts.Data
 	if body == nil {
 		body = r.Items
 	}
+
 	legacy, cursor := pagination.BuildMeta[T](c, r)
 	links := pagination.BuildLinks[T](c, r, legacy)
+
 	meta := PaginationMeta{
 		RequestID:       cursor.RequestID,
 		Limit:           cursor.Limit,
@@ -365,21 +369,26 @@ func normalizeValidationErrors(details any) map[string][]string {
 	if rv.Kind() != reflect.Map || rv.Type().Key().Kind() != reflect.String {
 		return nil
 	}
+
 	out := make(map[string][]string, rv.Len())
+
 	iter := rv.MapRange()
 	for iter.Next() {
-		field, ok := iter.Key().Interface().(string)
+		field, ok := reflect.TypeAssert[string](iter.Key())
 		if !ok {
 			continue
 		}
+
 		msgs := collectStrings(iter.Value())
 		if len(msgs) > 0 {
 			out[field] = msgs
 		}
 	}
+
 	if len(out) > 0 {
 		return out
 	}
+
 	return nil
 }
 
@@ -391,9 +400,11 @@ func normalizeAnyMap(v map[string]any) map[string][]string {
 			out[field] = msgs
 		}
 	}
+
 	if len(out) > 0 {
 		return out
 	}
+
 	return nil
 }
 
@@ -408,29 +419,34 @@ func collectStrings(rv reflect.Value) []string {
 		if rv.IsNil() {
 			return nil
 		}
+
 		rv = rv.Elem()
 	}
 
-	switch rv.Kind() {
+	switch rv.Kind() { //nolint:exhaustive // default branch handles all non-string container kinds
 	case reflect.String:
 		return []string{rv.String()}
 	case reflect.Slice, reflect.Array:
 		out := make([]string, 0, rv.Len())
-		for i := 0; i < rv.Len(); i++ {
+		for i := range rv.Len() {
 			ev := rv.Index(i)
 			for ev.Kind() == reflect.Interface || ev.Kind() == reflect.Pointer {
 				if ev.IsNil() {
 					break
 				}
+
 				ev = ev.Elem()
 			}
+
 			if ev.Kind() == reflect.String {
 				out = append(out, ev.String())
 			}
 		}
+
 		return out
+	default:
+		return nil
 	}
-	return nil
 }
 
 func absolutePath(c *gin.Context) string {

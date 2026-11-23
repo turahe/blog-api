@@ -181,8 +181,10 @@ func adminSettingsHistoryHandler(settings settingsAPI) gin.HandlerFunc {
 			return
 		}
 
-		filter := settingsdomain.HistoryFilter{Key: c.Query("key")}
-		filter.PageRequest = pr
+		filter := settingsdomain.HistoryFilter{
+			Key:         c.Query("key"),
+			PageRequest: pr,
+		}
 
 		page, err := settings.History(c.Request.Context(), filter)
 		if err != nil {
@@ -200,6 +202,7 @@ func adminSettingsHistoryHandler(settings settingsAPI) gin.HandlerFunc {
 					return
 				}
 			}
+
 			return
 		}
 

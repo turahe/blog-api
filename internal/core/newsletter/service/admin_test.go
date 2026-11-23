@@ -187,7 +187,7 @@ func TestListSubscribers(t *testing.T) {
 			require.Equal(t, tt.wantStatus, f.repo.subscriberFilter.Status)
 			require.Equal(t, tt.wantQuery, f.repo.subscriberFilter.Query)
 			require.Equal(t, tt.wantPage, f.repo.subscriberFilter.PageRequest.Page)
-			require.Equal(t, tt.wantPerPage, f.repo.subscriberFilter.PageRequest.Limit)
+			require.Equal(t, tt.wantPerPage, f.repo.subscriberFilter.Limit)
 			require.Equal(t, tt.wantPerPage, got.OffsetPerPage)
 			require.Equal(t, tt.wantPerPage, got.Limit)
 		})
@@ -442,6 +442,7 @@ func TestCreateIssue(t *testing.T) {
 			name:       "draft by default",
 			wantStatus: domain.IssueDraft,
 			check: func(t *testing.T, f *fixture, issue domain.Issue) {
+				t.Helper()
 				assert.Equal(t, []string{"weekly"}, issue.Lists)
 				assert.Equal(t, testActor, *issue.CreatedBy)
 				assert.Equal(t, testNow, issue.CreatedAt)
@@ -453,6 +454,7 @@ func TestCreateIssue(t *testing.T) {
 			in:         func(in *IssueInput) { in.Status = domain.IssueQueued },
 			wantStatus: domain.IssueQueued,
 			check: func(t *testing.T, f *fixture, issue domain.Issue) {
+				t.Helper()
 				assert.Equal(t, testNow, *issue.QueuedAt)
 				assert.Equal(t, []uuid.UUID{issue.UUID}, sendRequests(f))
 			},
@@ -462,6 +464,7 @@ func TestCreateIssue(t *testing.T) {
 			in:         func(in *IssueInput) { in.Status, in.SendAt = domain.IssueScheduled, &future },
 			wantStatus: domain.IssueScheduled,
 			check: func(t *testing.T, f *fixture, issue domain.Issue) {
+				t.Helper()
 				assert.Equal(t, future, *issue.SendAt)
 				assert.Empty(t, sendRequests(f))
 			},
@@ -564,6 +567,7 @@ func TestUpdateIssue(t *testing.T) {
 			},
 			wantStatus: domain.IssueDraft,
 			check: func(t *testing.T, _ *fixture, issue domain.Issue) {
+				t.Helper()
 				assert.Equal(t, "New subject", issue.Subject)
 				assert.Equal(t, "New preheader", issue.Preheader)
 				assert.Equal(t, "New body", issue.BodyMarkdown)
@@ -584,6 +588,7 @@ func TestUpdateIssue(t *testing.T) {
 			wantStatus: domain.IssueScheduled,
 			wantMove:   []string{"draft", "scheduled"},
 			check: func(t *testing.T, _ *fixture, issue domain.Issue) {
+				t.Helper()
 				assert.Equal(t, future, *issue.SendAt)
 			},
 		},
@@ -595,6 +600,7 @@ func TestUpdateIssue(t *testing.T) {
 			wantStatus: domain.IssueScheduled,
 			wantMove:   []string{"scheduled", "scheduled"},
 			check: func(t *testing.T, _ *fixture, issue domain.Issue) {
+				t.Helper()
 				assert.Equal(t, later, *issue.SendAt)
 			},
 		},
@@ -606,6 +612,7 @@ func TestUpdateIssue(t *testing.T) {
 			wantStatus: domain.IssueDraft,
 			wantMove:   []string{"scheduled", "draft"},
 			check: func(t *testing.T, _ *fixture, issue domain.Issue) {
+				t.Helper()
 				assert.Nil(t, issue.SendAt)
 			},
 		},
@@ -616,6 +623,7 @@ func TestUpdateIssue(t *testing.T) {
 			wantStatus: domain.IssueQueued,
 			wantMove:   []string{"draft", "queued"},
 			check: func(t *testing.T, f *fixture, issue domain.Issue) {
+				t.Helper()
 				assert.Equal(t, testNow, *issue.QueuedAt)
 				assert.Equal(t, []uuid.UUID{issue.UUID}, sendRequests(f))
 			},
@@ -627,6 +635,7 @@ func TestUpdateIssue(t *testing.T) {
 			wantStatus: domain.IssueQueued,
 			wantMove:   []string{"sending", "queued"},
 			check: func(t *testing.T, f *fixture, issue domain.Issue) {
+				t.Helper()
 				assert.Equal(t, []uuid.UUID{issue.UUID}, sendRequests(f))
 				assert.Zero(t, f.repo.callCount("UpdateIssue"), "only the status moves")
 			},
@@ -638,6 +647,7 @@ func TestUpdateIssue(t *testing.T) {
 			wantStatus: domain.IssueCancelled,
 			wantMove:   []string{"queued", "cancelled"},
 			check: func(t *testing.T, f *fixture, _ domain.Issue) {
+				t.Helper()
 				assert.Empty(t, sendRequests(f))
 			},
 		},

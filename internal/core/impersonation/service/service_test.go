@@ -193,6 +193,7 @@ func (t *fakeTokens) IssueAccess(c authdomain.AccessClaims) (string, error) {
 	}
 
 	t.issued = append(t.issued, c)
+
 	return "token-" + c.SessionID, nil
 }
 

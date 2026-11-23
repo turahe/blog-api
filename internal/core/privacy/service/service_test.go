@@ -193,6 +193,7 @@ func (a *memArchives) DeleteObject(_ context.Context, key string) error {
 	}
 
 	delete(a.objects, key)
+
 	return nil
 }
 

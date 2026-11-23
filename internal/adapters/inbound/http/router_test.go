@@ -247,7 +247,9 @@ func TestOptionalServices(t *testing.T) {
 func TestGlobalMiddleware(t *testing.T) {
 	t.Parallel()
 
-	const base = 7 // RequestID, CORS, Tracing, SecurityHeaders, AccessLog, MaxInFlight, Recovery
+	// PkgStack (8): Recovery, Trace, bridge, HTTPInstrumentation, Logger, Metrics, Timeout, CORS
+	// + Tracing, SecurityHeaders, MaxInFlight
+	const base = 11
 
 	tests := []struct {
 		name  string
@@ -280,5 +282,6 @@ func TestNewRouterRecordsMetricsByRoute(t *testing.T) {
 
 	metrics.mu.Lock()
 	defer metrics.mu.Unlock()
+
 	require.Equal(t, []string{"/api/v1/health"}, metrics.routes)
 }

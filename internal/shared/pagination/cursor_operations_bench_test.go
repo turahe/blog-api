@@ -9,7 +9,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// BenchmarkEncodeCursor_ThreeFields benchmarks EncodeCursor with 3 fields (typical: timestamp, timestamp, int64).
+// BenchmarkEncodeCursor_ThreeFields benchmarks EncodeCursor with 3 fields (typical: timestamp, int64).
 // Measures: HMAC-SHA256, JSON marshal, base64 encoding overhead.
 func BenchmarkEncodeCursor_ThreeFields(b *testing.B) {
 	cfg := CursorConfig{
@@ -30,7 +30,8 @@ func BenchmarkEncodeCursor_ThreeFields(b *testing.B) {
 	}
 
 	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
+
+	for range b.N {
 		_, _ = EncodeCursor(cfg, fields, WithSigner(signer), WithNow(func() time.Time { return now }))
 	}
 }
@@ -60,7 +61,8 @@ func BenchmarkEncodeCursor_FiveFields(b *testing.B) {
 	}
 
 	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
+
+	for range b.N {
 		_, _ = EncodeCursor(cfg, fields, WithSigner(signer), WithNow(func() time.Time { return now }))
 	}
 }
@@ -100,7 +102,8 @@ func BenchmarkEncodeCursor_TenFields(b *testing.B) {
 	}
 
 	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
+
+	for range b.N {
 		_, _ = EncodeCursor(cfg, fields, WithSigner(signer), WithNow(func() time.Time { return now }))
 	}
 }
@@ -131,7 +134,8 @@ func BenchmarkDecodeCursor_ThreeFields(b *testing.B) {
 	token, _ := EncodeCursor(cfg, fields, WithSigner(signer), WithNow(func() time.Time { return now }))
 
 	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
+
+	for range b.N {
 		_, _, _ = DecodeCursor(cfg, token, WithSigner(signer), WithNow(func() time.Time { return now }))
 	}
 }
@@ -162,7 +166,8 @@ func BenchmarkDecodeCursor_FiveFields(b *testing.B) {
 	token, _ := EncodeCursor(cfg, fields, WithSigner(signer), WithNow(func() time.Time { return now }))
 
 	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
+
+	for range b.N {
 		_, _, _ = DecodeCursor(cfg, token, WithSigner(signer), WithNow(func() time.Time { return now }))
 	}
 }
@@ -203,7 +208,8 @@ func BenchmarkDecodeCursor_TenFields(b *testing.B) {
 	token, _ := EncodeCursor(cfg, fields, WithSigner(signer), WithNow(func() time.Time { return now }))
 
 	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
+
+	for range b.N {
 		_, _, _ = DecodeCursor(cfg, token, WithSigner(signer), WithNow(func() time.Time { return now }))
 	}
 }
@@ -233,7 +239,8 @@ func BenchmarkCursorRoundTrip_ThreeFields(b *testing.B) {
 	}
 
 	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
+
+	for range b.N {
 		token, _ := EncodeCursor(cfg, fields, WithSigner(signer), WithNow(func() time.Time { return now }))
 		_, _, _ = DecodeCursor(cfg, token, WithSigner(signer), WithNow(func() time.Time { return now }))
 	}
@@ -263,7 +270,8 @@ func BenchmarkCursorRoundTrip_FiveFields(b *testing.B) {
 	}
 
 	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
+
+	for range b.N {
 		token, _ := EncodeCursor(cfg, fields, WithSigner(signer), WithNow(func() time.Time { return now }))
 		_, _, _ = DecodeCursor(cfg, token, WithSigner(signer), WithNow(func() time.Time { return now }))
 	}
@@ -299,7 +307,8 @@ func BenchmarkDecodeCursor_SignatureVerification(b *testing.B) {
 	require.NoError(b, err)
 
 	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
+
+	for range b.N {
 		_, _, _ = DecodeCursor(cfg, token, WithSigner(signer), WithNow(func() time.Time { return now }))
 	}
 }
@@ -331,7 +340,8 @@ func BenchmarkEncodeCursor_AllTimeFields(b *testing.B) {
 	}
 
 	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
+
+	for range b.N {
 		_, _ = EncodeCursor(cfg, fields, WithSigner(signer), WithNow(func() time.Time { return now }))
 	}
 }
@@ -359,7 +369,8 @@ func BenchmarkDecodeCursor_AllTimeFields(b *testing.B) {
 	token, _ := EncodeCursor(cfg, fields, WithSigner(signer), WithNow(func() time.Time { return now }))
 
 	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
+
+	for range b.N {
 		_, _, _ = DecodeCursor(cfg, token, WithSigner(signer), WithNow(func() time.Time { return now }))
 	}
 }
@@ -387,7 +398,8 @@ func BenchmarkEncodeCursor_AllUUIDFields(b *testing.B) {
 	}
 
 	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
+
+	for range b.N {
 		_, _ = EncodeCursor(cfg, fields, WithSigner(signer), WithNow(func() time.Time { return now }))
 	}
 }
@@ -415,7 +427,8 @@ func BenchmarkDecodeCursor_AllUUIDFields(b *testing.B) {
 	token, _ := EncodeCursor(cfg, fields, WithSigner(signer), WithNow(func() time.Time { return now }))
 
 	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
+
+	for range b.N {
 		_, _, _ = DecodeCursor(cfg, token, WithSigner(signer), WithNow(func() time.Time { return now }))
 	}
 }

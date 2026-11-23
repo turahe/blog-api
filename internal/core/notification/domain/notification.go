@@ -55,5 +55,6 @@ func UnreadTotalFrom(r pagination.PageResult[Notification]) int64 {
 	if r.UnreadTotal == nil {
 		return 0
 	}
+
 	return *r.UnreadTotal
 }

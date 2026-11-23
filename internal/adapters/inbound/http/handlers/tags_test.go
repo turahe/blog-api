@@ -151,6 +151,7 @@ func TestAdminUpdateTagHandler(t *testing.T) {
 	t.Parallel()
 
 	tagID := uuid.New()
+
 	tests := []struct {
 		name   string
 		param  string
@@ -168,8 +169,11 @@ func TestAdminUpdateTagHandler(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 
-			var gotID uuid.UUID
-			var gotName, gotSlug *string
+			var (
+				gotID            uuid.UUID
+				gotName, gotSlug *string
+			)
+
 			svc := &fakeTagService{updateFn: func(_ context.Context, id uuid.UUID, name, slug *string) (tagdomain.Tag, error) {
 				gotID, gotName, gotSlug = id, name, slug
 				return tagdomain.Tag{UUID: id, Name: "Go", Slug: "golang"}, tc.err
@@ -253,6 +257,7 @@ func TestAdminMergeTagHandlerFailures(t *testing.T) {
 
 	sourceID, intoID := uuid.New(), uuid.New()
 	into := `{"intoId":"` + intoID.String() + `"}`
+
 	tests := []struct {
 		name     string
 		param    string

@@ -103,11 +103,13 @@ func adminListCommentsHandler(comments commentModerationAPI) gin.HandlerFunc {
 		if in.NewestFirst {
 			cfg = commentsAdminNewestCfg
 		}
+
 		pr, err := pagination.ParseRequest(c, cfg)
 		if err != nil {
 			responses.Failure(c, nethttp.StatusBadRequest, pagination.ErrorCode(err), pagination.ErrorCause(err))
 			return
 		}
+
 		in.PageRequest = pr
 
 		result, err := comments.AdminList(c.Request.Context(), in)
@@ -126,6 +128,7 @@ func adminListCommentsHandler(comments commentModerationAPI) gin.HandlerFunc {
 					return
 				}
 			}
+
 			return
 		}
 

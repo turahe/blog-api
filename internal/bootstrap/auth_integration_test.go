@@ -135,13 +135,15 @@ func migratedTx(t *testing.T) *gorm.DB {
 			return
 		}
 
-		if err = migrations.Up(sqlDB); err != nil {
+		testDB, err = gorm.Open(postgres.New(postgres.Config{Conn: sqlDB}),
+			&gorm.Config{Logger: logger.Default.LogMode(logger.Silent)})
+		if err != nil {
 			errDB = err
 			return
 		}
 
-		testDB, errDB = gorm.Open(postgres.New(postgres.Config{Conn: sqlDB}),
-			&gorm.Config{Logger: logger.Default.LogMode(logger.Silent)})
+		testDB.DisableForeignKeyConstraintWhenMigrating = true
+		errDB = migrations.Up(testDB)
 	})
 	require.NoError(t, errDB)
 

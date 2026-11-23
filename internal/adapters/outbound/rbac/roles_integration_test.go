@@ -45,13 +45,15 @@ func integrationTx(t *testing.T) *gorm.DB {
 			return
 		}
 
-		if err = migrations.Up(sqlDB); err != nil {
+		integrationGorm, err = gorm.Open(postgres.New(postgres.Config{Conn: sqlDB}),
+			&gorm.Config{Logger: logger.Default.LogMode(logger.Silent)})
+		if err != nil {
 			errIntegration = err
 			return
 		}
 
-		integrationGorm, errIntegration = gorm.Open(postgres.New(postgres.Config{Conn: sqlDB}),
-			&gorm.Config{Logger: logger.Default.LogMode(logger.Silent)})
+		integrationGorm.DisableForeignKeyConstraintWhenMigrating = true
+		errIntegration = migrations.Up(integrationGorm)
 	})
 	require.NoError(t, errIntegration)
 

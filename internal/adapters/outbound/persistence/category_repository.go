@@ -34,8 +34,8 @@ type CategoryModel struct {
 	SortOrder   int    `gorm:"column:sort_order"`
 	CreatedAt   time.Time
 	UpdatedAt   time.Time
-	ParentUUID  *uuid.UUID `gorm:"column:parent_uuid;->"`
-	ImageUUID   *uuid.UUID `gorm:"column:image_uuid;->"`
+	ParentUUID  *uuid.UUID `gorm:"column:parent_uuid;->;-:migration"`
+	ImageUUID   *uuid.UUID `gorm:"column:image_uuid;->;-:migration"`
 }
 
 // TableName returns the categories table name for GORM.

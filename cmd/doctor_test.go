@@ -28,6 +28,7 @@ func TestReportCache(t *testing.T) {
 		t.Helper()
 
 		client := goredis.NewClient(&goredis.Options{Addr: server.Addr(), MaxRetries: -1})
+
 		t.Cleanup(func() { _ = client.Close() })
 
 		return &bootstrap.Runtime{Config: cfg, Cache: cache.NewRedis(client, bootstrap.CacheTTLs(cfg), slog.New(slog.DiscardHandler))}
@@ -45,13 +46,17 @@ func TestReportCache(t *testing.T) {
 			want:    "cache: bypassed (CACHE_ENABLED=false)\n",
 		},
 		{
-			name:    "reports the ttl of every family",
-			runtime: func(t *testing.T) *bootstrap.Runtime { return runtimeWith(t, miniredis.RunT(t)) },
-			want:    "cache: ok (ttl posts=1m0s categories=2m0s tags=3m0s users=4m0s settings=5m0s)\n",
+			name: "reports the ttl of every family",
+			runtime: func(t *testing.T) *bootstrap.Runtime {
+				t.Helper()
+				return runtimeWith(t, miniredis.RunT(t))
+			},
+			want: "cache: ok (ttl posts=1m0s categories=2m0s tags=3m0s users=4m0s settings=5m0s)\n",
 		},
 		{
 			name: "fails when the probe cannot reach redis",
 			runtime: func(t *testing.T) *bootstrap.Runtime {
+				t.Helper()
 				server := miniredis.RunT(t)
 				app := runtimeWith(t, server)
 				server.Close()

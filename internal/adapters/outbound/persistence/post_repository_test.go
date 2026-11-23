@@ -16,7 +16,11 @@ const repoTestKey = "repo-test-pagination-key-do-not-use-production-000000"
 
 func TestMain(m *testing.M) {
 	pagination.ResetGlobalSigner()
-	os.Setenv("APP_KEY", repoTestKey)
+
+	if err := os.Setenv("APP_KEY", repoTestKey); err != nil {
+		panic(err)
+	}
+
 	os.Exit(m.Run())
 }
 
@@ -181,7 +185,7 @@ func TestPostRepositoryGetPublishedBySlug(t *testing.T) {
 
 	tests := []struct {
 		name    string
-		ctx     context.Context
+		ctx     context.Context //nolint:containedctx // test table carries per-case request context
 		slug    string
 		wantErr error
 	}{
@@ -194,6 +198,8 @@ func TestPostRepositoryGetPublishedBySlug(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
 			got, err := repo.GetPublishedBySlug(tt.ctx, tt.slug)
 			if tt.wantErr != nil {
 				require.ErrorIs(t, err, tt.wantErr)

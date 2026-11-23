@@ -9,7 +9,6 @@ import (
 	postdomain "github.com/turahe/blog-api/internal/core/post/domain"
 	"github.com/turahe/blog-api/internal/core/readcache"
 	"github.com/turahe/blog-api/internal/core/readcache/readcachetest"
-	"github.com/turahe/blog-api/internal/shared/pagination"
 )
 
 func TestPublicReadsAreCachedPerNormalisedQuery(t *testing.T) {
@@ -22,9 +21,9 @@ func TestPublicReadsAreCachedPerNormalisedQuery(t *testing.T) {
 	ctx := context.Background()
 
 	for range 2 {
-		_, err := svc.ListPublished(ctx, postdomain.ListFilter{PageRequest: pagination.PageRequest{Page: 0, Limit: 0}})
+		_, err := svc.ListPublished(ctx, postdomain.ListFilter{Page: 0, Limit: 0})
 		require.NoError(t, err)
-		_, err = svc.ListPublished(ctx, postdomain.ListFilter{PageRequest: pagination.PageRequest{Page: 1, Limit: 20}})
+		_, err = svc.ListPublished(ctx, postdomain.ListFilter{Page: 1, Limit: 20})
 		require.NoError(t, err)
 
 		got, err := svc.GetPublishedBySlug(ctx, " hello ")
@@ -44,7 +43,7 @@ func TestPublicReadsAreCachedPerNormalisedQuery(t *testing.T) {
 	require.ErrorIs(t, err, postdomain.ErrNotFound)
 	require.Equal(t, 4, repo.publicReads, "misses are not cached")
 
-	_, err = svc.ListPublished(readcache.WithBypass(ctx), postdomain.ListFilter{PageRequest: pagination.PageRequest{Page: 1, Limit: 20}})
+	_, err = svc.ListPublished(readcache.WithBypass(ctx), postdomain.ListFilter{Page: 1, Limit: 20})
 	require.NoError(t, err)
 	require.Equal(t, 5, repo.publicReads, "bypass reads the repository")
 }

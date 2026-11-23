@@ -10,12 +10,21 @@ docker build \
   -t blog-api:local .
 ```
 
+Or via Compose / Make:
+
+```bash
+make docker-build      # compose build api (production target)
+make docker-up         # production api + infra
+make docker-dev        # api = Dockerfile `dev` target (air live-reload)
+```
+
 Multi-stage [Dockerfile](../../Dockerfile):
 
-1. `golang:1.27-alpine` — compile `.` (root `main.go`) with `-trimpath` and version ldflags into `cmd`
-2. `gcr.io/distroless/static-debian12:nonroot` — copy binary only
+1. `dev` — Go toolchain + air; source bind-mounted under Compose (`compose.dev.yaml`)
+2. `production` — `golang:1.27-alpine` compiles `.` (root `main.go`) with `-trimpath` and
+   version ldflags; runtime is `gcr.io/distroless/static-debian12:nonroot` with binary only
 
-## Runtime
+## Runtime (production target)
 
 | Item | Value |
 | --- | --- |
@@ -23,10 +32,17 @@ Multi-stage [Dockerfile](../../Dockerfile):
 | Default CMD | `serve` |
 | User | `nonroot` |
 | Port | `8080` |
-| CGO | disabled |
+| CGO | disabled in the final image |
 
 Pass configuration via environment (see [config.md](./config.md) and
 [.env.example](../../.env.example)). Do not bake `.env` into the image.
+
+One-shot CLI against Compose (migrations and seed) must use the production image:
+
+```bash
+make docker-migrate    # docker compose run --rm migrate
+make docker-seed       # docker compose run --rm --no-deps migrate seed
+```
 
 ## Example run (API only)
 
@@ -42,3 +58,4 @@ docker run --rm -p 8080:8080 --env-file .env blog-api:local serve
 - no package manager in final image
 - secrets only via env / secret mounts
 - set `APP_TRUSTED_PROXIES` correctly behind a reverse proxy
+- set `CORS_ORIGINS` for browser frontends (see [config.md](./config.md#cors))

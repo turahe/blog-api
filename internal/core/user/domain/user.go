@@ -49,8 +49,10 @@ func (u User) IsActive() bool {
 	return u.Status == StatusActive && u.DeletedAt == nil
 }
 
+// ListFilter is the admin user list query (pagination + optional filters).
 type ListFilter struct {
 	pagination.PageRequest
 }
 
+// ListResult is one page of users with cursor or offset metadata.
 type ListResult = pagination.PageResult[User]

@@ -53,11 +53,12 @@ func (m *memoryInbox) List(_ context.Context, filter notificationdomain.ListFilt
 	m.listFilter = filter
 
 	total := int64(len(m.rows))
+
 	return notificationdomain.ListResult{
 		Total:         &total,
-		OffsetPage:    filter.PageRequest.Page,
-		OffsetPerPage: filter.PageRequest.Limit,
-		Limit:         filter.PageRequest.Limit,
+		OffsetPage:    filter.Page,
+		OffsetPerPage: filter.Limit,
+		Limit:         filter.Limit,
 	}, nil
 }
 
@@ -253,11 +254,13 @@ func TestInboxList(t *testing.T) {
 			require.NoError(t, err)
 			require.Equal(t, tt.wantPage, got.OffsetPage)
 			require.Equal(t, tt.wantPerPage, got.OffsetPerPage)
+
 			expectedFilter := notificationdomain.ListFilter{
 				UserUUID:   f.author,
 				UnreadOnly: true,
+
+				PageRequest: tt.pr,
 			}
-			expectedFilter.PageRequest = tt.pr
 			require.Equal(t, expectedFilter, f.repo.listFilter)
 		})
 	}

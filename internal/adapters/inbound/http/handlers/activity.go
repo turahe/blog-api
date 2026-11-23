@@ -152,6 +152,7 @@ func activityFilter(c *gin.Context) (auditdomain.ActivityFilter, bool) {
 		responses.Failure(c, nethttp.StatusBadRequest, pagination.ErrorCode(err), pagination.ErrorCause(err))
 		return filter, false
 	}
+
 	filter.PageRequest = pr
 
 	return filter, true
@@ -203,6 +204,7 @@ func writeActivityPage(c *gin.Context, page auditdomain.ActivityPage, err error,
 			Code:    responses.ErrorCodeInternal,
 			Message: "An unexpected error occurred",
 		})
+
 		return
 	}
 

@@ -245,6 +245,8 @@ func TestNewsletterRepositorySubscriberLookups(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
 			got, err := tt.find()
 			if tt.wantErr != nil {
 				require.ErrorIs(t, err, tt.wantErr)
@@ -379,11 +381,13 @@ func TestNewsletterRepositoryListSubscribers(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
 			filter := tt.filter
 			filter.List = list
 
 			if filter.PageRequest.Page == 0 {
-				filter.PageRequest.Page, filter.PageRequest.Limit = 1, 10
+				filter.PageRequest.Page, filter.Limit = 1, 10
 			}
 
 			page, err := repo.ListSubscribers(t.Context(), filter)
@@ -391,7 +395,7 @@ func TestNewsletterRepositoryListSubscribers(t *testing.T) {
 			require.Equal(t, tt.wantTotal, *page.Total)
 			require.Equal(t, tt.want, subscriberIDs(page.Items))
 			require.Equal(t, filter.PageRequest.Page, page.OffsetPage)
-			require.Equal(t, filter.PageRequest.Limit, page.OffsetPerPage)
+			require.Equal(t, filter.Limit, page.OffsetPerPage)
 		})
 	}
 
@@ -469,6 +473,7 @@ func TestNewsletterRepositoryTokens(t *testing.T) {
 		SubscriberID: sub.UUID, Purpose: domain.PurposeUnsubscribe, Hash: tokenHash(), IssueID: &issue.UUID,
 		ExpiresAt: now.Add(time.Hour), CreatedAt: now,
 	}
+
 	require.NoError(t, repo.CreateToken(ctx, confirm))
 	require.NoError(t, repo.CreateToken(ctx, unsubscribe))
 
@@ -523,6 +528,7 @@ func TestNewsletterRepositoryPruneTokens(t *testing.T) {
 	expiry := time.Now().UTC().AddDate(-100, 0, 0).Truncate(time.Microsecond)
 	expired := domain.Token{SubscriberID: sub.UUID, Purpose: domain.PurposeConfirm, Hash: tokenHash(), ExpiresAt: expiry, CreatedAt: expiry}
 	live := domain.Token{SubscriberID: sub.UUID, Purpose: domain.PurposeConfirm, Hash: tokenHash(), ExpiresAt: time.Now().Add(time.Hour), CreatedAt: expiry}
+
 	require.NoError(t, repo.CreateToken(t.Context(), expired))
 	require.NoError(t, repo.CreateToken(t.Context(), live))
 
@@ -607,6 +613,7 @@ func TestNewsletterRepositoryDatabaseErrors(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
 			require.ErrorIs(t, tt.call(), context.Canceled)
 		})
 	}

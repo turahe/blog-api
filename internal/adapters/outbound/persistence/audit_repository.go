@@ -41,8 +41,8 @@ type AuditLogModel struct {
 	UserAgent        *string
 	RequestID        *string
 	OccurredAt       time.Time
-	ActorUUID        *uuid.UUID `gorm:"column:actor_uuid;->"`
-	ImpersonatorUUID *uuid.UUID `gorm:"column:impersonator_uuid;->"`
+	ActorUUID        *uuid.UUID `gorm:"column:actor_uuid;->;-:migration"`
+	ImpersonatorUUID *uuid.UUID `gorm:"column:impersonator_uuid;->;-:migration"`
 }
 
 // TableName implements gorm's tabler.
@@ -144,6 +144,8 @@ func (r *AuditRepository) actorIDs(db *gorm.DB, entries []auditdomain.Entry) (ma
 }
 
 // Activity lists entries the user performed or that target the user's account, newest first.
+//
+//nolint:funlen,nestif // cursor next/prev encoding shares structure with other list repositories
 func (r *AuditRepository) Activity(ctx context.Context, filter auditdomain.ActivityFilter) (auditdomain.ActivityPage, error) {
 	pr := filter.PageRequest
 	if pr.Limit <= 0 {
@@ -151,16 +153,20 @@ func (r *AuditRepository) Activity(ctx context.Context, filter auditdomain.Activ
 	}
 
 	var cursorFields map[string]any
+
 	if pr.Mode == pagination.ModeCursor && pr.Cursor != "" {
 		decoded, _, err := pagination.DecodeCursor(activityListCfg, pr.Cursor)
 		if err != nil {
 			return auditdomain.ActivityPage{}, err
 		}
+
 		if err := pagination.ValidateCursor(activityListCfg, decoded); err != nil {
 			return auditdomain.ActivityPage{}, err
 		}
+
 		cursorFields = decoded
 	}
+
 	seek, err := pagination.BuildSeek(activityListCfg, pr, cursorFields)
 	if err != nil {
 		return auditdomain.ActivityPage{}, err
@@ -191,19 +197,23 @@ func (r *AuditRepository) Activity(ctx context.Context, filter auditdomain.Activ
 	}
 
 	var out auditdomain.ActivityPage
+
 	if pr.IncludeTotal {
 		var total int64
 		if err := query.Count(&total).Error; err != nil {
 			return auditdomain.ActivityPage{}, fmt.Errorf("count activity: %w", err)
 		}
+
 		out.Total = &total
 	}
 
 	var models []AuditLogModel
+
 	db := query.Select(auditLogColumns).Order(strings.TrimPrefix(seek.OrderClause, "ORDER BY ")).Limit(seek.LimitFetch)
 	if pr.Mode == pagination.ModeOffset {
 		db = db.Offset(pr.Offset)
 	}
+
 	if err := db.Find(&models).Error; err != nil {
 		return auditdomain.ActivityPage{}, fmt.Errorf("list activity: %w", err)
 	}
@@ -225,11 +235,13 @@ func (r *AuditRepository) Activity(ctx context.Context, filter auditdomain.Activ
 	out.Items = page
 	out.HasNextPage = hasNext
 	out.HasPreviousPage = hasPrev
+
 	out.Limit = pr.Limit
 	if pr.Mode == pagination.ModeOffset {
 		out.OffsetPage = pr.Page
 		out.OffsetPerPage = pr.Limit
 	}
+
 	if len(page) > 0 {
 		if out.HasNextPage {
 			lastModel := pageModels[len(pageModels)-1]
@@ -241,14 +253,18 @@ func (r *AuditRepository) Activity(ctx context.Context, filter auditdomain.Activ
 					case 1:
 						return lastModel.ID
 					}
+
 					return nil
 				})
+
 			cur, err := pagination.EncodeCursor(activityListCfg, fields)
 			if err != nil {
 				return auditdomain.ActivityPage{}, err
 			}
+
 			out.NextCursor = cur
 		}
+
 		if out.HasPreviousPage {
 			firstModel := pageModels[0]
 			fields := pagination.SortValues[auditdomain.Entry](activityListCfg, page[0],
@@ -259,12 +275,15 @@ func (r *AuditRepository) Activity(ctx context.Context, filter auditdomain.Activ
 					case 1:
 						return firstModel.ID
 					}
+
 					return nil
 				})
+
 			cur, err := pagination.EncodeCursor(activityListCfg, fields)
 			if err != nil {
 				return auditdomain.ActivityPage{}, err
 			}
+
 			out.PreviousCursor = cur
 		}
 	}
@@ -272,13 +291,15 @@ func (r *AuditRepository) Activity(ctx context.Context, filter auditdomain.Activ
 	return out, nil
 }
 
-func computePageModels(models []AuditLogModel, pageLen int, forward bool, excess bool) []AuditLogModel {
+func computePageModels(models []AuditLogModel, pageLen int, forward, excess bool) []AuditLogModel {
 	if !excess {
 		return models
 	}
+
 	if forward {
 		return models[:pageLen]
 	}
+
 	return models[1 : pageLen+1]
 }
 

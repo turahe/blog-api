@@ -28,6 +28,7 @@ func TestNewLoginLockoutDefaultsLockPeriod(t *testing.T) {
 	for _, lockFor := range []time.Duration{0, -time.Second} {
 		server := miniredis.RunT(t)
 		client := goredis.NewClient(&goredis.Options{Addr: server.Addr()})
+
 		t.Cleanup(func() { _ = client.Close() })
 
 		lockedFor, err := NewLoginLockout(client, 1, lockFor).Fail(t.Context(), "k")
@@ -144,6 +145,7 @@ func TestLoginLockoutRedisFailures(t *testing.T) {
 
 		server := miniredis.RunT(t)
 		client := goredis.NewClient(&goredis.Options{Addr: server.Addr()})
+
 		t.Cleanup(func() { _ = client.Close() })
 		client.AddHook(failSetPipelines{})
 

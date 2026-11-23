@@ -93,6 +93,8 @@ func TestCategoryRepositoryGet(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
 			got, err := tt.get()
 			if tt.wantErr != nil {
 				require.ErrorIs(t, err, tt.wantErr)
@@ -134,6 +136,7 @@ func TestCategoryRepositoryRejectsUnknownReferences(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
 			_, err := repo.Create(t.Context(), newCategory(tt.mutate))
 			require.ErrorIs(t, err, categorydomain.ErrValidation)
 			require.ErrorContains(t, err, tt.wantMsg)

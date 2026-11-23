@@ -1,7 +1,9 @@
 package pagination
 
 import (
+	"errors"
 	"fmt"
+	"math"
 	"slices"
 	"strings"
 	"time"
@@ -45,7 +47,7 @@ type SeekResult struct {
 // OrderClause set so the caller can still apply LIMIT/OFFSET on top.
 func BuildSeek(cfg CursorConfig, pr PageRequest, cursorFields map[string]any) (SeekResult, error) {
 	if len(cfg.Sort) == 0 {
-		return SeekResult{}, fmt.Errorf("pagination: BuildSeek called with empty Sort list")
+		return SeekResult{}, errors.New("pagination: BuildSeek called with empty Sort list")
 	}
 	// For offset mode the display order is the natural endpoint order (do
 	// not flip via pr.Forward — that flag is meaningful only for cursor
@@ -54,16 +56,20 @@ func BuildSeek(cfg CursorConfig, pr PageRequest, cursorFields map[string]any) (S
 	if pr.Mode == ModeOffset {
 		forward = true
 	}
+
 	order := orderFor(cfg.Sort, forward)
+
 	limit := pr.Limit
 	if limit < 1 {
 		limit = DefaultPerPage
 	}
+
 	fetchLimit := limit + 1
 	res := SeekResult{
 		OrderClause: order,
 		LimitFetch:  fetchLimit,
 	}
+
 	switch pr.Mode {
 	case ModeOffset:
 		return res, nil
@@ -72,31 +78,38 @@ func BuildSeek(cfg CursorConfig, pr PageRequest, cursorFields map[string]any) (S
 		if pr.Cursor == "" {
 			return res, nil
 		}
+
 		if !pr.Forward {
 			res.ReverseDisplay = true
 		}
+
 		if len(cursorFields) == 0 {
 			return res, nil
 		}
 		// Build (col1, col2, ..., colN) <op> (?, ?, ..., ?)
 		cols := make([]string, 0, len(cfg.Sort))
+
 		bind := make([]any, 0, len(cfg.Sort))
 		for _, f := range cfg.Sort {
 			col := f.Column
 			if col == "" {
 				col = f.Name
 			}
+
 			cols = append(cols, col)
 			bind = append(bind, coerceBind(f, cursorFields[f.Name]))
 		}
+
 		op := comparatorFor(cfg.Sort, pr.Forward)
 		res.WhereClause = fmt.Sprintf("(%s) %s (%s)",
 			strings.Join(cols, ", "),
 			op,
 			strings.TrimSuffix(strings.Repeat("?, ", len(cols)), ", "))
 		res.BindVars = bind
+
 		return res, nil
 	}
+
 	return res, nil
 }
 
@@ -116,6 +129,7 @@ func comparatorFor(sortFields []SortField, forward bool) string {
 	//   For forward seek on an ASC-ascending list  — (tuple) > (cursor tuple)
 	//   For backward seek — invert.
 	first := sortFields[0]
+
 	sense := first.Dir
 	if !forward {
 		if sense == Asc {
@@ -124,9 +138,11 @@ func comparatorFor(sortFields []SortField, forward bool) string {
 			sense = Asc
 		}
 	}
+
 	if sense == Desc {
 		return "<"
 	}
+
 	return ">"
 }
 
@@ -141,26 +157,33 @@ func orderFor(sortFields []SortField, forward bool) string {
 		if col == "" {
 			col = f.Name
 		}
+
 		dir := f.Dir
 		nulls := f.Nulls
+
 		if !forward {
 			if dir == Asc {
 				dir = Desc
 			} else {
 				dir = Asc
 			}
-			if nulls == NullsFirst {
+
+			switch nulls {
+			case NullsFirst:
 				nulls = NullsLast
-			} else if nulls == NullsLast {
+			case NullsLast:
 				nulls = NullsFirst
+			case NullsDefault:
 			}
 		}
+
 		part := col
 		if dir == Desc {
 			part += " DESC"
 		} else {
 			part += " ASC"
 		}
+
 		switch nulls {
 		case NullsFirst:
 			part += " NULLS FIRST"
@@ -168,8 +191,10 @@ func orderFor(sortFields []SortField, forward bool) string {
 			part += " NULLS LAST"
 		case NullsDefault:
 		}
+
 		parts = append(parts, part)
 	}
+
 	return "ORDER BY " + strings.Join(parts, ", ")
 }
 
@@ -189,10 +214,18 @@ func coerceBind(f SortField, v any) any {
 		case int64:
 			return n
 		case uint:
+			if uint64(n) > math.MaxInt64 {
+				break
+			}
+
 			return int64(n)
 		case uint32:
 			return int64(n)
 		case uint64:
+			if n > math.MaxInt64 {
+				break
+			}
+
 			return int64(n)
 		}
 	case TypeFloat64:
@@ -218,6 +251,7 @@ func coerceBind(f SortField, v any) any {
 		if tm, ok := v.(time.Time); ok {
 			return tm.UTC()
 		}
+
 		if s, ok := v.(string); ok {
 			if tm, err := time.Parse(time.RFC3339Nano, s); err == nil {
 				return tm.UTC()
@@ -227,6 +261,7 @@ func coerceBind(f SortField, v any) any {
 		if u, ok := v.(uuid.UUID); ok {
 			return u
 		}
+
 		if s, ok := v.(string); ok {
 			if u, err := uuid.Parse(s); err == nil {
 				return u
@@ -236,6 +271,7 @@ func coerceBind(f SortField, v any) any {
 		return v
 	default:
 	}
+
 	return v
 }
 

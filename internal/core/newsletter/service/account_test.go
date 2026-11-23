@@ -127,6 +127,7 @@ func TestMySubscribe(t *testing.T) {
 			wantConsent: []string{domain.ConsentListJoined, domain.ConsentSubscribed},
 			wantChanges: []string{"confirmed"},
 			check: func(t *testing.T, f *fixture, got Preferences) {
+				t.Helper()
 				sub := f.repo.subscriber(t, got.Subscriber.UUID)
 				assert.Equal(t, "reader@example.test", sub.Email)
 				assert.Equal(t, "Reader", sub.DisplayName)
@@ -144,6 +145,7 @@ func TestMySubscribe(t *testing.T) {
 			wantConsent: []string{domain.ConsentListJoined, domain.ConsentSubscribed},
 			wantChanges: []string{"confirmed"},
 			check: func(t *testing.T, _ *fixture, got Preferences) {
+				t.Helper()
 				assert.Empty(t, got.Subscriber.DisplayName)
 			},
 		},
@@ -160,6 +162,7 @@ func TestMySubscribe(t *testing.T) {
 			wantConsent: []string{domain.ConsentListJoined, domain.ConsentSubscribed},
 			wantChanges: []string{"confirmed"},
 			check: func(t *testing.T, f *fixture, got Preferences) {
+				t.Helper()
 				assert.Equal(t, domain.FormatPlaintext, got.Subscriber.Format)
 				assert.Equal(t, testUser, *got.Subscriber.UserID)
 				assert.Zero(t, f.repo.callCount("CreateSubscriber"))
@@ -215,6 +218,7 @@ func TestMySubscribe(t *testing.T) {
 			wantConsent: []string{domain.ConsentConfirmSent},
 			wantConfirm: true,
 			check: func(t *testing.T, f *fixture, got Preferences) {
+				t.Helper()
 				assert.Equal(t, domain.SourceAccount, got.Subscriber.Source)
 				assert.Equal(t, string(domain.SourceAccount), f.repo.consentEvents()[0].Source)
 			},

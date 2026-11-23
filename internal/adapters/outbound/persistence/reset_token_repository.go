@@ -23,7 +23,7 @@ type PasswordResetTokenModel struct {
 	ExpiresAt time.Time  `gorm:"column:expires_at"`
 	UsedAt    *time.Time `gorm:"column:used_at"`
 	CreatedAt time.Time  `gorm:"column:created_at"`
-	UserUUID  uuid.UUID  `gorm:"column:user_uuid;->"`
+	UserUUID  uuid.UUID  `gorm:"column:user_uuid;->;-:migration"`
 }
 
 // TableName returns the password_reset_tokens table name for GORM.
