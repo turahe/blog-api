@@ -166,7 +166,7 @@ docker-seed: dev-keys
 
 # Every service except migrate and api (for running the API from an IDE or debugger).
 infra-up:
-	docker compose up -d postgres redis rustfs mailpit imgproxy kafka rabbitmq
+	docker compose up -d postgres redis rustfs mailpit imgproxy rabbitmq
 
 infra-down:
 	docker compose down

@@ -80,7 +80,6 @@ make lint              # golangci-lint (in golangci-lint container)
 | rustfs | 9000 / 9001 | S3-compatible media + console |
 | imgproxy | 8081 (loopback) | image transforms from the private bucket |
 | mailpit | 1025 / 8025 | SMTP catcher + web UI |
-| kafka | 9092 | message broker (KRaft single-node) |
 | rabbitmq | 5672 / 15672 | message broker + management UI |
 
 Compose file: [compose.yaml](../../compose.yaml). Data dirs under `./.data/` (gitignored).
@@ -124,13 +123,12 @@ container user, so `sudo rm -rf .data/postgres`).
 
 ## Messaging
 
-`make docker-up` and `make infra-up` start Kafka (`apache/kafka:3.9.0`) and RabbitMQ
-(`rabbitmq:4-management-alpine`) along with everything else. The Compose api service still
-clears `MESSAGE_BROKER`, because no worker runs in the stack, so it delivers inline.
+`make docker-up` and `make infra-up` start RabbitMQ (`rabbitmq:4-management-alpine`) along
+with everything else. The Compose api service still clears `MESSAGE_BROKER`, because no
+worker runs in the stack, so it delivers inline.
 
-To run the worker against Compose brokers (host or a custom compose service), set in `.env`:
+To run the worker against the Compose broker, set in `.env`:
 
-- Kafka: `MESSAGE_BROKER=kafka`, `KAFKA_BROKERS=127.0.0.1:9092`
 - RabbitMQ: `MESSAGE_BROKER=rabbitmq`, `RABBITMQ_URL=amqp://blog:blog@127.0.0.1:5672/`
 
 ```bash
