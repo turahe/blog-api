@@ -1,6 +1,7 @@
 # Live-reload API on top of compose.yaml:
 #   docker compose -f compose.yaml -f compose.dev.yaml up -d --build   (or: make docker-dev)
-# The source is bind-mounted and air rebuilds on every .go change; migrate still runs the production image.
+# The source is bind-mounted and air rebuilds on every .go change.
+# migrate up is not part of this stack; apply schema with `make docker-migrate`.
 services:
   api:
     build:
@@ -11,7 +12,6 @@ services:
       - api-dev-tmp:/src/tmp
       - go-mod-cache:/go/pkg/mod
       - go-build-cache:/root/.cache/go-build
-
 volumes:
   api-dev-tmp:
   go-mod-cache:
